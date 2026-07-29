@@ -1,0 +1,20 @@
+format_version: 1
+package_id: roleplay2026.casada_frustrada
+version: 1.0.0
+author:
+  id: welnecker
+  name: Welnecker
+entrypoint: story.yaml
+card:
+  title: Casada frustrada
+  subtitle: Mary tenta reconstruir a própria vida sem esconder o que deseja.
+  description: Uma história adulta de tensão emocional, escolhas e consequências, conduzida em ritmo gradual.
+  genres:
+    - Drama
+    - Romance adulto
+  chapter_label: Capítulo 1
+  cover: ""
+commerce:
+  access: paid
+  price_cents: 990
+  currency: BRL
