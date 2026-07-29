@@ -30,6 +30,17 @@ def read_secret(secrets: Mapping[str, Any], *names: str) -> str:
     return ""
 
 
+def _new_external_reference() -> str:
+    """Gera uma referência aceita pela API Orders do Mercado Pago.
+
+    Mantém somente caracteres alfanuméricos e sublinhado e fica muito abaixo
+    do limite de 64 caracteres. A associação com usuário e pacote permanece
+    registrada localmente em PAYMENT_ORDERS.
+    """
+
+    return f"rp26_{uuid4().hex}"
+
+
 class PixCheckoutService:
     def __init__(
         self,
@@ -53,7 +64,7 @@ class PixCheckoutService:
         amount_cents: int,
         currency: str,
     ) -> CheckoutResult:
-        external_reference = f"roleplay2026:{user_id}:{package_id}:{uuid4().hex}"
+        external_reference = _new_external_reference()
         idempotency_key = str(uuid4())
         stored = self.payments.create_pending_order(
             user_id=user_id,
