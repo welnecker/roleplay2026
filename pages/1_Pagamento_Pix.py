@@ -18,6 +18,47 @@ ROOT = Path(__file__).resolve().parent.parent
 st.set_page_config(page_title="Pagamento Pix", page_icon="💠", layout="centered")
 st.title("Pagamento por Pix")
 
+
+@st.cache_resource(show_spinner=False)
+def payment_services() -> tuple[
+    PixCheckoutService | None,
+    GoogleSheetsAccountRepository | None,
+    str,
+]:
+    """Monta a infraestrutura Pix uma única vez por processo do Streamlit.
+
+    Evita reabrir a planilha e executar todas as verificações de schema em cada
+    rerun da página de pagamento, reduzindo fortemente o consumo da API Sheets.
+    """
+
+    try:
+        runtime = build_google_sheets_repository(st.secrets)
+        if runtime is None:
+            return None, None, "Google Sheets não está configurado."
+
+        access_token = read_secret(
+            st.secrets,
+            "MERCADO_PAGO_ACCESS_TOKEN",
+            "MERCADOPAGO_ACCESS_TOKEN",
+            "MP_ACCESS_TOKEN",
+        )
+        if not access_token:
+            return None, None, "Access Token do Mercado Pago não encontrado nos secrets."
+
+        accounts = GoogleSheetsAccountRepository(runtime.spreadsheet)
+        accounts.ensure_schema()
+        payments = GoogleSheetsPaymentRepository(runtime.spreadsheet)
+        payments.ensure_schema()
+        service = PixCheckoutService(
+            client=MercadoPagoClient(access_token),
+            payments=payments,
+            accounts=accounts,
+        )
+        return service, accounts, ""
+    except Exception as exc:
+        return None, None, str(exc)
+
+
 if st.button("← Voltar à biblioteca"):
     st.session_state.page = "library"
     st.switch_page("app.py")
@@ -39,30 +80,10 @@ if package is None:
         st.code("\n".join(errors))
     st.stop()
 
-runtime = build_google_sheets_repository(st.secrets)
-if runtime is None:
-    st.error("Google Sheets não está configurado.")
+service, accounts, service_error = payment_services()
+if service is None or accounts is None:
+    st.error(service_error or "Não foi possível iniciar o pagamento.")
     st.stop()
-
-access_token = read_secret(
-    st.secrets,
-    "MERCADO_PAGO_ACCESS_TOKEN",
-    "MERCADOPAGO_ACCESS_TOKEN",
-    "MP_ACCESS_TOKEN",
-)
-if not access_token:
-    st.error("Access Token do Mercado Pago não encontrado nos secrets.")
-    st.stop()
-
-accounts = GoogleSheetsAccountRepository(runtime.spreadsheet)
-accounts.ensure_schema()
-payments = GoogleSheetsPaymentRepository(runtime.spreadsheet)
-payments.ensure_schema()
-service = PixCheckoutService(
-    client=MercadoPagoClient(access_token),
-    payments=payments,
-    accounts=accounts,
-)
 
 manifest = package.manifest
 commerce = manifest.commerce
