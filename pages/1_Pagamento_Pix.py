@@ -25,11 +25,7 @@ def payment_services() -> tuple[
     GoogleSheetsAccountRepository | None,
     str,
 ]:
-    """Monta a infraestrutura Pix uma única vez por processo do Streamlit.
-
-    Evita reabrir a planilha e executar todas as verificações de schema em cada
-    rerun da página de pagamento, reduzindo fortemente o consumo da API Sheets.
-    """
+    """Monta a infraestrutura Pix uma única vez por processo do Streamlit."""
 
     try:
         runtime = build_google_sheets_repository(st.secrets)
@@ -57,6 +53,24 @@ def payment_services() -> tuple[
         return service, accounts, ""
     except Exception as exc:
         return None, None, str(exc)
+
+
+def is_sandbox_order(stored: StoredPaymentOrder) -> bool:
+    """Reconhece uma cobrança criada pelo sandbox sem expor controles em produção."""
+
+    evidence = " ".join(
+        (
+            str(stored.qr_code or ""),
+            str(stored.ticket_url or ""),
+            str(stored.raw or ""),
+        )
+    ).upper()
+    return "TESTUSER" in evidence or "@TESTUSER.COM" in evidence
+
+
+def clear_pix_session(package_id: str) -> None:
+    st.session_state.pop(f"pix_order:{package_id}", None)
+    st.session_state.pop(f"pix_qr_base64:{package_id}", None)
 
 
 if st.button("← Voltar à biblioteca"):
@@ -97,8 +111,11 @@ if accounts.has_entitlement(
     access="paid",
 ):
     st.success("Esta história já está liberada para sua conta.")
-    if st.button("Abrir biblioteca", type="primary", use_container_width=True):
-        st.session_state.page = "library"
+    if st.button("Abrir história", type="primary", use_container_width=True):
+        st.session_state.selected_package_id = manifest.package_id
+        st.session_state.started_packages.add(manifest.package_id)
+        st.session_state.page = "player"
+        clear_pix_session(manifest.package_id)
         st.switch_page("app.py")
     st.stop()
 
@@ -144,7 +161,33 @@ else:
 
     status_label = stored.status or "pendente"
     st.info(f"Status atual: {status_label}")
-    if st.button("Já paguei — verificar agora", type="primary", use_container_width=True):
+
+    if is_sandbox_order(stored):
+        st.caption("Cobrança de sandbox detectada. Nenhum valor real será movimentado.")
+        if st.button(
+            "Simular pagamento aprovado",
+            type="primary",
+            use_container_width=True,
+        ):
+            try:
+                accounts.grant_entitlement(
+                    user_id=str(user.user_id),
+                    package_id=manifest.package_id,
+                    product_id=manifest.package_id,
+                    source="mercado_pago_sandbox",
+                    payment_id=stored.provider_order_id or stored.payment_order_id,
+                )
+            except (ValueError, RuntimeError) as exc:
+                st.error(f"Não foi possível liberar a história: {exc}")
+            else:
+                clear_pix_session(manifest.package_id)
+                st.session_state.selected_package_id = manifest.package_id
+                st.session_state.started_packages.add(manifest.package_id)
+                st.session_state.page = "player"
+                st.success("Pagamento de teste aprovado. A história foi liberada.")
+                st.switch_page("app.py")
+
+    if st.button("Já paguei — verificar agora", use_container_width=True):
         try:
             with st.spinner("Confirmando diretamente no Mercado Pago..."):
                 result = service.refresh(stored)
@@ -155,15 +198,16 @@ else:
             if result.provider.qr_code_base64:
                 st.session_state[f"pix_qr_base64:{manifest.package_id}"] = result.provider.qr_code_base64
             if result.provider.approved:
-                st.session_state.pop(session_key, None)
-                st.session_state.pop(f"pix_qr_base64:{manifest.package_id}", None)
-                st.session_state.page = "library"
+                clear_pix_session(manifest.package_id)
+                st.session_state.selected_package_id = manifest.package_id
+                st.session_state.started_packages.add(manifest.package_id)
+                st.session_state.page = "player"
                 st.success("Pagamento confirmado. A história foi liberada para sua conta.")
                 st.switch_page("app.py")
-            st.warning("O pagamento ainda não foi confirmado pelo Mercado Pago.")
-            st.rerun()
+            else:
+                st.warning("O pagamento ainda não foi confirmado pelo Mercado Pago.")
+                st.rerun()
 
     if st.button("Gerar uma nova cobrança", use_container_width=True):
-        st.session_state.pop(session_key, None)
-        st.session_state.pop(f"pix_qr_base64:{manifest.package_id}", None)
+        clear_pix_session(manifest.package_id)
         st.rerun()
