@@ -73,11 +73,11 @@ def _service_account_from_environment() -> dict[str, str]:
         return {}
 
     values["private_key"] = values["private_key"].replace("\\n", "\n")
-    values.setdefault("type", "service_account")
-    values.setdefault("auth_uri", "https://accounts.google.com/o/oauth2/auth")
-    values.setdefault("token_uri", "https://oauth2.googleapis.com/token")
-    values.setdefault(
-        "auth_provider_x509_cert_url",
-        "https://www.googleapis.com/oauth2/v1/certs",
+    values["type"] = values["type"] or "service_account"
+    values["auth_uri"] = values["auth_uri"] or "https://accounts.google.com/o/oauth2/auth"
+    values["token_uri"] = values["token_uri"] or "https://oauth2.googleapis.com/token"
+    values["auth_provider_x509_cert_url"] = (
+        values["auth_provider_x509_cert_url"]
+        or "https://www.googleapis.com/oauth2/v1/certs"
     )
     return {key: value for key, value in values.items() if value}
