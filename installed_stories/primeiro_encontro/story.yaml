@@ -1,0 +1,13 @@
+story_id: primeiro_encontro
+format_version: 1
+entry:
+  route: principal
+  beat: abertura
+runtime:
+  movement_mode: deterministic
+  memory_scope: story
+content:
+  characters_path: characters
+  chapters_path: chapters
+  cards_path: cards
+  assets_path: assets
