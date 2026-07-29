@@ -9,12 +9,13 @@ from packages.engine_adapter import StoryEngineAdapterError, adapt_story_definit
 from packages.loader import StoryPackageError, discover_packages
 from packages.models import InstalledStoryPackage
 from packages.story_content import StoryContentError, load_story_content
+from persistence.accounts import GoogleSheetsAccountRepository
 from persistence.factory import build_google_sheets_repository
 from persistence.google_sheets import GoogleSheetsRuntimeRepository
 from persistence.models import ConcurrentSaveUpdateError
 from platform_core.auth import AuthenticatedUser, authenticate_demo
 from platform_core.catalog import load_demo_catalog
-from platform_core.models import ProgressStatus, StoryCard
+from platform_core.models import AccessStatus, ProgressStatus, StoryCard
 from roleplay.engine import StoryEngine
 from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
@@ -45,7 +46,20 @@ def runtime_repository() -> tuple[GoogleSheetsRuntimeRepository | None, str]:
     try:
         repository = build_google_sheets_repository(st.secrets)
         return repository, ""
-    except Exception as exc:  # falha externa não deve derrubar o player
+    except Exception as exc:
+        return None, str(exc)
+
+
+@st.cache_resource(show_spinner=False)
+def account_repository() -> tuple[GoogleSheetsAccountRepository | None, str]:
+    runtime, error = runtime_repository()
+    if runtime is None:
+        return None, error
+    try:
+        repository = GoogleSheetsAccountRepository(runtime.spreadsheet)
+        repository.ensure_schema()
+        return repository, ""
+    except Exception as exc:
         return None, str(exc)
 
 
@@ -72,10 +86,32 @@ def installed_packages() -> tuple[dict[str, InstalledStoryPackage], list[str]]:
     return {package.manifest.package_id: package for package in packages}, errors
 
 
-def catalog_for_user() -> list[StoryCard]:
+def user_has_access(user: AuthenticatedUser, package_id: str, access: str) -> bool:
+    if access == "free":
+        return True
+    repository, _error = account_repository()
+    if repository is None:
+        return False
+    return repository.has_entitlement(
+        user_id=user.user_id,
+        package_id=package_id,
+        access=access,
+    )
+
+
+def catalog_for_user(user: AuthenticatedUser) -> list[StoryCard]:
     started = st.session_state.started_packages
     result: list[StoryCard] = []
     for story in load_demo_catalog():
+        access = "free" if story.access_status == AccessStatus.FREE else "paid"
+        entitled = user_has_access(user, story.package_id, access)
+        access_status = (
+            AccessStatus.FREE
+            if access == "free"
+            else AccessStatus.OWNED
+            if entitled
+            else AccessStatus.LOCKED
+        )
         progress = (
             ProgressStatus.IN_PROGRESS
             if story.package_id in started
@@ -88,7 +124,7 @@ def catalog_for_user() -> list[StoryCard]:
                 subtitle=story.subtitle,
                 description=story.description,
                 genres=story.genres,
-                access_status=story.access_status,
+                access_status=access_status,
                 progress_status=progress,
                 price_label=story.price_label,
                 chapter_label=story.chapter_label,
@@ -117,29 +153,88 @@ def show_checkout(package_id: str) -> None:
     st.rerun()
 
 
+def _to_authenticated_user(user: object) -> AuthenticatedUser:
+    return AuthenticatedUser(
+        user_id=str(getattr(user, "user_id")),
+        email=str(getattr(user, "email")),
+        display_name=str(getattr(user, "display_name")),
+    )
+
+
 def render_login() -> None:
     _left, center, _right = st.columns([1, 1.15, 1])
     with center:
         st.markdown("<div class='hero'><h1>Roleplay 2026</h1></div>", unsafe_allow_html=True)
         st.write("Uma biblioteca de histórias interativas independentes.")
-        with st.form("login_form"):
-            st.subheader("Entrar")
-            email = st.text_input("E-mail", placeholder="voce@email.com")
-            password = st.text_input("Senha", type="password")
-            submitted = st.form_submit_button(
-                "Acessar biblioteca",
-                use_container_width=True,
-                type="primary",
-            )
-        st.caption("Protótipo: qualquer e-mail válido e senha não vazia permitem o acesso.")
-        if submitted:
-            user = authenticate_demo(email, password)
-            if user is None:
-                st.error("Informe um e-mail válido e uma senha.")
+
+        repository, account_error = account_repository()
+        login_tab, register_tab = st.tabs(["Entrar", "Criar conta"])
+
+        with login_tab:
+            with st.form("login_form"):
+                email = st.text_input("E-mail", placeholder="voce@email.com", key="login_email")
+                password = st.text_input("Senha", type="password", key="login_password")
+                submitted = st.form_submit_button(
+                    "Acessar biblioteca",
+                    use_container_width=True,
+                    type="primary",
+                )
+            if submitted:
+                if repository is not None:
+                    account = repository.authenticate(email=email, password=password)
+                    user = _to_authenticated_user(account) if account is not None else None
+                else:
+                    user = authenticate_demo(email, password)
+                if user is None:
+                    st.error("E-mail ou senha inválidos.")
+                else:
+                    st.session_state.authenticated_user = user
+                    st.session_state.page = "library"
+                    st.rerun()
+
+        with register_tab:
+            if repository is None:
+                st.info("O cadastro será habilitado quando o Google Sheets estiver configurado.")
             else:
-                st.session_state.authenticated_user = user
-                st.session_state.page = "library"
-                st.rerun()
+                with st.form("register_form"):
+                    display_name = st.text_input("Nome de exibição")
+                    email = st.text_input("E-mail", placeholder="voce@email.com", key="register_email")
+                    password = st.text_input("Senha", type="password", key="register_password")
+                    password_confirmation = st.text_input(
+                        "Confirmar senha",
+                        type="password",
+                    )
+                    submitted_register = st.form_submit_button(
+                        "Criar conta",
+                        use_container_width=True,
+                        type="primary",
+                    )
+                if submitted_register:
+                    if password != password_confirmation:
+                        st.error("As senhas não coincidem.")
+                    else:
+                        try:
+                            account = repository.register(
+                                email=email,
+                                password=password,
+                                display_name=display_name,
+                            )
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            st.session_state.authenticated_user = _to_authenticated_user(account)
+                            st.session_state.page = "library"
+                            st.rerun()
+
+        if account_error:
+            st.caption(
+                "Google Sheets indisponível. O login demonstrativo permanece ativo nesta execução: "
+                f"{account_error}"
+            )
+        elif repository is None:
+            st.caption("Modo local: qualquer e-mail válido e senha não vazia permitem o acesso.")
+        else:
+            st.caption("Contas e senhas protegidas por Argon2 no Google Sheets.")
 
 
 def render_library(user: AuthenticatedUser) -> None:
@@ -151,9 +246,11 @@ def render_library(user: AuthenticatedUser) -> None:
         if st.button("Sair", use_container_width=True):
             st.session_state.authenticated_user = None
             st.session_state.page = "library"
+            st.session_state.selected_package_id = None
+            st.session_state.runtime_contexts = {}
             st.rerun()
 
-    stories = catalog_for_user()
+    stories = catalog_for_user(user)
     for start in range(0, len(stories), 3):
         columns = st.columns(3)
         for column, story in zip(columns, stories[start : start + 3], strict=False):
@@ -178,18 +275,24 @@ def render_library(user: AuthenticatedUser) -> None:
     elif repository is None:
         st.info(
             "Persistência local ativa. Configure GOOGLE_SHEETS_SPREADSHEET_ID e "
-            "[gcp_service_account] para habilitar saves compartilhados."
+            "[gcp_service_account] para habilitar contas e saves compartilhados."
         )
     else:
-        st.success("Persistência compartilhada no Google Sheets ativa.")
+        st.success("Contas, entitlements e saves compartilhados no Google Sheets estão ativos.")
 
 
-def render_checkout() -> None:
+def render_checkout(user: AuthenticatedUser) -> None:
     package_id = st.session_state.checkout_package_id
     story = next((item for item in load_demo_catalog() if item.package_id == package_id), None)
     if story is None:
         st.session_state.page = "library"
         st.rerun()
+
+    if user_has_access(user, package_id, "paid"):
+        st.success("Esta história já está liberada para sua conta.")
+        if st.button("Abrir história", type="primary"):
+            open_story(package_id)
+        return
 
     if st.button("← Voltar à biblioteca"):
         st.session_state.page = "library"
@@ -200,8 +303,8 @@ def render_checkout() -> None:
     st.write(story.description)
     st.metric("Valor", story.price_label)
     st.warning(
-        "Integração Mercado Pago ainda não ativada. Esta tela já delimita o ponto "
-        "onde serão exibidos QR Code, Pix Copia e Cola e atualização do pagamento."
+        "Integração Mercado Pago ainda não ativada. O entitlement já é exigido pelo app, "
+        "mas a cobrança Pix será conectada no próximo marco."
     )
     st.button("Gerar Pix", disabled=True, use_container_width=True, type="primary")
 
@@ -256,6 +359,13 @@ def ensure_runtime_loaded(
 
 
 def render_player(package_id: str, user: AuthenticatedUser) -> None:
+    story_card = next((item for item in load_demo_catalog() if item.package_id == package_id), None)
+    access = "free" if story_card and story_card.access_status == AccessStatus.FREE else "paid"
+    if not user_has_access(user, package_id, access):
+        st.session_state.checkout_package_id = package_id
+        st.session_state.page = "checkout"
+        st.rerun()
+
     try:
         package, engine = load_package_engine(package_id)
         state, messages, context = ensure_runtime_loaded(package=package, user=user)
@@ -385,7 +495,7 @@ if user is None:
 else:
     page = st.session_state.page
     if page == "checkout":
-        render_checkout()
+        render_checkout(user)
     elif page == "player" and st.session_state.selected_package_id:
         render_player(str(st.session_state.selected_package_id), user)
     else:
