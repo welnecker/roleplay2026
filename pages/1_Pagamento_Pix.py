@@ -18,6 +18,10 @@ ROOT = Path(__file__).resolve().parent.parent
 st.set_page_config(page_title="Pagamento Pix", page_icon="💠", layout="centered")
 st.title("Pagamento por Pix")
 
+if st.button("← Voltar à biblioteca"):
+    st.session_state.page = "library"
+    st.switch_page("app.py")
+
 user = st.session_state.get("authenticated_user")
 package_id = st.session_state.get("checkout_package_id")
 if user is None:
@@ -66,9 +70,23 @@ if commerce.access != "paid" or commerce.price_cents <= 0:
     st.info("Esta história não exige pagamento.")
     st.stop()
 
+if accounts.has_entitlement(
+    user_id=str(user.user_id),
+    package_id=manifest.package_id,
+    access="paid",
+):
+    st.success("Esta história já está liberada para sua conta.")
+    if st.button("Abrir biblioteca", type="primary", use_container_width=True):
+        st.session_state.page = "library"
+        st.switch_page("app.py")
+    st.stop()
+
 st.subheader(manifest.card.title)
 st.write(manifest.card.description)
-st.metric("Valor", f"R$ {commerce.price_cents / 100:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."))
+st.metric(
+    "Valor",
+    f"R$ {commerce.price_cents / 100:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
+)
 
 session_key = f"pix_order:{manifest.package_id}"
 stored: StoredPaymentOrder | None = st.session_state.get(session_key)
@@ -118,10 +136,12 @@ else:
             if result.provider.qr_code_base64:
                 st.session_state[f"pix_qr_base64:{manifest.package_id}"] = result.provider.qr_code_base64
             if result.provider.approved:
-                st.success("Pagamento confirmado. A história foi liberada para sua conta.")
+                st.session_state.pop(session_key, None)
+                st.session_state.pop(f"pix_qr_base64:{manifest.package_id}", None)
                 st.session_state.page = "library"
-            else:
-                st.warning("O pagamento ainda não foi confirmado pelo Mercado Pago.")
+                st.success("Pagamento confirmado. A história foi liberada para sua conta.")
+                st.switch_page("app.py")
+            st.warning("O pagamento ainda não foi confirmado pelo Mercado Pago.")
             st.rerun()
 
     if st.button("Gerar uma nova cobrança", use_container_width=True):
