@@ -1,0 +1,11 @@
+.git
+.github
+.streamlit/secrets.toml
+__pycache__
+.pytest_cache
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+venv
