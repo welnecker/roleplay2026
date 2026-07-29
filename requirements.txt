@@ -1,3 +1,7 @@
 streamlit>=1.40,<2
 requests>=2.32,<3
 pytest>=8.0,<9
+pydantic>=2.8,<3
+PyYAML>=6.0,<7
+gspread>=6.1,<7
+argon2-cffi>=23.1,<24
