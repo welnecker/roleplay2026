@@ -9,7 +9,6 @@ from uuid import uuid4
 
 import requests
 
-
 API_BASE_URL = "https://api.mercadopago.com"
 
 
@@ -53,6 +52,7 @@ class MercadoPagoClient:
         idempotency_key: str | None = None,
         expiration_time: str = "PT30M",
     ) -> PixOrder:
+        del description  # O título permanece no catálogo; a Orders API não exige descrição.
         if amount_cents <= 0:
             raise ValueError("O valor da cobrança deve ser maior que zero.")
         amount = Decimal(amount_cents) / Decimal(100)
@@ -71,7 +71,6 @@ class MercadoPagoClient:
                 ]
             },
             "payer": {"email": payer_email},
-            "description": description,
         }
         data = self._request(
             "POST",
