@@ -1,22 +1,33 @@
-# roleplay2026
+# Roleplay 2026
 
-Motor de roleplay narrativo construído do zero.
+Plataforma Streamlit para uma coletânea de histórias interativas independentes.
 
-## Princípios
+## Princípios do motor
 
 - Uma linha de roteiro representa um movimento narrativo.
 - Uma resposta executa apenas um movimento.
 - O código escolhe rota, beat e ordem; o modelo não escolhe progressão.
 - O movimento é consumido antes de qualquer rerun da interface.
-- Não há monkey patch, wrapper de integração ou herança do projeto anterior.
-- O prompt do roteiro é isolado e autoritário.
+- Cada história é um universo isolado, com personagens, cards, capítulos, roteiros e beats próprios.
+- O estado definitivo será recuperável pelo Google Sheets; `st.session_state` é apenas estado temporário de interface.
 
-## Primeira meta
+## Escopo da interface inicial
 
-Validar o ciclo mínimo:
+- login demonstrativo com e-mail e senha;
+- biblioteca de histórias em cards;
+- história de degustação liberada;
+- histórias pagas bloqueadas;
+- ações de iniciar, continuar e reiniciar;
+- tela inicial do player;
+- interfaces preparadas para Google Sheets e Mercado Pago.
 
-1. selecionar a menor ordem ainda não consumida;
-2. gerar uma resposta para esse movimento;
-3. consumir a ordem;
-4. permanecer no beat enquanto houver movimentos;
-5. avançar somente quando o beat terminar.
+## Executar localmente
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Nesta etapa, autenticação, catálogo e progresso usam repositórios demonstrativos em memória. A troca por Google Sheets poderá ser feita sem alterar a interface.
