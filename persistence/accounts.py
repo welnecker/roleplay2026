@@ -11,12 +11,20 @@ from gspread import Spreadsheet, Worksheet
 from persistence.models import new_id, utc_now_iso
 
 USERS_SHEET = "USERS"
+CREDENTIALS_SHEET = "USER_CREDENTIALS"
 ENTITLEMENTS_SHEET = "USER_ENTITLEMENTS"
 
 USERS_HEADERS = (
     "user_id",
     "email",
     "display_name",
+    "status",
+    "created_at",
+    "updated_at",
+)
+CREDENTIALS_HEADERS = (
+    "credential_id",
+    "user_id",
     "password_hash",
     "status",
     "created_at",
@@ -49,18 +57,9 @@ class GoogleSheetsAccountRepository:
         self.hasher = PasswordHasher()
         self._worksheets: dict[str, Worksheet] = {}
 
-    @classmethod
-    def from_service_account(
-        cls,
-        *,
-        credentials: dict[str, Any],
-        spreadsheet_id: str,
-    ) -> "GoogleSheetsAccountRepository":
-        client = gspread.service_account_from_dict(credentials)
-        return cls(client.open_by_key(spreadsheet_id))
-
     def ensure_schema(self) -> None:
         self._ensure_sheet(USERS_SHEET, USERS_HEADERS)
+        self._ensure_sheet(CREDENTIALS_SHEET, CREDENTIALS_HEADERS)
         self._ensure_sheet(ENTITLEMENTS_SHEET, ENTITLEMENTS_HEADERS)
 
     def register(self, *, email: str, password: str, display_name: str) -> AccountUser:
@@ -72,7 +71,7 @@ class GoogleSheetsAccountRepository:
             raise ValueError("A senha deve ter ao menos 8 caracteres.")
         if not clean_name:
             raise ValueError("Nome de exibição obrigatório.")
-        if self._find_by_email(clean_email) is not None:
+        if self._find_user_by_email(clean_email) is not None:
             raise ValueError("Já existe uma conta com este e-mail.")
 
         now = utc_now_iso()
@@ -88,8 +87,18 @@ class GoogleSheetsAccountRepository:
                 "user_id": user.user_id,
                 "email": user.email,
                 "display_name": user.display_name,
-                "password_hash": self.hasher.hash(password),
                 "status": user.status,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        self._append(
+            self._worksheet(CREDENTIALS_SHEET),
+            {
+                "credential_id": new_id("cred"),
+                "user_id": user.user_id,
+                "password_hash": self.hasher.hash(password),
+                "status": "active",
                 "created_at": now,
                 "updated_at": now,
             },
@@ -97,23 +106,27 @@ class GoogleSheetsAccountRepository:
         return user
 
     def authenticate(self, *, email: str, password: str) -> AccountUser | None:
-        found = self._find_by_email(email.strip().lower())
+        found = self._find_user_by_email(email.strip().lower())
         if found is None:
             return None
-        _row_number, row = found
-        if str(row.get("status", "")) != "active":
+        user_row = found[1]
+        if str(user_row.get("status", "")) != "active":
             return None
-        password_hash = str(row.get("password_hash", ""))
+
+        credential = self._find_credential(str(user_row["user_id"]))
+        if credential is None or str(credential.get("status", "")) != "active":
+            return None
         try:
-            if not self.hasher.verify(password_hash, password):
+            if not self.hasher.verify(str(credential.get("password_hash", "")), password):
                 return None
         except (VerifyMismatchError, InvalidHashError):
             return None
+
         return AccountUser(
-            user_id=str(row["user_id"]),
-            email=str(row["email"]),
-            display_name=str(row["display_name"]),
-            status=str(row["status"]),
+            user_id=str(user_row["user_id"]),
+            email=str(user_row["email"]),
+            display_name=str(user_row["display_name"]),
+            status=str(user_row["status"]),
         )
 
     def has_entitlement(self, *, user_id: str, package_id: str, access: str) -> bool:
@@ -160,11 +173,17 @@ class GoogleSheetsAccountRepository:
         )
         return entitlement_id
 
-    def _find_by_email(self, email: str) -> tuple[int, dict[str, Any]] | None:
+    def _find_user_by_email(self, email: str) -> tuple[int, dict[str, Any]] | None:
         worksheet = self._worksheet(USERS_SHEET)
         for row_number, row in enumerate(worksheet.get_all_records(default_blank=""), start=2):
             if str(row.get("email", "")).strip().lower() == email:
                 return row_number, dict(row)
+        return None
+
+    def _find_credential(self, user_id: str) -> dict[str, Any] | None:
+        for row in self._records(CREDENTIALS_SHEET):
+            if str(row.get("user_id", "")) == user_id:
+                return row
         return None
 
     def _ensure_sheet(self, name: str, headers: tuple[str, ...]) -> None:
