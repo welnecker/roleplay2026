@@ -25,6 +25,12 @@ def inject_theme() -> None:
     st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 
+def _open_pix_checkout(package_id: str) -> None:
+    st.session_state.checkout_package_id = package_id
+    st.session_state.page = "checkout"
+    st.switch_page("pages/1_Pagamento_Pix.py")
+
+
 def render_story_card(
     story: StoryCard,
     *,
@@ -33,6 +39,8 @@ def render_story_card(
     on_restart: Callable[[str], None],
     on_buy: Callable[[str], None],
 ) -> None:
+    del on_buy  # Mantido no contrato para compatibilidade com chamadas existentes.
+
     with st.container(border=True):
         label = "Degustação gratuita" if story.is_tasting else "História independente"
         st.markdown(f'<div class="story-kicker">{label}</div>', unsafe_allow_html=True)
@@ -46,16 +54,31 @@ def render_story_card(
 
         if story.access_status == AccessStatus.LOCKED:
             st.markdown(f"### {story.price_label}")
-            if st.button("Comprar com Pix", key=f"buy:{story.package_id}", use_container_width=True, type="primary"):
-                on_buy(story.package_id)
+            if st.button(
+                "Comprar com Pix",
+                key=f"buy:{story.package_id}",
+                use_container_width=True,
+                type="primary",
+            ):
+                _open_pix_checkout(story.package_id)
             return
 
         if story.progress_status == ProgressStatus.NOT_STARTED:
-            if st.button("Iniciar história", key=f"start:{story.package_id}", use_container_width=True, type="primary"):
+            if st.button(
+                "Iniciar história",
+                key=f"start:{story.package_id}",
+                use_container_width=True,
+                type="primary",
+            ):
                 on_start(story.package_id)
             return
 
-        if st.button("Continuar história", key=f"continue:{story.package_id}", use_container_width=True, type="primary"):
+        if st.button(
+            "Continuar história",
+            key=f"continue:{story.package_id}",
+            use_container_width=True,
+            type="primary",
+        ):
             on_continue(story.package_id)
         if st.button("Reiniciar", key=f"restart:{story.package_id}", use_container_width=True):
             on_restart(story.package_id)
