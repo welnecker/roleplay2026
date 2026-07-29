@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 from uuid import uuid4
 
-from billing.mercado_pago import MercadoPagoClient, PixOrder
+from billing.mercado_pago import MercadoPagoClient, MercadoPagoError, PixOrder
 from persistence.accounts import GoogleSheetsAccountRepository
 from persistence.payments import GoogleSheetsPaymentRepository, StoredPaymentOrder
 
@@ -37,21 +37,25 @@ def _new_external_reference() -> str:
     return f"rp26_{uuid4().hex}"
 
 
-def _payer_email_for_environment(*, access_token: str, payer_email: str, user_id: str) -> str:
-    """Adapta o e-mail somente para o sandbox do Mercado Pago.
-
-    Credenciais de teste exigem domínio ``@testuser.com``. O e-mail real continua
-    armazenado na conta do usuário; somente o payload enviado ao sandbox usa o
-    endereço sintético e determinístico.
-    """
-
-    clean_email = payer_email.strip().lower()
-    if not access_token.strip().upper().startswith("TEST-"):
-        return clean_email
-    if clean_email.endswith("@testuser.com"):
-        return clean_email
+def _sandbox_payer_email(user_id: str) -> str:
     digest = hashlib.sha256(user_id.encode("utf-8")).hexdigest()[:24]
     return f"rp26_{digest}@testuser.com"
+
+
+def _payer_email_for_environment(*, access_token: str, payer_email: str, user_id: str) -> str:
+    """Adapta antecipadamente o e-mail para tokens TEST- conhecidos."""
+
+    clean_email = payer_email.strip().lower()
+    if clean_email.endswith("@testuser.com"):
+        return clean_email
+    if access_token.strip().upper().startswith("TEST-"):
+        return _sandbox_payer_email(user_id)
+    return clean_email
+
+
+def _is_sandbox_email_error(exc: MercadoPagoError) -> bool:
+    message = str(exc).lower()
+    return "invalid_email_for_sandbox" in message or "@testuser.com" in message
 
 
 class PixCheckoutService:
@@ -93,13 +97,24 @@ class PixCheckoutService:
             external_reference=external_reference,
             idempotency_key=idempotency_key,
         )
-        provider = self.client.create_pix_order(
-            amount_cents=amount_cents,
-            external_reference=external_reference,
-            payer_email=provider_payer_email,
-            description=title,
-            idempotency_key=idempotency_key,
-        )
+        try:
+            provider = self.client.create_pix_order(
+                amount_cents=amount_cents,
+                external_reference=external_reference,
+                payer_email=provider_payer_email,
+                description=title,
+                idempotency_key=idempotency_key,
+            )
+        except MercadoPagoError as exc:
+            if not _is_sandbox_email_error(exc):
+                raise
+            provider = self.client.create_pix_order(
+                amount_cents=amount_cents,
+                external_reference=external_reference,
+                payer_email=_sandbox_payer_email(user_id),
+                description=title,
+                idempotency_key=str(uuid4()),
+            )
         stored = self.payments.update_provider_order(
             payment_order_id=stored.payment_order_id,
             provider_order_id=provider.order_id,
