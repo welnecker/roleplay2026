@@ -70,6 +70,7 @@ O Google Sheets será usado inicialmente como persistência compartilhada, por m
 Abas previstas:
 
 - `USERS`
+- `USER_CREDENTIALS`
 - `STORY_PACKAGES`
 - `USER_ENTITLEMENTS`
 - `SAVES`
@@ -170,7 +171,7 @@ roleplay2026/
 
 - contrato dos pacotes;
 - biblioteca local;
-- login por token;
+- autenticação com senha protegida por Argon2;
 - sessões isoladas;
 - repositórios Google Sheets;
 - player mínimo;

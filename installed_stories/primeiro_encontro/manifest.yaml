@@ -1,0 +1,20 @@
+format_version: 1
+package_id: roleplay2026.degustacao
+version: 1.0.0
+author:
+  id: roleplay2026
+  name: Roleplay 2026
+entrypoint: story.yaml
+card:
+  title: Primeiro Encontro
+  subtitle: Uma história curta para conhecer a plataforma.
+  description: Pacote gratuito de demonstração do motor narrativo.
+  genres:
+    - Drama
+    - Romance
+  chapter_label: 1 capítulo
+  cover: ""
+commerce:
+  access: free
+  price_cents: 0
+  currency: BRL

@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+
+import streamlit as st
+
+from platform_core.models import AccessStatus, ProgressStatus, StoryCard
+
+
+CARD_CSS = """
+<style>
+.block-container {max-width: 1180px; padding-top: 2rem;}
+.story-kicker {color: #a1a1aa; font-size: .82rem; letter-spacing: .08em; text-transform: uppercase;}
+.story-title {font-size: 1.45rem; font-weight: 750; margin: .25rem 0;}
+.story-copy {color: #c9c9d2; min-height: 3.2rem;}
+.story-meta {color: #a1a1aa; font-size: .88rem; margin-top: .6rem;}
+.hero {padding: 1.4rem 0 1rem 0;}
+.hero h1 {font-size: 2.5rem; margin-bottom: .3rem;}
+[data-testid="stForm"] {border: 1px solid rgba(120,120,140,.25); border-radius: 18px; padding: 1.2rem;}
+</style>
+"""
+
+
+def inject_theme() -> None:
+    st.markdown(CARD_CSS, unsafe_allow_html=True)
+
+
+def render_story_card(
+    story: StoryCard,
+    *,
+    on_start: Callable[[str], None],
+    on_continue: Callable[[str], None],
+    on_restart: Callable[[str], None],
+    on_buy: Callable[[str], None],
+) -> None:
+    with st.container(border=True):
+        label = "Degustação gratuita" if story.is_tasting else "História independente"
+        st.markdown(f'<div class="story-kicker">{label}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="story-title">{story.title}</div>', unsafe_allow_html=True)
+        st.caption(story.subtitle)
+        st.markdown(f'<div class="story-copy">{story.description}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="story-meta">{" • ".join(story.genres)} · {story.chapter_label}</div>',
+            unsafe_allow_html=True,
+        )
+
+        if story.access_status == AccessStatus.LOCKED:
+            st.markdown(f"### {story.price_label}")
+            if st.button("Comprar com Pix", key=f"buy:{story.package_id}", use_container_width=True, type="primary"):
+                on_buy(story.package_id)
+            return
+
+        if story.progress_status == ProgressStatus.NOT_STARTED:
+            if st.button("Iniciar história", key=f"start:{story.package_id}", use_container_width=True, type="primary"):
+                on_start(story.package_id)
+            return
+
+        if st.button("Continuar história", key=f"continue:{story.package_id}", use_container_width=True, type="primary"):
+            on_continue(story.package_id)
+        if st.button("Reiniciar", key=f"restart:{story.package_id}", use_container_width=True):
+            on_restart(story.package_id)

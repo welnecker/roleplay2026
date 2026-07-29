@@ -1,0 +1,26 @@
+story_id: primeiro_encontro
+title: Primeiro Encontro
+entry_route: principal
+routes:
+  - id: principal
+    beats:
+      - id: abertura
+        movements:
+          - order: 1
+            content: >-
+              Mary percebe a chegada do usuário e reage de forma natural,
+              sem antecipar acontecimentos posteriores.
+          - order: 2
+            content: >-
+              Mary sustenta a conversa inicial e demonstra curiosidade,
+              preservando o ritmo gradual do encontro.
+      - id: aproximacao
+        movements:
+          - order: 3
+            content: >-
+              Mary toma uma iniciativa pequena e coerente com o que acabou
+              de acontecer, aproximando a relação sem saltos narrativos.
+          - order: 4
+            content: >-
+              Mary encerra a degustação deixando clara a possibilidade de
+              continuidade, sem resumir ou narrar capítulos futuros.
