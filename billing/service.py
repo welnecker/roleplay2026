@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any, Mapping
 from uuid import uuid4
@@ -31,14 +32,26 @@ def read_secret(secrets: Mapping[str, Any], *names: str) -> str:
 
 
 def _new_external_reference() -> str:
-    """Gera uma referência aceita pela API Orders do Mercado Pago.
-
-    Mantém somente caracteres alfanuméricos e sublinhado e fica muito abaixo
-    do limite de 64 caracteres. A associação com usuário e pacote permanece
-    registrada localmente em PAYMENT_ORDERS.
-    """
+    """Gera uma referência curta aceita pela API Orders do Mercado Pago."""
 
     return f"rp26_{uuid4().hex}"
+
+
+def _payer_email_for_environment(*, access_token: str, payer_email: str, user_id: str) -> str:
+    """Adapta o e-mail somente para o sandbox do Mercado Pago.
+
+    Credenciais de teste exigem domínio ``@testuser.com``. O e-mail real continua
+    armazenado na conta do usuário; somente o payload enviado ao sandbox usa o
+    endereço sintético e determinístico.
+    """
+
+    clean_email = payer_email.strip().lower()
+    if not access_token.strip().upper().startswith("TEST-"):
+        return clean_email
+    if clean_email.endswith("@testuser.com"):
+        return clean_email
+    digest = hashlib.sha256(user_id.encode("utf-8")).hexdigest()[:24]
+    return f"rp26_{digest}@testuser.com"
 
 
 class PixCheckoutService:
@@ -66,6 +79,11 @@ class PixCheckoutService:
     ) -> CheckoutResult:
         external_reference = _new_external_reference()
         idempotency_key = str(uuid4())
+        provider_payer_email = _payer_email_for_environment(
+            access_token=self.client.access_token,
+            payer_email=payer_email,
+            user_id=user_id,
+        )
         stored = self.payments.create_pending_order(
             user_id=user_id,
             package_id=package_id,
@@ -78,7 +96,7 @@ class PixCheckoutService:
         provider = self.client.create_pix_order(
             amount_cents=amount_cents,
             external_reference=external_reference,
-            payer_email=payer_email,
+            payer_email=provider_payer_email,
             description=title,
             idempotency_key=idempotency_key,
         )
