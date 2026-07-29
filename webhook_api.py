@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
@@ -47,6 +49,52 @@ def build_services() -> tuple[PixCheckoutService, GoogleSheetsPaymentRepository,
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/config-status")
+def config_status() -> dict[str, Any]:
+    """Expõe apenas presença/ausência da configuração, nunca valores secretos."""
+
+    configured_path = os.getenv("STREAMLIT_SECRETS_FILE", ".streamlit/secrets.toml")
+    path = Path(configured_path)
+    try:
+        secrets = load_application_secrets()
+        loader_error = ""
+    except Exception as exc:  # diagnóstico operacional sem revelar valores
+        secrets = {}
+        loader_error = f"{type(exc).__name__}: {exc}"
+
+    service_account = secrets.get("gcp_service_account")
+    return {
+        "status": "ok" if not loader_error else "configuration_error",
+        "secrets_file_path": configured_path,
+        "secrets_file_exists": path.is_file(),
+        "spreadsheet_id_present": bool(
+            str(secrets.get("GOOGLE_SHEETS_SPREADSHEET_ID", "") or "").strip()
+        ),
+        "service_account_section_present": isinstance(service_account, dict) and bool(service_account),
+        "service_account_client_email_present": bool(
+            isinstance(service_account, dict)
+            and str(service_account.get("client_email", "") or "").strip()
+        ),
+        "mercado_pago_access_token_present": bool(
+            read_secret(
+                secrets,
+                "MERCADO_PAGO_ACCESS_TOKEN",
+                "MERCADOPAGO_ACCESS_TOKEN",
+                "MP_ACCESS_TOKEN",
+            )
+        ),
+        "mercado_pago_webhook_secret_present": bool(
+            read_secret(
+                secrets,
+                "MERCADO_PAGO_WEBHOOK_SECRET",
+                "MERCADOPAGO_WEBHOOK_SECRET",
+                "MP_WEBHOOK_SECRET",
+            )
+        ),
+        "loader_error": loader_error,
+    }
 
 
 @app.post("/webhooks/mercado-pago")
