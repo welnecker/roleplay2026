@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 import streamlit as st
 
@@ -8,6 +9,9 @@ from packages.engine_adapter import StoryEngineAdapterError, adapt_story_definit
 from packages.loader import StoryPackageError, discover_packages
 from packages.models import InstalledStoryPackage
 from packages.story_content import StoryContentError, load_story_content
+from persistence.factory import build_google_sheets_repository
+from persistence.google_sheets import GoogleSheetsRuntimeRepository
+from persistence.models import ConcurrentSaveUpdateError
 from platform_core.auth import AuthenticatedUser, authenticate_demo
 from platform_core.catalog import load_demo_catalog
 from platform_core.models import ProgressStatus, StoryCard
@@ -16,6 +20,11 @@ from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
 from roleplay.prompt_builder import build_system_prompt
 from roleplay.validator import enforce_movement
+from services.runtime_persistence import (
+    RuntimePersistenceContext,
+    open_persistent_runtime,
+    persist_turn,
+)
 from ui_components import inject_theme, render_story_card
 
 
@@ -31,6 +40,15 @@ st.set_page_config(
 inject_theme()
 
 
+@st.cache_resource(show_spinner=False)
+def runtime_repository() -> tuple[GoogleSheetsRuntimeRepository | None, str]:
+    try:
+        repository = build_google_sheets_repository(st.secrets)
+        return repository, ""
+    except Exception as exc:  # falha externa não deve derrubar o player
+        return None, str(exc)
+
+
 def initialize_state() -> None:
     st.session_state.setdefault("authenticated_user", None)
     st.session_state.setdefault("page", "library")
@@ -39,6 +57,9 @@ def initialize_state() -> None:
     st.session_state.setdefault("story_messages", {})
     st.session_state.setdefault("started_packages", set())
     st.session_state.setdefault("checkout_package_id", None)
+    st.session_state.setdefault("runtime_contexts", {})
+    st.session_state.setdefault("restart_requests", set())
+    st.session_state.setdefault("instance_id", f"streamlit_{uuid4().hex}")
 
 
 def current_user() -> AuthenticatedUser | None:
@@ -79,9 +100,11 @@ def catalog_for_user() -> list[StoryCard]:
 
 
 def open_story(package_id: str, *, restart: bool = False) -> None:
-    if restart or package_id not in st.session_state.story_states:
-        st.session_state.story_states[package_id] = StoryState()
-        st.session_state.story_messages[package_id] = []
+    if restart:
+        st.session_state.restart_requests.add(package_id)
+        st.session_state.story_states.pop(package_id, None)
+        st.session_state.story_messages.pop(package_id, None)
+        st.session_state.runtime_contexts.pop(package_id, None)
     st.session_state.started_packages.add(package_id)
     st.session_state.selected_package_id = package_id
     st.session_state.page = "player"
@@ -149,11 +172,16 @@ def render_library(user: AuthenticatedUser) -> None:
             for error in package_errors:
                 st.error(error)
 
-    st.divider()
-    st.info(
-        "A biblioteca já descobre pacotes instalados por manifesto. As histórias pagas "
-        "ainda demonstram o fluxo de compra sem criar cobrança real."
-    )
+    repository, persistence_error = runtime_repository()
+    if persistence_error:
+        st.warning(f"Google Sheets indisponível; usando estado local nesta aba: {persistence_error}")
+    elif repository is None:
+        st.info(
+            "Persistência local ativa. Configure GOOGLE_SHEETS_SPREADSHEET_ID e "
+            "[gcp_service_account] para habilitar saves compartilhados."
+        )
+    else:
+        st.success("Persistência compartilhada no Google Sheets ativa.")
 
 
 def render_checkout() -> None:
@@ -191,18 +219,52 @@ def load_package_engine(package_id: str) -> tuple[InstalledStoryPackage, StoryEn
     return package, StoryEngine(engine_story)
 
 
-def render_player(package_id: str) -> None:
+def ensure_runtime_loaded(
+    *,
+    package: InstalledStoryPackage,
+    user: AuthenticatedUser,
+) -> tuple[StoryState, list[dict[str, object]], RuntimePersistenceContext | None]:
+    package_id = package.manifest.package_id
+    restart = package_id in st.session_state.restart_requests
+    if package_id in st.session_state.story_states and not restart:
+        return (
+            st.session_state.story_states[package_id],
+            st.session_state.story_messages.setdefault(package_id, []),
+            st.session_state.runtime_contexts.get(package_id),
+        )
+
+    repository, _error = runtime_repository()
+    context: RuntimePersistenceContext | None = None
+    if repository is not None:
+        context, state, messages = open_persistent_runtime(
+            repository,
+            user=user,
+            package_id=package_id,
+            package_version=package.manifest.version,
+            restart=restart,
+            instance_id=st.session_state.instance_id,
+        )
+        st.session_state.runtime_contexts[package_id] = context
+    else:
+        state = StoryState()
+        messages = []
+
+    st.session_state.story_states[package_id] = state
+    st.session_state.story_messages[package_id] = messages
+    st.session_state.restart_requests.discard(package_id)
+    return state, messages, context
+
+
+def render_player(package_id: str, user: AuthenticatedUser) -> None:
     try:
         package, engine = load_package_engine(package_id)
-    except (StoryPackageError, StoryContentError, StoryEngineAdapterError) as exc:
+        state, messages, context = ensure_runtime_loaded(package=package, user=user)
+    except (StoryPackageError, StoryContentError, StoryEngineAdapterError, RuntimeError) as exc:
         st.error(f"A história não pôde ser carregada: {exc}")
         if st.button("Voltar à biblioteca"):
             st.session_state.page = "library"
             st.rerun()
         return
-
-    state: StoryState = st.session_state.story_states.setdefault(package_id, StoryState())
-    messages: list[dict[str, object]] = st.session_state.story_messages.setdefault(package_id, [])
 
     with st.sidebar:
         st.subheader(package.manifest.card.title)
@@ -213,6 +275,8 @@ def render_player(package_id: str) -> None:
             st.write(f"Rota: `{step[0]}`")
             st.write(f"Beat: `{step[1]}`")
         st.write(f"Ordens consumidas: `{state.consumed_orders}`")
+        if context is not None:
+            st.caption(f"Save: `{context.save.save_id}` · versão {context.save.state_version}")
         if st.button("Voltar à biblioteca", use_container_width=True):
             st.session_state.page = "library"
             st.rerun()
@@ -241,7 +305,7 @@ def render_player(package_id: str) -> None:
         st.session_state.story_states[package_id] = state
         st.rerun()
 
-    messages.append({"role": "user", "content": user_text})
+    sequence_start = len(messages) + 1
     api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
     model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
     raw_response = movement.content
@@ -250,7 +314,7 @@ def render_player(package_id: str) -> None:
     if api_key:
         history = [
             {"role": str(item["role"]), "content": str(item["content"])}
-            for item in messages[:-1][-12:]
+            for item in messages[-12:]
         ]
         try:
             raw_response = generate_response(
@@ -265,17 +329,49 @@ def render_player(package_id: str) -> None:
 
     final_response, used_fallback = enforce_movement(raw_response, movement)
     updated_state = engine.consume(state, movement)
-    st.session_state.story_states[package_id] = updated_state
+    assistant_metadata: dict[str, object] = {
+        "screenplay_order": movement.order,
+        "screenplay_route": movement.route,
+        "screenplay_beat": movement.beat,
+        "screenplay_fallback": used_fallback or bool(generation_error),
+    }
+
+    repository, _error = runtime_repository()
+    if repository is not None and context is not None:
+        try:
+            updated_context = persist_turn(
+                repository,
+                context=context,
+                user=user,
+                state=updated_state,
+                user_text=user_text,
+                assistant_text=final_response,
+                assistant_metadata=assistant_metadata,
+                sequence_start=sequence_start,
+            )
+            st.session_state.runtime_contexts[package_id] = updated_context
+        except ConcurrentSaveUpdateError as exc:
+            st.error(
+                "Este save foi alterado em outra instância. A resposta não foi aplicada "
+                f"para evitar sobrescrever o progresso: {exc}"
+            )
+            st.session_state.story_states.pop(package_id, None)
+            st.session_state.story_messages.pop(package_id, None)
+            st.session_state.runtime_contexts.pop(package_id, None)
+            return
+        except Exception as exc:
+            st.error(f"Não foi possível persistir este turno: {exc}")
+            return
+
+    messages.append({"role": "user", "content": user_text})
     messages.append(
         {
             "role": "assistant",
             "content": final_response,
-            "screenplay_order": movement.order,
-            "screenplay_route": movement.route,
-            "screenplay_beat": movement.beat,
-            "screenplay_fallback": used_fallback or bool(generation_error),
+            **assistant_metadata,
         }
     )
+    st.session_state.story_states[package_id] = updated_state
     st.session_state.story_messages[package_id] = messages
     if generation_error:
         st.toast(f"OpenRouter indisponível; movimento local usado: {generation_error}")
@@ -291,6 +387,6 @@ else:
     if page == "checkout":
         render_checkout()
     elif page == "player" and st.session_state.selected_package_id:
-        render_player(str(st.session_state.selected_package_id))
+        render_player(str(st.session_state.selected_package_id), user)
     else:
         render_library(user)
