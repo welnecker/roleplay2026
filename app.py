@@ -1,21 +1,26 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
+from packages.engine_adapter import StoryEngineAdapterError, adapt_story_definition
+from packages.loader import StoryPackageError, discover_packages
+from packages.models import InstalledStoryPackage
+from packages.story_content import StoryContentError, load_story_content
 from platform_core.auth import AuthenticatedUser, authenticate_demo
 from platform_core.catalog import load_demo_catalog
-from platform_core.models import AccessStatus, ProgressStatus, StoryCard
+from platform_core.models import ProgressStatus, StoryCard
 from roleplay.engine import StoryEngine
 from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
 from roleplay.prompt_builder import build_system_prompt
 from roleplay.validator import enforce_movement
-from stories import CASADA_FRUSTRADA
 from ui_components import inject_theme, render_story_card
 
 
 MODEL_DEFAULT = "google/gemini-3-flash-preview"
-DEMO_PACKAGE_ID = "roleplay2026.degustacao"
+INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent / "installed_stories"
 
 st.set_page_config(
     page_title="Roleplay 2026",
@@ -39,6 +44,11 @@ def initialize_state() -> None:
 def current_user() -> AuthenticatedUser | None:
     value = st.session_state.authenticated_user
     return value if isinstance(value, AuthenticatedUser) else None
+
+
+def installed_packages() -> tuple[dict[str, InstalledStoryPackage], list[str]]:
+    packages, errors = discover_packages(INSTALLED_STORIES_ROOT)
+    return {package.manifest.package_id: package for package in packages}, errors
 
 
 def catalog_for_user() -> list[StoryCard]:
@@ -85,7 +95,7 @@ def show_checkout(package_id: str) -> None:
 
 
 def render_login() -> None:
-    left, center, right = st.columns([1, 1.15, 1])
+    _left, center, _right = st.columns([1, 1.15, 1])
     with center:
         st.markdown("<div class='hero'><h1>Roleplay 2026</h1></div>", unsafe_allow_html=True)
         st.write("Uma biblioteca de histórias interativas independentes.")
@@ -93,7 +103,11 @@ def render_login() -> None:
             st.subheader("Entrar")
             email = st.text_input("E-mail", placeholder="voce@email.com")
             password = st.text_input("Senha", type="password")
-            submitted = st.form_submit_button("Acessar biblioteca", use_container_width=True, type="primary")
+            submitted = st.form_submit_button(
+                "Acessar biblioteca",
+                use_container_width=True,
+                type="primary",
+            )
         st.caption("Protótipo: qualquer e-mail válido e senha não vazia permitem o acesso.")
         if submitted:
             user = authenticate_demo(email, password)
@@ -129,10 +143,16 @@ def render_library(user: AuthenticatedUser) -> None:
                     on_buy=show_checkout,
                 )
 
+    _packages, package_errors = installed_packages()
+    if package_errors:
+        with st.expander("Pacotes com erro"):
+            for error in package_errors:
+                st.error(error)
+
     st.divider()
     st.info(
-        "Nesta interface inicial, a degustação está liberada. As demais histórias "
-        "demonstram o fluxo de compra por Pix, ainda sem criar cobrança real."
+        "A biblioteca já descobre pacotes instalados por manifesto. As histórias pagas "
+        "ainda demonstram o fluxo de compra sem criar cobrança real."
     )
 
 
@@ -158,20 +178,34 @@ def render_checkout() -> None:
     st.button("Gerar Pix", disabled=True, use_container_width=True, type="primary")
 
 
+def load_package_engine(package_id: str) -> tuple[InstalledStoryPackage, StoryEngine]:
+    package_map, errors = installed_packages()
+    if package_id not in package_map:
+        detail = "; ".join(errors) if errors else "pacote não instalado"
+        raise StoryPackageError(f"Não foi possível abrir {package_id}: {detail}")
+
+    package = package_map[package_id]
+    entrypoint = package.root / package.manifest.entrypoint
+    loaded = load_story_content(entrypoint)
+    engine_story = adapt_story_definition(loaded.definition)
+    return package, StoryEngine(engine_story)
+
+
 def render_player(package_id: str) -> None:
-    if package_id != DEMO_PACKAGE_ID:
-        st.warning("O player desta história será ativado quando o conteúdo for cadastrado.")
+    try:
+        package, engine = load_package_engine(package_id)
+    except (StoryPackageError, StoryContentError, StoryEngineAdapterError) as exc:
+        st.error(f"A história não pôde ser carregada: {exc}")
         if st.button("Voltar à biblioteca"):
             st.session_state.page = "library"
             st.rerun()
         return
 
-    engine = StoryEngine(CASADA_FRUSTRADA)
     state: StoryState = st.session_state.story_states.setdefault(package_id, StoryState())
     messages: list[dict[str, object]] = st.session_state.story_messages.setdefault(package_id, [])
 
     with st.sidebar:
-        st.subheader("História de degustação")
+        st.subheader(package.manifest.card.title)
         step = engine.current_step(state)
         if step is None:
             st.write("História concluída")
@@ -185,8 +219,8 @@ def render_player(package_id: str) -> None:
         if st.button("Reiniciar história", use_container_width=True):
             open_story(package_id, restart=True)
 
-    st.title("Primeiro Encontro")
-    st.caption("Degustação do motor narrativo determinístico.")
+    st.title(engine.story.title)
+    st.caption(package.manifest.card.subtitle or "História carregada por pacote declarativo.")
 
     for message in messages:
         with st.chat_message(str(message["role"])):
