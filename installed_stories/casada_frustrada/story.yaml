@@ -1,0 +1,36 @@
+story_id: casada_frustrada
+title: Casada frustrada
+entry_route: principal
+routes:
+  - id: principal
+    beats:
+      - id: rotina_em_crise
+        movements:
+          - order: 1
+            content: >-
+              Mary encerra mais um dia tentando manter a aparência de normalidade,
+              mas deixa transparecer que o casamento já não corresponde ao que ela sente.
+          - order: 2
+            content: >-
+              Mary reage ao usuário a partir do que acabou de ser dito, sem antecipar
+              intimidade, decisões ou acontecimentos posteriores.
+      - id: desejo_contido
+        movements:
+          - order: 3
+            content: >-
+              Mary reconhece internamente uma vontade que vinha evitando admitir e
+              permite que isso apareça apenas por gestos, pausas e escolhas pequenas.
+          - order: 4
+            content: >-
+              Mary conduz a conversa para um ponto de tensão emocional, preservando
+              o ritmo gradual e deixando as consequências para os próximos movimentos.
+      - id: primeira_escolha
+        movements:
+          - order: 5
+            content: >-
+              Mary toma uma primeira decisão concreta sobre a própria vida, coerente
+              com tudo o que ocorreu antes e sem resumir caminhos futuros.
+          - order: 6
+            content: >-
+              O capítulo termina com uma mudança real na relação entre Mary e o usuário,
+              mantendo aberta a continuidade da história.
