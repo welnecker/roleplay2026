@@ -141,8 +141,6 @@ else:
             pass
     if stored.qr_code:
         st.text_area("Pix Copia e Cola", stored.qr_code, height=120)
-    if stored.ticket_url:
-        st.link_button("Abrir página do Pix", stored.ticket_url, use_container_width=True)
 
     status_label = stored.status or "pendente"
     st.info(f"Status atual: {status_label}")
