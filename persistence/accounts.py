@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import monotonic
 from typing import Any
 
 import gspread
@@ -13,6 +14,7 @@ from persistence.models import new_id, utc_now_iso
 USERS_SHEET = "USERS"
 CREDENTIALS_SHEET = "USER_CREDENTIALS"
 ENTITLEMENTS_SHEET = "USER_ENTITLEMENTS"
+RECORDS_CACHE_TTL_SECONDS = 30.0
 
 USERS_HEADERS = (
     "user_id",
@@ -56,6 +58,7 @@ class GoogleSheetsAccountRepository:
         self.spreadsheet = spreadsheet
         self.hasher = PasswordHasher()
         self._worksheets: dict[str, Worksheet] = {}
+        self._records_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 
     def ensure_schema(self) -> None:
         self._ensure_sheet(USERS_SHEET, USERS_HEADERS)
@@ -82,7 +85,7 @@ class GoogleSheetsAccountRepository:
             status="active",
         )
         self._append(
-            self._worksheet(USERS_SHEET),
+            USERS_SHEET,
             {
                 "user_id": user.user_id,
                 "email": user.email,
@@ -93,7 +96,7 @@ class GoogleSheetsAccountRepository:
             },
         )
         self._append(
-            self._worksheet(CREDENTIALS_SHEET),
+            CREDENTIALS_SHEET,
             {
                 "credential_id": new_id("cred"),
                 "user_id": user.user_id,
@@ -158,7 +161,7 @@ class GoogleSheetsAccountRepository:
         now = utc_now_iso()
         entitlement_id = new_id("ent")
         self._append(
-            self._worksheet(ENTITLEMENTS_SHEET),
+            ENTITLEMENTS_SHEET,
             {
                 "entitlement_id": entitlement_id,
                 "user_id": user_id,
@@ -174,8 +177,7 @@ class GoogleSheetsAccountRepository:
         return entitlement_id
 
     def _find_user_by_email(self, email: str) -> tuple[int, dict[str, Any]] | None:
-        worksheet = self._worksheet(USERS_SHEET)
-        for row_number, row in enumerate(worksheet.get_all_records(default_blank=""), start=2):
+        for row_number, row in enumerate(self._records(USERS_SHEET), start=2):
             if str(row.get("email", "")).strip().lower() == email:
                 return row_number, dict(row)
         return None
@@ -204,9 +206,19 @@ class GoogleSheetsAccountRepository:
         return self._worksheets[name]
 
     def _records(self, name: str) -> list[dict[str, Any]]:
-        return [dict(row) for row in self._worksheet(name).get_all_records(default_blank="")]
+        now = monotonic()
+        cached = self._records_cache.get(name)
+        if cached is not None:
+            expires_at, rows = cached
+            if now < expires_at:
+                return [dict(row) for row in rows]
 
-    @staticmethod
-    def _append(worksheet: Worksheet, data: dict[str, Any]) -> None:
+        rows = [dict(row) for row in self._worksheet(name).get_all_records(default_blank="")]
+        self._records_cache[name] = (now + RECORDS_CACHE_TTL_SECONDS, rows)
+        return [dict(row) for row in rows]
+
+    def _append(self, sheet_name: str, data: dict[str, Any]) -> None:
+        worksheet = self._worksheet(sheet_name)
         headers = [str(item).strip() for item in worksheet.row_values(1)]
         worksheet.append_row([data.get(header, "") for header in headers], value_input_option="RAW")
+        self._records_cache.pop(sheet_name, None)
