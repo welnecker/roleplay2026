@@ -86,6 +86,7 @@ def _install_sidebar_end_policy() -> None:
         st.session_state.started_packages.discard(package_id)
         st.session_state.checkout_package_id = package_id
         st.session_state.selected_package_id = None
+        st.session_state.page = "checkout"
         st.switch_page("pages/1_Pagamento_Pix.py")
         return False
 
@@ -93,9 +94,20 @@ def _install_sidebar_end_policy() -> None:
     _BUTTON_POLICY_INSTALLED = True
 
 
+def _redirect_pending_checkout() -> None:
+    """Impede que a tela antiga de checkout do app principal seja renderizada."""
+
+    if (
+        str(st.session_state.get("page", "") or "") == "checkout"
+        and str(st.session_state.get("checkout_package_id", "") or "").strip()
+    ):
+        st.switch_page("pages/1_Pagamento_Pix.py")
+
+
 def inject_theme() -> None:
     GoogleSheetsAccountRepository.configure_paid_access_resolver(_paid_access_resolver)
     _install_sidebar_end_policy()
+    _redirect_pending_checkout()
     st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 
