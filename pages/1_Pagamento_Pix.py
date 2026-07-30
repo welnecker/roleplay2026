@@ -22,6 +22,7 @@ from services.paid_run_access import prime_paid_access_available
 
 ROOT = Path(__file__).resolve().parent.parent
 PROCESSING_COOLDOWN_SECONDS = 6.0
+NEW_CHARGE_COOLDOWN_SECONDS = 65.0
 T = TypeVar("T")
 
 st.set_page_config(page_title="Pagamento Pix", page_icon="💠", layout="centered")
@@ -87,7 +88,7 @@ def call_with_quota_backoff(
     *,
     status: object,
     action_label: str,
-    max_attempts: int = 4,
+    max_attempts: int = 5,
 ) -> T:
     """Repete somente falhas 429 durante o processamento do pagamento."""
 
@@ -97,11 +98,11 @@ def call_with_quota_backoff(
         except APIError as exc:
             if not is_quota_error(exc) or attempt == max_attempts - 1:
                 raise
-            delay = min(18.0, (2 ** (attempt + 1)) + random.uniform(0.5, 1.5))
+            delay = min(30.0, (2 ** (attempt + 1)) + random.uniform(0.5, 1.5))
             write = getattr(status, "write", None)
             if callable(write):
                 write(
-                    f"Aguardando a liberação do Google para {action_label} "
+                    f"Aguardando para {action_label} "
                     f"({delay:.0f} segundos)..."
                 )
             time.sleep(delay)
@@ -112,6 +113,21 @@ def call_with_quota_backoff(
 def clear_pix_session(package_id: str) -> None:
     st.session_state.pop(f"pix_order:{package_id}", None)
     st.session_state.pop(f"pix_qr_base64:{package_id}", None)
+
+
+def prepare_new_charge(package_id: str) -> None:
+    """Aguarda uma janela segura antes de reconstruir o checkout."""
+
+    with st.status("Preparando uma nova cobrança...", expanded=True) as status:
+        status.write("A cobrança anterior será descartada. Aguarde alguns instantes.")
+        time.sleep(NEW_CHARGE_COOLDOWN_SECONDS)
+        clear_pix_session(package_id)
+        status.update(
+            label="Nova cobrança pronta.",
+            state="complete",
+            expanded=False,
+        )
+    st.rerun()
 
 
 def finish_payment_transition(*, user_id: str, package_id: str, status: object) -> None:
@@ -205,15 +221,25 @@ stored: StoredPaymentOrder | None = st.session_state.get(session_key)
 if stored is None:
     if st.button("Gerar Pix", type="primary", use_container_width=True):
         try:
-            with st.spinner("Criando cobrança Pix..."):
-                result = service.create_checkout(
-                    user_id=str(user.user_id),
-                    payer_email=str(user.email),
-                    package_id=manifest.package_id,
-                    product_id=manifest.package_id,
-                    title=manifest.card.title,
-                    amount_cents=commerce.price_cents,
-                    currency=commerce.currency,
+            with st.status("Criando cobrança Pix...", expanded=True) as creation_status:
+                creation_status.write("Preparando os dados do pagamento...")
+                result = call_with_quota_backoff(
+                    lambda: service.create_checkout(
+                        user_id=str(user.user_id),
+                        payer_email=str(user.email),
+                        package_id=manifest.package_id,
+                        product_id=manifest.package_id,
+                        title=manifest.card.title,
+                        amount_cents=commerce.price_cents,
+                        currency=commerce.currency,
+                    ),
+                    status=creation_status,
+                    action_label="criar a cobrança Pix",
+                )
+                creation_status.update(
+                    label="Cobrança Pix criada.",
+                    state="complete",
+                    expanded=False,
                 )
         except (MercadoPagoError, APIError, ValueError, RuntimeError) as exc:
             st.error(str(exc))
@@ -300,5 +326,4 @@ else:
             st.error(str(exc))
 
     if st.button("Gerar uma nova cobrança", use_container_width=True):
-        clear_pix_session(manifest.package_id)
-        st.rerun()
+        prepare_new_charge(manifest.package_id)
