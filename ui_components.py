@@ -22,6 +22,7 @@ CARD_CSS = """
 </style>
 """
 
+_PILOT_PACKAGE_ID = "roleplay2026.casada_frustrada"
 _ORIGINAL_BUTTON = st.button
 _BUTTON_POLICY_INSTALLED = False
 
@@ -104,10 +105,21 @@ def _redirect_pending_checkout() -> None:
         st.switch_page("pages/1_Pagamento_Pix.py")
 
 
+def _redirect_pilot_player() -> None:
+    """Usa o player guiado apenas para o roteiro piloto de Casada frustrada."""
+
+    if (
+        str(st.session_state.get("page", "") or "") == "player"
+        and str(st.session_state.get("selected_package_id", "") or "") == _PILOT_PACKAGE_ID
+    ):
+        st.switch_page("pages/2_Piloto_Supermercado.py")
+
+
 def inject_theme() -> None:
     GoogleSheetsAccountRepository.configure_paid_access_resolver(_paid_access_resolver)
     _install_sidebar_end_policy()
     _redirect_pending_checkout()
+    _redirect_pilot_player()
     st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 

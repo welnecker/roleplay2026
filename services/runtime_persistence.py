@@ -139,11 +139,17 @@ def persist_turn(
         status="completed" if state.finished else "active",
     )
     if state.finished:
+        requested_status = str(assistant_metadata.get("pilot_run_status", "completed") or "completed")
+        run_status = "terminated" if requested_status == "terminated" else "completed"
+        ending_code = str(
+            assistant_metadata.get("pilot_ending_code", "normal_completion")
+            or "normal_completion"
+        )
         finish_active_run(
             secrets=st.secrets,
             user_id=user.user_id,
             package_id=context.save.package_id,
-            status="completed",
-            ending_code="normal_completion",
+            status=run_status,
+            ending_code=ending_code,
         )
     return RuntimePersistenceContext(save=updated_save, session=context.session)
