@@ -14,7 +14,6 @@ from gspread.exceptions import APIError
 from billing.mercado_pago import MercadoPagoClient, MercadoPagoError
 from billing.service import PixCheckoutService, read_secret
 from packages.loader import discover_packages
-from persistence.billing_users import GoogleSheetsBillingUserRepository
 from persistence.payments import GoogleSheetsPaymentRepository, StoredPaymentOrder
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from persistence.v2_google_sheets import GoogleSheetsStoryCreditRepository
@@ -33,7 +32,6 @@ st.title("Pagamento por Pix")
 def payment_services() -> tuple[
     PixCheckoutService | None,
     GoogleSheetsStoryCreditRepository | None,
-    GoogleSheetsBillingUserRepository | None,
     str,
 ]:
     """Monta somente a infraestrutura de ROLEPLAY_ACCOUNTS_BILLING."""
@@ -41,7 +39,7 @@ def payment_services() -> tuple[
     try:
         credentials = st.secrets.get("gcp_service_account")
         if not credentials:
-            return None, None, None, "Google Sheets não está configurado."
+            return None, None, "Google Sheets não está configurado."
 
         access_token = read_secret(
             st.secrets,
@@ -50,13 +48,12 @@ def payment_services() -> tuple[
             "MP_ACCESS_TOKEN",
         )
         if not access_token:
-            return None, None, None, "Access Token do Mercado Pago não encontrado nos secrets."
+            return None, None, "Access Token do Mercado Pago não encontrado nos secrets."
 
         spreadsheet_ids = read_spreadsheet_ids(st.secrets)
         client = gspread.service_account_from_dict(dict(credentials))
         accounts_billing = client.open_by_key(spreadsheet_ids.accounts_billing)
 
-        billing_users = GoogleSheetsBillingUserRepository(accounts_billing)
         payments = GoogleSheetsPaymentRepository(accounts_billing)
         story_credits = GoogleSheetsStoryCreditRepository(accounts_billing)
         service = PixCheckoutService(
@@ -64,9 +61,9 @@ def payment_services() -> tuple[
             payments=payments,
             story_credits=story_credits,
         )
-        return service, story_credits, billing_users, ""
+        return service, story_credits, ""
     except Exception as exc:
-        return None, None, None, str(exc)
+        return None, None, str(exc)
 
 
 def is_quota_error(exc: BaseException) -> bool:
@@ -184,8 +181,8 @@ if package is None:
         st.code("\n".join(errors))
     st.stop()
 
-service, story_credits, billing_users, service_error = payment_services()
-if service is None or story_credits is None or billing_users is None:
+service, story_credits, service_error = payment_services()
+if service is None or story_credits is None:
     st.error(service_error or "Não foi possível iniciar o pagamento.")
     st.stop()
 
@@ -209,16 +206,6 @@ if stored is None:
     if st.button("Gerar Pix", type="primary", use_container_width=True):
         try:
             with st.status("Criando cobrança Pix...", expanded=True) as creation_status:
-                creation_status.write("Sincronizando sua conta...")
-                call_with_quota_backoff(
-                    lambda: billing_users.upsert_user(
-                        user_id=str(user.user_id),
-                        email=str(user.email),
-                        display_name=str(user.display_name),
-                    ),
-                    status=creation_status,
-                    action_label="sincronizar a conta",
-                )
                 creation_status.write("Preparando os dados do pagamento...")
                 result = call_with_quota_backoff(
                     lambda: service.create_checkout(
