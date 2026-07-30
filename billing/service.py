@@ -17,6 +17,26 @@ class CheckoutResult:
     provider: PixOrder
 
 
+def _streamlit_paid_access_resolver(*, user_id: str, package_id: str, access: str) -> bool:
+    if access == "free":
+        return True
+    try:
+        import streamlit as st
+
+        from services.paid_run_access import get_paid_run_access
+
+        return get_paid_run_access(
+            secrets=st.secrets,
+            user_id=user_id,
+            package_id=package_id,
+        ).allowed
+    except Exception:
+        return False
+
+
+GoogleSheetsAccountRepository.configure_paid_access_resolver(_streamlit_paid_access_resolver)
+
+
 def read_secret(secrets: Mapping[str, Any], *names: str) -> str:
     for name in names:
         value = secrets.get(name)

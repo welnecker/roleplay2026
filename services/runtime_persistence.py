@@ -10,6 +10,7 @@ from persistence.google_sheets import GoogleSheetsRuntimeRepository
 from persistence.models import SaveRecord, SessionRecord
 from platform_core.auth import AuthenticatedUser
 from roleplay.models import StoryState
+from services.paid_run_access import finish_active_run
 from services.v2_run_starter import start_v2_run_on_first_message
 
 
@@ -100,12 +101,17 @@ def persist_turn(
     sequence_start: int,
 ) -> RuntimePersistenceContext:
     if sequence_start == 1:
-        start_v2_run_on_first_message(
+        started_run = start_v2_run_on_first_message(
             secrets=st.secrets,
             user_id=user.user_id,
             package_id=context.save.package_id,
             installed_stories_root=INSTALLED_STORIES_ROOT,
         )
+        if started_run is None:
+            raise RuntimeError(
+                "Nenhum crédito disponível para iniciar esta execução. "
+                "É necessário realizar um novo pagamento."
+            )
 
     repository.append_interaction(
         session_id=context.session.session_id,
@@ -132,4 +138,12 @@ def persist_turn(
         state=serialize_story_state(state),
         status="completed" if state.finished else "active",
     )
+    if state.finished:
+        finish_active_run(
+            secrets=st.secrets,
+            user_id=user.user_id,
+            package_id=context.save.package_id,
+            status="completed",
+            ending_code="normal_completion",
+        )
     return RuntimePersistenceContext(save=updated_save, session=context.session)
