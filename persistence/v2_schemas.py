@@ -12,6 +12,14 @@ ACCOUNTS_BILLING_SCHEMAS: Final[dict[str, tuple[str, ...]]] = {
         "created_at",
         "updated_at",
     ),
+    "USER_CREDENTIALS": (
+        "credential_id",
+        "user_id",
+        "password_hash",
+        "status",
+        "created_at",
+        "updated_at",
+    ),
     "STORY_CREDITS": (
         "credit_id",
         "user_id",
