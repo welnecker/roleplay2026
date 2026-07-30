@@ -14,7 +14,7 @@ from gspread.exceptions import APIError
 from billing.mercado_pago import MercadoPagoClient, MercadoPagoError
 from billing.service import PixCheckoutService, read_secret
 from packages.loader import discover_packages
-from persistence.accounts import GoogleSheetsAccountRepository
+from persistence.billing_users import GoogleSheetsBillingUserRepository
 from persistence.payments import GoogleSheetsPaymentRepository, StoredPaymentOrder
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from persistence.v2_google_sheets import GoogleSheetsStoryCreditRepository
@@ -33,17 +33,15 @@ st.title("Pagamento por Pix")
 def payment_services() -> tuple[
     PixCheckoutService | None,
     GoogleSheetsStoryCreditRepository | None,
+    GoogleSheetsBillingUserRepository | None,
     str,
 ]:
-    """Monta somente a infraestrutura necessária ao checkout Pix."""
+    """Monta somente a infraestrutura de ROLEPLAY_ACCOUNTS_BILLING."""
 
     try:
         credentials = st.secrets.get("gcp_service_account")
-        legacy_spreadsheet_id = str(
-            st.secrets.get("GOOGLE_SHEETS_SPREADSHEET_ID", "") or ""
-        ).strip()
-        if not credentials or not legacy_spreadsheet_id:
-            return None, None, "Google Sheets não está configurado."
+        if not credentials:
+            return None, None, None, "Google Sheets não está configurado."
 
         access_token = read_secret(
             st.secrets,
@@ -52,27 +50,23 @@ def payment_services() -> tuple[
             "MP_ACCESS_TOKEN",
         )
         if not access_token:
-            return None, None, "Access Token do Mercado Pago não encontrado nos secrets."
+            return None, None, None, "Access Token do Mercado Pago não encontrado nos secrets."
 
         spreadsheet_ids = read_spreadsheet_ids(st.secrets)
         client = gspread.service_account_from_dict(dict(credentials))
-        billing_legacy = client.open_by_key(legacy_spreadsheet_id)
-        billing_v2 = client.open_by_key(spreadsheet_ids.accounts_billing)
+        accounts_billing = client.open_by_key(spreadsheet_ids.accounts_billing)
 
-        # As abas são criadas por migração/deploy. O checkout normal não deve
-        # validar SAVES, SESSIONS, INTERACTIONS e outros schemas narrativos.
-        accounts = GoogleSheetsAccountRepository(billing_legacy)
-        payments = GoogleSheetsPaymentRepository(billing_legacy)
-        story_credits = GoogleSheetsStoryCreditRepository(billing_v2)
+        billing_users = GoogleSheetsBillingUserRepository(accounts_billing)
+        payments = GoogleSheetsPaymentRepository(accounts_billing)
+        story_credits = GoogleSheetsStoryCreditRepository(accounts_billing)
         service = PixCheckoutService(
             client=MercadoPagoClient(access_token),
             payments=payments,
-            accounts=accounts,
             story_credits=story_credits,
         )
-        return service, story_credits, ""
+        return service, story_credits, billing_users, ""
     except Exception as exc:
-        return None, None, str(exc)
+        return None, None, None, str(exc)
 
 
 def is_quota_error(exc: BaseException) -> bool:
@@ -101,10 +95,7 @@ def call_with_quota_backoff(
             delay = min(30.0, (2 ** (attempt + 1)) + random.uniform(0.5, 1.5))
             write = getattr(status, "write", None)
             if callable(write):
-                write(
-                    f"Aguardando para {action_label} "
-                    f"({delay:.0f} segundos)..."
-                )
+                write(f"Aguardando para {action_label} ({delay:.0f} segundos)...")
             time.sleep(delay)
 
     raise RuntimeError(f"Não foi possível concluir: {action_label}.")
@@ -122,11 +113,7 @@ def prepare_new_charge(package_id: str) -> None:
         status.write("A cobrança anterior será descartada. Aguarde alguns instantes.")
         time.sleep(NEW_CHARGE_COOLDOWN_SECONDS)
         clear_pix_session(package_id)
-        status.update(
-            label="Nova cobrança pronta.",
-            state="complete",
-            expanded=False,
-        )
+        status.update(label="Nova cobrança pronta.", state="complete", expanded=False)
     st.rerun()
 
 
@@ -197,8 +184,8 @@ if package is None:
         st.code("\n".join(errors))
     st.stop()
 
-service, story_credits, service_error = payment_services()
-if service is None or story_credits is None:
+service, story_credits, billing_users, service_error = payment_services()
+if service is None or story_credits is None or billing_users is None:
     st.error(service_error or "Não foi possível iniciar o pagamento.")
     st.stop()
 
@@ -222,6 +209,16 @@ if stored is None:
     if st.button("Gerar Pix", type="primary", use_container_width=True):
         try:
             with st.status("Criando cobrança Pix...", expanded=True) as creation_status:
+                creation_status.write("Sincronizando sua conta...")
+                call_with_quota_backoff(
+                    lambda: billing_users.upsert_user(
+                        user_id=str(user.user_id),
+                        email=str(user.email),
+                        display_name=str(user.display_name),
+                    ),
+                    status=creation_status,
+                    action_label="sincronizar a conta",
+                )
                 creation_status.write("Preparando os dados do pagamento...")
                 result = call_with_quota_backoff(
                     lambda: service.create_checkout(
@@ -260,11 +257,7 @@ else:
 
     if is_sandbox_order(stored):
         st.caption("Cobrança de sandbox detectada. Nenhum valor real será movimentado.")
-        if st.button(
-            "Simular pagamento aprovado",
-            type="primary",
-            use_container_width=True,
-        ):
+        if st.button("Simular pagamento aprovado", type="primary", use_container_width=True):
             try:
                 with st.status(
                     "Pagamento confirmado. Aguarde o processamento...",
@@ -292,10 +285,7 @@ else:
 
     if st.button("Já paguei — verificar agora", use_container_width=True):
         try:
-            with st.status(
-                "Aguarde o processamento do pagamento...",
-                expanded=True,
-            ) as processing_status:
+            with st.status("Aguarde o processamento do pagamento...", expanded=True) as processing_status:
                 processing_status.write("Confirmando diretamente no Mercado Pago...")
                 result = call_with_quota_backoff(
                     lambda: service.refresh(stored),
