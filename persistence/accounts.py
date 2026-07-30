@@ -62,9 +62,10 @@ class AccountUser:
 
 class GoogleSheetsAccountRepository:
     _paid_access_resolver: ClassVar[PaidAccessResolver | None] = None
+    _billing_spreadsheet: ClassVar[Spreadsheet | None] = None
 
     def __init__(self, spreadsheet: Spreadsheet) -> None:
-        self.spreadsheet = spreadsheet
+        self.spreadsheet = self._resolve_accounts_billing_spreadsheet(spreadsheet)
         self.hasher = PasswordHasher()
         self._worksheets: dict[str, Worksheet] = {}
         self._records_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
@@ -73,12 +74,30 @@ class GoogleSheetsAccountRepository:
     def configure_paid_access_resolver(cls, resolver: PaidAccessResolver | None) -> None:
         cls._paid_access_resolver = resolver
 
+    @classmethod
+    def _resolve_accounts_billing_spreadsheet(cls, fallback: Spreadsheet) -> Spreadsheet:
+        if cls._billing_spreadsheet is not None:
+            return cls._billing_spreadsheet
+        try:
+            import streamlit as st
+
+            credentials = st.secrets.get("gcp_service_account")
+            spreadsheet_id = str(
+                st.secrets.get("ROLEPLAY_ACCOUNTS_BILLING_SPREADSHEET_ID", "") or ""
+            ).strip()
+            if credentials and spreadsheet_id:
+                client = gspread.service_account_from_dict(dict(credentials))
+                cls._billing_spreadsheet = client.open_by_key(spreadsheet_id)
+                return cls._billing_spreadsheet
+        except Exception:
+            pass
+        return fallback
+
     def ensure_schema(self) -> None:
-        """Cria ou valida as abas quando chamada explicitamente por setup/testes."""
+        """Cria ou valida apenas as abas de autenticação."""
 
         self._ensure_sheet(USERS_SHEET, USERS_HEADERS)
         self._ensure_sheet(CREDENTIALS_SHEET, CREDENTIALS_HEADERS)
-        self._ensure_sheet(ENTITLEMENTS_SHEET, ENTITLEMENTS_HEADERS)
 
     def register(self, *, email: str, password: str, display_name: str) -> AccountUser:
         clean_email = email.strip().lower()
@@ -159,11 +178,15 @@ class GoogleSheetsAccountRepository:
                     access=access,
                 )
             )
+        try:
+            rows = self._records(ENTITLEMENTS_SHEET)
+        except gspread.WorksheetNotFound:
+            return False
         return any(
             str(row.get("user_id", "")) == user_id
             and str(row.get("package_id", "")) == package_id
             and str(row.get("status", "")) == "active"
-            for row in self._records(ENTITLEMENTS_SHEET)
+            for row in rows
         )
 
     def grant_entitlement(
@@ -175,6 +198,7 @@ class GoogleSheetsAccountRepository:
         source: str,
         payment_id: str = "",
     ) -> str:
+        self._ensure_sheet(ENTITLEMENTS_SHEET, ENTITLEMENTS_HEADERS)
         for row in self._records(ENTITLEMENTS_SHEET):
             if (
                 str(row.get("user_id", "")) == user_id
