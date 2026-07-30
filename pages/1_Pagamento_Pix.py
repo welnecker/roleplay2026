@@ -11,6 +11,7 @@ from packages.loader import discover_packages
 from persistence.accounts import GoogleSheetsAccountRepository
 from persistence.factory import build_google_sheets_repository
 from persistence.payments import GoogleSheetsPaymentRepository, StoredPaymentOrder
+from persistence.v2_factory import build_v2_narrative_repositories
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -23,6 +24,7 @@ st.title("Pagamento por Pix")
 def payment_services() -> tuple[
     PixCheckoutService | None,
     GoogleSheetsAccountRepository | None,
+    object | None,
     str,
 ]:
     """Monta a infraestrutura Pix uma única vez por processo do Streamlit."""
@@ -30,7 +32,7 @@ def payment_services() -> tuple[
     try:
         runtime = build_google_sheets_repository(st.secrets)
         if runtime is None:
-            return None, None, "Google Sheets não está configurado."
+            return None, None, None, "Google Sheets não está configurado."
 
         access_token = read_secret(
             st.secrets,
@@ -39,20 +41,22 @@ def payment_services() -> tuple[
             "MP_ACCESS_TOKEN",
         )
         if not access_token:
-            return None, None, "Access Token do Mercado Pago não encontrado nos secrets."
+            return None, None, None, "Access Token do Mercado Pago não encontrado nos secrets."
 
         accounts = GoogleSheetsAccountRepository(runtime.spreadsheet)
         accounts.ensure_schema()
         payments = GoogleSheetsPaymentRepository(runtime.spreadsheet)
         payments.ensure_schema()
+        v2_repositories = build_v2_narrative_repositories(st.secrets)
         service = PixCheckoutService(
             client=MercadoPagoClient(access_token),
             payments=payments,
             accounts=accounts,
+            story_credits=v2_repositories.credits,
         )
-        return service, accounts, ""
+        return service, accounts, v2_repositories.credits, ""
     except Exception as exc:
-        return None, None, str(exc)
+        return None, None, None, str(exc)
 
 
 def is_sandbox_order(stored: StoredPaymentOrder) -> bool:
@@ -95,8 +99,8 @@ if package is None:
         st.code("\n".join(errors))
     st.stop()
 
-service, accounts, service_error = payment_services()
-if service is None or accounts is None:
+service, accounts, story_credits, service_error = payment_services()
+if service is None or accounts is None or story_credits is None:
     st.error(service_error or "Não foi possível iniciar o pagamento.")
     st.stop()
 
@@ -171,12 +175,18 @@ else:
             use_container_width=True,
         ):
             try:
+                payment_id = stored.provider_order_id or stored.payment_order_id
                 accounts.grant_entitlement(
                     user_id=str(user.user_id),
                     package_id=manifest.package_id,
                     product_id=manifest.package_id,
                     source="mercado_pago_sandbox",
-                    payment_id=stored.provider_order_id or stored.payment_order_id,
+                    payment_id=payment_id,
+                )
+                story_credits.create_credit(
+                    user_id=str(user.user_id),
+                    package_id=manifest.package_id,
+                    payment_id=payment_id,
                 )
             except (ValueError, RuntimeError) as exc:
                 st.error(f"Não foi possível liberar a história: {exc}")
