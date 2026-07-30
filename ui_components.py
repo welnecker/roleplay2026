@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
 
 import streamlit as st
 
 from persistence.accounts import GoogleSheetsAccountRepository
 from platform_core.models import AccessStatus, ProgressStatus, StoryCard
-from services.paid_run_access import finish_active_run, get_paid_run_access
-from services.v2_run_starter import start_v2_run_on_first_message
+from services.paid_run_access import get_paid_run_access, terminate_paid_access
 
 
 CARD_CSS = """
@@ -25,7 +23,6 @@ CARD_CSS = """
 """
 
 _PILOT_PACKAGE_ID = "roleplay2026.casada_frustrada"
-_INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent / "installed_stories"
 _ORIGINAL_BUTTON = st.button
 _BUTTON_POLICY_INSTALLED = False
 
@@ -68,35 +65,6 @@ def _send_to_new_payment(*, user_id: str, package_id: str) -> None:
     st.switch_page("pages/1_Pagamento_Pix.py")
 
 
-def _terminate_current_paid_access(*, user_id: str, package_id: str, ending_code: str) -> bool:
-    ended = finish_active_run(
-        secrets=st.secrets,
-        user_id=user_id,
-        package_id=package_id,
-        status="terminated",
-        ending_code=ending_code,
-    )
-    if ended is not None:
-        return True
-
-    started = start_v2_run_on_first_message(
-        secrets=st.secrets,
-        user_id=user_id,
-        package_id=package_id,
-        installed_stories_root=_INSTALLED_STORIES_ROOT,
-    )
-    if started is None:
-        return False
-
-    return finish_active_run(
-        secrets=st.secrets,
-        user_id=user_id,
-        package_id=package_id,
-        status="terminated",
-        ending_code=f"{ending_code}_before_first_turn",
-    ) is not None
-
-
 def _finish_and_restart_paid_story(package_id: str) -> None:
     user = st.session_state.get("authenticated_user")
     user_id = str(getattr(user, "user_id", "") or "")
@@ -105,17 +73,14 @@ def _finish_and_restart_paid_story(package_id: str) -> None:
         return
 
     try:
-        terminated = _terminate_current_paid_access(
+        terminate_paid_access(
+            secrets=st.secrets,
             user_id=user_id,
             package_id=package_id,
             ending_code="user_restart_requested",
         )
     except Exception as exc:
         st.error(f"Não foi possível encerrar a execução atual: {exc}")
-        return
-
-    if not terminated:
-        st.error("Não foi possível encerrar a execução atual antes do novo pagamento.")
         return
 
     _send_to_new_payment(user_id=user_id, package_id=package_id)
@@ -151,16 +116,14 @@ def _install_sidebar_end_policy() -> None:
             st.error("Não foi possível identificar a execução ativa.")
             return False
         try:
-            terminated = _terminate_current_paid_access(
+            terminate_paid_access(
+                secrets=st.secrets,
                 user_id=user_id,
                 package_id=package_id,
                 ending_code="user_abandoned",
             )
         except Exception as exc:
             st.error(f"Não foi possível encerrar a execução: {exc}")
-            return False
-        if not terminated:
-            st.error("Não foi possível encerrar a execução ativa.")
             return False
 
         _send_to_new_payment(user_id=user_id, package_id=package_id)
