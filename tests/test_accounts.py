@@ -95,42 +95,47 @@ def test_duplicate_email_is_rejected() -> None:
 
 
 def test_paid_access_requires_active_entitlement() -> None:
-    repository = build_repository()
-    user = repository.register(
-        email="pessoa@example.com",
-        password="senha-segura",
-        display_name="Pessoa",
-    )
+    previous_resolver = GoogleSheetsAccountRepository._paid_access_resolver
+    GoogleSheetsAccountRepository.configure_paid_access_resolver(None)
+    try:
+        repository = build_repository()
+        user = repository.register(
+            email="pessoa@example.com",
+            password="senha-segura",
+            display_name="Pessoa",
+        )
 
-    assert repository.has_entitlement(
-        user_id=user.user_id,
-        package_id="example.paid",
-        access="paid",
-    ) is False
+        assert repository.has_entitlement(
+            user_id=user.user_id,
+            package_id="example.paid",
+            access="paid",
+        ) is False
 
-    first_id = repository.grant_entitlement(
-        user_id=user.user_id,
-        package_id="example.paid",
-        product_id="example-product",
-        source="test",
-        payment_id="payment-1",
-    )
-    second_id = repository.grant_entitlement(
-        user_id=user.user_id,
-        package_id="example.paid",
-        product_id="example-product",
-        source="test",
-        payment_id="payment-1",
-    )
+        first_id = repository.grant_entitlement(
+            user_id=user.user_id,
+            package_id="example.paid",
+            product_id="example-product",
+            source="test",
+            payment_id="payment-1",
+        )
+        second_id = repository.grant_entitlement(
+            user_id=user.user_id,
+            package_id="example.paid",
+            product_id="example-product",
+            source="test",
+            payment_id="payment-1",
+        )
 
-    assert first_id == second_id
-    assert repository.has_entitlement(
-        user_id=user.user_id,
-        package_id="example.paid",
-        access="paid",
-    ) is True
-    assert repository.has_entitlement(
-        user_id=user.user_id,
-        package_id="example.free",
-        access="free",
-    ) is True
+        assert first_id == second_id
+        assert repository.has_entitlement(
+            user_id=user.user_id,
+            package_id="example.paid",
+            access="paid",
+        ) is True
+        assert repository.has_entitlement(
+            user_id=user.user_id,
+            package_id="example.free",
+            access="free",
+        ) is True
+    finally:
+        GoogleSheetsAccountRepository.configure_paid_access_resolver(previous_resolver)
