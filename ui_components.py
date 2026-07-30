@@ -40,6 +40,50 @@ def _paid_access_resolver(*, user_id: str, package_id: str, access: str) -> bool
         return False
 
 
+def _clear_story_session(package_id: str, user_id: str = "") -> None:
+    st.session_state.story_states.pop(package_id, None)
+    st.session_state.story_messages.pop(package_id, None)
+    st.session_state.runtime_contexts.pop(package_id, None)
+    st.session_state.started_packages.discard(package_id)
+    st.session_state.restart_requests.discard(package_id)
+
+    if user_id:
+        prefix = f"pilot:{user_id}:{package_id}:"
+        for key in list(st.session_state.keys()):
+            if str(key).startswith(prefix):
+                st.session_state.pop(key, None)
+
+
+def _send_to_new_payment(*, user_id: str, package_id: str) -> None:
+    _clear_story_session(package_id, user_id)
+    st.session_state.checkout_package_id = package_id
+    st.session_state.selected_package_id = None
+    st.session_state.page = "checkout"
+    st.switch_page("pages/1_Pagamento_Pix.py")
+
+
+def _finish_and_restart_paid_story(package_id: str) -> None:
+    user = st.session_state.get("authenticated_user")
+    user_id = str(getattr(user, "user_id", "") or "")
+    if not user_id:
+        st.error("Não foi possível identificar o usuário desta execução.")
+        return
+
+    try:
+        finish_active_run(
+            secrets=st.secrets,
+            user_id=user_id,
+            package_id=package_id,
+            status="terminated",
+            ending_code="user_restart_requested",
+        )
+    except Exception as exc:
+        st.error(f"Não foi possível encerrar a execução atual: {exc}")
+        return
+
+    _send_to_new_payment(user_id=user_id, package_id=package_id)
+
+
 def _install_sidebar_end_policy() -> None:
     global _BUTTON_POLICY_INSTALLED
     if _BUTTON_POLICY_INSTALLED:
@@ -81,14 +125,7 @@ def _install_sidebar_end_policy() -> None:
             st.error(f"Não foi possível encerrar a execução: {exc}")
             return False
 
-        st.session_state.story_states.pop(package_id, None)
-        st.session_state.story_messages.pop(package_id, None)
-        st.session_state.runtime_contexts.pop(package_id, None)
-        st.session_state.started_packages.discard(package_id)
-        st.session_state.checkout_package_id = package_id
-        st.session_state.selected_package_id = None
-        st.session_state.page = "checkout"
-        st.switch_page("pages/1_Pagamento_Pix.py")
+        _send_to_new_payment(user_id=user_id, package_id=package_id)
         return False
 
     st.button = guarded_button  # type: ignore[method-assign]
@@ -180,3 +217,10 @@ def render_story_card(
             type="primary",
         ):
             on_continue(story.package_id)
+
+        if story.package_id == _PILOT_PACKAGE_ID and st.button(
+            "Reiniciar — novo pagamento",
+            key=f"restart-paid:{story.package_id}",
+            use_container_width=True,
+        ):
+            _finish_and_restart_paid_story(story.package_id)
