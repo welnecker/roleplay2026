@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from uuid import uuid4
+
+import streamlit as st
 
 from persistence.google_sheets import GoogleSheetsRuntimeRepository
 from persistence.models import SaveRecord, SessionRecord
 from platform_core.auth import AuthenticatedUser
 from roleplay.models import StoryState
+from services.v2_run_starter import start_v2_run_on_first_message
+
+
+INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
 
 
 @dataclass(slots=True)
@@ -92,6 +99,14 @@ def persist_turn(
     assistant_metadata: dict[str, object],
     sequence_start: int,
 ) -> RuntimePersistenceContext:
+    if sequence_start == 1:
+        start_v2_run_on_first_message(
+            secrets=st.secrets,
+            user_id=user.user_id,
+            package_id=context.save.package_id,
+            installed_stories_root=INSTALLED_STORIES_ROOT,
+        )
+
     repository.append_interaction(
         session_id=context.session.session_id,
         save_id=context.save.save_id,
