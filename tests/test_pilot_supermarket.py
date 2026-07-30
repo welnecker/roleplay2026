@@ -32,20 +32,36 @@ def test_classifica_respostas_minimas_e_debochadas() -> None:
     assert classify_user_message("Estou bem, foi só um susto") == "engaged"
 
 
-def test_abertura_e_fallbacks_usam_primeira_pessoa() -> None:
+def test_abertura_usa_pensamento_e_fala_sem_narrar_acao() -> None:
     opening = opening_text(script())
 
-    assert "Caminho distraída" in opening
+    assert "como estou distraída" in opening.casefold()
     assert "Mary" not in opening
-    assert "ela " not in opening.casefold()
+    assert "caminho" not in opening.casefold()
+    assert "seguro o carrinho" not in opening.casefold()
 
 
-def test_resposta_do_modelo_em_terceira_pessoa_e_rejeitada() -> None:
-    fallback = "Seguro o carrinho. — Você está bem?"
+def test_narracao_de_acao_e_rejeitada_mesmo_em_primeira_pessoa() -> None:
+    fallback = "Uau... que coincidência. Você mora no Plaza?"
 
-    assert clean_model_response("Mary segura o carrinho e olha para ele.", fallback) == fallback
-    assert clean_model_response("Seguro o carrinho e olho para você.", fallback) == (
-        "Seguro o carrinho e olho para você."
+    assert clean_model_response(
+        "Arregalo levemente os olhos e solto uma risadinha curta.", fallback
+    ) == fallback
+    assert clean_model_response(
+        "Dou um passo para trás e seguro o carrinho com as duas mãos.", fallback
+    ) == fallback
+    assert clean_model_response(
+        "Digo, sorrindo enquanto olho para você: que coincidência!", fallback
+    ) == fallback
+
+
+def test_pensamento_fala_e_onomatopeia_sao_aceitos() -> None:
+    fallback = "Uau... que coincidência."
+
+    assert clean_model_response("Uau... que coincidência.", fallback) == "Uau... que coincidência."
+    assert clean_model_response("Você me faz rir, kkkkk.", fallback) == "Você me faz rir, kkkkk."
+    assert clean_model_response("Bom, vou terminar minhas compras.", fallback) == (
+        "Bom, vou terminar minhas compras."
     )
 
 
@@ -55,7 +71,8 @@ def test_resposta_valida_avanca_sem_numero_fixo_de_turnos() -> None:
     assert turn.target_id == "check_wellbeing"
     assert turn.finished is False
     assert turn.state.node_id == "check_wellbeing"
-    assert "primeira pessoa" in turn.system_prompt
+    assert "Não narre ações" in turn.system_prompt
+    assert "onomatopeia" in turn.system_prompt
 
 
 def test_deboque_encerra_imediatamente() -> None:
