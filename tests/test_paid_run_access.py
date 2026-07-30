@@ -35,7 +35,13 @@ class FakeRepositories:
     runs: FakeRuns
 
 
+def _clear_caches() -> None:
+    paid_run_access._repository_cache.clear()
+    paid_run_access._access_cache.clear()
+
+
 def test_credit_available_libera_inicio(monkeypatch) -> None:
+    _clear_caches()
     repositories = FakeRepositories(
         credits=FakeCredits(
             RunCredit(
@@ -62,9 +68,11 @@ def test_credit_available_libera_inicio(monkeypatch) -> None:
 
     assert access.state == "available"
     assert access.allowed is True
+    _clear_caches()
 
 
 def test_run_encerrada_remove_acesso(monkeypatch) -> None:
+    _clear_caches()
     run = StoryRun(
         run_id="run_1",
         credit_id="credit_1",
@@ -100,3 +108,4 @@ def test_run_encerrada_remove_acesso(monkeypatch) -> None:
     assert finished.ended_at
     assert access.state == "locked"
     assert access.allowed is False
+    _clear_caches()
