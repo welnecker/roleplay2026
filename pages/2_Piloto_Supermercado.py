@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
 import streamlit as st
 
@@ -9,6 +8,7 @@ from persistence.factory import build_google_sheets_repository
 from platform_core.auth import AuthenticatedUser
 from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
+from services.editorial_content import load_editorial_pilot
 from services.paid_run_access import get_paid_run_access, terminate_paid_access
 from services.pilot_supermarket import (
     PilotScript,
@@ -24,9 +24,7 @@ from services.runtime_persistence import (
 )
 
 
-ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_ID = "roleplay2026.casada_frustrada"
-SCRIPT_PATH = ROOT / "installed_stories" / "casada_frustrada" / "dialogue_pilot.yaml"
 MODEL_DEFAULT = "google/gemini-3-flash-preview"
 PAYMENT_QUOTA_WINDOW_SECONDS = 65.0
 END_CONFIRMATION_KEY = f"confirm_end:{PACKAGE_ID}"
@@ -36,7 +34,7 @@ st.set_page_config(page_title="Casada frustrada — piloto", page_icon="🛒", l
 
 @st.cache_resource(show_spinner=False)
 def load_script() -> PilotScript:
-    return PilotScript.load(SCRIPT_PATH)
+    return load_editorial_pilot(st.secrets)
 
 
 @st.cache_resource(show_spinner=False)
@@ -70,6 +68,7 @@ def recover_pilot_state(messages: list[dict[str, object]]) -> PilotState:
 def ensure_runtime(
     user: AuthenticatedUser,
     *,
+    package_version: str,
     restart: bool = False,
 ) -> tuple[
     RuntimePersistenceContext,
@@ -101,7 +100,7 @@ def ensure_runtime(
         repository,
         user=user,
         package_id=PACKAGE_ID,
-        package_version="0.1.0-pilot",
+        package_version=package_version,
         restart=restart,
         instance_id=str(st.session_state.get("instance_id", "pilot")),
     )
@@ -114,8 +113,6 @@ def ensure_runtime(
 
 
 def prepare_after_payment(user: AuthenticatedUser) -> bool:
-    """Aguarda a transição paga e informa se deve abrir uma execução nova."""
-
     handoff = st.session_state.get("payment_access_ready")
     if not isinstance(handoff, dict):
         return False
@@ -161,8 +158,6 @@ def clear_session(user: AuthenticatedUser) -> None:
 
 
 def return_to_library() -> None:
-    """Retorna aos cards sem encerrar nem apagar a execução atual."""
-
     st.session_state.pop(END_CONFIRMATION_KEY, None)
     st.session_state.page = "library"
     st.session_state.selected_package_id = None
@@ -171,8 +166,6 @@ def return_to_library() -> None:
 
 
 def end_story_and_return(user: AuthenticatedUser) -> None:
-    """Encerra a execução e revoga qualquer acesso residual antes de voltar aos cards."""
-
     try:
         terminate_paid_access(
             secrets=st.secrets,
@@ -201,15 +194,22 @@ if user is None:
     st.stop()
 
 fresh_start = prepare_after_payment(user)
-script = load_script()
 try:
-    context, story_state, messages, pilot_state = ensure_runtime(user, restart=fresh_start)
+    script = load_script()
+except Exception as exc:
+    st.error(f"Não foi possível carregar o roteiro editorial: {exc}")
+    st.stop()
+
+try:
+    context, story_state, messages, pilot_state = ensure_runtime(
+        user,
+        restart=fresh_start,
+        package_version=str(script.raw.get("script_version", "0.1.0-pilot")),
+    )
 except Exception as exc:
     st.error(f"Não foi possível abrir o piloto: {exc}")
     st.stop()
 
-# A run finalizada precisa continuar aberta para exibir a última fala e o botão.
-# Só verificamos novo direito de acesso enquanto a execução ainda está ativa.
 if not pilot_state.finished and not story_state.finished:
     try:
         access = get_paid_run_access(
@@ -220,7 +220,6 @@ if not pilot_state.finished and not story_state.finished:
     except Exception as exc:
         st.error(f"Não foi possível verificar o acesso: {exc}")
         st.stop()
-
     if not access.allowed:
         return_to_library()
 
