@@ -9,7 +9,7 @@ from persistence.factory import build_google_sheets_repository
 from platform_core.auth import AuthenticatedUser
 from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
-from services.paid_run_access import finish_active_run, get_paid_run_access
+from services.paid_run_access import get_paid_run_access, terminate_paid_access
 from services.pilot_supermarket import (
     PilotScript,
     PilotState,
@@ -22,7 +22,6 @@ from services.runtime_persistence import (
     open_persistent_runtime,
     persist_turn,
 )
-from services.v2_run_starter import start_v2_run_on_first_message
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,6 +29,7 @@ PACKAGE_ID = "roleplay2026.casada_frustrada"
 SCRIPT_PATH = ROOT / "installed_stories" / "casada_frustrada" / "dialogue_pilot.yaml"
 MODEL_DEFAULT = "google/gemini-3-flash-preview"
 PAYMENT_QUOTA_WINDOW_SECONDS = 65.0
+END_CONFIRMATION_KEY = f"confirm_end:{PACKAGE_ID}"
 
 st.set_page_config(page_title="Casada frustrada — piloto", page_icon="🛒", layout="centered")
 
@@ -78,20 +78,21 @@ def ensure_runtime(
     PilotState,
 ]:
     context_key, story_key, messages_key, pilot_key = session_keys(user.user_id)
+    if restart:
+        for key in (context_key, story_key, messages_key, pilot_key):
+            st.session_state.pop(key, None)
+
     context = st.session_state.get(context_key)
     story_state = st.session_state.get(story_key)
     messages = st.session_state.get(messages_key)
     pilot_state = st.session_state.get(pilot_key)
-    if not restart and (
+    if (
         isinstance(context, RuntimePersistenceContext)
         and isinstance(story_state, StoryState)
         and isinstance(messages, list)
         and isinstance(pilot_state, PilotState)
     ):
         return context, story_state, messages, pilot_state
-
-    if restart:
-        clear_session(user)
 
     repository = runtime_repository()
     if repository is None:
@@ -156,11 +157,13 @@ def save_session(
 def clear_session(user: AuthenticatedUser) -> None:
     for key in session_keys(user.user_id):
         st.session_state.pop(key, None)
+    st.session_state.pop(END_CONFIRMATION_KEY, None)
 
 
 def return_to_library() -> None:
     """Retorna aos cards sem encerrar nem apagar a execução atual."""
 
+    st.session_state.pop(END_CONFIRMATION_KEY, None)
     st.session_state.page = "library"
     st.session_state.selected_package_id = None
     st.session_state.checkout_package_id = None
@@ -168,31 +171,15 @@ def return_to_library() -> None:
 
 
 def end_story_and_return(user: AuthenticatedUser) -> None:
-    """Encerra a execução e remove a continuidade antes de voltar aos cards."""
+    """Encerra a execução e revoga qualquer acesso residual antes de voltar aos cards."""
 
     try:
-        ended = finish_active_run(
+        terminate_paid_access(
             secrets=st.secrets,
             user_id=user.user_id,
             package_id=PACKAGE_ID,
-            status="terminated",
             ending_code="user_abandoned",
         )
-        if ended is None:
-            started = start_v2_run_on_first_message(
-                secrets=st.secrets,
-                user_id=user.user_id,
-                package_id=PACKAGE_ID,
-                installed_stories_root=ROOT / "installed_stories",
-            )
-            if started is not None:
-                finish_active_run(
-                    secrets=st.secrets,
-                    user_id=user.user_id,
-                    package_id=PACKAGE_ID,
-                    status="terminated",
-                    ending_code="user_abandoned_before_first_turn",
-                )
     except Exception as exc:
         st.error(f"Não foi possível encerrar a história: {exc}")
         return
@@ -244,13 +231,26 @@ with st.sidebar:
     st.write(f"Desejo: `{pilot_state.desire}`")
     st.write(f"Paciência: `{pilot_state.patience}`")
     st.write(f"Etapa: `{pilot_state.node_id}`")
+
     if st.button("Retornar aos cards", use_container_width=True):
         return_to_library()
-    if not pilot_state.finished and st.button(
-        "Encerrar história",
-        use_container_width=True,
-    ):
-        end_story_and_return(user)
+
+    confirming_end = bool(st.session_state.get(END_CONFIRMATION_KEY, False))
+    if not pilot_state.finished and not confirming_end:
+        if st.button("Encerrar história", use_container_width=True):
+            st.session_state[END_CONFIRMATION_KEY] = True
+            st.rerun()
+
+    if not pilot_state.finished and confirming_end:
+        st.warning("Encerrar irá gerar a necessidade de um novo pagamento. Continuar?")
+        confirm_column, cancel_column = st.columns(2)
+        with confirm_column:
+            if st.button("Sim, encerrar", type="primary", use_container_width=True):
+                end_story_and_return(user)
+        with cancel_column:
+            if st.button("Cancelar", use_container_width=True):
+                st.session_state.pop(END_CONFIRMATION_KEY, None)
+                st.rerun()
 
 st.title("Casada frustrada")
 st.caption("Bloco piloto: primeiro contato no supermercado")
@@ -269,9 +269,7 @@ if pilot_state.finished or story_state.finished:
     else:
         st.info("Mary encerrou a interação.")
     st.caption("A última fala foi registrada. Esta execução não aceita novas mensagens.")
-    if st.button("Retornar aos cards", type="primary", use_container_width=True):
-        clear_session(user)
-        st.session_state.started_packages.discard(PACKAGE_ID)
+    if st.button("Voltar à biblioteca", type="primary", use_container_width=True):
         return_to_library()
     st.stop()
 
