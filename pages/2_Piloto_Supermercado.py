@@ -22,6 +22,7 @@ from services.runtime_persistence import (
     open_persistent_runtime,
     persist_turn,
 )
+from services.v2_run_starter import start_v2_run_on_first_message
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -66,7 +67,11 @@ def recover_pilot_state(messages: list[dict[str, object]]) -> PilotState:
     return PilotState()
 
 
-def ensure_runtime(user: AuthenticatedUser) -> tuple[
+def ensure_runtime(
+    user: AuthenticatedUser,
+    *,
+    restart: bool = False,
+) -> tuple[
     RuntimePersistenceContext,
     StoryState,
     list[dict[str, object]],
@@ -77,13 +82,16 @@ def ensure_runtime(user: AuthenticatedUser) -> tuple[
     story_state = st.session_state.get(story_key)
     messages = st.session_state.get(messages_key)
     pilot_state = st.session_state.get(pilot_key)
-    if (
+    if not restart and (
         isinstance(context, RuntimePersistenceContext)
         and isinstance(story_state, StoryState)
         and isinstance(messages, list)
         and isinstance(pilot_state, PilotState)
     ):
         return context, story_state, messages, pilot_state
+
+    if restart:
+        clear_session(user)
 
     repository = runtime_repository()
     if repository is None:
@@ -93,6 +101,7 @@ def ensure_runtime(user: AuthenticatedUser) -> tuple[
         user=user,
         package_id=PACKAGE_ID,
         package_version="0.1.0-pilot",
+        restart=restart,
         instance_id=str(st.session_state.get("instance_id", "pilot")),
     )
     pilot_state = recover_pilot_state(messages)
@@ -103,28 +112,22 @@ def ensure_runtime(user: AuthenticatedUser) -> tuple[
     return context, story_state, messages, pilot_state
 
 
-def wait_for_payment_quota_window(user: AuthenticatedUser) -> None:
-    """Espera a janela de cota apenas na primeira abertura após o pagamento."""
+def prepare_after_payment(user: AuthenticatedUser) -> bool:
+    """Aguarda a transição paga e informa se deve abrir uma execução nova."""
 
     handoff = st.session_state.get("payment_access_ready")
     if not isinstance(handoff, dict):
-        return
+        return False
     if str(handoff.get("user_id", "")) != user.user_id:
-        return
+        return False
     if str(handoff.get("package_id", "")) != PACKAGE_ID:
-        return
+        return False
 
     created_at = float(handoff.get("created_at", 0.0) or 0.0)
     remaining = PAYMENT_QUOTA_WINDOW_SECONDS - max(0.0, time.time() - created_at)
     if remaining > 0:
-        with st.status(
-            "Pagamento confirmado. Preparando a história...",
-            expanded=True,
-        ) as processing_status:
-            processing_status.write(
-                "Aguardando a renovação segura da cota do Google Sheets. "
-                "As interações não serão desaceleradas."
-            )
+        with st.status("Preparando sua história...", expanded=True) as processing_status:
+            processing_status.write("Organizando sua nova execução. Isso pode levar alguns instantes.")
             time.sleep(remaining)
             processing_status.update(
                 label="Abrindo a história...",
@@ -133,6 +136,7 @@ def wait_for_payment_quota_window(user: AuthenticatedUser) -> None:
             )
 
     st.session_state.pop("payment_access_ready", None)
+    return True
 
 
 def save_session(
@@ -154,8 +158,48 @@ def clear_session(user: AuthenticatedUser) -> None:
         st.session_state.pop(key, None)
 
 
-def return_to_library(user: AuthenticatedUser) -> None:
+def return_to_library() -> None:
+    """Retorna aos cards sem encerrar nem apagar a execução atual."""
+
+    st.session_state.page = "library"
+    st.session_state.selected_package_id = None
+    st.session_state.checkout_package_id = None
+    st.switch_page("app.py")
+
+
+def end_story_and_return(user: AuthenticatedUser) -> None:
+    """Encerra a execução e remove a continuidade antes de voltar aos cards."""
+
+    try:
+        ended = finish_active_run(
+            secrets=st.secrets,
+            user_id=user.user_id,
+            package_id=PACKAGE_ID,
+            status="terminated",
+            ending_code="user_abandoned",
+        )
+        if ended is None:
+            started = start_v2_run_on_first_message(
+                secrets=st.secrets,
+                user_id=user.user_id,
+                package_id=PACKAGE_ID,
+                installed_stories_root=ROOT / "installed_stories",
+            )
+            if started is not None:
+                finish_active_run(
+                    secrets=st.secrets,
+                    user_id=user.user_id,
+                    package_id=PACKAGE_ID,
+                    status="terminated",
+                    ending_code="user_abandoned_before_first_turn",
+                )
+    except Exception as exc:
+        st.error(f"Não foi possível encerrar a história: {exc}")
+        return
+
     clear_session(user)
+    st.session_state.started_packages.discard(PACKAGE_ID)
+    st.session_state.pop("payment_access_ready", None)
     st.session_state.page = "library"
     st.session_state.selected_package_id = None
     st.session_state.checkout_package_id = None
@@ -169,10 +213,10 @@ if user is None:
         st.switch_page("app.py")
     st.stop()
 
-wait_for_payment_quota_window(user)
+fresh_start = prepare_after_payment(user)
 script = load_script()
 try:
-    context, story_state, messages, pilot_state = ensure_runtime(user)
+    context, story_state, messages, pilot_state = ensure_runtime(user, restart=fresh_start)
 except Exception as exc:
     st.error(f"Não foi possível abrir o piloto: {exc}")
     st.stop()
@@ -191,7 +235,7 @@ if not pilot_state.finished and not story_state.finished:
         st.stop()
 
     if not access.allowed:
-        return_to_library(user)
+        return_to_library()
 
 with st.sidebar:
     st.subheader("Casada frustrada")
@@ -200,24 +244,13 @@ with st.sidebar:
     st.write(f"Desejo: `{pilot_state.desire}`")
     st.write(f"Paciência: `{pilot_state.patience}`")
     st.write(f"Etapa: `{pilot_state.node_id}`")
-    if st.button("Voltar à biblioteca", use_container_width=True):
-        return_to_library(user)
+    if st.button("Retornar aos cards", use_container_width=True):
+        return_to_library()
     if not pilot_state.finished and st.button(
-        "Encerrar execução",
+        "Encerrar história",
         use_container_width=True,
     ):
-        try:
-            finish_active_run(
-                secrets=st.secrets,
-                user_id=user.user_id,
-                package_id=PACKAGE_ID,
-                status="terminated",
-                ending_code="user_abandoned",
-            )
-        except Exception as exc:
-            st.error(f"Não foi possível encerrar a execução: {exc}")
-        else:
-            return_to_library(user)
+        end_story_and_return(user)
 
 st.title("Casada frustrada")
 st.caption("Bloco piloto: primeiro contato no supermercado")
@@ -236,8 +269,10 @@ if pilot_state.finished or story_state.finished:
     else:
         st.info("Mary encerrou a interação.")
     st.caption("A última fala foi registrada. Esta execução não aceita novas mensagens.")
-    if st.button("Voltar à biblioteca", type="primary", use_container_width=True):
-        return_to_library(user)
+    if st.button("Retornar aos cards", type="primary", use_container_width=True):
+        clear_session(user)
+        st.session_state.started_packages.discard(PACKAGE_ID)
+        return_to_library()
     st.stop()
 
 user_text = st.chat_input("Responda a Mary")
