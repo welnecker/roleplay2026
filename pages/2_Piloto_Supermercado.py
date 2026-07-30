@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -27,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_ID = "roleplay2026.casada_frustrada"
 SCRIPT_PATH = ROOT / "installed_stories" / "casada_frustrada" / "dialogue_pilot.yaml"
 MODEL_DEFAULT = "google/gemini-3-flash-preview"
+PAYMENT_QUOTA_WINDOW_SECONDS = 65.0
 
 st.set_page_config(page_title="Casada frustrada — piloto", page_icon="🛒", layout="centered")
 
@@ -101,6 +103,38 @@ def ensure_runtime(user: AuthenticatedUser) -> tuple[
     return context, story_state, messages, pilot_state
 
 
+def wait_for_payment_quota_window(user: AuthenticatedUser) -> None:
+    """Espera a janela de cota apenas na primeira abertura após o pagamento."""
+
+    handoff = st.session_state.get("payment_access_ready")
+    if not isinstance(handoff, dict):
+        return
+    if str(handoff.get("user_id", "")) != user.user_id:
+        return
+    if str(handoff.get("package_id", "")) != PACKAGE_ID:
+        return
+
+    created_at = float(handoff.get("created_at", 0.0) or 0.0)
+    remaining = PAYMENT_QUOTA_WINDOW_SECONDS - max(0.0, time.time() - created_at)
+    if remaining > 0:
+        with st.status(
+            "Pagamento confirmado. Preparando a história...",
+            expanded=True,
+        ) as processing_status:
+            processing_status.write(
+                "Aguardando a renovação segura da cota do Google Sheets. "
+                "As interações não serão desaceleradas."
+            )
+            time.sleep(remaining)
+            processing_status.update(
+                label="Abrindo a história...",
+                state="complete",
+                expanded=False,
+            )
+
+    st.session_state.pop("payment_access_ready", None)
+
+
 def save_session(
     user: AuthenticatedUser,
     context: RuntimePersistenceContext,
@@ -135,6 +169,7 @@ if user is None:
         st.switch_page("app.py")
     st.stop()
 
+wait_for_payment_quota_window(user)
 script = load_script()
 try:
     context, story_state, messages, pilot_state = ensure_runtime(user)
