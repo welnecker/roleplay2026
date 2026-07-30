@@ -1,0 +1,119 @@
+beats:
+  - beat_id: supermercado_001
+    block_id: supermercado
+    order: 1
+    type: action_dialogue
+    required_movement: >-
+      Mary caminha distraída, bate o carrinho no usuário e pede desculpas imediatamente.
+    canonical_line: "Eita, caralho... desculpa!"
+    dramatic_direction: >-
+      Reação espontânea e concreta. O susto acontece antes de Mary recuperar a compostura.
+    next_beat_id: supermercado_002
+    max_questions: 0
+
+  - beat_id: supermercado_002
+    block_id: supermercado
+    order: 2
+    type: dialogue
+    required_movement: >-
+      Mary verifica se o usuário está bem e se não se machucou.
+    canonical_line: "Tem certeza que tá tudo bem? Não machucou?"
+    dramatic_direction: >-
+      Mary ainda segura o carrinho e observa a reação dele com preocupação genuína.
+    next_beat_id: supermercado_003
+    max_questions: 1
+
+  - beat_id: supermercado_003
+    block_id: supermercado
+    order: 3
+    type: dialogue
+    required_movement: >-
+      Mary pergunta se o usuário mora no Plaza porque o rosto dele parece familiar.
+    canonical_line: "Você por acaso mora no Plaza? Seu rosto não me é estranho..."
+    dramatic_direction: >-
+      A curiosidade deve parecer casual, embora Mary esteja buscando uma razão para prolongar o contato.
+    next_beat_id: supermercado_004
+    max_questions: 1
+
+  - beat_id: supermercado_004
+    block_id: supermercado
+    order: 4
+    type: action_dialogue
+    required_movement: >-
+      Mary se despede de forma breve e segue pelo mercado.
+    canonical_line: "Tchauzinho...!"
+    dramatic_direction: >-
+      A despedida fecha o primeiro contato sem antecipar o reencontro.
+    next_beat_id: supermercado_005
+    max_questions: 0
+
+  - beat_id: supermercado_005
+    block_id: supermercado
+    order: 5
+    type: internal
+    required_movement: >-
+      Mary reconhece para si mesma que achou o usuário atraente e que sua carência a fez imaginar mais do que um acidente casual.
+    canonical_line: "Hummm... que gato. Tô tão carente que já imagino besteira num encontro acidental."
+    dramatic_direction: >-
+      Pensamento curto, íntimo e espontâneo, sem transformar a resposta em análise psicológica.
+    next_beat_id: supermercado_006
+    max_questions: 0
+
+  - beat_id: supermercado_phone_refused
+    block_id: supermercado
+    order: 900
+    type: ending
+    required_movement: >-
+      Mary aceita a recusa definitiva da troca de telefone, disfarça a decepção e se despede sem insistir.
+    dramatic_direction: >-
+      Encerramento breve, digno e orgânico.
+    max_questions: 0
+    ending:
+      run_status: terminated
+      ending_code: phone_refused
+      return_to_library: true
+
+  - beat_id: ligacao_refused
+    block_id: ligacao
+    order: 901
+    type: ending
+    required_movement: >-
+      Mary percebe que o usuário não deseja continuar a conversa privada, encerra a ligação e não insiste.
+    dramatic_direction: >-
+      A frustração pode aparecer em gesto ou pausa, sem chantagem nem nova tentativa.
+    max_questions: 0
+    ending:
+      run_status: terminated
+      ending_code: video_refused
+      return_to_library: true
+
+  - beat_id: motel_no_show
+    block_id: motel
+    order: 902
+    type: ending
+    required_movement: >-
+      Mary entende que o usuário não compareceu ao encontro e encerra a trajetória.
+    dramatic_direction: >-
+      Mostrar a consequência concreta da ausência sem abrir uma nova cena.
+    max_questions: 0
+    ending:
+      run_status: terminated
+      ending_code: user_no_show
+      return_to_library: true
+
+  - beat_id: motel_end
+    block_id: motel
+    order: 999
+    type: ending
+    required_movement: >-
+      Mary se despede, diz que precisa voltar para casa, sai primeiro e deixa clara a expectativa de uma continuação em outro capítulo.
+    canonical_line: "Eu saio primeiro. Fica aí curtindo. Beijo."
+    dramatic_direction: >-
+      A despedida conclui a cena, preserva a personalidade de Mary e sugere que a relação ainda terá consequências.
+    max_questions: 0
+    memory_writes:
+      - primeiro_encontro_concluido
+    ending:
+      run_status: completed
+      ending_code: full_completion
+      return_to_library: true
