@@ -85,7 +85,7 @@ class PixCheckoutService:
         *,
         client: MercadoPagoClient,
         payments: GoogleSheetsPaymentRepository,
-        accounts: GoogleSheetsAccountRepository,
+        accounts: GoogleSheetsAccountRepository | None = None,
         story_credits: StoryCreditGrantRepository | None = None,
     ) -> None:
         self.client = client
@@ -173,16 +173,21 @@ class PixCheckoutService:
         return self.refresh(stored)
 
     def _grant(self, stored: StoredPaymentOrder, provider: PixOrder) -> None:
-        self.accounts.grant_entitlement(
-            user_id=stored.user_id,
-            package_id=stored.package_id,
-            product_id=stored.product_id,
-            source="mercado_pago_pix",
-            payment_id=provider.order_id,
-        )
+        # O fluxo v2 usa um crédito por execução. Quando o repositório de créditos
+        # está configurado, não cria mais USER_ENTITLEMENTS no armazenamento legado.
         if self.story_credits is not None:
             self.story_credits.create_credit(
                 user_id=stored.user_id,
                 package_id=stored.package_id,
+                payment_id=provider.order_id,
+            )
+            return
+
+        if self.accounts is not None:
+            self.accounts.grant_entitlement(
+                user_id=stored.user_id,
+                package_id=stored.package_id,
+                product_id=stored.product_id,
+                source="mercado_pago_pix",
                 payment_id=provider.order_id,
             )
