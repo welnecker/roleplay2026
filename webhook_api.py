@@ -12,11 +12,12 @@ from billing.service import PixCheckoutService, read_secret
 from persistence.accounts import GoogleSheetsAccountRepository
 from persistence.factory import build_google_sheets_repository
 from persistence.payments import GoogleSheetsPaymentRepository
+from persistence.v2_factory import build_v2_narrative_repositories
 from services.secret_loader import load_application_secrets
 from services.v2_schema_initializer import initialize_v2_sheet_schemas
 
 
-app = FastAPI(title="Roleplay 2026 Webhooks", version="0.2.0")
+app = FastAPI(title="Roleplay 2026 Webhooks", version="0.3.0")
 
 
 def build_services() -> tuple[PixCheckoutService, GoogleSheetsPaymentRepository, str]:
@@ -40,10 +41,12 @@ def build_services() -> tuple[PixCheckoutService, GoogleSheetsPaymentRepository,
     accounts.ensure_schema()
     payments = GoogleSheetsPaymentRepository(runtime.spreadsheet)
     payments.ensure_schema()
+    v2_repositories = build_v2_narrative_repositories(secrets)
     service = PixCheckoutService(
         client=MercadoPagoClient(access_token),
         payments=payments,
         accounts=accounts,
+        story_credits=v2_repositories.credits,
     )
     return service, payments, webhook_secret
 
@@ -62,7 +65,7 @@ def config_status() -> dict[str, Any]:
     try:
         secrets = load_application_secrets()
         loader_error = ""
-    except Exception as exc:  # diagnóstico operacional sem revelar valores
+    except Exception as exc:
         secrets = {}
         loader_error = f"{type(exc).__name__}: {exc}"
 
