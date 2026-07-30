@@ -74,6 +74,30 @@ def clear_paid_access_cache(*, user_id: str = "", package_id: str = "") -> None:
         _access_cache.pop(key, None)
 
 
+def prime_paid_access_available(
+    *,
+    secrets: Any,
+    user_id: str,
+    package_id: str,
+    ttl_seconds: float = ACCESS_CACHE_TTL_SECONDS,
+) -> PaidRunAccess:
+    """Registra localmente o crédito recém-criado sem reler o Sheets.
+
+    O checkout acabou de confirmar a criação do crédito. Reaproveitar esse fato
+    evita que a biblioteca ou o piloto consultem STORY_RUNS/STORY_CREDITS logo
+    na transição entre as páginas.
+    """
+
+    result = PaidRunAccess(state="available")
+    cache_key = _access_cache_key(
+        secrets=secrets,
+        user_id=user_id,
+        package_id=package_id,
+    )
+    _access_cache[cache_key] = (monotonic() + max(1.0, float(ttl_seconds)), result)
+    return result
+
+
 def _cached_active_run(*, secrets: Any, user_id: str, package_id: str) -> StoryRun | None:
     cached = _access_cache.get(
         _access_cache_key(secrets=secrets, user_id=user_id, package_id=package_id)
