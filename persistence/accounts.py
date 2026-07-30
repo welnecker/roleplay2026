@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import monotonic
@@ -9,6 +11,7 @@ import gspread
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from gspread import Spreadsheet, Worksheet
+from gspread.exceptions import APIError
 
 from persistence.models import new_id, utc_now_iso
 
@@ -16,6 +19,7 @@ USERS_SHEET = "USERS"
 CREDENTIALS_SHEET = "USER_CREDENTIALS"
 ENTITLEMENTS_SHEET = "USER_ENTITLEMENTS"
 RECORDS_CACHE_TTL_SECONDS = 30.0
+QUOTA_RETRY_ATTEMPTS = 5
 
 USERS_HEADERS = (
     "user_id",
@@ -70,9 +74,14 @@ class GoogleSheetsAccountRepository:
         cls._paid_access_resolver = resolver
 
     def ensure_schema(self) -> None:
-        self._ensure_sheet(USERS_SHEET, USERS_HEADERS)
-        self._ensure_sheet(CREDENTIALS_SHEET, CREDENTIALS_HEADERS)
-        self._ensure_sheet(ENTITLEMENTS_SHEET, ENTITLEMENTS_HEADERS)
+        """Não valida cabeçalhos durante o acesso normal do usuário.
+
+        As abas são preparadas por instalação/migração explícita. Validá-las em
+        cada abertura da tela de login produz várias leituras desnecessárias e
+        pode esgotar a cota antes da autenticação.
+        """
+
+        return None
 
     def register(self, *, email: str, password: str, display_name: str) -> AccountUser:
         clean_email = email.strip().lower()
@@ -223,6 +232,30 @@ class GoogleSheetsAccountRepository:
             self._worksheets[name] = self.spreadsheet.worksheet(name)
         return self._worksheets[name]
 
+    @staticmethod
+    def _is_quota_error(exc: APIError) -> bool:
+        response = getattr(exc, "response", None)
+        status_code = getattr(response, "status_code", None)
+        return status_code == 429 or "429" in str(exc)
+
+    def _read_records(self, name: str) -> list[dict[str, Any]]:
+        for attempt in range(QUOTA_RETRY_ATTEMPTS):
+            try:
+                return [
+                    dict(row)
+                    for row in self._worksheet(name).get_all_records(default_blank="")
+                ]
+            except APIError as exc:
+                if not self._is_quota_error(exc) or attempt == QUOTA_RETRY_ATTEMPTS - 1:
+                    if self._is_quota_error(exc):
+                        raise RuntimeError(
+                            "O acesso está temporariamente ocupado. Aguarde alguns instantes e tente novamente."
+                        ) from exc
+                    raise
+                delay = min(30.0, (2 ** (attempt + 1)) + random.uniform(0.5, 1.5))
+                time.sleep(delay)
+        return []
+
     def _records(self, name: str) -> list[dict[str, Any]]:
         now = monotonic()
         cached = self._records_cache.get(name)
@@ -231,7 +264,7 @@ class GoogleSheetsAccountRepository:
             if now < expires_at:
                 return [dict(row) for row in rows]
 
-        rows = [dict(row) for row in self._worksheet(name).get_all_records(default_blank="")]
+        rows = self._read_records(name)
         self._records_cache[name] = (now + RECORDS_CACHE_TTL_SECONDS, rows)
         return [dict(row) for row in rows]
 
