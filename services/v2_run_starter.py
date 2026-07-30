@@ -4,11 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from narrative_v2.models import StoryRun
-from packages.loader import discover_packages
 from persistence.v2_factory import build_v2_narrative_repositories
+from services.editorial_content import load_editorial_story_start
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,39 +16,15 @@ class V2StoryStart:
     first_beat_id: str
 
 
-def load_v2_story_start(*, package_id: str, installed_stories_root: Path) -> V2StoryStart | None:
-    packages, _errors = discover_packages(installed_stories_root)
-    package = next(
-        (item for item in packages if item.manifest.package_id == package_id),
-        None,
-    )
-    if package is None:
+def load_v2_story_start(*, secrets: Any, package_id: str) -> V2StoryStart | None:
+    values = load_editorial_story_start(secrets, package_id)
+    if values is None:
         return None
-
-    blocks_path = package.root / "blocks.yaml"
-    if not blocks_path.is_file():
-        return None
-
-    raw = yaml.safe_load(blocks_path.read_text(encoding="utf-8")) or {}
-    blocks = raw.get("blocks") if isinstance(raw, dict) else None
-    if not isinstance(blocks, list) or not blocks:
-        raise ValueError(f"{package_id}: blocks.yaml não contém blocos.")
-
-    ordered = sorted(
-        (item for item in blocks if isinstance(item, dict)),
-        key=lambda item: int(item.get("order", 0) or 0),
-    )
-    if not ordered:
-        raise ValueError(f"{package_id}: nenhum bloco válido foi encontrado.")
-
-    first = ordered[0]
-    first_block_id = str(first.get("block_id", "") or "").strip()
-    first_beat_id = str(first.get("entry_beat_id", "") or "").strip()
-    if not first_block_id or not first_beat_id:
-        raise ValueError(f"{package_id}: bloco inicial incompleto.")
-
+    script_version, first_block_id, first_beat_id = values
+    if not script_version or not first_block_id or not first_beat_id:
+        raise ValueError(f"{package_id}: início editorial incompleto em STORIES.")
     return V2StoryStart(
-        script_version=str(package.manifest.version),
+        script_version=script_version,
         first_block_id=first_block_id,
         first_beat_id=first_beat_id,
     )
@@ -63,16 +37,14 @@ def start_v2_run_on_first_message(
     package_id: str,
     installed_stories_root: Path,
 ) -> StoryRun | None:
-    """Inicia uma run apenas quando há crédito disponível.
+    """Inicia uma run usando exclusivamente a definição publicada no editorial.
 
-    A função é idempotente: uma run ativa existente é reutilizada. O crédito só
-    é consumido quando a run criada pertence ao mesmo crédito selecionado.
+    ``installed_stories_root`` permanece na assinatura por compatibilidade com os
+    chamadores existentes, mas não é usado como fonte editorial.
     """
 
-    start = load_v2_story_start(
-        package_id=package_id,
-        installed_stories_root=installed_stories_root,
-    )
+    del installed_stories_root
+    start = load_v2_story_start(secrets=secrets, package_id=package_id)
     if start is None:
         return None
 
