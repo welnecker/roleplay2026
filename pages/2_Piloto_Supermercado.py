@@ -120,6 +120,14 @@ def clear_session(user: AuthenticatedUser) -> None:
         st.session_state.pop(key, None)
 
 
+def return_to_library(user: AuthenticatedUser) -> None:
+    clear_session(user)
+    st.session_state.page = "library"
+    st.session_state.selected_package_id = None
+    st.session_state.checkout_package_id = None
+    st.switch_page("app.py")
+
+
 user = authenticated_user()
 if user is None:
     st.error("Entre na sua conta antes de abrir a história.")
@@ -127,27 +135,28 @@ if user is None:
         st.switch_page("app.py")
     st.stop()
 
-try:
-    access = get_paid_run_access(
-        secrets=st.secrets,
-        user_id=user.user_id,
-        package_id=PACKAGE_ID,
-    )
-except Exception as exc:
-    st.error(f"Não foi possível verificar o acesso: {exc}")
-    st.stop()
-
-if not access.allowed:
-    st.session_state.checkout_package_id = PACKAGE_ID
-    st.session_state.page = "checkout"
-    st.switch_page("pages/1_Pagamento_Pix.py")
-
 script = load_script()
 try:
     context, story_state, messages, pilot_state = ensure_runtime(user)
 except Exception as exc:
     st.error(f"Não foi possível abrir o piloto: {exc}")
     st.stop()
+
+# A run finalizada precisa continuar aberta para exibir a última fala e o botão.
+# Só verificamos novo direito de acesso enquanto a execução ainda está ativa.
+if not pilot_state.finished and not story_state.finished:
+    try:
+        access = get_paid_run_access(
+            secrets=st.secrets,
+            user_id=user.user_id,
+            package_id=PACKAGE_ID,
+        )
+    except Exception as exc:
+        st.error(f"Não foi possível verificar o acesso: {exc}")
+        st.stop()
+
+    if not access.allowed:
+        return_to_library(user)
 
 with st.sidebar:
     st.subheader("Casada frustrada")
@@ -157,11 +166,9 @@ with st.sidebar:
     st.write(f"Paciência: `{pilot_state.patience}`")
     st.write(f"Etapa: `{pilot_state.node_id}`")
     if st.button("Voltar à biblioteca", use_container_width=True):
-        st.session_state.page = "library"
-        st.session_state.selected_package_id = None
-        st.switch_page("app.py")
+        return_to_library(user)
     if not pilot_state.finished and st.button(
-        "Encerrar execução e pagar novamente",
+        "Encerrar execução",
         use_container_width=True,
     ):
         try:
@@ -175,11 +182,7 @@ with st.sidebar:
         except Exception as exc:
             st.error(f"Não foi possível encerrar a execução: {exc}")
         else:
-            clear_session(user)
-            st.session_state.checkout_package_id = PACKAGE_ID
-            st.session_state.page = "checkout"
-            st.session_state.selected_package_id = None
-            st.switch_page("pages/1_Pagamento_Pix.py")
+            return_to_library(user)
 
 st.title("Casada frustrada")
 st.caption("Bloco piloto: primeiro contato no supermercado")
@@ -199,10 +202,7 @@ if pilot_state.finished or story_state.finished:
         st.info("Mary encerrou a interação.")
     st.caption("A última fala foi registrada. Esta execução não aceita novas mensagens.")
     if st.button("Voltar à biblioteca", type="primary", use_container_width=True):
-        clear_session(user)
-        st.session_state.page = "library"
-        st.session_state.selected_package_id = None
-        st.switch_page("app.py")
+        return_to_library(user)
     st.stop()
 
 user_text = st.chat_input("Responda a Mary")
