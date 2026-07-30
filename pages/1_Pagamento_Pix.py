@@ -23,7 +23,6 @@ st.title("Pagamento por Pix")
 @st.cache_resource(show_spinner=False)
 def payment_services() -> tuple[
     PixCheckoutService | None,
-    GoogleSheetsAccountRepository | None,
     object | None,
     str,
 ]:
@@ -32,7 +31,7 @@ def payment_services() -> tuple[
     try:
         runtime = build_google_sheets_repository(st.secrets)
         if runtime is None:
-            return None, None, None, "Google Sheets não está configurado."
+            return None, None, "Google Sheets não está configurado."
 
         access_token = read_secret(
             st.secrets,
@@ -41,7 +40,7 @@ def payment_services() -> tuple[
             "MP_ACCESS_TOKEN",
         )
         if not access_token:
-            return None, None, None, "Access Token do Mercado Pago não encontrado nos secrets."
+            return None, None, "Access Token do Mercado Pago não encontrado nos secrets."
 
         accounts = GoogleSheetsAccountRepository(runtime.spreadsheet)
         accounts.ensure_schema()
@@ -54,9 +53,9 @@ def payment_services() -> tuple[
             accounts=accounts,
             story_credits=v2_repositories.credits,
         )
-        return service, accounts, v2_repositories.credits, ""
+        return service, v2_repositories.credits, ""
     except Exception as exc:
-        return None, None, None, str(exc)
+        return None, None, str(exc)
 
 
 def is_sandbox_order(stored: StoredPaymentOrder) -> bool:
@@ -80,6 +79,7 @@ def clear_pix_session(package_id: str) -> None:
 
 if st.button("← Voltar à biblioteca"):
     st.session_state.page = "library"
+    st.session_state.checkout_package_id = None
     st.switch_page("app.py")
 
 user = st.session_state.get("authenticated_user")
@@ -99,8 +99,8 @@ if package is None:
         st.code("\n".join(errors))
     st.stop()
 
-service, accounts, story_credits, service_error = payment_services()
-if service is None or accounts is None or story_credits is None:
+service, story_credits, service_error = payment_services()
+if service is None or story_credits is None:
     st.error(service_error or "Não foi possível iniciar o pagamento.")
     st.stop()
 
@@ -108,20 +108,6 @@ manifest = package.manifest
 commerce = manifest.commerce
 if commerce.access != "paid" or commerce.price_cents <= 0:
     st.info("Esta história não exige pagamento.")
-    st.stop()
-
-if accounts.has_entitlement(
-    user_id=str(user.user_id),
-    package_id=manifest.package_id,
-    access="paid",
-):
-    st.success("Esta história já está liberada para sua conta.")
-    if st.button("Abrir história", type="primary", use_container_width=True):
-        st.session_state.selected_package_id = manifest.package_id
-        st.session_state.started_packages.add(manifest.package_id)
-        st.session_state.page = "player"
-        clear_pix_session(manifest.package_id)
-        st.switch_page("app.py")
     st.stop()
 
 st.subheader(manifest.card.title)
@@ -164,9 +150,6 @@ else:
     if stored.qr_code:
         st.text_area("Pix Copia e Cola", stored.qr_code, height=120)
 
-    status_label = stored.status or "pendente"
-    st.info(f"Status atual: {status_label}")
-
     if is_sandbox_order(stored):
         st.caption("Cobrança de sandbox detectada. Nenhum valor real será movimentado.")
         if st.button(
@@ -176,13 +159,6 @@ else:
         ):
             try:
                 payment_id = stored.provider_order_id or stored.payment_order_id
-                accounts.grant_entitlement(
-                    user_id=str(user.user_id),
-                    package_id=manifest.package_id,
-                    product_id=manifest.package_id,
-                    source="mercado_pago_sandbox",
-                    payment_id=payment_id,
-                )
                 story_credits.create_credit(
                     user_id=str(user.user_id),
                     package_id=manifest.package_id,
