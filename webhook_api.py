@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets as secrets_module
 from pathlib import Path
 from typing import Any
 
@@ -12,9 +13,10 @@ from persistence.accounts import GoogleSheetsAccountRepository
 from persistence.factory import build_google_sheets_repository
 from persistence.payments import GoogleSheetsPaymentRepository
 from services.secret_loader import load_application_secrets
+from services.v2_schema_initializer import initialize_v2_sheet_schemas
 
 
-app = FastAPI(title="Roleplay 2026 Webhooks", version="0.1.0")
+app = FastAPI(title="Roleplay 2026 Webhooks", version="0.2.0")
 
 
 def build_services() -> tuple[PixCheckoutService, GoogleSheetsPaymentRepository, str]:
@@ -72,6 +74,18 @@ def config_status() -> dict[str, Any]:
         "spreadsheet_id_present": bool(
             str(secrets.get("GOOGLE_SHEETS_SPREADSHEET_ID", "") or "").strip()
         ),
+        "accounts_billing_spreadsheet_id_present": bool(
+            str(secrets.get("ROLEPLAY_ACCOUNTS_BILLING_SPREADSHEET_ID", "") or "").strip()
+        ),
+        "runtime_spreadsheet_id_present": bool(
+            str(secrets.get("ROLEPLAY_RUNTIME_SPREADSHEET_ID", "") or "").strip()
+        ),
+        "editorial_spreadsheet_id_present": bool(
+            str(secrets.get("ROLEPLAY_EDITORIAL_SPREADSHEET_ID", "") or "").strip()
+        ),
+        "v2_sheets_admin_token_present": bool(
+            str(secrets.get("V2_SHEETS_ADMIN_TOKEN", "") or "").strip()
+        ),
         "service_account_section_present": isinstance(service_account, dict) and bool(service_account),
         "service_account_client_email_present": bool(
             isinstance(service_account, dict)
@@ -94,6 +108,51 @@ def config_status() -> dict[str, Any]:
             )
         ),
         "loader_error": loader_error,
+    }
+
+
+@app.post("/admin/initialize-v2-sheets")
+def initialize_v2_sheets_endpoint(
+    x_admin_token: str = Header(default="", alias="x-admin-token"),
+) -> dict[str, Any]:
+    """Cria ou valida as abas v2 usando a configuração do Render."""
+
+    application_secrets = load_application_secrets()
+    expected_token = str(
+        application_secrets.get("V2_SHEETS_ADMIN_TOKEN", "") or ""
+    ).strip()
+    supplied_token = x_admin_token.strip()
+    if not expected_token:
+        raise HTTPException(
+            status_code=503,
+            detail="V2_SHEETS_ADMIN_TOKEN não está configurado.",
+        )
+    if not supplied_token or not secrets_module.compare_digest(
+        supplied_token,
+        expected_token,
+    ):
+        raise HTTPException(status_code=401, detail="Token administrativo inválido.")
+
+    try:
+        results = initialize_v2_sheet_schemas(application_secrets)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha ao inicializar as planilhas: {type(exc).__name__}",
+        ) from exc
+
+    return {
+        "status": "ok",
+        "spreadsheets": [
+            {
+                "name": result.spreadsheet_name,
+                "created_sheets": list(result.created_sheets),
+                "existing_sheets": list(result.existing_sheets),
+            }
+            for result in results
+        ],
     }
 
 
