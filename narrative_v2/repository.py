@@ -5,6 +5,10 @@ from typing import Protocol
 from narrative_v2.models import RunCredit, StoryRun
 
 
+class RuntimeConflictError(RuntimeError):
+    pass
+
+
 class StoryCreditRepository(Protocol):
     """Persistência de créditos adquiridos por pagamento."""
 
