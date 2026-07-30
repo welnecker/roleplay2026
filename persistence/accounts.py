@@ -144,9 +144,10 @@ class GoogleSheetsAccountRepository:
     def has_entitlement(self, *, user_id: str, package_id: str, access: str) -> bool:
         if access == "free":
             return True
-        if self._paid_access_resolver is not None:
+        resolver = type(self)._paid_access_resolver
+        if resolver is not None:
             return bool(
-                self._paid_access_resolver(
+                resolver(
                     user_id=user_id,
                     package_id=package_id,
                     access=access,
