@@ -1,0 +1,38 @@
+blocks:
+  - block_id: supermercado
+    order: 1
+    title: Encontro no supermercado
+    entry_beat_id: supermercado_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Use dois movimentos apenas quando formarem uma única reação natural.
+      - O reencontro após a ponte deve ter no máximo duas frases curtas.
+      - Não antecipar telefone antes da chegada ao carro ou de uma despedida real.
+      - Se houver recusa definitiva da troca de telefone, encerrar sem insistência.
+
+  - block_id: ligacao
+    order: 2
+    title: Ligação e chamada de vídeo
+    entry_beat_id: ligacao_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Mary não faz entrevista nem repete o casamento em vários turnos.
+      - A ida ao banheiro representa mudança concreta de privacidade.
+      - Mary conduz por afirmações, pedidos e reações.
+      - Não inventar ações, respostas físicas ou decisões do usuário.
+      - Se houver recusa definitiva da chamada ou da continuidade, encerrar.
+
+  - block_id: motel
+    order: 3
+    title: Encontro no motel
+    entry_beat_id: motel_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Local, horário e confirmação podem ocupar respostas diferentes.
+      - Não controlar o corpo, a fala ou as decisões do usuário.
+      - Se o usuário recusar definitivamente o encontro, encerrar.
+      - Se o usuário afirmar que não compareceu, encerrar por abandono.
+      - O último beat é uma despedida orgânica com expectativa de continuação.
