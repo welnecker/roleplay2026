@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from narrative_v2.models import StoryRun
+from persistence.models import utc_now_iso
 from persistence.v2_factory import build_v2_narrative_repositories
 
 PaidAccessState = Literal["locked", "available", "active"]
@@ -43,6 +44,9 @@ def finish_active_run(
     if run is None:
         return None
     expected_version = run.state_version
+    now = utc_now_iso()
     run.status = status
     run.ending_code = ending_code
+    run.ended_at = now
+    run.updated_at = now
     return repositories.runs.update_run(run=run, expected_version=expected_version)
