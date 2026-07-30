@@ -6,7 +6,9 @@ from services.pilot_supermarket import (
     PilotScript,
     PilotState,
     classify_user_message,
+    clean_model_response,
     decide_turn,
+    opening_text,
 )
 
 
@@ -30,12 +32,30 @@ def test_classifica_respostas_minimas_e_debochadas() -> None:
     assert classify_user_message("Estou bem, foi só um susto") == "engaged"
 
 
+def test_abertura_e_fallbacks_usam_primeira_pessoa() -> None:
+    opening = opening_text(script())
+
+    assert "Caminho distraída" in opening
+    assert "Mary" not in opening
+    assert "ela " not in opening.casefold()
+
+
+def test_resposta_do_modelo_em_terceira_pessoa_e_rejeitada() -> None:
+    fallback = "Seguro o carrinho. — Você está bem?"
+
+    assert clean_model_response("Mary segura o carrinho e olha para ele.", fallback) == fallback
+    assert clean_model_response("Seguro o carrinho e olho para você.", fallback) == (
+        "Seguro o carrinho e olho para você."
+    )
+
+
 def test_resposta_valida_avanca_sem_numero_fixo_de_turnos() -> None:
     turn = decide_turn(script(), PilotState(), "Estou bem, não machucou")
 
     assert turn.target_id == "check_wellbeing"
     assert turn.finished is False
     assert turn.state.node_id == "check_wellbeing"
+    assert "primeira pessoa" in turn.system_prompt
 
 
 def test_deboque_encerra_imediatamente() -> None:
@@ -45,6 +65,7 @@ def test_deboque_encerra_imediatamente() -> None:
     assert turn.run_status == "terminated"
     assert turn.ending_code == "user_mocking"
     assert turn.state.desire == 0
+    assert "Mary" not in turn.visible_fallback
 
 
 def test_repeticao_displicente_esfria_mary_e_encerra() -> None:
