@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+import re
 import yaml
 
 Engagement = Literal["engaged", "minimal", "dismissive", "mocking", "hostile", "nonsense"]
@@ -56,16 +57,15 @@ class PilotTurn:
 class PilotScript:
     def __init__(self, raw: dict[str, Any]) -> None:
         self.raw = raw
-        scene = raw.get("scene") or {}
-        self.scene = scene
+        self.scene = raw.get("scene") or {}
         self.beats = {
             str(item["beat_id"]): item
-            for item in scene.get("beats", [])
+            for item in self.scene.get("beats", [])
             if isinstance(item, dict) and item.get("beat_id")
         }
         self.endings = {
             str(item["ending_id"]): item
-            for item in scene.get("endings", [])
+            for item in self.scene.get("endings", [])
             if isinstance(item, dict) and item.get("ending_id")
         }
         self.engagement_policy = raw.get("engagement_policy") or {}
@@ -87,13 +87,20 @@ _DISMISSIVE = {
     "proxima", "vai logo", "segue o roteiro", "continue",
 }
 _HOSTILE_MARKERS = {
-    "idiota", "burra", "imbecil", "vagabunda", "vadia", "cala a boca", "vai se foder",
-    "te odeio", "ameaço", "ameaco",
+    "idiota", "burra", "imbecil", "vagabunda", "vadia", "cala a boca",
+    "vai se foder", "te odeio", "ameaço", "ameaco",
 }
 _MOCKING_MARKERS = {
-    "sou o batman", "sou superman", "mulher maravilha", "segue o roteiro", "que roteiro",
-    "npc", "robô", "robo", "personagem", "chatbot", "faz sua fala", "diz sua fala",
+    "sou o batman", "sou superman", "mulher maravilha", "segue o roteiro",
+    "que roteiro", "npc", "robô", "robo", "personagem", "chatbot",
+    "faz sua fala", "diz sua fala",
 }
+_THIRD_PERSON_PATTERNS = (
+    r"\bMary\b",
+    r"\bela\s+(?:olha|observa|segura|recua|caminha|ajeita|sorri|ri|se afasta|encerra)",
+    r"\bo interesse no rosto dela\b",
+    r"\bo interesse no rosto de Mary\b",
+)
 
 
 def _normalized(text: str) -> str:
@@ -108,7 +115,9 @@ def classify_user_message(text: str) -> Engagement:
         return "hostile"
     if any(marker in value for marker in _MOCKING_MARKERS):
         return "mocking"
-    if value in _DISMISSIVE or (len(value.split()) <= 3 and any(value.startswith(x) for x in _DISMISSIVE)):
+    if value in _DISMISSIVE or (
+        len(value.split()) <= 3 and any(value.startswith(marker) for marker in _DISMISSIVE)
+    ):
         return "dismissive"
     if value in _MINIMAL or (len(value.split()) == 1 and len(value) <= 5):
         return "minimal"
@@ -118,8 +127,7 @@ def classify_user_message(text: str) -> Engagement:
 
 
 def opening_text(script: PilotScript) -> str:
-    beat = script.beats["collision"]
-    return _fallback_for_beat("collision", beat)
+    return _fallback_for_beat("collision", script.beats["collision"])
 
 
 def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> PilotTurn:
@@ -144,11 +152,12 @@ def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> Pilot
         target_id = "end_lost_interest"
     else:
         current = script.beats.get(state.node_id)
-        if current is None:
-            target_id = "end_lost_interest"
-        else:
-            transitions = current.get("on_user") or {}
-            target_id = str(transitions.get(engagement) or transitions.get("engaged") or "end_lost_interest")
+        transitions = (current or {}).get("on_user") or {}
+        target_id = str(
+            transitions.get(engagement)
+            or transitions.get("engaged")
+            or "end_lost_interest"
+        )
 
     if target_id in script.endings:
         return _ending_turn(script, updated, engagement, target_id, user_text)
@@ -158,41 +167,30 @@ def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> Pilot
         return _ending_turn(script, updated, engagement, "end_lost_interest", user_text)
 
     updated.node_id = target_id
-    terminal = str(beat.get("terminal_transition", "") or "")
     fallback = _fallback_for_beat(target_id, beat)
     prompt = _build_prompt(script, beat, updated, engagement, user_text, fallback)
+    terminal = str(beat.get("terminal_transition", "") or "")
     if terminal:
         ending = script.endings[terminal]
         updated.finished = True
         updated.run_status = str(ending.get("run_status", "completed"))
         updated.ending_code = str(ending.get("ending_code", terminal))
         return PilotTurn(
-            engagement=engagement,
-            target_id=target_id,
-            visible_fallback=fallback,
-            system_prompt=prompt,
-            state=updated,
-            finished=True,
-            run_status=updated.run_status,
-            ending_code=updated.ending_code,
+            engagement, target_id, fallback, prompt, updated, True,
+            updated.run_status, updated.ending_code,
         )
-
-    return PilotTurn(
-        engagement=engagement,
-        target_id=target_id,
-        visible_fallback=fallback,
-        system_prompt=prompt,
-        state=updated,
-    )
+    return PilotTurn(engagement, target_id, fallback, prompt, updated)
 
 
 def clean_model_response(response: str, fallback: str) -> str:
     value = response.strip()
     if not value:
         return fallback
-    for marker in ("<END_RUN", "END_RUN", '"event"', "```json"):
-        if marker.casefold() in value.casefold():
-            return fallback
+    lowered = value.casefold()
+    if any(marker.casefold() in lowered for marker in ("<END_RUN", "END_RUN", '"event"', "```json")):
+        return fallback
+    if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in _THIRD_PERSON_PATTERNS):
+        return fallback
     return value
 
 
@@ -204,35 +202,32 @@ def _ending_turn(
     user_text: str,
 ) -> PilotTurn:
     ending = script.endings[ending_id]
-    visible = ending.get("visible_delivery") or {}
-    fallback = str(visible.get("text", "Mary encerra a conversa e se afasta."))
+    fallback = _ENDING_FALLBACKS.get(
+        ending_id,
+        "Perco a vontade de continuar essa conversa. — Deixa pra lá.",
+    )
     final_state = ending.get("mary_final_state") or {}
-    if "interest" in final_state:
-        state.interest = int(final_state["interest"])
-    if "desire" in final_state:
-        state.desire = int(final_state["desire"])
+    state.interest = int(final_state.get("interest", state.interest))
+    state.desire = int(final_state.get("desire", state.desire))
     state.node_id = ending_id
     state.finished = True
     state.run_status = str(ending.get("run_status", "terminated"))
     state.ending_code = str(ending.get("ending_code", ending_id))
     prompt = (
-        "Você interpreta Mary, uma mulher adulta brasileira. Encerre a cena neste turno. "
-        "A decisão é de Mary e deve parecer natural, definitiva e sem convite para continuar. "
+        "Você é Mary e narra somente a própria experiência em primeira pessoa. "
+        "Encerre a cena neste turno, de modo natural, definitivo e sem convite para continuar. "
+        "Toda ação deve usar eu/me/meu/minha ou verbo na primeira pessoa. "
+        "Pensamentos internos também devem estar em primeira pessoa. "
+        "É proibido escrever 'Mary', 'ela' ou narrar de fora da personagem. "
         "Não mencione aplicativo, regras, roteiro, classificação ou evento técnico. "
-        "Não faça perguntas. Não escreva marcadores de encerramento.\n\n"
+        "Não faça perguntas nem escreva marcadores de encerramento.\n\n"
         f"MENSAGEM DO USUÁRIO: {user_text}\n"
         f"MOTIVO INTERNO: {state.ending_code}\n"
-        f"FALA FINAL DE REFERÊNCIA: {fallback}"
+        f"REFERÊNCIA EM PRIMEIRA PESSOA: {fallback}"
     )
     return PilotTurn(
-        engagement=engagement,
-        target_id=ending_id,
-        visible_fallback=fallback,
-        system_prompt=prompt,
-        state=state,
-        finished=True,
-        run_status=state.run_status,
-        ending_code=state.ending_code,
+        engagement, ending_id, fallback, prompt, state, True,
+        state.run_status, state.ending_code,
     )
 
 
@@ -252,49 +247,76 @@ def _build_prompt(
         if isinstance(item, dict) and item.get("kind") != "wait_user"
     )
     return (
-        "Você interpreta Mary, uma mulher adulta brasileira, numa história guiada.\n"
-        "Siga o movimento atual com máxima fidelidade. A liberdade serve apenas para adaptar "
-        "a fala à resposta real do usuário, nunca para inventar outra trama.\n\n"
-        "REGRAS:\n"
-        "- Escreva somente a fala e pequenas ações de Mary.\n"
+        "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
+        "A resposta inteira deve vir da consciência de Mary, em primeira pessoa.\n\n"
+        "REGRAS ABSOLUTAS:\n"
+        "- Narre ações como: 'Caminho distraída', 'Seguro o carrinho', 'Olho para você'.\n"
+        "- Expresse pensamentos como: 'Nossa... ainda bem que ele foi educado' ou 'Como estou distraída'.\n"
+        "- Nunca escreva 'Mary faz', 'Mary olha', 'ela faz' ou qualquer narração externa.\n"
+        "- Não use narrador onisciente ou terceira pessoa nem em ações, nem em pensamentos.\n"
         "- Não invente ações, pensamentos, endereço, profissão ou passado do usuário.\n"
+        "- Siga o movimento atual com máxima fidelidade e não crie outra trama.\n"
         "- Não pule para telefone, ligação, encontro ou qualquer cena futura.\n"
-        "- Não carregue a conversa sozinha: o investimento emocional deve ser proporcional.\n"
-        "- Não mencione roteiro, classificação, pontuação ou sistema.\n"
-        "- Não inclua END_RUN, JSON ou qualquer marcador técnico.\n"
+        "- O investimento emocional deve ser proporcional à participação do usuário.\n"
+        "- Não mencione roteiro, classificação, sistema, END_RUN ou JSON.\n"
         "- Faça no máximo uma pergunta quando o movimento pedir pergunta.\n\n"
         f"LOCAL: {script.scene.get('location', 'supermercado')}\n"
         f"OBJETIVO ATUAL: {beat.get('objective', '')}\n"
         f"ENGAJAMENTO DETECTADO: {engagement}\n"
-        f"ESTADO DE MARY: interesse={state.interest}, desejo={state.desire}, "
+        f"ESTADO INTERNO: interesse={state.interest}, desejo={state.desire}, "
         f"confiança={state.trust}, paciência={state.patience}\n"
         f"RESPOSTA DO USUÁRIO: {user_text}\n\n"
         f"UNIDADES DO MOVIMENTO:\n{unit_text}\n\n"
-        f"REFERÊNCIA DE SEGURANÇA: {fallback}"
+        f"REFERÊNCIA EM PRIMEIRA PESSOA: {fallback}"
     )
+
+
+_ENDING_FALLBACKS: dict[str, str] = {
+    "end_pilot_positive": (
+        "Sorrio de lado, ainda segurando o carrinho. — Tchauzinho... e presta atenção "
+        "por onde anda, porque da próxima vez a culpa pode ser sua."
+    ),
+    "end_pilot_neutral": "Ajeito as mãos no carrinho. — Bom... desculpa de novo. Tchau.",
+    "end_lost_interest": "Sinto meu interesse desaparecer. — Deixa pra lá.",
+    "end_mocking": "Solto uma risada sem humor e seguro o carrinho. — Não, obrigada.",
+    "end_hostile": "Recuo e encerro a conversa. Sigo para outro corredor sem olhar para trás.",
+}
 
 
 def _fallback_for_beat(beat_id: str, beat: dict[str, Any]) -> str:
     fixed: dict[str, str] = {
-        "collision": "O carrinho encosta em você e Mary se assusta. — Eita, caralho... desculpa!",
-        "check_wellbeing": "Mary segura o carrinho e olha rapidamente para o ponto do impacto. — Você tá bem? Não machucou?",
-        "check_wellbeing_restrained": "Mary mantém a mão no carrinho, mais contida. — Tá tudo bem mesmo?",
-        "familiar_face_bridge": "Com o susto passando, Mary observa seu rosto por um instante. — Seu rosto me parece familiar... você por acaso mora no Plaza?",
-        "familiar_face_bridge_restrained": "Mary o observa brevemente. — Seu rosto não me é estranho. Você mora no Plaza?",
-        "plaza_response": "Mary reage apenas ao que você disse e ajeita as mãos no carrinho. — Entendi... bom, desculpa de novo pelo esbarrão.",
-        "plaza_response_restrained": "— Imaginei. Acho que já te vi por lá. Bom... desculpa de novo. Tchau.",
-        "confront_low_engagement": "O interesse no rosto de Mary diminui. — Eu estou falando com você, não narrando sozinha.",
+        "collision": (
+            "Caminho distraída, empurrando o carrinho, até encostar em você. "
+            "Levo um susto. — Eita, caralho... desculpa!"
+        ),
+        "check_wellbeing": (
+            "Seguro o carrinho e olho rapidamente para onde bati. "
+            "— Você tá bem? Não machucou?"
+        ),
+        "check_wellbeing_restrained": "Mantenho a mão no carrinho, mais contida. — Tá tudo bem mesmo?",
+        "familiar_face_bridge": (
+            "Nossa... ainda bem que ele foi educado. Como estou distraída. "
+            "Olho para o rosto dele por um instante a mais. "
+            "— Seu rosto me parece familiar... você por acaso mora no Plaza?"
+        ),
+        "familiar_face_bridge_restrained": (
+            "Observo você brevemente, ainda contida. "
+            "— Seu rosto não me é estranho. Você mora no Plaza?"
+        ),
+        "plaza_response": (
+            "Reajo somente ao que você disse e ajeito as mãos no carrinho. "
+            "— Entendi... bom, desculpa de novo pelo esbarrão."
+        ),
+        "plaza_response_restrained": (
+            "— Imaginei. Acho que já te vi por lá. Bom... desculpa de novo. Tchau."
+        ),
+        "confront_low_engagement": (
+            "Sinto minha curiosidade diminuir. — Eu estou falando com você, não narrando sozinha."
+        ),
         "steer_collision_once": "— Eu perguntei porque acabei de bater o carrinho em você. Machucou?",
         "steer_wellbeing_once": "— Só quero saber se você está bem.",
         "steer_plaza_once": "— Perguntei se você mora no Plaza.",
     }
     if beat_id in fixed:
         return fixed[beat_id]
-    parts: list[str] = []
-    for unit in beat.get("units", []):
-        if not isinstance(unit, dict) or unit.get("kind") == "wait_user":
-            continue
-        value = unit.get("text") or unit.get("anchor") or unit.get("instruction")
-        if value:
-            parts.append(str(value))
-    return " ".join(parts) or "Mary reage de forma breve e coerente com a cena."
+    return "Respiro, observo a situação e respondo de forma breve, sempre pela minha própria perspectiva."
