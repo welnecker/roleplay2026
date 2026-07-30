@@ -6,6 +6,7 @@ from typing import Any, Mapping
 from uuid import uuid4
 
 from billing.mercado_pago import MercadoPagoClient, MercadoPagoError, PixOrder
+from billing.v2_credit_grant import StoryCreditGrantRepository
 from persistence.accounts import GoogleSheetsAccountRepository
 from persistence.payments import GoogleSheetsPaymentRepository, StoredPaymentOrder
 
@@ -65,10 +66,12 @@ class PixCheckoutService:
         client: MercadoPagoClient,
         payments: GoogleSheetsPaymentRepository,
         accounts: GoogleSheetsAccountRepository,
+        story_credits: StoryCreditGrantRepository | None = None,
     ) -> None:
         self.client = client
         self.payments = payments
         self.accounts = accounts
+        self.story_credits = story_credits
 
     def create_checkout(
         self,
@@ -157,3 +160,9 @@ class PixCheckoutService:
             source="mercado_pago_pix",
             payment_id=provider.order_id,
         )
+        if self.story_credits is not None:
+            self.story_credits.create_credit(
+                user_id=stored.user_id,
+                package_id=stored.package_id,
+                payment_id=provider.order_id,
+            )
