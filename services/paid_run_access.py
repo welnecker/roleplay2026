@@ -9,7 +9,7 @@ from persistence.models import utc_now_iso
 from persistence.v2_factory import build_v2_narrative_repositories
 
 PaidAccessState = Literal["locked", "available", "active"]
-ACCESS_CACHE_TTL_SECONDS = 15.0
+ACCESS_CACHE_TTL_SECONDS = 60.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +39,22 @@ def _configuration_key(secrets: Any) -> tuple[str, str, str, int]:
     )
 
 
+def _access_cache_key(
+    *,
+    secrets: Any,
+    user_id: str,
+    package_id: str,
+) -> tuple[str, str, str, str, int]:
+    configuration = _configuration_key(secrets)
+    return (
+        configuration[0],
+        configuration[1],
+        user_id,
+        package_id,
+        configuration[3],
+    )
+
+
 def _repositories(secrets: Any) -> Any:
     key = _configuration_key(secrets)
     cached = _repository_cache.get(key)
@@ -58,14 +74,23 @@ def clear_paid_access_cache(*, user_id: str = "", package_id: str = "") -> None:
         _access_cache.pop(key, None)
 
 
+def _cached_active_run(*, secrets: Any, user_id: str, package_id: str) -> StoryRun | None:
+    cached = _access_cache.get(
+        _access_cache_key(secrets=secrets, user_id=user_id, package_id=package_id)
+    )
+    if cached is None:
+        return None
+    _expires_at, access = cached
+    if access.state != "active" or access.run is None:
+        return None
+    return access.run
+
+
 def get_paid_run_access(*, secrets: Any, user_id: str, package_id: str) -> PaidRunAccess:
-    configuration = _configuration_key(secrets)
-    cache_key = (
-        configuration[0],
-        configuration[1],
-        user_id,
-        package_id,
-        configuration[3],
+    cache_key = _access_cache_key(
+        secrets=secrets,
+        user_id=user_id,
+        package_id=package_id,
     )
     now = monotonic()
     cached = _access_cache.get(cache_key)
@@ -96,10 +121,20 @@ def finish_active_run(
     ending_code: str,
 ) -> StoryRun | None:
     repositories = _repositories(secrets)
-    run = repositories.runs.get_active_run(user_id=user_id, package_id=package_id)
+
+    # A página já consulta o acesso antes de oferecer o botão de encerramento.
+    # Reutilizar essa run evita uma leitura redundante de STORY_RUNS.
+    run = _cached_active_run(
+        secrets=secrets,
+        user_id=user_id,
+        package_id=package_id,
+    )
+    if run is None:
+        run = repositories.runs.get_active_run(user_id=user_id, package_id=package_id)
     if run is None:
         clear_paid_access_cache(user_id=user_id, package_id=package_id)
         return None
+
     expected_version = run.state_version
     now = utc_now_iso()
     run.status = status
