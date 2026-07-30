@@ -74,6 +74,25 @@ def clear_paid_access_cache(*, user_id: str = "", package_id: str = "") -> None:
         _access_cache.pop(key, None)
 
 
+def prime_paid_access_available(
+    *,
+    secrets: Any,
+    user_id: str,
+    package_id: str,
+    ttl_seconds: float = ACCESS_CACHE_TTL_SECONDS,
+) -> PaidRunAccess:
+    """Registra o crédito recém-criado sem consultar novamente o Sheets."""
+
+    result = PaidRunAccess(state="available")
+    cache_key = _access_cache_key(
+        secrets=secrets,
+        user_id=user_id,
+        package_id=package_id,
+    )
+    _access_cache[cache_key] = (monotonic() + max(1.0, float(ttl_seconds)), result)
+    return result
+
+
 def _cached_active_run(*, secrets: Any, user_id: str, package_id: str) -> StoryRun | None:
     cached = _access_cache.get(
         _access_cache_key(secrets=secrets, user_id=user_id, package_id=package_id)
@@ -122,8 +141,6 @@ def finish_active_run(
 ) -> StoryRun | None:
     repositories = _repositories(secrets)
 
-    # A página já consulta o acesso antes de oferecer o botão de encerramento.
-    # Reutilizar essa run evita uma leitura redundante de STORY_RUNS.
     run = _cached_active_run(
         secrets=secrets,
         user_id=user_id,
