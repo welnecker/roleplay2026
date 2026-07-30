@@ -23,21 +23,8 @@ class FakeCredits:
         return object()
 
 
-def test_approved_payment_grants_legacy_access_and_v2_credit() -> None:
-    accounts = FakeAccounts()
-    credits = FakeCredits()
-    service = PixCheckoutService(
-        client=SimpleNamespace(),
-        payments=SimpleNamespace(),
-        accounts=accounts,  # type: ignore[arg-type]
-        story_credits=credits,
-    )
-    stored = SimpleNamespace(
-        user_id="user_1",
-        package_id="casada_frustrada",
-        product_id="casada_frustrada",
-    )
-    provider = PixOrder(
+def approved_provider() -> PixOrder:
+    return PixOrder(
         order_id="mp_123",
         status="approved",
         status_detail="accredited",
@@ -48,7 +35,47 @@ def test_approved_payment_grants_legacy_access_and_v2_credit() -> None:
         raw={},
     )
 
-    service._grant(stored, provider)  # type: ignore[arg-type]
+
+def stored_order() -> SimpleNamespace:
+    return SimpleNamespace(
+        user_id="user_1",
+        package_id="casada_frustrada",
+        product_id="casada_frustrada",
+    )
+
+
+def test_approved_payment_grants_only_v2_credit_when_configured() -> None:
+    accounts = FakeAccounts()
+    credits = FakeCredits()
+    service = PixCheckoutService(
+        client=SimpleNamespace(),
+        payments=SimpleNamespace(),
+        accounts=accounts,  # type: ignore[arg-type]
+        story_credits=credits,
+    )
+
+    service._grant(stored_order(), approved_provider())  # type: ignore[arg-type]
+
+    assert accounts.calls == []
+    assert credits.calls == [
+        {
+            "user_id": "user_1",
+            "package_id": "casada_frustrada",
+            "payment_id": "mp_123",
+        }
+    ]
+
+
+def test_approved_payment_uses_legacy_entitlement_without_v2_credit_repository() -> None:
+    accounts = FakeAccounts()
+    service = PixCheckoutService(
+        client=SimpleNamespace(),
+        payments=SimpleNamespace(),
+        accounts=accounts,  # type: ignore[arg-type]
+        story_credits=None,
+    )
+
+    service._grant(stored_order(), approved_provider())  # type: ignore[arg-type]
 
     assert accounts.calls == [
         {
@@ -56,13 +83,6 @@ def test_approved_payment_grants_legacy_access_and_v2_credit() -> None:
             "package_id": "casada_frustrada",
             "product_id": "casada_frustrada",
             "source": "mercado_pago_pix",
-            "payment_id": "mp_123",
-        }
-    ]
-    assert credits.calls == [
-        {
-            "user_id": "user_1",
-            "package_id": "casada_frustrada",
             "payment_id": "mp_123",
         }
     ]
