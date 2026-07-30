@@ -109,6 +109,14 @@ commerce:
     return tmp_path
 
 
+def _mock_editorial_start(monkeypatch) -> None:
+    monkeypatch.setattr(
+        v2_run_starter,
+        "load_editorial_story_start",
+        lambda secrets, package_id: ("2.0.0", "primeiro", "beat_001"),
+    )
+
+
 def test_cria_run_e_consume_credit(monkeypatch, tmp_path: Path) -> None:
     credit = RunCredit(
         credit_id="credit_1",
@@ -123,6 +131,7 @@ def test_cria_run_e_consume_credit(monkeypatch, tmp_path: Path) -> None:
         "build_v2_narrative_repositories",
         lambda secrets: repositories,
     )
+    _mock_editorial_start(monkeypatch)
 
     run = v2_run_starter.start_v2_run_on_first_message(
         secrets={},
@@ -132,6 +141,7 @@ def test_cria_run_e_consume_credit(monkeypatch, tmp_path: Path) -> None:
     )
 
     assert run is not None
+    assert run.script_version == "2.0.0"
     assert run.current_block_id == "primeiro"
     assert run.current_beat_id == "beat_001"
     assert repositories.credits.consumed == ("credit_1", "run_1")
@@ -162,6 +172,7 @@ def test_reutiliza_run_ativa_sem_consumir_outro_credito(monkeypatch, tmp_path: P
         "build_v2_narrative_repositories",
         lambda secrets: repositories,
     )
+    _mock_editorial_start(monkeypatch)
 
     run = v2_run_starter.start_v2_run_on_first_message(
         secrets={},
