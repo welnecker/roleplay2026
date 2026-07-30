@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from time import monotonic
-from typing import Any
+from typing import Any, ClassVar
 
 import gspread
 from argon2 import PasswordHasher
@@ -44,6 +45,8 @@ ENTITLEMENTS_HEADERS = (
     "updated_at",
 )
 
+PaidAccessResolver = Callable[..., bool]
+
 
 @dataclass(frozen=True, slots=True)
 class AccountUser:
@@ -54,11 +57,17 @@ class AccountUser:
 
 
 class GoogleSheetsAccountRepository:
+    _paid_access_resolver: ClassVar[PaidAccessResolver | None] = None
+
     def __init__(self, spreadsheet: Spreadsheet) -> None:
         self.spreadsheet = spreadsheet
         self.hasher = PasswordHasher()
         self._worksheets: dict[str, Worksheet] = {}
         self._records_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+
+    @classmethod
+    def configure_paid_access_resolver(cls, resolver: PaidAccessResolver | None) -> None:
+        cls._paid_access_resolver = resolver
 
     def ensure_schema(self) -> None:
         self._ensure_sheet(USERS_SHEET, USERS_HEADERS)
@@ -135,6 +144,14 @@ class GoogleSheetsAccountRepository:
     def has_entitlement(self, *, user_id: str, package_id: str, access: str) -> bool:
         if access == "free":
             return True
+        if self._paid_access_resolver is not None:
+            return bool(
+                self._paid_access_resolver(
+                    user_id=user_id,
+                    package_id=package_id,
+                    access=access,
+                )
+            )
         return any(
             str(row.get("user_id", "")) == user_id
             and str(row.get("package_id", "")) == package_id
