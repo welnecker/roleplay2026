@@ -17,6 +17,13 @@ from services.v2_run_starter import start_v2_run_on_first_message
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
 
 
+@dataclass(frozen=True, slots=True)
+class RuntimeRunView:
+    save_id: str
+    package_id: str
+    state_version: int
+
+
 @dataclass(slots=True)
 class RuntimePersistenceContext:
     package_id: str
@@ -24,6 +31,15 @@ class RuntimePersistenceContext:
     run: StoryRun | None = None
     session: RuntimeSession | None = None
     instance_id: str = ""
+
+    @property
+    def save(self) -> RuntimeRunView:
+        """Compatibilidade temporária para telas que ainda exibem o antigo save."""
+        return RuntimeRunView(
+            save_id=self.run.run_id if self.run is not None else "aguardando_primeira_mensagem",
+            package_id=self.package_id,
+            state_version=self.run.state_version if self.run is not None else 0,
+        )
 
 
 def serialize_story_state(state: StoryState) -> dict[str, object]:
