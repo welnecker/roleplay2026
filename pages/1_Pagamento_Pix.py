@@ -1,20 +1,28 @@
 from __future__ import annotations
 
 import base64
+import random
+import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
+import gspread
 import streamlit as st
+from gspread.exceptions import APIError
 
 from billing.mercado_pago import MercadoPagoClient, MercadoPagoError
 from billing.service import PixCheckoutService, read_secret
 from packages.loader import discover_packages
 from persistence.accounts import GoogleSheetsAccountRepository
-from persistence.factory import build_google_sheets_repository
 from persistence.payments import GoogleSheetsPaymentRepository, StoredPaymentOrder
-from persistence.v2_factory import build_v2_narrative_repositories
-
+from persistence.spreadsheet_config import read_spreadsheet_ids
+from persistence.v2_google_sheets import GoogleSheetsStoryCreditRepository
+from services.paid_run_access import prime_paid_access_available
 
 ROOT = Path(__file__).resolve().parent.parent
+PROCESSING_COOLDOWN_SECONDS = 6.0
+T = TypeVar("T")
 
 st.set_page_config(page_title="Pagamento Pix", page_icon="💠", layout="centered")
 st.title("Pagamento por Pix")
@@ -23,14 +31,17 @@ st.title("Pagamento por Pix")
 @st.cache_resource(show_spinner=False)
 def payment_services() -> tuple[
     PixCheckoutService | None,
-    object | None,
+    GoogleSheetsStoryCreditRepository | None,
     str,
 ]:
-    """Monta a infraestrutura Pix uma única vez por processo do Streamlit."""
+    """Monta somente a infraestrutura necessária ao checkout Pix."""
 
     try:
-        runtime = build_google_sheets_repository(st.secrets)
-        if runtime is None:
+        credentials = st.secrets.get("gcp_service_account")
+        legacy_spreadsheet_id = str(
+            st.secrets.get("GOOGLE_SHEETS_SPREADSHEET_ID", "") or ""
+        ).strip()
+        if not credentials or not legacy_spreadsheet_id:
             return None, None, "Google Sheets não está configurado."
 
         access_token = read_secret(
@@ -42,20 +53,96 @@ def payment_services() -> tuple[
         if not access_token:
             return None, None, "Access Token do Mercado Pago não encontrado nos secrets."
 
-        accounts = GoogleSheetsAccountRepository(runtime.spreadsheet)
-        accounts.ensure_schema()
-        payments = GoogleSheetsPaymentRepository(runtime.spreadsheet)
-        payments.ensure_schema()
-        v2_repositories = build_v2_narrative_repositories(st.secrets)
+        spreadsheet_ids = read_spreadsheet_ids(st.secrets)
+        client = gspread.service_account_from_dict(dict(credentials))
+        billing_legacy = client.open_by_key(legacy_spreadsheet_id)
+        billing_v2 = client.open_by_key(spreadsheet_ids.accounts_billing)
+
+        # As abas são criadas por migração/deploy. O checkout normal não deve
+        # validar SAVES, SESSIONS, INTERACTIONS e outros schemas narrativos.
+        accounts = GoogleSheetsAccountRepository(billing_legacy)
+        payments = GoogleSheetsPaymentRepository(billing_legacy)
+        story_credits = GoogleSheetsStoryCreditRepository(billing_v2)
         service = PixCheckoutService(
             client=MercadoPagoClient(access_token),
             payments=payments,
             accounts=accounts,
-            story_credits=v2_repositories.credits,
+            story_credits=story_credits,
         )
-        return service, v2_repositories.credits, ""
+        return service, story_credits, ""
     except Exception as exc:
         return None, None, str(exc)
+
+
+def is_quota_error(exc: BaseException) -> bool:
+    if not isinstance(exc, APIError):
+        return False
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    return status_code == 429 or "429" in str(exc)
+
+
+def call_with_quota_backoff(
+    operation: Callable[[], T],
+    *,
+    status: object,
+    action_label: str,
+    max_attempts: int = 4,
+) -> T:
+    """Repete somente falhas 429 durante o processamento do pagamento."""
+
+    for attempt in range(max_attempts):
+        try:
+            return operation()
+        except APIError as exc:
+            if not is_quota_error(exc) or attempt == max_attempts - 1:
+                raise
+            delay = min(18.0, (2 ** (attempt + 1)) + random.uniform(0.5, 1.5))
+            write = getattr(status, "write", None)
+            if callable(write):
+                write(
+                    f"Aguardando a liberação do Google para {action_label} "
+                    f"({delay:.0f} segundos)..."
+                )
+            time.sleep(delay)
+
+    raise RuntimeError(f"Não foi possível concluir: {action_label}.")
+
+
+def clear_pix_session(package_id: str) -> None:
+    st.session_state.pop(f"pix_order:{package_id}", None)
+    st.session_state.pop(f"pix_qr_base64:{package_id}", None)
+
+
+def finish_payment_transition(*, user_id: str, package_id: str, status: object) -> None:
+    """Prepara o acesso local e abre a história sem nova leitura imediata."""
+
+    prime_paid_access_available(
+        secrets=st.secrets,
+        user_id=user_id,
+        package_id=package_id,
+        ttl_seconds=90.0,
+    )
+    st.session_state["payment_access_ready"] = {
+        "user_id": user_id,
+        "package_id": package_id,
+        "created_at": time.time(),
+    }
+
+    write = getattr(status, "write", None)
+    if callable(write):
+        write("Preparando a abertura da história...")
+    time.sleep(PROCESSING_COOLDOWN_SECONDS)
+
+    update = getattr(status, "update", None)
+    if callable(update):
+        update(label="Execução liberada!", state="complete", expanded=False)
+
+    clear_pix_session(package_id)
+    st.session_state.selected_package_id = package_id
+    st.session_state.started_packages.add(package_id)
+    st.session_state.page = "player"
+    st.switch_page("app.py")
 
 
 def is_sandbox_order(stored: StoredPaymentOrder) -> bool:
@@ -70,11 +157,6 @@ def is_sandbox_order(stored: StoredPaymentOrder) -> bool:
         )
     ).upper()
     return "TESTUSER" in evidence or "@TESTUSER.COM" in evidence
-
-
-def clear_pix_session(package_id: str) -> None:
-    st.session_state.pop(f"pix_order:{package_id}", None)
-    st.session_state.pop(f"pix_qr_base64:{package_id}", None)
 
 
 if st.button("← Voltar à biblioteca"):
@@ -133,7 +215,7 @@ if stored is None:
                     amount_cents=commerce.price_cents,
                     currency=commerce.currency,
                 )
-        except (MercadoPagoError, ValueError, RuntimeError) as exc:
+        except (MercadoPagoError, APIError, ValueError, RuntimeError) as exc:
             st.error(str(exc))
         else:
             stored = result.stored
@@ -158,42 +240,64 @@ else:
             use_container_width=True,
         ):
             try:
-                payment_id = stored.provider_order_id or stored.payment_order_id
-                story_credits.create_credit(
-                    user_id=str(user.user_id),
-                    package_id=manifest.package_id,
-                    payment_id=payment_id,
-                )
-            except (ValueError, RuntimeError) as exc:
+                with st.status(
+                    "Pagamento confirmado. Aguarde o processamento...",
+                    expanded=True,
+                ) as processing_status:
+                    processing_status.write("Liberando uma execução...")
+                    payment_id = stored.provider_order_id or stored.payment_order_id
+                    call_with_quota_backoff(
+                        lambda: story_credits.create_credit(
+                            user_id=str(user.user_id),
+                            package_id=manifest.package_id,
+                            payment_id=payment_id,
+                        ),
+                        status=processing_status,
+                        action_label="liberar a execução",
+                    )
+                    processing_status.write("Crédito confirmado.")
+                    finish_payment_transition(
+                        user_id=str(user.user_id),
+                        package_id=manifest.package_id,
+                        status=processing_status,
+                    )
+            except (APIError, ValueError, RuntimeError) as exc:
                 st.error(f"Não foi possível liberar a história: {exc}")
-            else:
-                clear_pix_session(manifest.package_id)
-                st.session_state.selected_package_id = manifest.package_id
-                st.session_state.started_packages.add(manifest.package_id)
-                st.session_state.page = "player"
-                st.success("Pagamento de teste aprovado. A história foi liberada.")
-                st.switch_page("app.py")
 
     if st.button("Já paguei — verificar agora", use_container_width=True):
         try:
-            with st.spinner("Confirmando diretamente no Mercado Pago..."):
-                result = service.refresh(stored)
-        except (MercadoPagoError, ValueError, RuntimeError) as exc:
+            with st.status(
+                "Aguarde o processamento do pagamento...",
+                expanded=True,
+            ) as processing_status:
+                processing_status.write("Confirmando diretamente no Mercado Pago...")
+                result = call_with_quota_backoff(
+                    lambda: service.refresh(stored),
+                    status=processing_status,
+                    action_label="confirmar o pagamento",
+                )
+                st.session_state[session_key] = result.stored
+                if result.provider.qr_code_base64:
+                    st.session_state[f"pix_qr_base64:{manifest.package_id}"] = (
+                        result.provider.qr_code_base64
+                    )
+
+                if result.provider.approved:
+                    processing_status.write("Pagamento aprovado e execução liberada.")
+                    finish_payment_transition(
+                        user_id=str(user.user_id),
+                        package_id=manifest.package_id,
+                        status=processing_status,
+                    )
+                else:
+                    processing_status.update(
+                        label="Pagamento ainda não confirmado.",
+                        state="complete",
+                        expanded=False,
+                    )
+                    st.warning("O pagamento ainda não foi confirmado pelo Mercado Pago.")
+        except (MercadoPagoError, APIError, ValueError, RuntimeError) as exc:
             st.error(str(exc))
-        else:
-            st.session_state[session_key] = result.stored
-            if result.provider.qr_code_base64:
-                st.session_state[f"pix_qr_base64:{manifest.package_id}"] = result.provider.qr_code_base64
-            if result.provider.approved:
-                clear_pix_session(manifest.package_id)
-                st.session_state.selected_package_id = manifest.package_id
-                st.session_state.started_packages.add(manifest.package_id)
-                st.session_state.page = "player"
-                st.success("Pagamento confirmado. A história foi liberada para sua conta.")
-                st.switch_page("app.py")
-            else:
-                st.warning("O pagamento ainda não foi confirmado pelo Mercado Pago.")
-                st.rerun()
 
     if st.button("Gerar uma nova cobrança", use_container_width=True):
         clear_pix_session(manifest.package_id)
