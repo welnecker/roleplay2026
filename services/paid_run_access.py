@@ -131,6 +131,30 @@ def get_paid_run_access(*, secrets: Any, user_id: str, package_id: str) -> PaidR
     return result
 
 
+def revoke_available_credits(*, secrets: Any, user_id: str, package_id: str) -> int:
+    """Revoga créditos disponíveis residuais ao encerrar explicitamente a história."""
+
+    repositories = _repositories(secrets)
+    table = repositories.credits.table
+    revoked = 0
+    now = utc_now_iso()
+    for row_number, row in enumerate(table.records(), start=2):
+        if str(row.get("user_id", "")).strip() != user_id:
+            continue
+        if str(row.get("package_id", "")).strip() != package_id:
+            continue
+        if str(row.get("status", "")).strip() != "available":
+            continue
+        updated = dict(row)
+        updated["status"] = "revoked"
+        updated["revoked_at"] = now
+        table.replace(row_number, updated)
+        revoked += 1
+
+    clear_paid_access_cache(user_id=user_id, package_id=package_id)
+    return revoked
+
+
 def finish_active_run(
     *,
     secrets: Any,
@@ -161,3 +185,28 @@ def finish_active_run(
     updated = repositories.runs.update_run(run=run, expected_version=expected_version)
     clear_paid_access_cache(user_id=user_id, package_id=package_id)
     return updated
+
+
+def terminate_paid_access(
+    *,
+    secrets: Any,
+    user_id: str,
+    package_id: str,
+    ending_code: str,
+) -> StoryRun | None:
+    """Encerra a run e bloqueia qualquer crédito residual até um novo pagamento."""
+
+    ended = finish_active_run(
+        secrets=secrets,
+        user_id=user_id,
+        package_id=package_id,
+        status="terminated",
+        ending_code=ending_code,
+    )
+    revoke_available_credits(
+        secrets=secrets,
+        user_id=user_id,
+        package_id=package_id,
+    )
+    clear_paid_access_cache(user_id=user_id, package_id=package_id)
+    return ended
