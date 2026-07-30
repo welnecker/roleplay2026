@@ -5,26 +5,31 @@ import secrets as secrets_module
 from pathlib import Path
 from typing import Any
 
+import gspread
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 
 from billing.mercado_pago import MercadoPagoClient, validate_webhook_signature
 from billing.service import PixCheckoutService, read_secret
-from persistence.accounts import GoogleSheetsAccountRepository
-from persistence.factory import build_google_sheets_repository
 from persistence.payments import GoogleSheetsPaymentRepository
-from persistence.v2_factory import build_v2_narrative_repositories
+from persistence.spreadsheet_config import read_spreadsheet_ids
+from persistence.v2_google_sheets import GoogleSheetsStoryCreditRepository
 from services.secret_loader import load_application_secrets
 from services.v2_schema_initializer import initialize_v2_sheet_schemas
 
 
-app = FastAPI(title="Roleplay 2026 Webhooks", version="0.3.0")
+app = FastAPI(title="Roleplay 2026 Webhooks", version="0.4.0")
 
 
 def build_services() -> tuple[PixCheckoutService, GoogleSheetsPaymentRepository, str]:
     secrets = load_application_secrets()
-    runtime = build_google_sheets_repository(secrets)
-    if runtime is None:
+    credentials = secrets.get("gcp_service_account")
+    if not credentials:
         raise RuntimeError("Google Sheets não configurado.")
+
+    spreadsheet_ids = read_spreadsheet_ids(secrets)
+    client = gspread.service_account_from_dict(dict(credentials))
+    accounts_billing = client.open_by_key(spreadsheet_ids.accounts_billing)
+
     access_token = read_secret(
         secrets,
         "MERCADO_PAGO_ACCESS_TOKEN",
@@ -37,16 +42,13 @@ def build_services() -> tuple[PixCheckoutService, GoogleSheetsPaymentRepository,
         "MERCADOPAGO_WEBHOOK_SECRET",
         "MP_WEBHOOK_SECRET",
     )
-    accounts = GoogleSheetsAccountRepository(runtime.spreadsheet)
-    accounts.ensure_schema()
-    payments = GoogleSheetsPaymentRepository(runtime.spreadsheet)
-    payments.ensure_schema()
-    v2_repositories = build_v2_narrative_repositories(secrets)
+
+    payments = GoogleSheetsPaymentRepository(accounts_billing)
+    story_credits = GoogleSheetsStoryCreditRepository(accounts_billing)
     service = PixCheckoutService(
         client=MercadoPagoClient(access_token),
         payments=payments,
-        accounts=accounts,
-        story_credits=v2_repositories.credits,
+        story_credits=story_credits,
     )
     return service, payments, webhook_secret
 
