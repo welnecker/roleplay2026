@@ -74,14 +74,11 @@ class GoogleSheetsAccountRepository:
         cls._paid_access_resolver = resolver
 
     def ensure_schema(self) -> None:
-        """Não valida cabeçalhos durante o acesso normal do usuário.
+        """Cria ou valida as abas quando chamada explicitamente por setup/testes."""
 
-        As abas são preparadas por instalação/migração explícita. Validá-las em
-        cada abertura da tela de login produz várias leituras desnecessárias e
-        pode esgotar a cota antes da autenticação.
-        """
-
-        return None
+        self._ensure_sheet(USERS_SHEET, USERS_HEADERS)
+        self._ensure_sheet(CREDENTIALS_SHEET, CREDENTIALS_HEADERS)
+        self._ensure_sheet(ENTITLEMENTS_SHEET, ENTITLEMENTS_HEADERS)
 
     def register(self, *, email: str, password: str, display_name: str) -> AccountUser:
         clean_email = email.strip().lower()
