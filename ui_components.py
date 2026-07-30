@@ -4,7 +4,9 @@ from collections.abc import Callable
 
 import streamlit as st
 
+from persistence.accounts import GoogleSheetsAccountRepository
 from platform_core.models import AccessStatus, ProgressStatus, StoryCard
+from services.paid_run_access import finish_active_run, get_paid_run_access
 
 
 CARD_CSS = """
@@ -20,8 +22,80 @@ CARD_CSS = """
 </style>
 """
 
+_ORIGINAL_BUTTON = st.button
+_BUTTON_POLICY_INSTALLED = False
+
+
+def _paid_access_resolver(*, user_id: str, package_id: str, access: str) -> bool:
+    if access == "free":
+        return True
+    try:
+        return get_paid_run_access(
+            secrets=st.secrets,
+            user_id=user_id,
+            package_id=package_id,
+        ).allowed
+    except Exception:
+        return False
+
+
+def _install_sidebar_end_policy() -> None:
+    global _BUTTON_POLICY_INSTALLED
+    if _BUTTON_POLICY_INSTALLED:
+        return
+
+    def guarded_button(label: str, *args: object, **kwargs: object) -> bool:
+        if label != "Reiniciar história":
+            return bool(_ORIGINAL_BUTTON(label, *args, **kwargs))
+
+        st.caption(
+            "Encerrar esta execução elimina o acesso atual. Para jogar novamente, "
+            "será necessário realizar um novo pagamento."
+        )
+        clicked = bool(
+            _ORIGINAL_BUTTON(
+                "Encerrar execução e pagar novamente",
+                *args,
+                **kwargs,
+            )
+        )
+        if not clicked:
+            return False
+
+        user = st.session_state.get("authenticated_user")
+        package_id = str(st.session_state.get("selected_package_id", "") or "")
+        user_id = str(getattr(user, "user_id", "") or "")
+        if not user_id or not package_id:
+            st.error("Não foi possível identificar a execução ativa.")
+            return False
+        try:
+            finish_active_run(
+                secrets=st.secrets,
+                user_id=user_id,
+                package_id=package_id,
+                status="terminated",
+                ending_code="user_abandoned",
+            )
+        except Exception as exc:
+            st.error(f"Não foi possível encerrar a execução: {exc}")
+            return False
+
+        st.session_state.story_states.pop(package_id, None)
+        st.session_state.story_messages.pop(package_id, None)
+        st.session_state.runtime_contexts.pop(package_id, None)
+        st.session_state.started_packages.discard(package_id)
+        st.session_state.checkout_package_id = package_id
+        st.session_state.selected_package_id = None
+        st.switch_page("pages/1_Pagamento_Pix.py")
+        return False
+
+    st.button = guarded_button  # type: ignore[method-assign]
+    _BUTTON_POLICY_INSTALLED = True
+
 
 def inject_theme() -> None:
+    GoogleSheetsAccountRepository.configure_paid_access_resolver(_paid_access_resolver)
+    _install_sidebar_end_policy()
     st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 
@@ -39,7 +113,7 @@ def render_story_card(
     on_restart: Callable[[str], None],
     on_buy: Callable[[str], None],
 ) -> None:
-    del on_buy  # Mantido no contrato para compatibilidade com chamadas existentes.
+    del on_restart, on_buy
 
     with st.container(border=True):
         label = "Degustação gratuita" if story.is_tasting else "História independente"
@@ -55,7 +129,9 @@ def render_story_card(
         if story.access_status == AccessStatus.LOCKED:
             st.markdown(f"### {story.price_label}")
             if st.button(
-                "Comprar com Pix",
+                "Jogar novamente — pagar com Pix"
+                if story.progress_status == ProgressStatus.COMPLETED
+                else "Comprar com Pix",
                 key=f"buy:{story.package_id}",
                 use_container_width=True,
                 type="primary",
@@ -80,5 +156,3 @@ def render_story_card(
             type="primary",
         ):
             on_continue(story.package_id)
-        if st.button("Reiniciar", key=f"restart:{story.package_id}", use_container_width=True):
-            on_restart(story.package_id)
