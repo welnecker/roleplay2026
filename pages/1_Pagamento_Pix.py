@@ -56,13 +56,14 @@ def payment_services() -> tuple[
 
 
 def is_sandbox_order(stored: StoredPaymentOrder) -> bool:
-    """Reconhece uma cobrança criada pelo sandbox sem expor controles em produção."""
+    """Reconhece uma cobrança de teste usando apenas campos persistidos."""
 
     evidence = " ".join(
         (
-            str(stored.qr_code or ""),
-            str(stored.ticket_url or ""),
-            str(stored.raw or ""),
+            str(getattr(stored, "qr_code", "") or ""),
+            str(getattr(stored, "ticket_url", "") or ""),
+            str(getattr(stored, "status_detail", "") or ""),
+            str(getattr(stored, "external_reference", "") or ""),
         )
     ).upper()
     return "TESTUSER" in evidence or "@TESTUSER.COM" in evidence
