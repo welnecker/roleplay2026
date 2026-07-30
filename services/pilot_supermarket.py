@@ -95,11 +95,15 @@ _MOCKING_MARKERS = {
     "que roteiro", "npc", "robô", "robo", "personagem", "chatbot",
     "faz sua fala", "diz sua fala",
 }
-_THIRD_PERSON_PATTERNS = (
+
+# Não basta estar em primeira pessoa: Mary não deve descrever movimentos ou expressões.
+_FORBIDDEN_NARRATION = (
     r"\bMary\b",
-    r"\bela\s+(?:olha|observa|segura|recua|caminha|ajeita|sorri|ri|se afasta|encerra)",
-    r"\bo interesse no rosto dela\b",
-    r"\bo interesse no rosto de Mary\b",
+    r"\bela\s+",
+    r"\b(?:eu\s+)?(?:arregalo|sorrio|rio|dou um passo|caminho|seguro|ajeito|observo|olho|recuo|respiro|inclino|aproximo|afasto|encosto|mantenho|viro|cruzo|descruzo|levanto|abaixo|mordo|lambo|chupo|beijo)\b",
+    r"\b(?:meus?|minhas?)\s+(?:olhos|mãos|lábios|pernas|braços|dedos)\b",
+    r"\b(?:contato visual|carrinho com as duas mãos|passo para trás|sorriso contido|risadinha curta)\b",
+    r"\b(?:digo|pergunto|respondo|falo),?\s+(?:sorrindo|rindo|olhando|segurando|caminhando)\b",
 )
 
 
@@ -189,7 +193,7 @@ def clean_model_response(response: str, fallback: str) -> str:
     lowered = value.casefold()
     if any(marker.casefold() in lowered for marker in ("<END_RUN", "END_RUN", '"event"', "```json")):
         return fallback
-    if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in _THIRD_PERSON_PATTERNS):
+    if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in _FORBIDDEN_NARRATION):
         return fallback
     return value
 
@@ -202,10 +206,7 @@ def _ending_turn(
     user_text: str,
 ) -> PilotTurn:
     ending = script.endings[ending_id]
-    fallback = _ENDING_FALLBACKS.get(
-        ending_id,
-        "Perco a vontade de continuar essa conversa. — Deixa pra lá.",
-    )
+    fallback = _ENDING_FALLBACKS.get(ending_id, "Perdi a vontade. Deixa pra lá.")
     final_state = ending.get("mary_final_state") or {}
     state.interest = int(final_state.get("interest", state.interest))
     state.desire = int(final_state.get("desire", state.desire))
@@ -214,16 +215,14 @@ def _ending_turn(
     state.run_status = str(ending.get("run_status", "terminated"))
     state.ending_code = str(ending.get("ending_code", ending_id))
     prompt = (
-        "Você é Mary e narra somente a própria experiência em primeira pessoa. "
-        "Encerre a cena neste turno, de modo natural, definitivo e sem convite para continuar. "
-        "Toda ação deve usar eu/me/meu/minha ou verbo na primeira pessoa. "
-        "Pensamentos internos também devem estar em primeira pessoa. "
-        "É proibido escrever 'Mary', 'ela' ou narrar de fora da personagem. "
-        "Não mencione aplicativo, regras, roteiro, classificação ou evento técnico. "
-        "Não faça perguntas nem escreva marcadores de encerramento.\n\n"
+        "Você é Mary. Encerre a cena somente com pensamento curto, fala direta ou onomatopeia. "
+        "Não descreva movimentos, expressões faciais, postura, olhar, mãos, corpo ou cenário. "
+        "Não use rubricas como 'sorrio', 'dou um passo', 'olho para você' ou 'digo sorrindo'. "
+        "Não faça perguntas e não deixe convite para continuar. "
+        "Não mencione aplicativo, regras, roteiro ou evento técnico.\n\n"
         f"MENSAGEM DO USUÁRIO: {user_text}\n"
         f"MOTIVO INTERNO: {state.ending_code}\n"
-        f"REFERÊNCIA EM PRIMEIRA PESSOA: {fallback}"
+        f"REFERÊNCIA DE VOZ: {fallback}"
     )
     return PilotTurn(
         engagement, ending_id, fallback, prompt, state, True,
@@ -248,15 +247,19 @@ def _build_prompt(
     )
     return (
         "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
-        "A resposta inteira deve vir da consciência de Mary, em primeira pessoa.\n\n"
+        "A resposta deve soar como voz viva, não como prosa narrativa.\n\n"
+        "FORMATO PERMITIDO:\n"
+        "- pensamento curto: 'Uau... que coincidência.'; 'Bom, vou terminar minhas compras.'\n"
+        "- fala direta: 'Você mora no Plaza?'\n"
+        "- onomatopeia integrada à fala: 'kkkkk', 'rsrsrs', 'smack!', 'chup!', 'ahhh!', 'hummm'.\n\n"
         "REGRAS ABSOLUTAS:\n"
-        "- Narre ações como: 'Caminho distraída', 'Seguro o carrinho', 'Olho para você'.\n"
-        "- Expresse pensamentos como: 'Nossa... ainda bem que ele foi educado' ou 'Como estou distraída'.\n"
-        "- Nunca escreva 'Mary faz', 'Mary olha', 'ela faz' ou qualquer narração externa.\n"
-        "- Não use narrador onisciente ou terceira pessoa nem em ações, nem em pensamentos.\n"
+        "- Não narre ações, movimentos, gestos, expressões, postura ou contato visual.\n"
+        "- Não escreva: 'sorrio', 'rio', 'arregalo os olhos', 'dou um passo', 'seguro o carrinho', "
+        "'olho para você', 'digo sorrindo' ou equivalentes.\n"
+        "- Risos, beijos, gemidos e sons corporais devem aparecer como som, não como descrição.\n"
+        "- Não use terceira pessoa, rubricas, asteriscos ou parênteses de ação.\n"
         "- Não invente ações, pensamentos, endereço, profissão ou passado do usuário.\n"
         "- Siga o movimento atual com máxima fidelidade e não crie outra trama.\n"
-        "- Não pule para telefone, ligação, encontro ou qualquer cena futura.\n"
         "- O investimento emocional deve ser proporcional à participação do usuário.\n"
         "- Não mencione roteiro, classificação, sistema, END_RUN ou JSON.\n"
         "- Faça no máximo uma pergunta quando o movimento pedir pergunta.\n\n"
@@ -267,56 +270,33 @@ def _build_prompt(
         f"confiança={state.trust}, paciência={state.patience}\n"
         f"RESPOSTA DO USUÁRIO: {user_text}\n\n"
         f"UNIDADES DO MOVIMENTO:\n{unit_text}\n\n"
-        f"REFERÊNCIA EM PRIMEIRA PESSOA: {fallback}"
+        f"REFERÊNCIA DE VOZ SEM NARRAÇÃO: {fallback}"
     )
 
 
 _ENDING_FALLBACKS: dict[str, str] = {
-    "end_pilot_positive": (
-        "Sorrio de lado, ainda segurando o carrinho. — Tchauzinho... e presta atenção "
-        "por onde anda, porque da próxima vez a culpa pode ser sua."
-    ),
-    "end_pilot_neutral": "Ajeito as mãos no carrinho. — Bom... desculpa de novo. Tchau.",
-    "end_lost_interest": "Sinto meu interesse desaparecer. — Deixa pra lá.",
-    "end_mocking": "Solto uma risada sem humor e seguro o carrinho. — Não, obrigada.",
-    "end_hostile": "Recuo e encerro a conversa. Sigo para outro corredor sem olhar para trás.",
+    "end_pilot_positive": "kkkkk... Tchauzinho. E presta atenção, porque da próxima vez a culpa pode ser sua.",
+    "end_pilot_neutral": "Bom... desculpa de novo. Vou terminar minhas compras. Tchau.",
+    "end_lost_interest": "Perdi a vontade de continuar essa conversa. Deixa pra lá.",
+    "end_mocking": "rs... não, obrigada. Perdi o interesse.",
+    "end_hostile": "Chega. Não quero mais falar com você.",
 }
 
 
 def _fallback_for_beat(beat_id: str, beat: dict[str, Any]) -> str:
     fixed: dict[str, str] = {
-        "collision": (
-            "Caminho distraída, empurrando o carrinho, até encostar em você. "
-            "Levo um susto. — Eita, caralho... desculpa!"
-        ),
-        "check_wellbeing": (
-            "Seguro o carrinho e olho rapidamente para onde bati. "
-            "— Você tá bem? Não machucou?"
-        ),
-        "check_wellbeing_restrained": "Mantenho a mão no carrinho, mais contida. — Tá tudo bem mesmo?",
-        "familiar_face_bridge": (
-            "Nossa... ainda bem que ele foi educado. Como estou distraída. "
-            "Olho para o rosto dele por um instante a mais. "
-            "— Seu rosto me parece familiar... você por acaso mora no Plaza?"
-        ),
-        "familiar_face_bridge_restrained": (
-            "Observo você brevemente, ainda contida. "
-            "— Seu rosto não me é estranho. Você mora no Plaza?"
-        ),
-        "plaza_response": (
-            "Reajo somente ao que você disse e ajeito as mãos no carrinho. "
-            "— Entendi... bom, desculpa de novo pelo esbarrão."
-        ),
-        "plaza_response_restrained": (
-            "— Imaginei. Acho que já te vi por lá. Bom... desculpa de novo. Tchau."
-        ),
-        "confront_low_engagement": (
-            "Sinto minha curiosidade diminuir. — Eu estou falando com você, não narrando sozinha."
-        ),
-        "steer_collision_once": "— Eu perguntei porque acabei de bater o carrinho em você. Machucou?",
-        "steer_wellbeing_once": "— Só quero saber se você está bem.",
-        "steer_plaza_once": "— Perguntei se você mora no Plaza.",
+        "collision": "Eita, caralho... desculpa! Nossa, como estou distraída.",
+        "check_wellbeing": "Ainda bem que você foi educado... Você tá bem? Não machucou?",
+        "check_wellbeing_restrained": "Tá tudo bem mesmo?",
+        "familiar_face_bridge": "Uau... seu rosto me parece familiar. Você por acaso mora no Plaza?",
+        "familiar_face_bridge_restrained": "Seu rosto não me é estranho. Você mora no Plaza?",
+        "plaza_response": "Uau... que coincidência. Bom, desculpa de novo pelo esbarrão.",
+        "plaza_response_restrained": "Imaginei. Acho que já vi você por lá. Bom, vou terminar minhas compras. Tchau.",
+        "confront_low_engagement": "Minha curiosidade está sumindo. Eu estou falando com você, não sozinha.",
+        "steer_collision_once": "Eu perguntei porque bati o carrinho em você. Machucou?",
+        "steer_wellbeing_once": "Só quero saber se você está bem.",
+        "steer_plaza_once": "Perguntei se você mora no Plaza.",
     }
     if beat_id in fixed:
         return fixed[beat_id]
-    return "Respiro, observo a situação e respondo de forma breve, sempre pela minha própria perspectiva."
+    return "Hummm... vou responder só ao que faz sentido agora."
