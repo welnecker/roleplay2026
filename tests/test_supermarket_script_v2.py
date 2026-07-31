@@ -5,6 +5,7 @@ from services.editorial_content import load_source_document
 from services.pilot_supermarket import PilotScript, PilotState
 from services.supermarket_script_v2 import (
     automatic_followups_after,
+    decide_supermarket_script_v2_turn,
     prepare_supermarket_script_v2,
     state_after_automatic_followup,
 )
@@ -51,6 +52,19 @@ def test_primeira_despedida_e_caixa_usam_pontes_declaradas_no_yaml() -> None:
     assert "tá me seguindo" in first_reencounter[0]["text"]
     assert checkout[0]["target_id"] == "reencontro_fila_007"
     assert "me esperar" in checkout[0]["text"]
+
+
+def test_aceite_da_ajuda_avanca_apenas_para_o_beat_do_carrinho() -> None:
+    script = _script()
+    state = PilotState(node_id="reencontro_fila_007")
+
+    turn = decide_supermarket_script_v2_turn(script, state, "claro, espero sim")
+
+    assert turn.target_id == "reencontro_fila_008"
+    assert turn.state.node_id == "reencontro_fila_008"
+    assert "tamanho desse carrinho" in turn.visible_fallback
+    assert turn.state.facts["help_to_car"] == "accepted"
+    assert turn.state.facts["_scene_location"] == "estacionamento_caminho"
 
 
 def test_estado_final_libera_usuario_somente_em_janio() -> None:
