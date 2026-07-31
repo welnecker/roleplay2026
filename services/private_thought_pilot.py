@@ -24,6 +24,10 @@ _SAFE_FALLBACK = (
     "[/PENSAMENTO]\n\n"
     "Tá gelada sim, amor. Deixa eu guardar as compras e já levo uma para você."
 )
+_THOUGHT_BLOCK = re.compile(
+    r"\[PENSAMENTO\](?P<thought>.*?)\[/PENSAMENTO\]",
+    flags=re.IGNORECASE | re.DOTALL,
+)
 
 
 def apply_private_thought_overrides(document: dict[str, Any]) -> dict[str, Any]:
@@ -82,10 +86,11 @@ def decide_private_thought_turn(
         return turn
 
     prompt = (
-        "Você é Mary, já em casa e falando com Alfredo. Responda primeiro ao conteúdo dele de modo curto. "
+        "Você é Mary, já em casa e falando com Alfredo. Comece obrigatoriamente pelo pensamento privado. "
         "Qualquer referência a Janio, atração, segredo ou intenção de mandar mensagem deve aparecer somente "
-        "dentro de um único bloco [PENSAMENTO]...[/PENSAMENTO]. Depois do fechamento, fale apenas com Alfredo. "
-        "Não repita o pensamento, não diga o nome Janio em voz alta e não acrescente outro parágrafo secreto.\n\n"
+        "dentro de um único bloco [PENSAMENTO]...[/PENSAMENTO]. Depois do fechamento, responda ao conteúdo "
+        "de Alfredo de modo curto. Não coloque fala antes do bloco de pensamento, não repita o pensamento, "
+        "não diga o nome Janio em voz alta e não acrescente outro parágrafo secreto.\n\n"
         f"FALA DE ALFREDO: {user_text}\n\n"
         f"FORMATO SEGURO DE REFERÊNCIA:\n{_SAFE_FALLBACK}"
     )
@@ -93,33 +98,39 @@ def decide_private_thought_turn(
 
 
 def sanitize_private_thought_response(response: str, fallback: str) -> str:
-    """Bloqueia vazamento de Janio para a fala audível no beat privado."""
+    """Valida o pensamento privado e o move para o início para a tarja visual."""
 
     value = str(response or "").strip()
     if not value:
         return fallback
 
-    blocks = re.findall(
-        r"\[PENSAMENTO\](.*?)\[/PENSAMENTO\]",
-        value,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    if len(blocks) != 1:
+    matches = list(_THOUGHT_BLOCK.finditer(value))
+    if len(matches) != 1:
         return fallback
 
-    audible = re.sub(
-        r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
-        "",
-        value,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
+    match = matches[0]
+    thought = str(match.group("thought") or "").strip()
+    if not thought:
+        return fallback
+
+    # O modelo pode responder primeiro a Alfredo e inserir o pensamento no meio.
+    # A interface reconhece a tarja quando o bloco vem no início, então reunimos
+    # toda a fala audível antes/depois e persistimos em formato canônico.
+    before = value[: match.start()].strip()
+    after = value[match.end() :].strip()
+    audible_parts = [part for part in (before, after) if part]
+    audible = "\n\n".join(audible_parts).strip()
+    if not audible:
+        return fallback
+
     if re.search(
         r"\b(?:janio|jânio|mandar (?:um )?oi|mandar mensagem|que homem)\b",
         audible,
         re.IGNORECASE,
     ):
         return fallback
-    return value
+
+    return f"[PENSAMENTO]\n{thought}\n[/PENSAMENTO]\n\n{audible}"
 
 
 def clean_private_model_response(response: str, fallback: str) -> str:
