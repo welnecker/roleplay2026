@@ -216,9 +216,9 @@ def _ending_turn(
     user_text: str,
 ) -> PilotTurn:
     ending = script.endings[ending_id]
-    fallback = str((ending.get("visible_delivery") or {}).get("text", ""))
-    if not fallback:
-        fallback = _ENDING_FALLBACKS.get(ending_id, "Perdi a vontade. Deixa pra lá.")
+    safe_default = _ENDING_FALLBACKS.get(ending_id, "Perdi a vontade. Deixa pra lá.")
+    editorial_text = str((ending.get("visible_delivery") or {}).get("text", "")).strip()
+    fallback = clean_model_response(editorial_text, safe_default) if editorial_text else safe_default
     final_state = ending.get("mary_final_state") or {}
     state.interest = int(final_state.get("interest", state.interest))
     state.desire = int(final_state.get("desire", state.desire))
@@ -292,13 +292,6 @@ _ENDING_FALLBACKS: dict[str, str] = {
 
 
 def _fallback_for_beat(beat_id: str, beat: dict[str, Any]) -> str:
-    units = beat.get("units") or []
-    for item in units:
-        if not isinstance(item, dict) or item.get("kind") == "wait_user":
-            continue
-        value = item.get("text") or item.get("anchor") or item.get("instruction")
-        if value:
-            return str(value)
     fixed: dict[str, str] = {
         "collision": "Eita, caralho... desculpa! Nossa, como estou distraída.",
         "check_wellbeing": "Ainda bem que você foi educado... Você tá bem? Não machucou?",
@@ -314,4 +307,12 @@ def _fallback_for_beat(beat_id: str, beat: dict[str, Any]) -> str:
     }
     if beat_id in fixed:
         return fixed[beat_id]
+
+    units = beat.get("units") or []
+    for item in units:
+        if not isinstance(item, dict) or item.get("kind") == "wait_user":
+            continue
+        value = item.get("anchor") or item.get("text")
+        if value:
+            return str(value)
     return "Hummm... vou responder só ao que faz sentido agora."
