@@ -7,6 +7,8 @@ from typing import Any, Literal
 import re
 import yaml
 
+from services.organic_interaction import detect_organic_signal, render_facts
+
 Engagement = Literal["engaged", "minimal", "dismissive", "mocking", "hostile", "nonsense"]
 
 
@@ -18,6 +20,9 @@ class PilotState:
     trust: int = 2
     patience: int = 4
     recent_engagement: list[str] = field(default_factory=list)
+    facts: dict[str, str] = field(default_factory=dict)
+    pending_next_beat_id: str = ""
+    interstitial_turns: int = 0
     finished: bool = False
     run_status: str = "active"
     ending_code: str = ""
@@ -36,6 +41,9 @@ class PilotState:
             trust=int(raw.get("trust", 2) or 0),
             patience=int(raw.get("patience", 4) or 0),
             recent_engagement=[str(item) for item in raw.get("recent_engagement", [])][-4:],
+            facts={str(key): str(value) for key, value in dict(raw.get("facts") or {}).items()},
+            pending_next_beat_id=str(raw.get("pending_next_beat_id", "") or ""),
+            interstitial_turns=int(raw.get("interstitial_turns", 0) or 0),
             finished=bool(raw.get("finished", False)),
             run_status=str(raw.get("run_status", "active") or "active"),
             ending_code=str(raw.get("ending_code", "") or ""),
@@ -133,8 +141,13 @@ def classify_user_message(text: str) -> Engagement:
     return "engaged"
 
 
+def _first_beat_id(script: PilotScript) -> str:
+    configured = str(getattr(script, "first_beat_id", "") or "")
+    return configured if configured in script.beats else next(iter(script.beats))
+
+
 def opening_text(script: PilotScript) -> str:
-    beat_id = script.first_beat_id
+    beat_id = _first_beat_id(script)
     return _fallback_for_beat(beat_id, script.beats[beat_id])
 
 
@@ -144,7 +157,8 @@ def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> Pilot
 
     engagement = classify_user_message(user_text)
     updated = PilotState.from_dict(state.to_dict())
-    current_id = state.node_id if state.node_id in script.beats else script.first_beat_id
+    first_beat_id = _first_beat_id(script)
+    current_id = state.node_id if state.node_id in script.beats else first_beat_id
     updated.node_id = current_id
     updated.recent_engagement = (updated.recent_engagement + [engagement])[-4:]
     category = script.engagement_policy.get("categories", {}).get(engagement, {})
@@ -155,20 +169,50 @@ def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> Pilot
         item in {"dismissive", "nonsense"} for item in updated.recent_engagement[-3:]
     ) >= 2
     if engagement == "hostile":
-        target_id = "end_hostile"
-    elif engagement == "mocking":
-        target_id = "end_mocking" if "end_mocking" in script.endings else "end_hostile"
-    elif updated.desire <= 0 or updated.patience <= 0 or repeated_bad:
-        target_id = "end_lost_interest" if "end_lost_interest" in script.endings else "end_hostile"
-    else:
-        current = script.beats[current_id]
-        transitions = current.get("on_user") or {}
-        target_id = str(
-            transitions.get(engagement)
-            or transitions.get("engaged")
-            or current.get("terminal_transition")
-            or ""
+        return _ending_turn(script, updated, engagement, "end_hostile", user_text)
+    if engagement == "mocking":
+        ending_id = "end_mocking" if "end_mocking" in script.endings else "end_hostile"
+        return _ending_turn(script, updated, engagement, ending_id, user_text)
+    if updated.desire <= 0 or updated.patience <= 0 or repeated_bad:
+        ending_id = "end_lost_interest" if "end_lost_interest" in script.endings else "end_hostile"
+        return _ending_turn(script, updated, engagement, ending_id, user_text)
+
+    current = script.beats[current_id]
+    transitions = current.get("on_user") or {}
+    normal_target = str(
+        transitions.get(engagement)
+        or transitions.get("engaged")
+        or current.get("terminal_transition")
+        or ""
+    )
+    pending_target = state.pending_next_beat_id if state.pending_next_beat_id else normal_target
+    signal = detect_organic_signal(user_text, updated.facts)
+
+    if signal is not None and updated.interstitial_turns < 2:
+        updated.facts = signal.facts
+        updated.pending_next_beat_id = pending_target
+        updated.interstitial_turns += 1
+        next_beat = script.beats.get(pending_target)
+        next_fallback = _fallback_for_beat(pending_target, next_beat) if next_beat else ""
+        prompt = _build_organic_prompt(
+            script=script,
+            state=updated,
+            user_text=user_text,
+            signal_kind=signal.kind,
+            signal_instruction=signal.instruction,
+            next_fallback=next_fallback,
         )
+        return PilotTurn(
+            engagement=engagement,
+            target_id=current_id,
+            visible_fallback=signal.fallback,
+            system_prompt=prompt,
+            state=updated,
+        )
+
+    target_id = pending_target
+    updated.pending_next_beat_id = ""
+    updated.interstitial_turns = 0
 
     if target_id in script.endings:
         return _ending_turn(script, updated, engagement, target_id, user_text)
@@ -229,7 +273,6 @@ def _ending_turn(
     prompt = (
         "Você é Mary. Encerre a cena somente com pensamento curto, fala direta ou onomatopeia. "
         "Não descreva movimentos, expressões faciais, postura, olhar, mãos, corpo ou cenário. "
-        "Não use rubricas como 'sorrio', 'dou um passo', 'olho para você' ou 'digo sorrindo'. "
         "Não faça perguntas e não deixe convite para continuar. "
         "Não mencione aplicativo, regras, roteiro ou evento técnico.\n\n"
         f"MENSAGEM DO USUÁRIO: {user_text}\n"
@@ -239,6 +282,34 @@ def _ending_turn(
     return PilotTurn(
         engagement, ending_id, fallback, prompt, state, True,
         state.run_status, state.ending_code,
+    )
+
+
+def _build_organic_prompt(
+    *,
+    script: PilotScript,
+    state: PilotState,
+    user_text: str,
+    signal_kind: str,
+    signal_instruction: str,
+    next_fallback: str,
+) -> str:
+    bridge = (
+        f"PRÓXIMA FALA OBRIGATÓRIA, APENAS SE COUBER NATURALMENTE NESTA RESPOSTA: {next_fallback}"
+        if next_fallback
+        else "Não antecipe outro movimento nesta resposta."
+    )
+    return (
+        "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
+        "Este é um TURNO ORGÂNICO INTERMEDIÁRIO. A prioridade é mostrar que Mary ouviu e entendeu o usuário.\n"
+        "Não recite mecanicamente a próxima fala do roteiro. Reaja primeiro ao conteúdo novo.\n"
+        "Você pode fazer uma ponte curta para o próximo movimento somente quando ela soar espontânea.\n"
+        "Não narre ações do usuário nem use terceira pessoa, rubricas ou asteriscos.\n\n"
+        f"TIPO DE CONTRIBUIÇÃO: {signal_kind}\n"
+        f"INSTRUÇÃO DE REAÇÃO: {signal_instruction}\n"
+        f"FATOS CONFIRMADOS: {render_facts(state.facts)}\n"
+        f"MENSAGEM DO USUÁRIO: {user_text}\n"
+        f"{bridge}"
     )
 
 
@@ -260,22 +331,19 @@ def _build_prompt(
     return (
         "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
         "A resposta deve soar como voz viva, não como prosa narrativa.\n\n"
-        "FORMATO PERMITIDO:\n"
-        "- pensamento curto e fala direta;\n"
-        "- onomatopeias integradas à fala.\n\n"
         "REGRAS ABSOLUTAS:\n"
         "- Não narre ações, movimentos, gestos, expressões, postura ou contato visual.\n"
         "- Não use terceira pessoa, rubricas, asteriscos ou parênteses de ação.\n"
+        "- onomatopeia é permitida quando surgir naturalmente na fala.\n"
         "- Não invente ações, pensamentos, endereço, profissão ou passado do usuário.\n"
         "- Siga o movimento atual com máxima fidelidade e não crie outra trama.\n"
-        "- Preserve semanticamente a fala canônica.\n"
-        "- O investimento emocional deve ser proporcional à participação do usuário.\n"
+        "- Preserve semanticamente a fala canônica, mas adapte ritmo e ligação ao que o usuário disse.\n"
+        "- Use fatos confirmados pelo usuário quando forem relevantes.\n"
         "- Não mencione roteiro, classificação, sistema, END_RUN ou JSON.\n\n"
         f"LOCAL: {script.scene.get('location', 'supermercado')}\n"
         f"OBJETIVO ATUAL: {beat.get('objective', '')}\n"
         f"ENGAJAMENTO DETECTADO: {engagement}\n"
-        f"ESTADO INTERNO: interesse={state.interest}, desejo={state.desire}, "
-        f"confiança={state.trust}, paciência={state.patience}\n"
+        f"FATOS CONFIRMADOS: {render_facts(state.facts)}\n"
         f"RESPOSTA DO USUÁRIO: {user_text}\n\n"
         f"UNIDADES DO MOVIMENTO:\n{unit_text}\n\n"
         f"REFERÊNCIA DE VOZ SEM NARRAÇÃO: {fallback}"
@@ -291,7 +359,7 @@ _ENDING_FALLBACKS: dict[str, str] = {
 }
 
 
-def _fallback_for_beat(beat_id: str, beat: dict[str, Any]) -> str:
+def _fallback_for_beat(beat_id: str, beat: dict[str, Any] | None) -> str:
     fixed: dict[str, str] = {
         "collision": "Eita, caralho... desculpa! Nossa, como estou distraída.",
         "check_wellbeing": "Ainda bem que você foi educado... Você tá bem? Não machucou?",
@@ -307,6 +375,8 @@ def _fallback_for_beat(beat_id: str, beat: dict[str, Any]) -> str:
     }
     if beat_id in fixed:
         return fixed[beat_id]
+    if not beat:
+        return ""
 
     units = beat.get("units") or []
     for item in units:
