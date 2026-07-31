@@ -13,6 +13,7 @@ from persistence.spreadsheet_config import read_spreadsheet_ids
 import services.pilot_supermarket as pilot_supermarket_module
 from services.private_thought_pilot import (
     apply_private_thought_overrides,
+    clean_private_model_response,
     decide_private_thought_turn,
     prepare_private_thought_script,
 )
@@ -35,9 +36,10 @@ _FREE_TEXT_PATTERN = re.compile(
     r"^(?P<indent>\s*)(?P<key>" + "|".join(sorted(_FREE_TEXT_KEYS)) + r"):\s*(?P<value>.*)$"
 )
 
-# A página importa ``decide_turn`` do módulo original depois de importar este módulo.
-# A substituição mantém um único player e adiciona as correções incrementais do piloto.
+# A página importa estas funções do módulo original depois de importar este módulo.
+# As substituições mantêm um único player e adicionam as correções incrementais.
 pilot_supermarket_module.decide_turn = decide_private_thought_turn
+pilot_supermarket_module.clean_model_response = clean_private_model_response
 
 
 def _protect_editorial_plain_scalars(text: str) -> str:
