@@ -8,6 +8,7 @@ from persistence.factory import build_google_sheets_repository
 from platform_core.auth import AuthenticatedUser
 from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
+from services.dialogue_presentation import render_dialogue_html, with_optional_thought_guidance
 from services.editorial_content import load_editorial_pilot
 from services.paid_run_access import get_paid_run_access, terminate_paid_access
 from services.pilot_supermarket import (
@@ -22,6 +23,7 @@ from services.runtime_persistence import (
     open_persistent_runtime,
     persist_turn,
 )
+from ui_components import CARD_CSS
 
 
 PACKAGE_ID = "roleplay2026.casada_frustrada"
@@ -30,6 +32,7 @@ PAYMENT_QUOTA_WINDOW_SECONDS = 65.0
 END_CONFIRMATION_KEY = f"confirm_end:{PACKAGE_ID}"
 
 st.set_page_config(page_title="Casada frustrada — piloto", page_icon="🛒", layout="centered")
+st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 
 @st.cache_resource(show_spinner=False)
@@ -186,6 +189,10 @@ def end_story_and_return(user: AuthenticatedUser) -> None:
     st.switch_page("app.py")
 
 
+def render_message(role: str, content: str) -> None:
+    st.markdown(render_dialogue_html(role, content), unsafe_allow_html=True)
+
+
 user = authenticated_user()
 if user is None:
     st.error("Entre na sua conta antes de abrir a história.")
@@ -255,12 +262,13 @@ st.title("Casada frustrada")
 st.caption("Bloco piloto: primeiro contato no supermercado")
 
 if not messages:
-    with st.chat_message("assistant"):
-        st.markdown(opening_text(script))
+    render_message("assistant", opening_text(script))
 
 for message in messages:
-    with st.chat_message(str(message.get("role", "assistant"))):
-        st.markdown(str(message.get("content", "")))
+    render_message(
+        str(message.get("role", "assistant")),
+        str(message.get("content", "")),
+    )
 
 if pilot_state.finished or story_state.finished:
     if pilot_state.run_status == "completed":
@@ -290,7 +298,7 @@ if api_key:
         generated = generate_response(
             api_key=api_key,
             model=model,
-            system_prompt=turn.system_prompt,
+            system_prompt=with_optional_thought_guidance(turn.system_prompt),
             history=history,
             user_text=user_text,
         )
