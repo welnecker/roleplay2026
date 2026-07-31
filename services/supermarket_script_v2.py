@@ -3,13 +3,19 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from services.pilot_supermarket import PilotScript, PilotState, PilotTurn, classify_user_message
+from services.pilot_supermarket import (
+    PilotScript,
+    PilotState,
+    PilotTurn,
+    classify_user_message,
+    decide_turn as base_decide_turn,
+)
 from services.private_thought_pilot import (
     apply_private_thought_overrides,
     clean_private_model_response,
-    decide_private_thought_turn,
     prepare_private_thought_script,
 )
+from services.supermarket_intent_pilot import classify_supermarket_intent
 
 SUPERMARKET_SCRIPT_V2_VERSION = "1.1.0-supermarket-playable"
 
@@ -49,7 +55,12 @@ _AUTOMATIC_FOLLOWUPS: dict[str, tuple[dict[str, str], ...]] = {
             "scene_location": "supermercado_caixa",
         },
     ),
-    "retorno_casa_001": (
+    "reencontro_fila_016": (
+        {
+            "target_id": "retorno_casa_001",
+            "text": CAR_BRIDGE,
+            "scene_location": "carro_mary_sozinha",
+        },
         {
             "target_id": "retorno_casa_002",
             "text": HOME_BRIDGE,
@@ -122,7 +133,6 @@ def apply_supermarket_script_v2_overrides(document: dict[str, Any]) -> dict[str,
 
     document = apply_private_thought_overrides(document)
     document["script_version"] = SUPERMARKET_SCRIPT_V2_VERSION
-
     blocks = {
         str(block.get("block_id", "")): block
         for block in document.get("blocks", [])
@@ -166,7 +176,6 @@ def apply_supermarket_script_v2_overrides(document: dict[str, Any]) -> dict[str,
                 _beat("reencontro_fila_016", 16, "Tá bom... então deixa eu ir. Meu telefone já tá vibrando aqui... Tchau... te ligo.", "retorno_casa_001", questions=0, sentences=3),
             ],
         )
-
     return document
 
 
@@ -180,37 +189,60 @@ def prepare_supermarket_script_v2(script: PilotScript) -> PilotScript:
     return script
 
 
+def _repeat_help_request(state: PilotState, user_text: str) -> PilotTurn:
+    updated = PilotState.from_dict(state.to_dict())
+    updated.node_id = "reencontro_fila_007"
+    updated.pending_next_beat_id = ""
+    updated.interstitial_turns = 0
+    updated.facts["_scene_location"] = "supermercado_caixa"
+    return PilotTurn(
+        engagement=classify_user_message(user_text),
+        target_id="reencontro_fila_007",
+        visible_fallback="Vizinho, você me espera? Vou precisar de uma ajudinha com tudo isso até o carro.",
+        system_prompt=(
+            "Você é Mary, ainda no caixa. Responda brevemente ao usuário e confirme se ele vai esperar. "
+            "Não presuma aceite, não avance ao estacionamento e não repita outros assuntos."
+        ),
+        state=updated,
+    )
+
+
 def decide_supermarket_script_v2_turn(
     script: PilotScript,
     state: PilotState,
     user_text: str,
 ) -> PilotTurn:
-    """Executa a despedida e entrega as pontes automáticas ao runtime."""
+    """Executa o roteiro jogável e deixa as pontes para o runtime."""
 
     prepare_supermarket_script_v2(script)
     current_id = state.node_id or script.first_beat_id
 
-    if current_id == "reencontro_fila_016":
-        updated = PilotState.from_dict(state.to_dict())
-        updated.node_id = "retorno_casa_001"
-        updated.pending_next_beat_id = ""
-        updated.interstitial_turns = 0
-        updated.facts["_scene_location"] = "carro_mary_sozinha"
-        updated.facts["_force_fixed_response"] = "true"
-        updated.facts["_automatic_bridge"] = "true"
-        updated.facts["alfredinho_has_voice"] = "false"
-        return PilotTurn(
-            engagement=classify_user_message(user_text),
-            target_id="retorno_casa_001",
-            visible_fallback=CAR_BRIDGE,
-            system_prompt="Use exatamente a ponte editorial fornecida, sem acrescentar resposta de Alfredinho.",
-            state=updated,
-        )
+    if current_id == "reencontro_fila_007":
+        intent = classify_supermarket_intent(current_id, user_text)
+        if intent == "accept":
+            synthetic = PilotState.from_dict(state.to_dict())
+            synthetic.node_id = "reencontro_fila_008"
+            turn = base_decide_turn(script, synthetic, user_text)
+            updated = PilotState.from_dict(turn.state.to_dict())
+            updated.facts["help_to_car"] = "accepted"
+            updated.facts["_scene_location"] = "estacionamento_caminho"
+            return replace(turn, state=updated)
+        if intent == "refuse":
+            # Mantém a saída respeitosa já existente no piloto anterior.
+            from services.supermarket_intent_pilot import decide_supermarket_turn
 
-    turn = decide_private_thought_turn(script, state, user_text)
+            return decide_supermarket_turn(script, state, user_text)
+        return _repeat_help_request(state, user_text)
+
+    if current_id.startswith(("encontro_acidental_", "reencontro_fila_")):
+        turn = base_decide_turn(script, state, user_text)
+    else:
+        # Fora do supermercado, preserva as regras já existentes dos blocos seguintes.
+        from services.private_thought_pilot import decide_private_thought_turn
+
+        turn = decide_private_thought_turn(script, state, user_text)
+
     if turn.target_id in {"reencontro_fila_001", "reencontro_fila_007"}:
-        # Esses beats são entregues automaticamente pelo runtime; se uma run antiga
-        # cair neles diretamente, mantém a fala canônica sem quebrar a sequência.
         updated = PilotState.from_dict(turn.state.to_dict())
         updated.facts["_scene_location"] = (
             "supermercado_fila" if turn.target_id == "reencontro_fila_001" else "supermercado_caixa"
@@ -230,6 +262,8 @@ def state_after_automatic_followup(state: PilotState, followup: dict[str, str]) 
     updated.interstitial_turns = 0
     updated.facts["_scene_location"] = str(followup["scene_location"])
     updated.facts.pop("_force_fixed_response", None)
+    if updated.node_id.startswith("retorno_casa_"):
+        updated.facts["alfredinho_has_voice"] = "false"
     if updated.node_id == "mensagens_iniciais_001":
         updated.facts["_automatic_bridge"] = "completed"
         updated.facts["active_interlocutor"] = "janio"
