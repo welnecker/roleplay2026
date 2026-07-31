@@ -45,7 +45,7 @@ def test_vazamento_de_janio_para_fala_audivel_usa_fallback() -> None:
     assert sanitize_private_thought_response(response, fallback) == fallback
 
 
-def test_resposta_com_um_pensamento_e_fala_segura_e_aceita() -> None:
+def test_resposta_com_um_pensamento_e_fala_segura_e_normalizada() -> None:
     fallback = (
         "[PENSAMENTO]\nPreciso mandar mensagem ao Janio.\n[/PENSAMENTO]\n\n"
         "Tá gelada sim, amor."
@@ -56,6 +56,27 @@ def test_resposta_com_um_pensamento_e_fala_segura_e_aceita() -> None:
     )
 
     assert sanitize_private_thought_response(response, fallback) == response
+
+
+def test_pensamento_no_meio_e_movido_para_o_inicio() -> None:
+    fallback = (
+        "[PENSAMENTO]\nPreciso mandar mensagem ao Janio.\n[/PENSAMENTO]\n\n"
+        "Tá gelada sim, amor."
+    )
+    response = (
+        "Está trincando, do jeito que você gosta.\n\n"
+        "[PENSAMENTO]\n"
+        "O Alfredo nem imagina, mas preciso mandar mensagem ao Janio.\n"
+        "[/PENSAMENTO]\n\n"
+        "Vou guardar as coisas e já levo para você."
+    )
+
+    normalized = sanitize_private_thought_response(response, fallback)
+
+    assert normalized.startswith("[PENSAMENTO]")
+    assert normalized.index("[/PENSAMENTO]") < normalized.index("Está trincando")
+    assert "Está trincando, do jeito que você gosta." in normalized
+    assert "Vou guardar as coisas e já levo para você." in normalized
 
 
 def test_mais_de_um_bloco_de_pensamento_e_rejeitado() -> None:
