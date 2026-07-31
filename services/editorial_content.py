@@ -13,6 +13,7 @@ from persistence.spreadsheet_config import read_spreadsheet_ids
 import services.pilot_supermarket as pilot_supermarket_module
 from services.pilot_supermarket import PilotScript
 from services.supermarket_intent_pilot import (
+    apply_supermarket_document_overrides,
     decide_supermarket_turn,
     prepare_supermarket_script,
 )
@@ -101,7 +102,7 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
 
     repository.ensure_schema()
     raw = load_editorial_yaml_text(EDITORIAL_PATH.read_text(encoding="utf-8"))
-    publish_editorial_document(repository, raw)
+    publish_editorial_document(repository, apply_supermarket_document_overrides(raw))
     _EDITORIAL_READY = True
     return repository
 
