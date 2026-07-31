@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from services.pilot_supermarket import (
     PilotScript,
@@ -13,6 +13,7 @@ from services.pilot_supermarket import (
 )
 
 UserIntent = Literal["accept", "refuse", "postpone", "question", "unclear"]
+SUPERMARKET_PILOT_VERSION = "1.0.1-supermarket-pilot"
 
 _SUPERMARKET_LOCATIONS = {
     "encontro_acidental_001": "supermercado_corredor",
@@ -41,6 +42,52 @@ _REFUSE_PATTERNS = (
 _POSTPONE_PATTERNS = (
     r"\b(?:agora não|depois|mais tarde|outra hora|estou com pressa|tô com pressa|to com pressa)\b",
 )
+
+
+def apply_supermarket_document_overrides(document: dict[str, Any]) -> dict[str, Any]:
+    """Prepara a versão publicada do piloto sem alterar os blocos posteriores."""
+
+    document["script_version"] = SUPERMARKET_PILOT_VERSION
+    for block in document.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for beat in block.get("beats", []):
+            if not isinstance(beat, dict):
+                continue
+            beat_id = str(beat.get("beat_id", ""))
+            if beat_id == "encontro_acidental_004":
+                beat["required_movement"] = (
+                    "Mary encerra o primeiro contato de forma simpática, sem verbalizar "
+                    "pensamentos íntimos nem antecipar interesse romântico."
+                )
+                beat["canonical_line"] = "Tchauzinho..."
+                beat["dramatic_direction"] = (
+                    "Despedida breve e natural. Não incluir pensamento, carência ou "
+                    "comentário sobre a aparência do usuário."
+                )
+                beat["max_sentences"] = 2
+            elif beat_id == "reencontro_fila_007":
+                beat["required_movement"] = (
+                    "Mary pede ajuda até o carro e aguarda decisão explícita. "
+                    "Não presumir que o usuário aceitou."
+                )
+                beat["dramatic_direction"] = (
+                    "Perguntar com naturalidade e aguardar aceite, recusa, adiamento ou dúvida."
+                )
+            elif beat_id == "reencontro_fila_008":
+                beat["required_movement"] = (
+                    "Somente após aceite confirmado, Mary segue com o usuário e o carrinho "
+                    "em direção ao carro."
+                )
+                beat["dramatic_direction"] = (
+                    "O deslocamento já foi consentido; não repetir o pedido nem a fala do caixa."
+                )
+            elif beat_id == "reencontro_fila_009":
+                beat["required_movement"] = "Mary e o usuário chegam ao carro de Mary."
+                beat["dramatic_direction"] = (
+                    "Marcar claramente a chegada ao carro, sem voltar à fila ou repetir o carrinho pesado."
+                )
+    return document
 
 
 def prepare_supermarket_script(script: PilotScript) -> PilotScript:
