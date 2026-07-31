@@ -12,6 +12,7 @@ from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 import services.pilot_supermarket as pilot_supermarket_module
 from services.pilot_supermarket import PilotScript
+from services.supermarket_runtime_authority import enforce_supermarket_runtime
 from services.supermarket_script_v2 import (
     apply_supermarket_script_v2_overrides,
     clean_supermarket_script_v2_response,
@@ -106,7 +107,8 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
 def load_editorial_pilot(secrets: Any) -> PilotScript:
     repository = ensure_editorial_pilot(secrets)
     script = PilotScript(repository.load_pilot_raw(PACKAGE_ID))
-    return prepare_supermarket_script_v2(script)
+    script = prepare_supermarket_script_v2(script)
+    return enforce_supermarket_runtime(script)
 
 
 def load_editorial_story_start(secrets: Any, package_id: str) -> tuple[str, str, str] | None:
