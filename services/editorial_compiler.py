@@ -68,7 +68,10 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                         {"unit_id": f"{beat_id}_wait", "kind": "wait_user"},
                     ],
                     "on_user": transitions,
-                    "terminal_transition": next_beat_id,
+                    # O próximo beat é escolhido somente após a resposta do usuário.
+                    # ``terminal_transition`` é reservado pelo motor para um
+                    # encerramento imediato depois da apresentação do beat.
+                    "terminal_transition": "",
                     "memory_writes": [str(item) for item in source.get("memory_writes", [])],
                     "max_questions": int(source.get("max_questions", 1) or 0),
                     "max_sentences": int(source.get("max_sentences", 1) or 1),
