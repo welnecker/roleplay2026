@@ -166,7 +166,25 @@ html, body, [data-testid="stAppViewContainer"] {
 .story-back {
     transform: rotateY(180deg);
     justify-content: flex-start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(188, 140, 255, .72) rgba(255, 255, 255, .05);
     background: linear-gradient(145deg, rgba(35, 21, 50, .98), rgba(12, 9, 17, .99));
+}
+.story-back::-webkit-scrollbar { width: 7px; }
+.story-back::-webkit-scrollbar-track {
+    margin: 14px 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .05);
+}
+.story-back::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(188, 140, 255, .72);
+}
+.story-back::-webkit-scrollbar-thumb:hover {
+    background: rgba(211, 177, 255, .90);
 }
 .story-kicker { color: #c5a2ef; font-size: .76rem; letter-spacing: .10em; text-transform: uppercase; }
 .story-title { color: #fff; font-size: 1.55rem; font-weight: 800; margin: .35rem 0; }
@@ -189,7 +207,16 @@ html, body, [data-testid="stAppViewContainer"] {
     margin-bottom: .25rem;
 }
 .story-profile-copy { color: #e5dce9; font-size: .92rem; line-height: 1.48; }
-.story-back-hint { margin-top: auto; color: #9f91ac; font-size: .76rem; }
+.story-back-hint {
+    position: sticky;
+    bottom: -1.25rem;
+    z-index: 2;
+    margin: auto -1.25rem -1.25rem;
+    padding: .8rem 1.25rem 1rem;
+    color: #b8a8c7;
+    font-size: .76rem;
+    background: linear-gradient(180deg, rgba(16, 10, 23, .12), rgba(16, 10, 23, .98) 42%);
+}
 
 @media (max-width: 760px) {
     .block-container { padding-left: 1rem; padding-right: 1rem; }
@@ -404,7 +431,7 @@ def _render_flip_card(story: StoryCard) -> None:
             <div class="story-profile-label">O que pretende com você</div>
             <div class="story-profile-copy">{escape(profile['intention'])}</div>
           </div>
-          <div class="story-back-hint">Toque fora do card para voltar à capa.</div>
+          <div class="story-back-hint">Role para continuar · toque fora do card para voltar à capa.</div>
         </section>
       </div>
     </div>
