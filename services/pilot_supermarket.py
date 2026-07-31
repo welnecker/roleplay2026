@@ -334,7 +334,7 @@ def _build_prompt(
         "REGRAS ABSOLUTAS:\n"
         "- Não narre ações, movimentos, gestos, expressões, postura ou contato visual.\n"
         "- Não use terceira pessoa, rubricas, asteriscos ou parênteses de ação.\n"
-        "- Onomatopeia é permitida quando surgir naturalmente na fala.\n"
+        "- onomatopeia é permitida quando surgir naturalmente na fala.\n"
         "- Não invente ações, pensamentos, endereço, profissão ou passado do usuário.\n"
         "- Siga o movimento atual com máxima fidelidade e não crie outra trama.\n"
         "- Preserve semanticamente a fala canônica, mas adapte ritmo e ligação ao que o usuário disse.\n"
