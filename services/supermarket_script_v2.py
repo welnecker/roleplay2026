@@ -127,9 +127,10 @@ def decide_supermarket_script_v2_turn(
     if current_id == "reencontro_fila_007":
         intent = classify_supermarket_intent(current_id, user_text)
         if intent == "accept":
-            synthetic = PilotState.from_dict(state.to_dict())
-            synthetic.node_id = "reencontro_fila_008"
-            turn = base_decide_turn(script, synthetic, user_text)
+            # O estado já está no beat do pedido. O motor deve aplicar exatamente
+            # uma transição, de 007 para 008. Posicionar previamente em 008 faria
+            # o motor avançar novamente e pular o movimento do carrinho.
+            turn = base_decide_turn(script, state, user_text)
             updated = PilotState.from_dict(turn.state.to_dict())
             updated.facts["help_to_car"] = "accepted"
             updated.facts["_scene_location"] = "estacionamento_caminho"
