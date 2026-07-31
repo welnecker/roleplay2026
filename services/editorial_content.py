@@ -10,7 +10,12 @@ import yaml
 from persistence.editorial import GoogleSheetsEditorialRepository
 from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
+import services.pilot_supermarket as pilot_supermarket_module
 from services.pilot_supermarket import PilotScript
+from services.supermarket_intent_pilot import (
+    decide_supermarket_turn,
+    prepare_supermarket_script,
+)
 
 
 PACKAGE_ID = "roleplay2026.casada_frustrada"
@@ -28,6 +33,11 @@ _FREE_TEXT_KEYS = {
 _FREE_TEXT_PATTERN = re.compile(
     r"^(?P<indent>\s*)(?P<key>" + "|".join(sorted(_FREE_TEXT_KEYS)) + r"):\s*(?P<value>.*)$"
 )
+
+# A página importa ``decide_turn`` do módulo original depois de importar este módulo.
+# A substituição mantém um único player e restringe a nova lógica ao recorte do
+# supermercado; os demais beats continuam delegados ao decisor original.
+pilot_supermarket_module.decide_turn = decide_supermarket_turn
 
 
 def _protect_editorial_plain_scalars(text: str) -> str:
@@ -98,7 +108,8 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
 
 def load_editorial_pilot(secrets: Any) -> PilotScript:
     repository = ensure_editorial_pilot(secrets)
-    return PilotScript(repository.load_pilot_raw(PACKAGE_ID))
+    script = PilotScript(repository.load_pilot_raw(PACKAGE_ID))
+    return prepare_supermarket_script(script)
 
 
 def load_editorial_story_start(secrets: Any, package_id: str) -> tuple[str, str, str] | None:
