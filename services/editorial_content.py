@@ -11,10 +11,11 @@ from persistence.editorial import GoogleSheetsEditorialRepository
 from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 import services.pilot_supermarket as pilot_supermarket_module
-from services.alfredinho_call_pilot import (
-    apply_alfredinho_call_overrides,
-    decide_alfredinho_call_turn,
-    prepare_alfredinho_call_script,
+from services.private_thought_pilot import (
+    apply_private_thought_overrides,
+    clean_private_model_response,
+    decide_private_thought_turn,
+    prepare_private_thought_script,
 )
 from services.pilot_supermarket import PilotScript
 
@@ -35,9 +36,10 @@ _FREE_TEXT_PATTERN = re.compile(
     r"^(?P<indent>\s*)(?P<key>" + "|".join(sorted(_FREE_TEXT_KEYS)) + r"):\s*(?P<value>.*)$"
 )
 
-# A página importa ``decide_turn`` do módulo original depois de importar este módulo.
-# A substituição mantém um único player e adiciona as correções incrementais do piloto.
-pilot_supermarket_module.decide_turn = decide_alfredinho_call_turn
+# A página importa estas funções do módulo original depois de importar este módulo.
+# As substituições mantêm um único player e adicionam as correções incrementais.
+pilot_supermarket_module.decide_turn = decide_private_thought_turn
+pilot_supermarket_module.clean_model_response = clean_private_model_response
 
 
 def _protect_editorial_plain_scalars(text: str) -> str:
@@ -101,7 +103,7 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
 
     repository.ensure_schema()
     raw = load_editorial_yaml_text(EDITORIAL_PATH.read_text(encoding="utf-8"))
-    publish_editorial_document(repository, apply_alfredinho_call_overrides(raw))
+    publish_editorial_document(repository, apply_private_thought_overrides(raw))
     _EDITORIAL_READY = True
     return repository
 
@@ -109,7 +111,7 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
 def load_editorial_pilot(secrets: Any) -> PilotScript:
     repository = ensure_editorial_pilot(secrets)
     script = PilotScript(repository.load_pilot_raw(PACKAGE_ID))
-    return prepare_alfredinho_call_script(script)
+    return prepare_private_thought_script(script)
 
 
 def load_editorial_story_start(secrets: Any, package_id: str) -> tuple[str, str, str] | None:
