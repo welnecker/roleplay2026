@@ -11,6 +11,12 @@ from roleplay.openrouter import OpenRouterError, generate_response
 from services.dialogue_presentation import render_dialogue_html, with_optional_thought_guidance
 from services.editorial_content import load_editorial_pilot
 from services.paid_run_access import get_paid_run_access, terminate_paid_access
+from services.pilot_diagnostics import (
+    build_turn_diagnostics,
+    finalize_model_response,
+    log_exception,
+    log_turn,
+)
 from services.pilot_supermarket import (
     PilotScript,
     PilotState,
@@ -177,6 +183,7 @@ def end_story_and_return(user: AuthenticatedUser) -> None:
             ending_code="user_abandoned",
         )
     except Exception as exc:
+        log_exception("terminate_paid_access", exc, user_id=user.user_id, package_id=PACKAGE_ID)
         st.error(f"Não foi possível encerrar a história: {exc}")
         return
 
@@ -204,6 +211,7 @@ fresh_start = prepare_after_payment(user)
 try:
     script = load_script()
 except Exception as exc:
+    log_exception("load_editorial_script", exc, package_id=PACKAGE_ID)
     st.error(f"Não foi possível carregar o roteiro editorial: {exc}")
     st.stop()
 
@@ -214,6 +222,7 @@ try:
         package_version=str(script.raw.get("script_version", "0.1.0-pilot")),
     )
 except Exception as exc:
+    log_exception("open_runtime", exc, user_id=user.user_id, package_id=PACKAGE_ID)
     st.error(f"Não foi possível abrir o piloto: {exc}")
     st.stop()
 
@@ -225,6 +234,7 @@ if not pilot_state.finished and not story_state.finished:
             package_id=PACKAGE_ID,
         )
     except Exception as exc:
+        log_exception("check_paid_access", exc, user_id=user.user_id, package_id=PACKAGE_ID)
         st.error(f"Não foi possível verificar o acesso: {exc}")
         st.stop()
     if not access.allowed:
@@ -284,10 +294,26 @@ user_text = st.chat_input("Responda a Mary")
 if not user_text:
     st.stop()
 
-turn = decide_turn(script, pilot_state, user_text)
+try:
+    turn = decide_turn(script, pilot_state, user_text)
+except Exception as exc:
+    log_exception(
+        "decide_turn",
+        exc,
+        user_id=user.user_id,
+        package_id=PACKAGE_ID,
+        node_id=pilot_state.node_id,
+        pending_beat_id=pilot_state.pending_next_beat_id,
+        user_text=user_text,
+    )
+    st.error("Não foi possível decidir o próximo movimento da história.")
+    st.stop()
+
 api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
 model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
-assistant_text = turn.visible_fallback
+system_prompt = with_optional_thought_guidance(turn.system_prompt)
+raw_model_response = ""
+cleaned_response = turn.visible_fallback
 generation_error = ""
 if api_key:
     history = [
@@ -295,16 +321,51 @@ if api_key:
         for item in messages[-12:]
     ]
     try:
-        generated = generate_response(
+        raw_model_response = generate_response(
             api_key=api_key,
             model=model,
-            system_prompt=with_optional_thought_guidance(turn.system_prompt),
+            system_prompt=system_prompt,
             history=history,
             user_text=user_text,
         )
-        assistant_text = clean_model_response(generated, turn.visible_fallback)
+        cleaned_response = clean_model_response(raw_model_response, turn.visible_fallback)
     except OpenRouterError as exc:
         generation_error = str(exc)
+        log_exception(
+            "openrouter_generation",
+            exc,
+            user_id=user.user_id,
+            package_id=PACKAGE_ID,
+            node_id=pilot_state.node_id,
+            target_id=turn.target_id,
+        )
+
+recent_assistant_messages = [
+    str(item.get("content", ""))
+    for item in messages
+    if str(item.get("role", "")) == "assistant"
+][-6:]
+guarded = finalize_model_response(
+    raw_response=raw_model_response,
+    cleaned_response=cleaned_response,
+    fallback=turn.visible_fallback,
+    recent_assistant_messages=recent_assistant_messages,
+)
+assistant_text = guarded.response
+
+diagnostics = build_turn_diagnostics(
+    user_text=user_text,
+    previous_state=pilot_state,
+    turn=turn,
+    raw_model_response=raw_model_response,
+    final_response=assistant_text,
+    fallback=turn.visible_fallback,
+    generation_error=generation_error,
+    guard_reason=guarded.guard_reason,
+    repeated_recent_anchor=guarded.repeated_recent_anchor,
+    system_prompt=system_prompt,
+)
+log_turn(diagnostics)
 
 updated_story_state = story_state.copy()
 updated_story_state.step_index += 1
@@ -319,6 +380,7 @@ metadata: dict[str, object] = {
     "pilot_end_event": "END_RUN" if turn.finished else "",
     "pilot_run_status": turn.run_status,
     "pilot_ending_code": turn.ending_code,
+    "pilot_diagnostics": diagnostics,
 }
 repository = runtime_repository()
 if repository is None:
@@ -336,6 +398,15 @@ try:
         sequence_start=sequence_start,
     )
 except Exception as exc:
+    log_exception(
+        "persist_turn",
+        exc,
+        user_id=user.user_id,
+        package_id=PACKAGE_ID,
+        node_id=pilot_state.node_id,
+        target_id=turn.target_id,
+        diagnostics=diagnostics,
+    )
     st.error(f"Não foi possível registrar a interação: {exc}")
     st.stop()
 
@@ -344,4 +415,6 @@ messages.append({"role": "assistant", "content": assistant_text, **metadata})
 save_session(user, updated_context, updated_story_state, messages, turn.state)
 if generation_error:
     st.toast(f"OpenRouter indisponível; fala segura usada: {generation_error}")
+elif guarded.repeated_recent_anchor:
+    st.toast("Uma repetição narrativa foi bloqueada e a fala do beat foi restaurada.")
 st.rerun()
