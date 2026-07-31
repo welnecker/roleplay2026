@@ -45,7 +45,7 @@ def with_optional_thought_guidance(system_prompt: str) -> str:
 def split_dialogue(content: str) -> PresentedDialogue:
     """Separa pensamento estruturado da fala, preservando mensagens antigas."""
 
-    value = str(content or "").strip()
+    value = _normalize_presented_content(content)
     match = _THOUGHT_PATTERN.match(value)
     if match is None:
         return PresentedDialogue(thought="", speech=value)
@@ -86,6 +86,29 @@ def render_dialogue_html(role: str, content: str) -> str:
         f'<div class="dialogue-speech">{_paragraphs(speech)}</div>'
         "</article>"
     )
+
+
+def _normalize_presented_content(content: str) -> str:
+    """Remove wrappers comuns sem alterar o texto narrativo real.
+
+    Respostas do modelo ou valores recuperados da persistência podem chegar entre
+    aspas, cercas Markdown ou com BOM. Esses wrappers impediam o marcador de
+    pensamento de ocupar o início lógico da mensagem e, portanto, a tarja não era
+    renderizada.
+    """
+
+    value = str(content or "").replace("\ufeff", "").strip()
+    if value.startswith("```") and value.endswith("```"):
+        value = re.sub(r"^```(?:text|markdown)?\s*", "", value, flags=re.IGNORECASE)
+        value = re.sub(r"\s*```$", "", value).strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        inner = value[1:-1].strip()
+        if THOUGHT_OPEN in inner.upper():
+            value = inner
+    marker_index = value.upper().find(THOUGHT_OPEN)
+    if marker_index > 0 and not value[:marker_index].strip(' \t\r\n"\'`'):
+        value = value[marker_index:]
+    return value.strip()
 
 
 def _paragraphs(value: str) -> str:
