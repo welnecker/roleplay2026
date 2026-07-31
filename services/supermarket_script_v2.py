@@ -8,188 +8,57 @@ from services.pilot_supermarket import (
     PilotState,
     PilotTurn,
     classify_user_message,
+    clean_model_response as base_clean_model_response,
     decide_turn as base_decide_turn,
-)
-from services.private_thought_pilot import (
-    apply_private_thought_overrides,
-    clean_private_model_response,
-    prepare_private_thought_script,
 )
 from services.supermarket_intent_pilot import classify_supermarket_intent
 
-SUPERMARKET_SCRIPT_V2_VERSION = "1.1.0-supermarket-playable"
 
-CAR_BRIDGE = (
-    "[PENSAMENTO]\n"
-    "Caralho... nunca imaginei encontrar um cara tão legal e atraente no supermercado. "
-    "Vou ligar pro meu marido e avisar que estou indo.\n"
-    "[/PENSAMENTO]\n\n"
-    "Alô... Alfredinho?"
-)
-HOME_BRIDGE = (
-    "Cheguei, amor... tô exausta, ufa! Vou botar a cerveja pra gelar e guardar as compras. "
-    "Não se preocupa... fica quietinho aí vendo seu jogo."
-)
-FIRST_PRIVATE_MESSAGE = (
-    "[PENSAMENTO]\n"
-    "Vou mandar só uma mensagem... não suporto essa espera.\n"
-    "[/PENSAMENTO]\n\n"
-    "Oi?"
-)
-
-_AUTOMATIC_FOLLOWUPS: dict[str, tuple[dict[str, str], ...]] = {
-    "encontro_acidental_006": (
-        {
-            "target_id": "reencontro_fila_001",
-            "text": "Olha você de novo... tá me seguindo, é? rsrsrs",
-            "scene_location": "supermercado_fila",
-        },
-    ),
-    "reencontro_fila_006": (
-        {
-            "target_id": "reencontro_fila_007",
-            "text": (
-                "Passou rapidinho pelo caixa, hein? Chegou minha vez. Dá pra você me esperar? "
-                "Vou precisar de uma mãozinha até o carro."
-            ),
-            "scene_location": "supermercado_caixa",
-        },
-    ),
-    "reencontro_fila_016": (
-        {
-            "target_id": "retorno_casa_001",
-            "text": CAR_BRIDGE,
-            "scene_location": "carro_mary_sozinha",
-        },
-        {
-            "target_id": "retorno_casa_002",
-            "text": HOME_BRIDGE,
-            "scene_location": "casa_de_mary",
-        },
-        {
-            "target_id": "mensagens_iniciais_001",
-            "text": FIRST_PRIVATE_MESSAGE,
-            "scene_location": "mensagem_privada_janio",
-        },
-    ),
-}
+_AUTOMATIC_FOLLOWUPS: dict[str, tuple[dict[str, str], ...]] = {}
 
 
-def _beat(
-    beat_id: str,
-    order: int,
-    line: str,
-    next_id: str,
-    *,
-    questions: int = 1,
-    sentences: int = 3,
-) -> dict[str, Any]:
-    return {
-        "beat_id": beat_id,
-        "order": order,
-        "type": "dialogue",
-        "required_movement": (
-            "Mary abre somente este assunto, reage brevemente ao usuário e prepara uma resposta clara. "
-            "Não antecipar o beat seguinte."
-        ),
-        "canonical_line": line,
-        "dramatic_direction": (
-            "Fala natural e jogável. Permitir no máximo uma reação orgânica curta antes de retomar o roteiro."
-        ),
-        "next_beat_id": next_id,
-        "max_questions": questions,
-        "max_sentences": sentences,
-        "memory_writes": [],
-        "allowed_transitions": {
-            "engaged": next_id,
-            "minimal": next_id,
-            "dismissive": next_id,
-            "nonsense": next_id,
-            "mocking": "end_hostile",
-            "hostile": "end_hostile",
-        },
-        "status": "active",
-    }
+def _register_automatic_followups(script: PilotScript) -> None:
+    """Indexa somente a mecânica declarada na fonte editorial."""
 
-
-def _replace_block_beats(block: dict[str, Any], beats: list[dict[str, Any]]) -> None:
-    block["beats"] = beats
-    block["max_movements_per_response"] = 1
-    block["max_questions_per_response"] = 1
-    rules = list(block.get("rules") or [])
-    rules.extend(
-        [
-            "Cada beat abre um único assunto para o usuário responder.",
-            "Mary pode reagir organicamente por no máximo um turno intermediário.",
-            "Beats marcados como ponte automática não concedem turno ao usuário.",
-            "Nunca misturar interlocutores ou movimentos diferentes na mesma mensagem.",
-        ]
-    )
-    block["rules"] = list(dict.fromkeys(str(item) for item in rules if str(item).strip()))
-
-
-def apply_supermarket_script_v2_overrides(document: dict[str, Any]) -> dict[str, Any]:
-    """Publica o supermercado da planilha e as pontes sem voz de Alfredinho."""
-
-    document = apply_private_thought_overrides(document)
-    document["script_version"] = SUPERMARKET_SCRIPT_V2_VERSION
-    blocks = {
-        str(block.get("block_id", "")): block
-        for block in document.get("blocks", [])
-        if isinstance(block, dict)
-    }
-
-    encounter = blocks.get("encontro_acidental")
-    if encounter is not None:
-        _replace_block_beats(
-            encounter,
-            [
-                _beat("encontro_acidental_001", 1, "Eita, caralho... desculpa!", "encontro_acidental_002", questions=0, sentences=2),
-                _beat("encontro_acidental_002", 2, "Tem certeza que tá tudo bem? Não machucou?", "encontro_acidental_003", questions=2, sentences=2),
-                _beat("encontro_acidental_003", 3, "Que alívio... pensei que tivesse machucado você. Tudo bem mesmo? Pode dizer se estiver doendo.", "encontro_acidental_004", questions=2, sentences=3),
-                _beat("encontro_acidental_004", 4, "Humm... você por acaso mora no Plaza? Seu rosto não me é estranho...", "encontro_acidental_005", questions=1, sentences=2),
-                _beat("encontro_acidental_005", 5, "Ah... que legal. Somos vizinhos, então?", "encontro_acidental_006", questions=1, sentences=2),
-                _beat("encontro_acidental_006", 6, "Vou continuar minhas comprinhas... tchauzinho, vizinho.", "reencontro_fila_001", questions=0, sentences=2),
-            ],
-        )
-
-    queue = blocks.get("reencontro_fila")
-    if queue is not None:
-        _replace_block_beats(
-            queue,
-            [
-                _beat("reencontro_fila_001", 1, "Olha você de novo... tá me seguindo, é? rsrsrs", "reencontro_fila_002", questions=1),
-                _beat("reencontro_fila_002", 2, "Parece que está recuperado do susto, vizinho...", "reencontro_fila_003", questions=0, sentences=2),
-                _beat("reencontro_fila_003", 3, "O mercado tá cheio hoje. Essa fila do caixa tá desanimadora.", "reencontro_fila_004", questions=0, sentences=2),
-                _beat("reencontro_fila_004", 4, "Tô olhando pro seu carrinho... cerveja, salgadinho e macarrão instantâneo. Isso é típico de solteiro ou passei longe?", "reencontro_fila_005", questions=1),
-                _beat("reencontro_fila_005", 5, "Na minha casa é cerveja e futebol quase todo fim de semana. Já acostumei com essa rotina.", "reencontro_fila_006", questions=0, sentences=2),
-                _beat("reencontro_fila_006", 6, "Olha, é sua vez no caixa. Passa suas compras. Depois sou eu.", "reencontro_fila_007", questions=0, sentences=2),
-                _beat("reencontro_fila_007", 7, "Passou rapidinho pelo caixa, hein? Chegou minha vez. Dá pra você me esperar? Vou precisar de uma mãozinha até o carro.", "reencontro_fila_008", questions=1),
-                _beat("reencontro_fila_008", 8, "Vizinho, você me espera? Vou precisar de uma ajudinha com tudo isso até o carro.", "reencontro_fila_009", questions=1),
-                _beat("reencontro_fila_009", 9, "Prontinho. Olha o tamanho desse carrinho perto do seu! Você dá conta de empurrar?", "reencontro_fila_010", questions=1),
-                _beat("reencontro_fila_010", 10, "Meu carro é aquele ali... vou abrir o porta-malas. Tá cansado?", "reencontro_fila_011", questions=1),
-                _beat("reencontro_fila_011", 11, "Prontinho, né? Porta-malas cheio! Nem sei como te agradecer.", "reencontro_fila_012", questions=0),
-                _beat("reencontro_fila_012", 12, "Você foi muito gentil, sabia? Eu nem sei seu nome... que distração a minha.", "reencontro_fila_013", questions=1),
-                _beat("reencontro_fila_013", 13, "Foi muito legal te conhecer... posso te pedir só mais uma coisa? Prometo que vai ser a última.", "reencontro_fila_014", questions=1),
-                _beat("reencontro_fila_014", 14, "Queria seu número. Pra saber se você não ficou com sequelas, sabe? Ai... que desculpa esfarrapada... desculpe, rsrsrs.", "reencontro_fila_015", questions=1),
-                _beat("reencontro_fila_015", 15, "Anotado... posso te ligar, quem sabe, lá pelas oito?", "reencontro_fila_016", questions=1),
-                _beat("reencontro_fila_016", 16, "Tá bom... então deixa eu ir. Meu telefone já tá vibrando aqui... Tchau... te ligo.", "retorno_casa_001", questions=0, sentences=3),
-            ],
-        )
-    return document
+    registered: dict[str, tuple[dict[str, str], ...]] = {}
+    for block in script.raw.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for beat in block.get("beats", []):
+            if not isinstance(beat, dict):
+                continue
+            beat_id = str(beat.get("beat_id", ""))
+            followups: list[dict[str, str]] = []
+            for item in beat.get("automatic_followups", []) or []:
+                if not isinstance(item, dict):
+                    continue
+                target_id = str(item.get("target_id", "")).strip()
+                text = str(item.get("text", "")).strip()
+                if not target_id or not text:
+                    raise ValueError(f"Ponte automática inválida no beat {beat_id!r}.")
+                followups.append(
+                    {
+                        "target_id": target_id,
+                        "text": text,
+                        "scene_location": str(item.get("scene_location", "")).strip(),
+                    }
+                )
+            if followups:
+                registered[beat_id] = tuple(followups)
+    _AUTOMATIC_FOLLOWUPS.clear()
+    _AUTOMATIC_FOLLOWUPS.update(registered)
 
 
 def prepare_supermarket_script_v2(script: PilotScript) -> PilotScript:
-    script = prepare_private_thought_script(script)
-    for beat_id, beat in script.beats.items():
-        if beat_id.startswith(("encontro_acidental_", "reencontro_fila_")):
-            beat["objective"] = (
-                "Abrir somente o assunto deste beat, reagir ao usuário de modo curto e não antecipar o próximo movimento."
-            )
+    """Valida e indexa a fonte sem alterar nenhum beat ou fala."""
+
+    _register_automatic_followups(script)
     return script
 
 
-def _repeat_help_request(state: PilotState, user_text: str) -> PilotTurn:
+def _repeat_help_request(script: PilotScript, state: PilotState, user_text: str) -> PilotTurn:
+    beat = script.beats["reencontro_fila_007"]
+    fallback = str(beat.get("anchor") or beat.get("canonical_line") or "")
     updated = PilotState.from_dict(state.to_dict())
     updated.node_id = "reencontro_fila_007"
     updated.pending_next_beat_id = ""
@@ -198,10 +67,10 @@ def _repeat_help_request(state: PilotState, user_text: str) -> PilotTurn:
     return PilotTurn(
         engagement=classify_user_message(user_text),
         target_id="reencontro_fila_007",
-        visible_fallback="Vizinho, você me espera? Vou precisar de uma ajudinha com tudo isso até o carro.",
+        visible_fallback=fallback,
         system_prompt=(
-            "Você é Mary, ainda no caixa. Responda brevemente ao usuário e confirme se ele vai esperar. "
-            "Não presuma aceite, não avance ao estacionamento e não repita outros assuntos."
+            "Você é Mary, ainda no caixa. Responda brevemente e confirme se o usuário vai esperar. "
+            "Não presuma aceite e não avance ao estacionamento. Preserve o movimento editorial fornecido."
         ),
         state=updated,
     )
@@ -212,11 +81,9 @@ def decide_supermarket_script_v2_turn(
     state: PilotState,
     user_text: str,
 ) -> PilotTurn:
-    """Executa o roteiro jogável e deixa as pontes para o runtime."""
+    """Aplica somente decisões de interação; o conteúdo pertence ao roteiro."""
 
-    prepare_supermarket_script_v2(script)
     current_id = state.node_id or script.first_beat_id
-
     if current_id == "reencontro_fila_007":
         intent = classify_supermarket_intent(current_id, user_text)
         if intent == "accept":
@@ -228,27 +95,12 @@ def decide_supermarket_script_v2_turn(
             updated.facts["_scene_location"] = "estacionamento_caminho"
             return replace(turn, state=updated)
         if intent == "refuse":
-            # Mantém a saída respeitosa já existente no piloto anterior.
             from services.supermarket_intent_pilot import decide_supermarket_turn
 
             return decide_supermarket_turn(script, state, user_text)
-        return _repeat_help_request(state, user_text)
+        return _repeat_help_request(script, state, user_text)
 
-    if current_id.startswith(("encontro_acidental_", "reencontro_fila_")):
-        turn = base_decide_turn(script, state, user_text)
-    else:
-        # Fora do supermercado, preserva as regras já existentes dos blocos seguintes.
-        from services.private_thought_pilot import decide_private_thought_turn
-
-        turn = decide_private_thought_turn(script, state, user_text)
-
-    if turn.target_id in {"reencontro_fila_001", "reencontro_fila_007"}:
-        updated = PilotState.from_dict(turn.state.to_dict())
-        updated.facts["_scene_location"] = (
-            "supermercado_fila" if turn.target_id == "reencontro_fila_001" else "supermercado_caixa"
-        )
-        return replace(turn, state=updated)
-    return turn
+    return base_decide_turn(script, state, user_text)
 
 
 def automatic_followups_after(target_id: str) -> tuple[dict[str, str], ...]:
@@ -260,16 +112,16 @@ def state_after_automatic_followup(state: PilotState, followup: dict[str, str]) 
     updated.node_id = str(followup["target_id"])
     updated.pending_next_beat_id = ""
     updated.interstitial_turns = 0
-    updated.facts["_scene_location"] = str(followup["scene_location"])
-    updated.facts.pop("_force_fixed_response", None)
+    location = str(followup.get("scene_location", ""))
+    if location:
+        updated.facts["_scene_location"] = location
     if updated.node_id.startswith("retorno_casa_"):
         updated.facts["alfredinho_has_voice"] = "false"
     if updated.node_id == "mensagens_iniciais_001":
-        updated.facts["_automatic_bridge"] = "completed"
         updated.facts["active_interlocutor"] = "janio"
         updated.facts["alfredinho_has_voice"] = "false"
     return updated
 
 
 def clean_supermarket_script_v2_response(response: str, fallback: str) -> str:
-    return clean_private_model_response(response, fallback)
+    return base_clean_model_response(response, fallback)
