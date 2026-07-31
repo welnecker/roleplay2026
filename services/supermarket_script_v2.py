@@ -70,19 +70,19 @@ def _register_automatic_followups(script: PilotScript) -> None:
                 if not isinstance(item, dict):
                     continue
                 target_id = str(item.get("target_id", "")).strip()
-                text = str(item.get("text", "")).strip()
-                if not target_id or not text:
+                raw_text = str(item.get("text", "")).strip()
+                if not target_id or not raw_text:
                     raise ValueError(f"Ponte automática inválida no beat {beat_id!r}.")
                 time_label, location_label = _transition_metadata(item)
-                followups.append(
-                    {
-                        "target_id": target_id,
-                        "text": text,
-                        "scene_location": str(item.get("scene_location", "")).strip(),
-                        "transition_time": time_label,
-                        "transition_location": location_label,
-                    }
-                )
+                followup = {
+                    "target_id": target_id,
+                    "text": raw_text,
+                    "scene_location": str(item.get("scene_location", "")).strip(),
+                    "transition_time": time_label,
+                    "transition_location": location_label,
+                }
+                followup["text"] = render_automatic_followup_text(followup)
+                followups.append(followup)
             if followups:
                 registered[beat_id] = tuple(followups)
     _AUTOMATIC_FOLLOWUPS.clear()
