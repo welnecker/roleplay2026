@@ -9,7 +9,12 @@ from services.alfredinho_call_pilot import (
     decide_alfredinho_call_turn,
     prepare_alfredinho_call_script,
 )
-from services.pilot_supermarket import PilotScript, PilotState, PilotTurn
+from services.pilot_supermarket import (
+    PilotScript,
+    PilotState,
+    PilotTurn,
+    clean_model_response as base_clean_model_response,
+)
 
 PRIVATE_THOUGHT_VERSION = "1.0.4-private-thought"
 _SAFE_THOUGHT = "Preciso encontrar um momento discreto para mandar mensagem ao Janio."
@@ -87,12 +92,12 @@ def decide_private_thought_turn(
     return replace(turn, visible_fallback=_SAFE_FALLBACK, system_prompt=prompt)
 
 
-def sanitize_private_thought_response(target_id: str, response: str, fallback: str) -> str:
+def sanitize_private_thought_response(response: str, fallback: str) -> str:
     """Bloqueia vazamento de Janio para a fala audível no beat privado."""
 
     value = str(response or "").strip()
-    if target_id != "retorno_casa_003" or not value:
-        return value or fallback
+    if not value:
+        return fallback
 
     blocks = re.findall(
         r"\[PENSAMENTO\](.*?)\[/PENSAMENTO\]",
@@ -115,3 +120,12 @@ def sanitize_private_thought_response(target_id: str, response: str, fallback: s
     ):
         return fallback
     return value
+
+
+def clean_private_model_response(response: str, fallback: str) -> str:
+    """Usa o validador comum e aplica a trava privada quando o fallback identifica o beat."""
+
+    cleaned = base_clean_model_response(response, fallback)
+    if _SAFE_THOUGHT not in str(fallback or ""):
+        return cleaned
+    return sanitize_private_thought_response(cleaned, fallback)
