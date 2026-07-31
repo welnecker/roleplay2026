@@ -44,7 +44,11 @@ def finalize_model_response(
         )
 
     used_fallback = bool(safe_fallback) and _normalize(cleaned) == _normalize(safe_fallback)
-    reason = "validator_fallback" if used_fallback and raw and _normalize(raw) != _normalize(cleaned) else "model_response_accepted"
+    reason = (
+        "validator_fallback"
+        if used_fallback and raw and _normalize(raw) != _normalize(cleaned)
+        else "model_response_accepted"
+    )
     return GuardedResponse(cleaned, repeated, used_fallback, reason)
 
 
@@ -127,6 +131,17 @@ def log_exception(stage: str, exc: BaseException, **context: object) -> None:
 
 
 def _repeats_recent_anchor(response: str, recent_messages: list[str]) -> bool:
+    normalized_response = _normalize(response)
+    if not normalized_response:
+        return False
+
+    # Primeiro procura unidades longas já ditas. A comparação por inclusão evita que
+    # reticências ou uma frase introdutória escondam a repetição literal principal.
+    for message in recent_messages[-6:]:
+        for unit in _meaningful_units(message):
+            if unit in normalized_response:
+                return True
+
     response_units = _meaningful_units(response)
     if not response_units:
         return False
@@ -139,12 +154,17 @@ def _repeats_recent_anchor(response: str, recent_messages: list[str]) -> bool:
 
 
 def _meaningful_units(text: str) -> set[str]:
-    parts = re.split(r"(?<=[.!?])\s+|\n+", str(text or ""))
+    # Reticências não devem quebrar uma âncora em fragmentos artificiais.
+    compact = re.sub(r"\.{2,}", " ", str(text or ""))
+    parts = re.split(r"(?<=[!?])\s+|(?<=\.)\s+|\n+", compact)
     result: set[str] = set()
     for part in parts:
         normalized = _normalize(part)
         if len(normalized.split()) >= 6 and len(normalized) >= 36:
             result.add(normalized)
+    whole = _normalize(compact)
+    if len(whole.split()) >= 6 and len(whole) >= 36:
+        result.add(whole)
     return result
 
 

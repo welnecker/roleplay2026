@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from services.organic_interaction import detect_organic_signal
-from services.pilot_supermarket import PilotScript, PilotState, decide_turn
+from services.pilot_supermarket import PilotScript, PilotState, clean_model_response, decide_turn
 
 
 def _script() -> PilotScript:
@@ -13,6 +13,7 @@ def _script() -> PilotScript:
                 "beats": [
                     {
                         "beat_id": "ask_name",
+                        "objective": "Descobrir o nome do usuário.",
                         "units": [
                             {
                                 "kind": "dialogue",
@@ -24,6 +25,7 @@ def _script() -> PilotScript:
                     },
                     {
                         "beat_id": "ask_favor",
+                        "objective": "Pedir uma ajuda curta ao usuário.",
                         "units": [
                             {
                                 "kind": "dialogue",
@@ -35,6 +37,7 @@ def _script() -> PilotScript:
                     },
                     {
                         "beat_id": "ask_number",
+                        "objective": "Pedir o número do usuário.",
                         "units": [
                             {
                                 "kind": "dialogue",
@@ -46,6 +49,7 @@ def _script() -> PilotScript:
                     },
                     {
                         "beat_id": "share_number",
+                        "objective": "Compartilhar o número de Mary.",
                         "units": [
                             {
                                 "kind": "dialogue",
@@ -93,7 +97,7 @@ def test_turno_seguinte_retoma_o_beat_pendente() -> None:
     assert "Foi muito legal te conhecer" in second.visible_fallback
 
 
-def test_desafio_de_soletrar_usa_nome_memorizado() -> None:
+def test_desafio_de_soletrar_usa_nome_memorizado_sem_antecipar_fala() -> None:
     state = PilotState(node_id="ask_number", facts={"user_name": "Janio"})
 
     turn = decide_turn(
@@ -105,7 +109,32 @@ def test_desafio_de_soletrar_usa_nome_memorizado() -> None:
     assert turn.target_id == "ask_number"
     assert turn.state.pending_next_beat_id == "share_number"
     assert "J-A-N-I-O" in turn.visible_fallback
-    assert "Olha... esse número vai me trazer sorte" in turn.system_prompt
+    assert "Compartilhar o número de Mary" in turn.system_prompt
+    assert "Olha... esse número vai me trazer sorte" not in turn.system_prompt
+    assert "Não execute nem recite" in turn.system_prompt
+
+
+def test_pergunta_direta_avanca_e_e_respondida_no_novo_beat() -> None:
+    turn = decide_turn(
+        _script(),
+        PilotState(node_id="ask_favor"),
+        "Claro, mas onde está o seu carro?",
+    )
+
+    assert turn.target_id == "ask_number"
+    assert turn.state.node_id == "ask_number"
+    assert turn.state.pending_next_beat_id == ""
+    assert "Responda primeiro à pergunta direta" in turn.system_prompt
+
+
+def test_nome_de_mary_em_primeira_pessoa_nao_aciona_fallback() -> None:
+    response = "Eu sou a Mary, muito prazer! E você, como se chama?"
+
+    assert clean_model_response(response, "fallback") == response
+
+
+def test_narracao_de_mary_em_terceira_pessoa_continua_bloqueada() -> None:
+    assert clean_model_response("Mary sorri e olha para ele.", "fallback") == "fallback"
 
 
 def test_detector_nao_interrompe_resposta_comum() -> None:

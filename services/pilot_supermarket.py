@@ -109,7 +109,7 @@ _MOCKING_MARKERS = {
 }
 
 _FORBIDDEN_NARRATION = (
-    r"\bMary\b",
+    r"\bMary\s+(?:sorri|ri|olha|observa|caminha|segura|recu[aá]|respira|inclina|aproxima|afasta|encosta|vira|cruza|levanta|abaixa)\b",
     r"\bela\s+",
     r"\b(?:eu\s+)?(?:arregalo|sorrio|rio|dou um passo|caminho|seguro|ajeito|observo|olho|recuo|respiro|inclino|aproximo|afasto|encosto|mantenho|viro|cruzo|descruzo|levanto|abaixo|mordo|lambo|chupo|beijo)\b",
     r"\b(?:meus?|minhas?)\s+(?:olhos|mãos|lábios|pernas|braços|dedos)\b",
@@ -188,19 +188,24 @@ def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> Pilot
     pending_target = state.pending_next_beat_id if state.pending_next_beat_id else normal_target
     signal = detect_organic_signal(user_text, updated.facts)
 
-    if signal is not None and updated.interstitial_turns < 2:
+    # Apenas fatos pessoais e desafios relacionados suspendem o avanço. Uma pergunta
+    # direta comum deve ser respondida enquanto o roteiro avança para o próximo beat.
+    should_pause_for_signal = signal is not None and signal.kind in {
+        "fact_acknowledgement",
+        "related_challenge",
+    }
+    if should_pause_for_signal and updated.interstitial_turns < 2:
         updated.facts = signal.facts
         updated.pending_next_beat_id = pending_target
         updated.interstitial_turns += 1
         next_beat = script.beats.get(pending_target)
-        next_fallback = _fallback_for_beat(pending_target, next_beat) if next_beat else ""
         prompt = _build_organic_prompt(
             script=script,
             state=updated,
             user_text=user_text,
             signal_kind=signal.kind,
             signal_instruction=signal.instruction,
-            next_fallback=next_fallback,
+            next_intention=_beat_intention(next_beat),
         )
         return PilotTurn(
             engagement=engagement,
@@ -226,7 +231,16 @@ def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> Pilot
 
     updated.node_id = target_id
     fallback = _fallback_for_beat(target_id, beat)
-    prompt = _build_prompt(script, beat, updated, engagement, user_text, fallback)
+    organic_instruction = signal.instruction if signal is not None else ""
+    prompt = _build_prompt(
+        script,
+        beat,
+        updated,
+        engagement,
+        user_text,
+        fallback,
+        organic_instruction=organic_instruction,
+    )
     terminal = str(beat.get("terminal_transition", "") or "")
     if terminal:
         ending = script.endings[terminal]
@@ -285,6 +299,25 @@ def _ending_turn(
     )
 
 
+def _beat_intention(beat: dict[str, Any] | None) -> str:
+    if not beat:
+        return ""
+    objective = str(beat.get("objective", "") or "").strip()
+    if objective:
+        return objective
+    units = beat.get("units") or []
+    for item in units:
+        if not isinstance(item, dict):
+            continue
+        instruction = str(item.get("instruction", "") or "").strip()
+        if instruction:
+            return instruction
+        must_convey = item.get("must_convey") or []
+        if isinstance(must_convey, list) and must_convey:
+            return "; ".join(str(value) for value in must_convey if str(value).strip())
+    return "Avançar para o próximo movimento sem antecipar sua fala canônica."
+
+
 def _build_organic_prompt(
     *,
     script: PilotScript,
@@ -292,18 +325,18 @@ def _build_organic_prompt(
     user_text: str,
     signal_kind: str,
     signal_instruction: str,
-    next_fallback: str,
+    next_intention: str,
 ) -> str:
     bridge = (
-        f"PRÓXIMA FALA OBRIGATÓRIA, APENAS SE COUBER NATURALMENTE NESTA RESPOSTA: {next_fallback}"
-        if next_fallback
+        "PRÓXIMO MOVIMENTO, APENAS COMO CONTEXTO: "
+        f"{next_intention}\nNão execute nem recite a fala do próximo movimento nesta resposta."
+        if next_intention
         else "Não antecipe outro movimento nesta resposta."
     )
     return (
         "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
         "Este é um TURNO ORGÂNICO INTERMEDIÁRIO. A prioridade é mostrar que Mary ouviu e entendeu o usuário.\n"
-        "Não recite mecanicamente a próxima fala do roteiro. Reaja primeiro ao conteúdo novo.\n"
-        "Você pode fazer uma ponte curta para o próximo movimento somente quando ela soar espontânea.\n"
+        "Não recite mecanicamente a próxima fala do roteiro. Reaja somente ao conteúdo novo.\n"
         "Não narre ações do usuário nem use terceira pessoa, rubricas ou asteriscos.\n\n"
         f"TIPO DE CONTRIBUIÇÃO: {signal_kind}\n"
         f"INSTRUÇÃO DE REAÇÃO: {signal_instruction}\n"
@@ -320,6 +353,8 @@ def _build_prompt(
     engagement: Engagement,
     user_text: str,
     fallback: str,
+    *,
+    organic_instruction: str = "",
 ) -> str:
     units = beat.get("units") or []
     unit_text = "\n".join(
@@ -327,6 +362,11 @@ def _build_prompt(
         f"{item.get('text') or item.get('anchor') or item.get('instruction') or '; '.join(item.get('must_convey', []))}"
         for item in units
         if isinstance(item, dict) and item.get("kind") != "wait_user"
+    )
+    organic_context = (
+        f"\nREAÇÃO ORGÂNICA NECESSÁRIA: {organic_instruction}\n"
+        if organic_instruction
+        else ""
     )
     return (
         "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
@@ -336,6 +376,7 @@ def _build_prompt(
         "- Não use terceira pessoa, rubricas, asteriscos ou parênteses de ação.\n"
         "- onomatopeia é permitida quando surgir naturalmente na fala.\n"
         "- Não invente ações, pensamentos, endereço, profissão ou passado do usuário.\n"
+        "- Mary pode expressar apenas o próprio pensamento interno quando o formato opcional permitir.\n"
         "- Siga o movimento atual com máxima fidelidade e não crie outra trama.\n"
         "- Preserve semanticamente a fala canônica, mas adapte ritmo e ligação ao que o usuário disse.\n"
         "- Use fatos confirmados pelo usuário quando forem relevantes.\n"
@@ -344,7 +385,8 @@ def _build_prompt(
         f"OBJETIVO ATUAL: {beat.get('objective', '')}\n"
         f"ENGAJAMENTO DETECTADO: {engagement}\n"
         f"FATOS CONFIRMADOS: {render_facts(state.facts)}\n"
-        f"RESPOSTA DO USUÁRIO: {user_text}\n\n"
+        f"RESPOSTA DO USUÁRIO: {user_text}\n"
+        f"{organic_context}\n"
         f"UNIDADES DO MOVIMENTO:\n{unit_text}\n\n"
         f"REFERÊNCIA DE VOZ SEM NARRAÇÃO: {fallback}"
     )
