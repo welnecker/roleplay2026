@@ -19,6 +19,29 @@ class PresentedDialogue:
     speech: str
 
 
+def with_optional_thought_guidance(system_prompt: str) -> str:
+    """Acrescenta subtexto opcional sem transformar pensamento em beat obrigatório."""
+
+    return (
+        f"{system_prompt.rstrip()}\n\n"
+        "SUBTEXTO INTERNO OPCIONAL:\n"
+        "- Quando houver desejo, expectativa, dúvida, humor, incômodo, medo, ciúme, culpa, "
+        "curiosidade ou algo que Mary queira revelar apenas indiretamente, você pode abrir a resposta "
+        "com um pensamento curto em primeira pessoa.\n"
+        "- Não inclua pensamento em toda resposta. Use somente quando ele acrescentar uma camada emocional real.\n"
+        "- O pensamento pode orientar veladamente o usuário sobre o que Mary espera, teme ou deseja, "
+        "mas não pode dar uma instrução explícita ao usuário.\n"
+        "- O pensamento não descreve ações, postura, rosto, mãos, corpo ou cenário.\n"
+        "- Depois do pensamento, escreva a fala de Mary normalmente, em um ou mais parágrafos curtos.\n"
+        "- Quando usar pensamento, empregue exatamente este formato:\n"
+        "[PENSAMENTO]\n"
+        "pensamento curto de Mary em primeira pessoa\n"
+        "[/PENSAMENTO]\n\n"
+        "fala direta de Mary\n"
+        "- Não escreva os marcadores quando não houver pensamento."
+    )
+
+
 def split_dialogue(content: str) -> PresentedDialogue:
     """Separa pensamento estruturado da fala, preservando mensagens antigas."""
 
