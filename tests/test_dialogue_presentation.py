@@ -35,6 +35,36 @@ def test_renderizacao_cria_tarja_e_paragrafos() -> None:
     assert html.count("<p>") == 3
 
 
+def test_pensamento_entre_aspas_ainda_cria_tarja() -> None:
+    html = render_dialogue_html(
+        "assistant",
+        '"[PENSAMENTO]\nPreciso ser discreta.\n[/PENSAMENTO]\n\nJá levo a cerveja."',
+    )
+
+    assert "mary-thought" in html
+    assert "Preciso ser discreta" in html
+    assert "Já levo a cerveja" in html
+
+
+def test_pensamento_em_cerca_markdown_ainda_cria_tarja() -> None:
+    html = render_dialogue_html(
+        "assistant",
+        "```text\n[PENSAMENTO]\nPreciso ser discreta.\n[/PENSAMENTO]\n\nJá levo a cerveja.\n```",
+    )
+
+    assert "mary-thought" in html
+    assert "Preciso ser discreta" in html
+
+
+def test_bom_antes_do_marcador_nao_quebra_tarja() -> None:
+    dialogue = split_dialogue(
+        "\ufeff[PENSAMENTO]\nPreciso ser discreta.\n[/PENSAMENTO]\n\nJá levo a cerveja."
+    )
+
+    assert dialogue.thought == "Preciso ser discreta."
+    assert dialogue.speech == "Já levo a cerveja."
+
+
 def test_renderizacao_escapa_html_do_usuario() -> None:
     html = render_dialogue_html("user", "<script>alert('x')</script>")
 
