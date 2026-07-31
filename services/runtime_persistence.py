@@ -35,7 +35,6 @@ class RuntimePersistenceContext:
 
     @property
     def save(self) -> RuntimeRunView:
-        """Compatibilidade temporária para telas que ainda exibem o antigo save."""
         return RuntimeRunView(
             save_id=self.run.run_id if self.run is not None else "aguardando_primeira_mensagem",
             package_id=self.package_id,
@@ -118,19 +117,12 @@ def open_persistent_runtime(
     return context, _state_from_messages(messages), messages
 
 
-def persist_turn(
+def _ensure_run_and_session(
     repository: GoogleSheetsV2RuntimeRepository,
     *,
     context: RuntimePersistenceContext,
     user: AuthenticatedUser,
-    state: StoryState,
-    user_text: str,
-    assistant_text: str,
-    assistant_metadata: dict[str, object],
-    sequence_start: int | None = None,
-) -> RuntimePersistenceContext:
-    del sequence_start  # Compatibilidade: a sequência agora pertence à run, não à tela/sessão.
-
+) -> tuple[StoryRun, RuntimeSession]:
     run = context.run
     if run is None:
         run = start_v2_run_on_first_message(
@@ -153,6 +145,22 @@ def persist_turn(
             package_id=context.package_id,
             instance_id=context.instance_id or f"streamlit_{uuid4().hex}",
         )
+    return run, session
+
+
+def persist_turn(
+    repository: GoogleSheetsV2RuntimeRepository,
+    *,
+    context: RuntimePersistenceContext,
+    user: AuthenticatedUser,
+    state: StoryState,
+    user_text: str,
+    assistant_text: str,
+    assistant_metadata: dict[str, object],
+    sequence_start: int | None = None,
+) -> RuntimePersistenceContext:
+    del sequence_start
+    run, session = _ensure_run_and_session(repository, context=context, user=user)
 
     block_id = str(
         assistant_metadata.get("screenplay_route")
@@ -211,11 +219,7 @@ def persist_turn(
             ending_code=ending_code,
         )
     else:
-        run = repository.update_run_progress(
-            run=run,
-            block_id=block_id,
-            beat_id=beat_id,
-        )
+        run = repository.update_run_progress(run=run, block_id=block_id, beat_id=beat_id)
 
     return RuntimePersistenceContext(
         package_id=context.package_id,
@@ -224,4 +228,55 @@ def persist_turn(
         session=session,
         instance_id=context.instance_id,
         next_sequence=persisted_sequence + 2,
+    )
+
+
+def persist_assistant_message(
+    repository: GoogleSheetsV2RuntimeRepository,
+    *,
+    context: RuntimePersistenceContext,
+    user: AuthenticatedUser,
+    state: StoryState,
+    assistant_text: str,
+    assistant_metadata: dict[str, object],
+) -> RuntimePersistenceContext:
+    """Registra uma ponte automática de Mary sem inventar uma fala do usuário."""
+
+    run, session = _ensure_run_and_session(repository, context=context, user=user)
+    block_id = str(
+        assistant_metadata.get("screenplay_route")
+        or assistant_metadata.get("pilot_node")
+        or run.current_block_id
+    )
+    beat_id = str(
+        assistant_metadata.get("screenplay_beat")
+        or assistant_metadata.get("pilot_node")
+        or run.current_beat_id
+    )
+    persisted_metadata = dict(assistant_metadata)
+    persisted_metadata["_story_state"] = serialize_story_state(state)
+    persisted_metadata["automatic_bridge"] = True
+
+    sequence = max(1, int(context.next_sequence or 1))
+    repository.append_interaction(
+        run_id=run.run_id,
+        session_id=session.session_id,
+        user_id=user.user_id,
+        package_id=context.package_id,
+        role="assistant",
+        speaker_id="mary",
+        content=assistant_text,
+        sequence=sequence,
+        block_id=block_id,
+        beat_id=beat_id,
+        metadata=persisted_metadata,
+    )
+    run = repository.update_run_progress(run=run, block_id=block_id, beat_id=beat_id)
+    return RuntimePersistenceContext(
+        package_id=context.package_id,
+        package_version=context.package_version,
+        run=run,
+        session=session,
+        instance_id=context.instance_id,
+        next_sequence=sequence + 1,
     )

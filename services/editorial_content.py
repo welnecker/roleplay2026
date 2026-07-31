@@ -11,13 +11,13 @@ from persistence.editorial import GoogleSheetsEditorialRepository
 from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 import services.pilot_supermarket as pilot_supermarket_module
-from services.private_thought_pilot import (
-    apply_private_thought_overrides,
-    clean_private_model_response,
-    decide_private_thought_turn,
-    prepare_private_thought_script,
-)
 from services.pilot_supermarket import PilotScript
+from services.supermarket_script_v2 import (
+    apply_supermarket_script_v2_overrides,
+    clean_supermarket_script_v2_response,
+    decide_supermarket_script_v2_turn,
+    prepare_supermarket_script_v2,
+)
 
 
 PACKAGE_ID = "roleplay2026.casada_frustrada"
@@ -37,18 +37,13 @@ _FREE_TEXT_PATTERN = re.compile(
 )
 
 # A página importa estas funções do módulo original depois de importar este módulo.
-# As substituições mantêm um único player e adicionam as correções incrementais.
-pilot_supermarket_module.decide_turn = decide_private_thought_turn
-pilot_supermarket_module.clean_model_response = clean_private_model_response
+# As substituições mantêm um único player e ativam a versão jogável do roteiro.
+pilot_supermarket_module.decide_turn = decide_supermarket_script_v2_turn
+pilot_supermarket_module.clean_model_response = clean_supermarket_script_v2_response
 
 
 def _protect_editorial_plain_scalars(text: str) -> str:
-    """Protege textos livres que podem conter dois-pontos e aspas.
-
-    O roteiro é produzido para leitura humana e usa escalares simples. Falas como
-    ``Vou mandar mensagem: Oi`` são ambíguas para YAML. Antes do parse, esses
-    campos são convertidos para strings JSON, que também são escalares YAML válidos.
-    """
+    """Protege textos livres que podem conter dois-pontos e aspas."""
 
     protected: list[str] = []
     for line in text.splitlines():
@@ -103,7 +98,7 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
 
     repository.ensure_schema()
     raw = load_editorial_yaml_text(EDITORIAL_PATH.read_text(encoding="utf-8"))
-    publish_editorial_document(repository, apply_private_thought_overrides(raw))
+    publish_editorial_document(repository, apply_supermarket_script_v2_overrides(raw))
     _EDITORIAL_READY = True
     return repository
 
@@ -111,7 +106,7 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
 def load_editorial_pilot(secrets: Any) -> PilotScript:
     repository = ensure_editorial_pilot(secrets)
     script = PilotScript(repository.load_pilot_raw(PACKAGE_ID))
-    return prepare_private_thought_script(script)
+    return prepare_supermarket_script_v2(script)
 
 
 def load_editorial_story_start(secrets: Any, package_id: str) -> tuple[str, str, str] | None:
