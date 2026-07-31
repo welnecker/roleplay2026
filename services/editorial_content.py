@@ -6,13 +6,14 @@ from typing import Any
 import yaml
 
 from persistence.editorial import GoogleSheetsEditorialRepository
+from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from services.pilot_supermarket import PilotScript
 
 
 PACKAGE_ID = "roleplay2026.casada_frustrada"
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "installed_stories" / "casada_frustrada"
-PILOT_PATH = PACKAGE_ROOT / "dialogue_pilot.yaml"
+EDITORIAL_PATH = PACKAGE_ROOT / "editorial_story.yaml"
 _EDITORIAL_REPOSITORY: GoogleSheetsEditorialRepository | None = None
 _EDITORIAL_READY = False
 
@@ -34,7 +35,7 @@ def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
 
 
 def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
-    """Cria o schema e publica o roteiro local somente na primeira inicialização."""
+    """Garante o schema e publica a versão editorial somente quando necessário."""
 
     global _EDITORIAL_READY
     repository = build_editorial_repository(secrets)
@@ -42,15 +43,10 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
         return repository
 
     repository.ensure_schema()
-    if repository.get_story(PACKAGE_ID) is None:
-        raw = yaml.safe_load(PILOT_PATH.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError("dialogue_pilot.yaml inválido.")
-        repository.seed_pilot(
-            package_id=PACKAGE_ID,
-            title="Casada frustrada",
-            raw=raw,
-        )
+    raw = yaml.safe_load(EDITORIAL_PATH.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("editorial_story.yaml inválido.")
+    publish_editorial_document(repository, raw)
     _EDITORIAL_READY = True
     return repository
 
