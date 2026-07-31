@@ -11,6 +11,7 @@ from persistence.editorial import GoogleSheetsEditorialRepository
 from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 import services.pilot_supermarket as pilot_supermarket_module
+from services.editorial_compiler import compile_editorial_document
 from services.pilot_supermarket import PilotScript
 from services.supermarket_script_v2 import (
     clean_supermarket_script_v2_response,
@@ -99,10 +100,11 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
 
 
 def load_editorial_pilot(secrets: Any) -> PilotScript:
-    """Carrega o piloto diretamente da fonte; a planilha não participa do turno."""
+    """Carrega o piloto da fonte e adapta somente sua estrutura ao motor."""
 
     ensure_editorial_pilot(secrets)
-    return prepare_supermarket_script_v2(PilotScript(load_source_document()))
+    compiled = compile_editorial_document(load_source_document())
+    return prepare_supermarket_script_v2(PilotScript(compiled))
 
 
 def load_editorial_story_start(secrets: Any, package_id: str) -> tuple[str, str, str] | None:
