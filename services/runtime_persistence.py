@@ -31,6 +31,7 @@ class RuntimePersistenceContext:
     run: StoryRun | None = None
     session: RuntimeSession | None = None
     instance_id: str = ""
+    next_sequence: int = 1
 
     @property
     def save(self) -> RuntimeRunView:
@@ -72,6 +73,15 @@ def _state_from_messages(messages: list[dict[str, object]]) -> StoryState:
     )
 
 
+def _next_sequence_from_messages(messages: list[dict[str, object]]) -> int:
+    sequences = [
+        int(item.get("sequence", 0) or 0)
+        for item in messages
+        if int(item.get("sequence", 0) or 0) > 0
+    ]
+    return max(sequences, default=0) + 1
+
+
 def open_persistent_runtime(
     repository: GoogleSheetsV2RuntimeRepository,
     *,
@@ -103,6 +113,7 @@ def open_persistent_runtime(
         run=run,
         session=session,
         instance_id=resolved_instance,
+        next_sequence=_next_sequence_from_messages(messages),
     )
     return context, _state_from_messages(messages), messages
 
@@ -116,8 +127,10 @@ def persist_turn(
     user_text: str,
     assistant_text: str,
     assistant_metadata: dict[str, object],
-    sequence_start: int,
+    sequence_start: int | None = None,
 ) -> RuntimePersistenceContext:
+    del sequence_start  # Compatibilidade: a sequência agora pertence à run, não à tela/sessão.
+
     run = context.run
     if run is None:
         run = start_v2_run_on_first_message(
@@ -154,6 +167,7 @@ def persist_turn(
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)
 
+    persisted_sequence = max(1, int(context.next_sequence or 1))
     repository.append_interaction(
         run_id=run.run_id,
         session_id=session.session_id,
@@ -162,7 +176,7 @@ def persist_turn(
         role="user",
         speaker_id="user",
         content=user_text,
-        sequence=sequence_start,
+        sequence=persisted_sequence,
         block_id=block_id,
         beat_id=beat_id,
     )
@@ -174,7 +188,7 @@ def persist_turn(
         role="assistant",
         speaker_id="mary",
         content=assistant_text,
-        sequence=sequence_start + 1,
+        sequence=persisted_sequence + 1,
         block_id=block_id,
         beat_id=beat_id,
         metadata=persisted_metadata,
@@ -209,4 +223,5 @@ def persist_turn(
         run=run,
         session=session,
         instance_id=context.instance_id,
+        next_sequence=persisted_sequence + 2,
     )
