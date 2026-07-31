@@ -145,14 +145,18 @@ def prepare_supermarket_script(script: PilotScript) -> PilotScript:
 
 def classify_supermarket_intent(current_beat_id: str, text: str) -> UserIntent:
     value = " ".join(str(text or "").casefold().split())
-    if "?" in value:
-        return "question"
+
+    # Conteúdo semântico tem prioridade sobre pontuação. Frases naturais como
+    # "Claro? vou te esperar" podem carregar uma interrogação de hesitação, mas
+    # ainda confirmam o pedido feito por Mary.
     if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in _POSTPONE_PATTERNS):
         return "postpone"
     if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in _REFUSE_PATTERNS):
         return "refuse"
     if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in _ACCEPT_PATTERNS):
         return "accept"
+    if "?" in value:
+        return "question"
     if current_beat_id == "reencontro_fila_007":
         return "unclear"
     return "accept"

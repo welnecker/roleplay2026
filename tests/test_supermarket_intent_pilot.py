@@ -84,6 +84,20 @@ def test_aceite_explicito_avanca_para_caminho_do_carro() -> None:
     assert turn.state.facts["_scene_location"] == "estacionamento_caminho"
 
 
+def test_aceite_com_interrogacao_nao_repete_o_pedido() -> None:
+    turn = decide_supermarket_turn(
+        _script(),
+        PilotState(node_id="reencontro_fila_007"),
+        "Claro? vou te esperar na portaria..",
+    )
+
+    assert turn.target_id == "reencontro_fila_008"
+    assert turn.state.facts["_last_user_intent"] == "accept"
+    assert turn.state.facts["help_to_car"] == "accepted"
+    assert turn.state.facts["_scene_location"] == "estacionamento_caminho"
+    assert "consegue me esperar" not in turn.visible_fallback.casefold()
+
+
 def test_recusa_e_respeitada_sem_presumir_deslocamento() -> None:
     turn = decide_supermarket_turn(
         _script(),
@@ -127,6 +141,7 @@ def test_resposta_vaga_pede_confirmacao() -> None:
 
 def test_classificador_separa_engajamento_de_intencao() -> None:
     assert classify_supermarket_intent("reencontro_fila_007", "Claro, eu ajudo") == "accept"
+    assert classify_supermarket_intent("reencontro_fila_007", "Claro? vou te esperar na portaria") == "accept"
     assert classify_supermarket_intent("reencontro_fila_007", "Não consigo ajudar") == "refuse"
     assert classify_supermarket_intent("reencontro_fila_007", "Agora não, talvez depois") == "postpone"
     assert classify_supermarket_intent("reencontro_fila_007", "Onde está seu carro?") == "question"
