@@ -23,7 +23,7 @@ from services.runtime_persistence import (
     open_persistent_runtime,
     persist_turn,
 )
-from ui_components import inject_theme
+from ui_components import CARD_CSS
 
 
 PACKAGE_ID = "roleplay2026.casada_frustrada"
@@ -32,7 +32,7 @@ PAYMENT_QUOTA_WINDOW_SECONDS = 65.0
 END_CONFIRMATION_KEY = f"confirm_end:{PACKAGE_ID}"
 
 st.set_page_config(page_title="Casada frustrada — piloto", page_icon="🛒", layout="centered")
-inject_theme()
+st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 
 @st.cache_resource(show_spinner=False)
