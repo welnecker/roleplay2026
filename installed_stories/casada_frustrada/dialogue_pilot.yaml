@@ -354,9 +354,9 @@ scene:
         interest: 0
         desire: 0
       visible_delivery:
-        kind: action_dialogue
+        kind: dialogue
         delivery: fixed
-        text: "O interesse no rosto de Mary desaparece. — Deixa pra lá."
+        text: "Deixa pra lá. Perdi a vontade de continuar essa conversa."
       event:
         type: END_RUN
         code: mary_lost_interest
@@ -368,9 +368,9 @@ scene:
         interest: 0
         desire: 0
       visible_delivery:
-        kind: action_dialogue
+        kind: dialogue
         delivery: fixed
-        text: "Mary solta uma risada sem humor e segura o carrinho. — Não, obrigada."
+        text: "Não, obrigada. Perdi o interesse."
       event:
         type: END_RUN
         code: user_mocking
@@ -382,9 +382,9 @@ scene:
         interest: 0
         desire: 0
       visible_delivery:
-        kind: action_dialogue
+        kind: dialogue
         delivery: fixed
-        text: "Mary recua, encerra a conversa e segue para outro corredor sem olhar para trás."
+        text: "Chega. Não quero mais falar com você."
       event:
         type: END_RUN
         code: user_hostile
