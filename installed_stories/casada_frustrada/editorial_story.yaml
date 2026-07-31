@@ -262,7 +262,7 @@ blocks:
     order: 7
     type: dialogue
     required_movement: Mary deve interpretar e incluir o conteúdo essencial da fala canônica.
-    canonical_line: Você me espera? Acho que preciso de ajuda até o carro.
+    canonical_line: Você me espera, depois que passar? Comprei tanta coisa que vou precisar de ajuda até o carro.
     dramatic_direction: Dar vida interpretativa à fala, reagindo ao usuário sem retirar seu conteúdo essencial.
     next_beat_id: reencontro_fila_008
     max_questions: 1
