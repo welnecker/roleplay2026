@@ -17,6 +17,43 @@ from services.supermarket_intent_pilot import classify_supermarket_intent
 _AUTOMATIC_FOLLOWUPS: dict[str, tuple[dict[str, str], ...]] = {}
 
 
+def _humanize_scene_location(value: str) -> str:
+    """Converte o identificador técnico de local em legenda visível neutra."""
+
+    words = [part for part in value.strip().split("_") if part]
+    if not words:
+        return ""
+    return " ".join(words).capitalize()
+
+
+def _transition_metadata(item: dict[str, Any]) -> tuple[str, str]:
+    """Lê tempo e local formais da ponte, com fallback editorial seguro."""
+
+    raw_transition = item.get("transition")
+    transition = raw_transition if isinstance(raw_transition, dict) else {}
+    time_label = str(transition.get("time", "") or "").strip()
+    location_label = str(transition.get("location", "") or "").strip()
+    scene_location = str(item.get("scene_location", "") or "").strip()
+
+    if not time_label:
+        time_label = "Algum tempo depois"
+    if not location_label:
+        location_label = _humanize_scene_location(scene_location)
+    return time_label, location_label
+
+
+def render_automatic_followup_text(followup: dict[str, str]) -> str:
+    """Produz a mensagem persistida com transição de tempo/local antes da fala."""
+
+    text = str(followup.get("text", "") or "").strip()
+    time_label = str(followup.get("transition_time", "") or "").strip()
+    location_label = str(followup.get("transition_location", "") or "").strip()
+    heading = " — ".join(part for part in (time_label, location_label) if part)
+    if not heading:
+        return text
+    return f"[{heading.upper()}]\n\n{text}"
+
+
 def _register_automatic_followups(script: PilotScript) -> None:
     """Indexa somente a mecânica declarada na fonte editorial."""
 
@@ -33,16 +70,19 @@ def _register_automatic_followups(script: PilotScript) -> None:
                 if not isinstance(item, dict):
                     continue
                 target_id = str(item.get("target_id", "")).strip()
-                text = str(item.get("text", "")).strip()
-                if not target_id or not text:
+                raw_text = str(item.get("text", "")).strip()
+                if not target_id or not raw_text:
                     raise ValueError(f"Ponte automática inválida no beat {beat_id!r}.")
-                followups.append(
-                    {
-                        "target_id": target_id,
-                        "text": text,
-                        "scene_location": str(item.get("scene_location", "")).strip(),
-                    }
-                )
+                time_label, location_label = _transition_metadata(item)
+                followup = {
+                    "target_id": target_id,
+                    "text": raw_text,
+                    "scene_location": str(item.get("scene_location", "")).strip(),
+                    "transition_time": time_label,
+                    "transition_location": location_label,
+                }
+                followup["text"] = render_automatic_followup_text(followup)
+                followups.append(followup)
             if followups:
                 registered[beat_id] = tuple(followups)
     _AUTOMATIC_FOLLOWUPS.clear()
