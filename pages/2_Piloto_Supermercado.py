@@ -27,7 +27,12 @@ from services.pilot_supermarket import (
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
+    persist_assistant_message,
     persist_turn,
+)
+from services.supermarket_script_v2 import (
+    automatic_followups_after,
+    state_after_automatic_followup,
 )
 from ui_components import CARD_CSS
 
@@ -79,12 +84,7 @@ def ensure_runtime(
     *,
     package_version: str,
     restart: bool = False,
-) -> tuple[
-    RuntimePersistenceContext,
-    StoryState,
-    list[dict[str, object]],
-    PilotState,
-]:
+) -> tuple[RuntimePersistenceContext, StoryState, list[dict[str, object]], PilotState]:
     context_key, story_key, messages_key, pilot_key = session_keys(user.user_id)
     if restart:
         for key in (context_key, story_key, messages_key, pilot_key):
@@ -133,15 +133,10 @@ def prepare_after_payment(user: AuthenticatedUser) -> bool:
     created_at = float(handoff.get("created_at", 0.0) or 0.0)
     remaining = PAYMENT_QUOTA_WINDOW_SECONDS - max(0.0, time.time() - created_at)
     if remaining > 0:
-        with st.status("Preparando sua história...", expanded=True) as processing_status:
-            processing_status.write("Organizando sua nova execução. Isso pode levar alguns instantes.")
+        with st.status("Preparando sua história...", expanded=True) as status:
+            status.write("Organizando sua nova execução. Isso pode levar alguns instantes.")
             time.sleep(remaining)
-            processing_status.update(
-                label="Abrindo a história...",
-                state="complete",
-                expanded=False,
-            )
-
+            status.update(label="Abrindo a história...", state="complete", expanded=False)
     st.session_state.pop("payment_access_ready", None)
     return True
 
@@ -186,7 +181,6 @@ def end_story_and_return(user: AuthenticatedUser) -> None:
         log_exception("terminate_paid_access", exc, user_id=user.user_id, package_id=PACKAGE_ID)
         st.error(f"Não foi possível encerrar a história: {exc}")
         return
-
     clear_session(user)
     st.session_state.started_packages.discard(PACKAGE_ID)
     st.session_state.pop("payment_access_ready", None)
@@ -198,6 +192,27 @@ def end_story_and_return(user: AuthenticatedUser) -> None:
 
 def render_message(role: str, content: str) -> None:
     st.markdown(render_dialogue_html(role, content), unsafe_allow_html=True)
+
+
+def advance_story_state(state: StoryState, *, finished: bool = False) -> StoryState:
+    updated = state.copy()
+    updated.step_index += 1
+    updated.consumed_orders.append(updated.step_index)
+    updated.finished = finished
+    return updated
+
+
+def bridge_metadata(node_id: str, pilot_state: PilotState) -> dict[str, object]:
+    return {
+        "pilot": True,
+        "pilot_node": node_id,
+        "pilot_engagement": "automatic_bridge",
+        "pilot_state": pilot_state.to_dict(),
+        "pilot_end_event": "",
+        "pilot_run_status": "active",
+        "pilot_ending_code": "",
+        "automatic_bridge": True,
+    }
 
 
 user = authenticated_user()
@@ -247,7 +262,6 @@ with st.sidebar:
     st.write(f"Desejo: `{pilot_state.desire}`")
     st.write(f"Paciência: `{pilot_state.patience}`")
     st.write(f"Etapa: `{pilot_state.node_id}`")
-
     if st.button("Retornar aos cards", use_container_width=True):
         return_to_library()
 
@@ -256,7 +270,6 @@ with st.sidebar:
         if st.button("Encerrar história", use_container_width=True):
             st.session_state[END_CONFIRMATION_KEY] = True
             st.rerun()
-
     if not pilot_state.finished and confirming_end:
         st.warning("Encerrar irá gerar a necessidade de um novo pagamento. Continuar?")
         confirm_column, cancel_column = st.columns(2)
@@ -273,18 +286,11 @@ st.caption("Bloco piloto: primeiro contato no supermercado")
 
 if not messages:
     render_message("assistant", opening_text(script))
-
 for message in messages:
-    render_message(
-        str(message.get("role", "assistant")),
-        str(message.get("content", "")),
-    )
+    render_message(str(message.get("role", "assistant")), str(message.get("content", "")))
 
 if pilot_state.finished or story_state.finished:
-    if pilot_state.run_status == "completed":
-        st.success("Cena concluída.")
-    else:
-        st.info("Mary encerrou a interação.")
+    st.success("Cena concluída.") if pilot_state.run_status == "completed" else st.info("Mary encerrou a interação.")
     st.caption("A última fala foi registrada. Esta execução não aceita novas mensagens.")
     if st.button("Voltar à biblioteca", type="primary", use_container_width=True):
         return_to_library()
@@ -315,7 +321,8 @@ system_prompt = with_optional_thought_guidance(turn.system_prompt)
 raw_model_response = ""
 cleaned_response = turn.visible_fallback
 generation_error = ""
-if api_key:
+force_fixed = turn.state.facts.get("_force_fixed_response") == "true"
+if api_key and not force_fixed:
     history = [
         {"role": str(item.get("role", "assistant")), "content": str(item.get("content", ""))}
         for item in messages[-12:]
@@ -351,7 +358,7 @@ guarded = finalize_model_response(
     fallback=turn.visible_fallback,
     recent_assistant_messages=recent_assistant_messages,
 )
-assistant_text = guarded.response
+assistant_text = turn.visible_fallback if force_fixed else guarded.response
 
 diagnostics = build_turn_diagnostics(
     user_text=user_text,
@@ -361,17 +368,13 @@ diagnostics = build_turn_diagnostics(
     final_response=assistant_text,
     fallback=turn.visible_fallback,
     generation_error=generation_error,
-    guard_reason=guarded.guard_reason,
-    repeated_recent_anchor=guarded.repeated_recent_anchor,
+    guard_reason="fixed_script_bridge" if force_fixed else guarded.guard_reason,
+    repeated_recent_anchor=False if force_fixed else guarded.repeated_recent_anchor,
     system_prompt=system_prompt,
 )
 log_turn(diagnostics)
 
-updated_story_state = story_state.copy()
-updated_story_state.step_index += 1
-updated_story_state.consumed_orders.append(updated_story_state.step_index)
-updated_story_state.finished = turn.finished
-sequence_start = len(messages) + 1
+updated_story_state = advance_story_state(story_state, finished=turn.finished)
 metadata: dict[str, object] = {
     "pilot": True,
     "pilot_node": turn.target_id,
@@ -386,6 +389,7 @@ repository = runtime_repository()
 if repository is None:
     st.error("Google Sheets ficou indisponível durante a interação.")
     st.stop()
+
 try:
     updated_context = persist_turn(
         repository,
@@ -395,11 +399,34 @@ try:
         user_text=user_text,
         assistant_text=assistant_text,
         assistant_metadata=metadata,
-        sequence_start=sequence_start,
     )
+
+    messages.append({"role": "user", "content": user_text})
+    messages.append({"role": "assistant", "content": assistant_text, **metadata})
+    final_pilot_state = turn.state
+
+    for followup in automatic_followups_after(turn.target_id):
+        final_pilot_state = state_after_automatic_followup(final_pilot_state, followup)
+        updated_story_state = advance_story_state(updated_story_state)
+        followup_metadata = bridge_metadata(str(followup["target_id"]), final_pilot_state)
+        updated_context = persist_assistant_message(
+            repository,
+            context=updated_context,
+            user=user,
+            state=updated_story_state,
+            assistant_text=str(followup["text"]),
+            assistant_metadata=followup_metadata,
+        )
+        messages.append(
+            {
+                "role": "assistant",
+                "content": str(followup["text"]),
+                **followup_metadata,
+            }
+        )
 except Exception as exc:
     log_exception(
-        "persist_turn",
+        "persist_turn_or_bridge",
         exc,
         user_id=user.user_id,
         package_id=PACKAGE_ID,
@@ -410,11 +437,9 @@ except Exception as exc:
     st.error(f"Não foi possível registrar a interação: {exc}")
     st.stop()
 
-messages.append({"role": "user", "content": user_text})
-messages.append({"role": "assistant", "content": assistant_text, **metadata})
-save_session(user, updated_context, updated_story_state, messages, turn.state)
+save_session(user, updated_context, updated_story_state, messages, final_pilot_state)
 if generation_error:
     st.toast(f"OpenRouter indisponível; fala segura usada: {generation_error}")
-elif guarded.repeated_recent_anchor:
+elif not force_fixed and guarded.repeated_recent_anchor:
     st.toast("Uma repetição narrativa foi bloqueada e a fala do beat foi restaurada.")
 st.rerun()
