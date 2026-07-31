@@ -12,7 +12,7 @@ Engagement = Literal["engaged", "minimal", "dismissive", "mocking", "hostile", "
 
 @dataclass(slots=True)
 class PilotState:
-    node_id: str = "collision"
+    node_id: str = ""
     interest: int = 5
     desire: int = 3
     trust: int = 2
@@ -30,7 +30,7 @@ class PilotState:
         if not isinstance(raw, dict):
             return cls()
         return cls(
-            node_id=str(raw.get("node_id", "collision") or "collision"),
+            node_id=str(raw.get("node_id", "") or ""),
             interest=int(raw.get("interest", 5) or 0),
             desire=int(raw.get("desire", 3) or 0),
             trust=int(raw.get("trust", 2) or 0),
@@ -68,6 +68,10 @@ class PilotScript:
             for item in self.scene.get("endings", [])
             if isinstance(item, dict) and item.get("ending_id")
         }
+        if not self.beats:
+            raise ValueError("O roteiro editorial não contém beats ativos.")
+        configured_first = str(self.scene.get("first_beat_id", "") or "").strip()
+        self.first_beat_id = configured_first if configured_first in self.beats else next(iter(self.beats))
         self.engagement_policy = raw.get("engagement_policy") or {}
 
     @classmethod
@@ -96,7 +100,6 @@ _MOCKING_MARKERS = {
     "faz sua fala", "diz sua fala",
 }
 
-# Não basta estar em primeira pessoa: Mary não deve descrever movimentos ou expressões.
 _FORBIDDEN_NARRATION = (
     r"\bMary\b",
     r"\bela\s+",
@@ -131,7 +134,8 @@ def classify_user_message(text: str) -> Engagement:
 
 
 def opening_text(script: PilotScript) -> str:
-    return _fallback_for_beat("collision", script.beats["collision"])
+    beat_id = script.first_beat_id
+    return _fallback_for_beat(beat_id, script.beats[beat_id])
 
 
 def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> PilotTurn:
@@ -140,6 +144,8 @@ def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> Pilot
 
     engagement = classify_user_message(user_text)
     updated = PilotState.from_dict(state.to_dict())
+    current_id = state.node_id if state.node_id in script.beats else script.first_beat_id
+    updated.node_id = current_id
     updated.recent_engagement = (updated.recent_engagement + [engagement])[-4:]
     category = script.engagement_policy.get("categories", {}).get(engagement, {})
     updated.desire = max(0, updated.desire + int(category.get("desire_delta", 0) or 0))
@@ -151,16 +157,17 @@ def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> Pilot
     if engagement == "hostile":
         target_id = "end_hostile"
     elif engagement == "mocking":
-        target_id = "end_mocking"
+        target_id = "end_mocking" if "end_mocking" in script.endings else "end_hostile"
     elif updated.desire <= 0 or updated.patience <= 0 or repeated_bad:
-        target_id = "end_lost_interest"
+        target_id = "end_lost_interest" if "end_lost_interest" in script.endings else "end_hostile"
     else:
-        current = script.beats.get(state.node_id)
-        transitions = (current or {}).get("on_user") or {}
+        current = script.beats[current_id]
+        transitions = current.get("on_user") or {}
         target_id = str(
             transitions.get(engagement)
             or transitions.get("engaged")
-            or "end_lost_interest"
+            or current.get("terminal_transition")
+            or ""
         )
 
     if target_id in script.endings:
@@ -168,7 +175,10 @@ def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> Pilot
 
     beat = script.beats.get(target_id)
     if beat is None:
-        return _ending_turn(script, updated, engagement, "end_lost_interest", user_text)
+        fallback_ending = "end_lost_interest" if "end_lost_interest" in script.endings else "end_hostile"
+        if fallback_ending in script.endings:
+            return _ending_turn(script, updated, engagement, fallback_ending, user_text)
+        raise KeyError(f"Transição aponta para beat inexistente: {target_id!r}")
 
     updated.node_id = target_id
     fallback = _fallback_for_beat(target_id, beat)
@@ -206,7 +216,9 @@ def _ending_turn(
     user_text: str,
 ) -> PilotTurn:
     ending = script.endings[ending_id]
-    fallback = _ENDING_FALLBACKS.get(ending_id, "Perdi a vontade. Deixa pra lá.")
+    safe_default = _ENDING_FALLBACKS.get(ending_id, "Perdi a vontade. Deixa pra lá.")
+    editorial_text = str((ending.get("visible_delivery") or {}).get("text", "")).strip()
+    fallback = clean_model_response(editorial_text, safe_default) if editorial_text else safe_default
     final_state = ending.get("mary_final_state") or {}
     state.interest = int(final_state.get("interest", state.interest))
     state.desire = int(final_state.get("desire", state.desire))
@@ -249,20 +261,16 @@ def _build_prompt(
         "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
         "A resposta deve soar como voz viva, não como prosa narrativa.\n\n"
         "FORMATO PERMITIDO:\n"
-        "- pensamento curto: 'Uau... que coincidência.'; 'Bom, vou terminar minhas compras.'\n"
-        "- fala direta: 'Você mora no Plaza?'\n"
-        "- onomatopeia integrada à fala: 'kkkkk', 'rsrsrs', 'smack!', 'chup!', 'ahhh!', 'hummm'.\n\n"
+        "- pensamento curto e fala direta;\n"
+        "- onomatopeias integradas à fala.\n\n"
         "REGRAS ABSOLUTAS:\n"
         "- Não narre ações, movimentos, gestos, expressões, postura ou contato visual.\n"
-        "- Não escreva: 'sorrio', 'rio', 'arregalo os olhos', 'dou um passo', 'seguro o carrinho', "
-        "'olho para você', 'digo sorrindo' ou equivalentes.\n"
-        "- Risos, beijos, gemidos e sons corporais devem aparecer como som, não como descrição.\n"
         "- Não use terceira pessoa, rubricas, asteriscos ou parênteses de ação.\n"
         "- Não invente ações, pensamentos, endereço, profissão ou passado do usuário.\n"
         "- Siga o movimento atual com máxima fidelidade e não crie outra trama.\n"
+        "- Preserve semanticamente a fala canônica.\n"
         "- O investimento emocional deve ser proporcional à participação do usuário.\n"
-        "- Não mencione roteiro, classificação, sistema, END_RUN ou JSON.\n"
-        "- Faça no máximo uma pergunta quando o movimento pedir pergunta.\n\n"
+        "- Não mencione roteiro, classificação, sistema, END_RUN ou JSON.\n\n"
         f"LOCAL: {script.scene.get('location', 'supermercado')}\n"
         f"OBJETIVO ATUAL: {beat.get('objective', '')}\n"
         f"ENGAJAMENTO DETECTADO: {engagement}\n"
@@ -299,4 +307,12 @@ def _fallback_for_beat(beat_id: str, beat: dict[str, Any]) -> str:
     }
     if beat_id in fixed:
         return fixed[beat_id]
+
+    units = beat.get("units") or []
+    for item in units:
+        if not isinstance(item, dict) or item.get("kind") == "wait_user":
+            continue
+        value = item.get("anchor") or item.get("text")
+        if value:
+            return str(value)
     return "Hummm... vou responder só ao que faz sentido agora."
