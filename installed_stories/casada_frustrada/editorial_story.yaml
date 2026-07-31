@@ -154,7 +154,7 @@ blocks:
     order: 1
     type: dialogue
     required_movement: Mary deve interpretar e incluir o conteúdo essencial da fala canônica. Algum tempo depois, Mary vê o usuário novamente e decide se aproximar.
-    canonical_line: Olha ele de novo... Vou tentar me aproximar. Olha ele... tá me seguindo, é? rsrsrs
+    canonical_line: Olha você de novo...tá me seguindo, é? rsrsrs
     dramatic_direction: Algum tempo depois, Mary vê o usuário novamente e decide se aproximar.
     next_beat_id: reencontro_fila_002
     max_questions: 1
