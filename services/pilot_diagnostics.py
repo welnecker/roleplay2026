@@ -74,6 +74,9 @@ def build_turn_diagnostics(
     resulting_node = str(getattr(resulting_state, "node_id", "") or "")
     resulting_pending = str(getattr(resulting_state, "pending_next_beat_id", "") or "")
     resulting_interstitial = int(getattr(resulting_state, "interstitial_turns", 0) or 0)
+    facts = dict(getattr(resulting_state, "facts", {}) or {})
+    user_intent = str(facts.get("_last_user_intent", "") or "")
+    scene_location = str(facts.get("_scene_location", "") or "")
     raw = str(raw_model_response or "")
     final = str(final_response or "")
     safe_fallback = str(fallback or "")
@@ -81,13 +84,19 @@ def build_turn_diagnostics(
     transition_reason = "normal_transition"
     if resulting_pending:
         transition_reason = "organic_interstitial"
+    elif str(getattr(turn, "ending_code", "")) == "supermarket_help_declined":
+        transition_reason = "respectful_refusal"
+    elif previous_node == resulting_node and user_intent in {"question", "postpone", "unclear"}:
+        transition_reason = "await_explicit_decision"
     elif bool(getattr(turn, "finished", False)):
         transition_reason = "ending"
     elif previous_pending:
         transition_reason = "resume_pending_beat"
+    elif user_intent == "accept" and facts.get("help_to_car") == "accepted":
+        transition_reason = "explicit_acceptance"
 
     return {
-        "diagnostic_version": 2,
+        "diagnostic_version": 3,
         "previous_node_id": previous_node,
         "target_id": str(getattr(turn, "target_id", "") or ""),
         "resulting_node_id": resulting_node,
@@ -96,11 +105,13 @@ def build_turn_diagnostics(
         "previous_interstitial_turns": previous_interstitial,
         "resulting_interstitial_turns": resulting_interstitial,
         "engagement": str(getattr(turn, "engagement", "") or ""),
+        "user_intent": user_intent,
+        "scene_location": scene_location,
         "transition_reason": transition_reason,
         "finished": bool(getattr(turn, "finished", False)),
         "run_status": str(getattr(turn, "run_status", "") or ""),
         "ending_code": str(getattr(turn, "ending_code", "") or ""),
-        "facts": dict(getattr(resulting_state, "facts", {}) or {}),
+        "facts": facts,
         "user_text": str(user_text or ""),
         "fallback_text": safe_fallback,
         "raw_model_response": raw,
