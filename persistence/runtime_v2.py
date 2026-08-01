@@ -121,10 +121,14 @@ class GoogleSheetsV2RuntimeRepository:
 
     def list_interactions(self, *, run_id: str, limit: int = 100) -> list[dict[str, object]]:
         requested_limit = max(1, min(int(limit), MAX_RECOVERED_INTERACTIONS))
-        rows = self.interactions.list_recent_interactions(
-            run_id=run_id,
-            limit=requested_limit,
-        )
+        rows = [
+            row
+            for row in self.interactions.table.records()
+            if str(row.get("run_id", "")).strip() == run_id
+        ]
+        rows.sort(key=lambda row: int(row.get("sequence", 0) or 0))
+        rows = rows[-requested_limit:]
+
         result: list[dict[str, object]] = []
         for row in rows:
             metadata: dict[str, object] = {}
@@ -146,7 +150,6 @@ class GoogleSheetsV2RuntimeRepository:
                     **metadata,
                 }
             )
-        result.sort(key=lambda item: int(item.get("sequence", 0) or 0))
         return result
 
     def update_run_progress(
