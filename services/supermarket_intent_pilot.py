@@ -85,6 +85,20 @@ def apply_supermarket_document_overrides(document: dict[str, Any]) -> dict[str, 
 
 
 def prepare_supermarket_script(script: PilotScript) -> PilotScript:
+    farewell = script.beats.get("encontro_acidental_004")
+    if farewell:
+        farewell["objective"] = (
+            "Mary encerra o primeiro contato de forma simpática, sem verbalizar "
+            "pensamentos íntimos nem antecipar interesse romântico."
+        )
+        for unit in farewell.get("units", []) or []:
+            if isinstance(unit, dict) and unit.get("kind") == "dialogue":
+                unit["anchor"] = "Tchauzinho..."
+                unit["instruction"] = (
+                    "Despedida breve e natural. Não incluir pensamento, carência ou "
+                    "comentário sobre a aparência do usuário."
+                )
+
     request = script.beats.get("reencontro_fila_007")
     if request:
         request["objective"] = (
