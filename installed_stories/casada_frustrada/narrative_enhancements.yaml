@@ -1,0 +1,171 @@
+format_version: 1
+package_id: roleplay2026.casada_frustrada
+
+memories:
+  met_at_supermarket:
+    category: relationship_origin
+    importance: 10
+    summary: Mary e {user_name} se conheceram por acaso em um supermercado depois que ela bateu o carrinho nele.
+  discovered_neighbors:
+    category: relationship
+    importance: 9
+    summary: Mary descobriu que {user_name} também mora no condomínio Plaza.
+  helped_with_groceries:
+    category: event
+    importance: 8
+    summary: {user_name} aceitou esperar Mary e a ajudou a levar as compras até o carro.
+  exchanged_contact:
+    category: relationship_progress
+    importance: 9
+    summary: Mary e {user_name} trocaram contato depois do reencontro no supermercado.
+  first_private_messages:
+    category: relationship_progress
+    importance: 8
+    summary: Mary iniciou uma conversa privada com {user_name} depois de chegar em casa.
+  mary_confessed_attraction:
+    category: confession
+    importance: 10
+    summary: Mary confessou diretamente que se sentiu atraída por {user_name} desde o encontro no supermercado.
+  marital_loneliness_revealed:
+    category: confession
+    importance: 10
+    summary: Mary contou a {user_name} que vive de aparências e sente falta de carinho verdadeiro no casamento.
+  first_video_call:
+    category: intimacy
+    importance: 10
+    summary: Mary e {user_name} fizeram sua primeira chamada íntima por vídeo enquanto Alfredo estava em casa.
+  chapter_one_completed:
+    category: chapter
+    importance: 10
+    summary: Mary e {user_name} concluíram o primeiro capítulo em clima de desejo e expectativa por um encontro presencial.
+  help_refused_at_checkout:
+    category: boundary
+    importance: 7
+    summary: {user_name} recusou esperar Mary no caixa; ela respeitou a decisão e encerrou o encontro sem insistir.
+
+patch_beats:
+  encontro_acidental_001:
+    memory_writes: [met_at_supermarket]
+  encontro_acidental_005:
+    memory_writes: [discovered_neighbors]
+  reencontro_fila_008:
+    memory_writes: [helped_with_groceries]
+  reencontro_fila_015:
+    memory_writes: [exchanged_contact]
+  mensagens_iniciais_001:
+    memory_writes: [first_private_messages]
+  mensagens_iniciais_003:
+    memory_writes: [mary_confessed_attraction]
+  mensagens_iniciais_009:
+    memory_writes: [marital_loneliness_revealed]
+  video_002:
+    memory_writes: [first_video_call]
+  video_025:
+    next_beat_id: yard_chapter_complete_001
+    allowed_transitions:
+      engaged: yard_chapter_complete_001
+      minimal: yard_chapter_complete_001
+      dismissive: yard_chapter_complete_001
+      nonsense: yard_chapter_complete_001
+      mocking: end_hostile
+      hostile: end_hostile
+
+append_blocks:
+  - block_id: yard_help_refused
+    block_type: terminal_yard
+    order: 90
+    title: Pátio de encerramento após recusa no caixa
+    entry_beat_id: yard_help_refused_001
+    min_user_turns: 2
+    max_user_turns: 2
+    rules:
+      - Mary não tenta convencer o usuário a voltar ao fluxo principal.
+      - A despedida deve reconhecer o tom da resposta seguinte.
+    beats:
+      - beat_id: yard_help_refused_001
+        order: 1
+        type: dialogue
+        required_movement: Mary demonstra uma frustração leve, respeita a recusa e abre espaço para uma última resposta.
+        canonical_line: Ah... tudo bem. Achei que você pudesse esperar, mas eu entendo.
+        next_beat_id: yard_help_refused_002
+        max_questions: 0
+        max_sentences: 2
+        memory_writes: [help_refused_at_checkout]
+        allowed_transitions: {engaged: yard_help_refused_002, minimal: yard_help_refused_002, dismissive: yard_help_refused_002, nonsense: yard_help_refused_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: yard_help_refused_002
+        order: 2
+        type: dialogue
+        required_movement: Mary responde ao tom final do usuário e encerra sem ressentimento ou insistência.
+        canonical_line: Relaxa... não precisa se explicar. Foi legal te conhecer mesmo assim.
+        next_beat_id: end_help_declined
+        max_questions: 0
+        max_sentences: 2
+        memory_writes: []
+        allowed_transitions: {engaged: end_help_declined, minimal: end_help_declined, dismissive: end_help_declined, nonsense: end_help_declined, mocking: end_hostile, hostile: end_hostile}
+        status: active
+
+  - block_id: yard_chapter_complete
+    block_type: terminal_yard
+    order: 91
+    title: Pátio de conclusão natural do primeiro capítulo
+    entry_beat_id: yard_chapter_complete_001
+    min_user_turns: 2
+    max_user_turns: 2
+    rules:
+      - O capítulo termina, mas a relação permanece aberta.
+      - O último movimento deixa um gancho narrativo concreto para o próximo capítulo.
+    beats:
+      - beat_id: yard_chapter_complete_001
+        order: 1
+        type: dialogue
+        required_movement: Mary desacelera a despedida e deixa claro que não deseja que aquela seja a última conversa.
+        canonical_line: Acho melhor a gente parar por aqui hoje... mas eu não quero que isso seja a última vez.
+        next_beat_id: yard_chapter_complete_002
+        max_questions: 0
+        max_sentences: 2
+        memory_writes: []
+        allowed_transitions: {engaged: yard_chapter_complete_002, minimal: yard_chapter_complete_002, dismissive: yard_chapter_complete_002, nonsense: yard_chapter_complete_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: yard_chapter_complete_002
+        order: 2
+        type: dialogue
+        required_movement: Mary se despede e promete retomar o contato em outro capítulo.
+        canonical_line: Eu vou te chamar de novo... talvez antes do que você imagina. Boa noite, vizinho.
+        next_beat_id: end_chapter_one
+        max_questions: 0
+        max_sentences: 2
+        memory_writes: [chapter_one_completed]
+        allowed_transitions: {engaged: end_chapter_one, minimal: end_chapter_one, dismissive: end_chapter_one, nonsense: end_chapter_one, mocking: end_hostile, hostile: end_hostile}
+        status: active
+
+  - block_id: narrative_endings
+    order: 99
+    title: Encerramentos narrativos
+    entry_beat_id: end_help_declined
+    rules: []
+    beats:
+      - beat_id: end_help_declined
+        order: 1
+        type: ending
+        required_movement: Encerrar após a despedida orgânica da recusa.
+        canonical_line: Tudo bem... a gente se vê por aí.
+        next_beat_id: ''
+        max_questions: 0
+        max_sentences: 1
+        memory_writes: []
+        allowed_transitions: {}
+        ending: {run_status: completed, ending_code: supermarket_help_declined}
+        status: active
+      - beat_id: end_chapter_one
+        order: 2
+        type: ending
+        required_movement: Encerrar tecnicamente o primeiro capítulo após o gancho narrativo.
+        canonical_line: Até logo... ainda temos muita coisa pra viver.
+        next_beat_id: ''
+        max_questions: 0
+        max_sentences: 1
+        memory_writes: []
+        allowed_transitions: {}
+        ending: {run_status: completed, ending_code: chapter_one_complete}
+        status: active
