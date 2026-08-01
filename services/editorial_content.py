@@ -83,6 +83,25 @@ def _iter_beats(document: dict[str, Any]):
                 yield beat
 
 
+def _memory_entries(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [deepcopy(item) for item in value if isinstance(item, dict)]
+    if isinstance(value, dict):
+        return [
+            {
+                "memory_id": str(memory_id),
+                "memory_text": str(definition.get("summary") or definition.get("memory_text") or ""),
+                "summary": str(definition.get("summary") or definition.get("memory_text") or ""),
+                "category": str(definition.get("category", "event") or "event"),
+                "importance": int(definition.get("importance", 5) or 5),
+                "source_beat_id": str(definition.get("source_beat_id", "")),
+            }
+            for memory_id, definition in value.items()
+            if isinstance(definition, dict)
+        ]
+    return []
+
+
 def _merge_extension(document: dict[str, Any], extension: dict[str, Any]) -> dict[str, Any]:
     merged = deepcopy(document)
     beats_by_id = {
@@ -104,17 +123,19 @@ def _merge_extension(document: dict[str, Any], extension: dict[str, Any]) -> dic
         raise ValueError("append_blocks deve ser uma lista.")
     merged.setdefault("blocks", []).extend(deepcopy(append_blocks))
 
-    memories = extension.get("memories") or {}
-    if memories:
-        if not isinstance(memories, dict):
-            raise ValueError("memories deve ser um mapa por memory_id.")
-        target_memories = merged.setdefault("memories", {})
-        if not isinstance(target_memories, dict):
-            raise ValueError("memories da fonte principal deve ser um mapa.")
-        for memory_id, definition in memories.items():
-            if memory_id in target_memories:
+    incoming_memories = _memory_entries(extension.get("memories"))
+    if incoming_memories:
+        existing_memories = _memory_entries(merged.get("memories"))
+        known_ids = {str(item.get("memory_id", "")) for item in existing_memories}
+        for definition in incoming_memories:
+            memory_id = str(definition.get("memory_id", ""))
+            if not memory_id:
+                raise ValueError("Memória sem memory_id.")
+            if memory_id in known_ids:
                 raise ValueError(f"Memória duplicada: {memory_id}")
-            target_memories[str(memory_id)] = deepcopy(definition)
+            known_ids.add(memory_id)
+            existing_memories.append(definition)
+        merged["memories"] = existing_memories
 
     return merged
 
