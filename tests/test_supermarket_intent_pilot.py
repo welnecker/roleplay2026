@@ -57,8 +57,44 @@ def _script() -> PilotScript:
                     "units": [{"kind": "dialogue", "anchor": "Chegamos."}],
                     "on_user": {"engaged": "reencontro_fila_009"},
                 },
+                {
+                    "beat_id": "yard_help_refused_001",
+                    "objective": "Respeitar a recusa e abrir a despedida.",
+                    "units": [
+                        {
+                            "kind": "dialogue",
+                            "anchor": "Ah... tudo bem. Achei que você pudesse esperar, mas eu entendo.",
+                        }
+                    ],
+                    "on_user": {
+                        "engaged": "yard_help_refused_002",
+                        "minimal": "yard_help_refused_002",
+                    },
+                },
+                {
+                    "beat_id": "yard_help_refused_002",
+                    "objective": "Encerrar organicamente.",
+                    "units": [
+                        {
+                            "kind": "dialogue",
+                            "anchor": "Relaxa... foi legal te conhecer mesmo assim.",
+                        }
+                    ],
+                    "on_user": {"engaged": "end_help_declined"},
+                },
             ],
-            "endings": [],
+            "endings": [
+                {
+                    "ending_id": "end_help_declined",
+                    "run_status": "completed",
+                    "ending_code": "supermarket_help_declined",
+                    "visible_delivery": {
+                        "kind": "dialogue",
+                        "delivery": "fixed",
+                        "text": "Tudo bem... a gente se vê por aí.",
+                    },
+                }
+            ],
         },
     }
     return PilotScript(raw)
@@ -98,19 +134,20 @@ def test_aceite_com_interrogacao_nao_repete_o_pedido() -> None:
     assert "consegue me esperar" not in turn.visible_fallback.casefold()
 
 
-def test_recusa_e_respeitada_sem_presumir_deslocamento() -> None:
+def test_recusa_entra_no_patio_sem_presumir_deslocamento() -> None:
     turn = decide_supermarket_turn(
         _script(),
         PilotState(node_id="reencontro_fila_007"),
         "Não posso ajudar agora, desculpa.",
     )
 
-    assert turn.finished is True
-    assert turn.run_status == "completed"
-    assert turn.ending_code == "supermarket_help_declined"
+    assert turn.finished is False
+    assert turn.run_status == "active"
+    assert turn.ending_code == ""
+    assert turn.target_id == "yard_help_refused_001"
     assert turn.state.facts["help_to_car"] == "refused"
     assert turn.state.facts["_scene_location"] == "supermercado_caixa"
-    assert "sem problema" in turn.visible_fallback.casefold()
+    assert "eu entendo" in turn.visible_fallback.casefold()
 
 
 def test_pergunta_nao_avanca_para_estacionamento() -> None:

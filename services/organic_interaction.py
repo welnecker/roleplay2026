@@ -73,7 +73,13 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
 
 
 def render_facts(facts: dict[str, Any]) -> str:
-    items = [f"{key}={value}" for key, value in facts.items() if str(value).strip()]
+    """Renderiza apenas fatos narrativos; chaves iniciadas por '_' são do runtime."""
+
+    items = [
+        f"{key}={value}"
+        for key, value in facts.items()
+        if not str(key).startswith("_") and str(value).strip()
+    ]
     return ", ".join(items) if items else "nenhum fato pessoal confirmado"
 
 

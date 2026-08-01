@@ -16,7 +16,7 @@ from persistence.v2_google_sheets import (
 
 
 MAX_RECOVERED_INTERACTIONS = 500
-RUNTIME_REPOSITORY_CONTRACT_VERSION = 3
+RUNTIME_REPOSITORY_CONTRACT_VERSION = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,8 +115,6 @@ class GoogleSheetsV2RuntimeRepository:
         return candidates[0]
 
     def reactivate_run(self, run: StoryRun) -> StoryRun:
-        """Reabre a mesma execução paga sem criar ou consumir outro crédito."""
-
         expected_version = run.state_version
         run.status = "active"
         run.ending_code = ""
@@ -189,6 +187,48 @@ class GoogleSheetsV2RuntimeRepository:
             speaker_id=speaker_id,
             metadata=metadata,
         )
+        if role == "assistant" and isinstance(metadata, dict):
+            self._persist_pending_memories(
+                run_id=run_id,
+                source_beat_id=beat_id,
+                metadata=metadata,
+            )
+
+    def _persist_pending_memories(
+        self,
+        *,
+        run_id: str,
+        source_beat_id: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        pilot_state = metadata.get("pilot_state")
+        if not isinstance(pilot_state, dict):
+            return
+        facts = pilot_state.get("facts")
+        if not isinstance(facts, dict):
+            return
+        raw = str(facts.get("_pending_memory_writes", "") or "")
+        for memory_id in (item.strip() for item in raw.split(",")):
+            if not memory_id:
+                continue
+            self.runs.append_run_memory(
+                run_id=run_id,
+                memory_id=memory_id,
+                source_beat_id=source_beat_id,
+            )
+
+    def list_run_memory_ids(self, *, run_id: str) -> list[str]:
+        runs = getattr(self, "runs", None)
+        memories = getattr(runs, "memories", None)
+        if memories is None:
+            return []
+        values = {
+            str(row.get("memory_id", "")).strip()
+            for row in memories.records()
+            if str(row.get("run_id", "")).strip() == run_id
+            and str(row.get("memory_id", "")).strip()
+        }
+        return sorted(values)
 
     def list_interactions(self, *, run_id: str, limit: int = 100) -> list[dict[str, object]]:
         requested_limit = max(1, min(int(limit), MAX_RECOVERED_INTERACTIONS))
@@ -221,6 +261,17 @@ class GoogleSheetsV2RuntimeRepository:
                     **metadata,
                 }
             )
+
+        active_ids = self.list_run_memory_ids(run_id=run_id)
+        if active_ids:
+            for message in reversed(result):
+                pilot_state = message.get("pilot_state")
+                if not isinstance(pilot_state, dict):
+                    continue
+                facts = pilot_state.setdefault("facts", {})
+                if isinstance(facts, dict):
+                    facts["_active_memory_ids"] = ",".join(active_ids)
+                break
         return result
 
     def update_run_progress(

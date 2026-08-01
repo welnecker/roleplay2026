@@ -32,10 +32,11 @@ def test_opa_apos_primeira_mensagem_avanca_sem_encerrar() -> None:
     assert turn.state.node_id == "mensagens_iniciais_002"
 
 
-def test_continuacao_executavel_nao_aponta_mais_para_end_pilot() -> None:
+def test_continuacao_executavel_termina_no_patio_positivo() -> None:
     script = _script()
 
     assert script.beats["mensagens_iniciais_001"]["on_user"]["engaged"] == "mensagens_iniciais_002"
     assert script.beats["mensagens_iniciais_001"]["on_user"]["minimal"] == "mensagens_iniciais_002"
     assert "video_025" in script.beats
-    assert script.beats["video_025"]["on_user"]["engaged"] == "end_pilot"
+    assert script.beats["video_025"]["on_user"]["engaged"] == "yard_chapter_complete_001"
+    assert script.beats["yard_chapter_complete_002"]["on_user"]["engaged"] == "end_chapter_one"
