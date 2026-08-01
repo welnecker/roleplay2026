@@ -13,7 +13,7 @@ from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 import services.pilot_supermarket as pilot_supermarket_module
 from services.editorial_compiler import compile_editorial_document
-from services.narrative_context import validate_memory_references
+from services.narrative_context import validate_memory_references, validate_terminal_yards
 from services.pilot_supermarket import PilotScript
 from services.supermarket_script_v2 import (
     clean_supermarket_script_v2_response,
@@ -127,6 +127,7 @@ def load_source_document() -> dict[str, Any]:
         extension = load_editorial_yaml_text(path.read_text(encoding="utf-8"))
         document = _merge_extension(document, extension)
     validate_memory_references(document)
+    validate_terminal_yards(document)
     return document
 
 
