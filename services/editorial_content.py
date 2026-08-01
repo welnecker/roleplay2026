@@ -13,6 +13,7 @@ from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 import services.pilot_supermarket as pilot_supermarket_module
 from services.editorial_compiler import compile_editorial_document
+from services.narrative_context import validate_memory_references
 from services.pilot_supermarket import PilotScript
 from services.supermarket_script_v2 import (
     clean_supermarket_script_v2_response,
@@ -24,7 +25,10 @@ from services.supermarket_script_v2 import (
 PACKAGE_ID = "roleplay2026.casada_frustrada"
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "installed_stories" / "casada_frustrada"
 EDITORIAL_PATH = PACKAGE_ROOT / "supermarket_pilot.yaml"
-CONTINUATION_PATH = PACKAGE_ROOT / "supermarket_continuation.yaml"
+EXTENSION_PATHS = (
+    PACKAGE_ROOT / "supermarket_continuation.yaml",
+    PACKAGE_ROOT / "narrative_enhancements.yaml",
+)
 _EDITORIAL_REPOSITORY: GoogleSheetsEditorialRepository | None = None
 _EDITORIAL_READY = False
 _FREE_TEXT_KEYS = {
@@ -34,6 +38,7 @@ _FREE_TEXT_KEYS = {
     "canonical_line",
     "dramatic_direction",
     "text",
+    "summary",
 }
 _FREE_TEXT_PATTERN = re.compile(
     r"^(?P<indent>\s*)(?P<key>" + "|".join(sorted(_FREE_TEXT_KEYS)) + r"):\s*(?P<value>.*)$"
@@ -65,7 +70,7 @@ def _protect_editorial_plain_scalars(text: str) -> str:
 def load_editorial_yaml_text(text: str) -> dict[str, Any]:
     raw = yaml.safe_load(_protect_editorial_plain_scalars(text))
     if not isinstance(raw, dict):
-        raise ValueError("supermarket_pilot.yaml inválido.")
+        raise ValueError("Documento editorial YAML inválido.")
     return raw
 
 
@@ -78,11 +83,7 @@ def _iter_beats(document: dict[str, Any]):
                 yield beat
 
 
-def _merge_continuation(document: dict[str, Any]) -> dict[str, Any]:
-    if not CONTINUATION_PATH.is_file():
-        return document
-
-    extension = load_editorial_yaml_text(CONTINUATION_PATH.read_text(encoding="utf-8"))
+def _merge_extension(document: dict[str, Any], extension: dict[str, Any]) -> dict[str, Any]:
     merged = deepcopy(document)
     beats_by_id = {
         str(beat.get("beat_id", "")): beat
@@ -102,12 +103,31 @@ def _merge_continuation(document: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(append_blocks, list):
         raise ValueError("append_blocks deve ser uma lista.")
     merged.setdefault("blocks", []).extend(deepcopy(append_blocks))
+
+    memories = extension.get("memories") or {}
+    if memories:
+        if not isinstance(memories, dict):
+            raise ValueError("memories deve ser um mapa por memory_id.")
+        target_memories = merged.setdefault("memories", {})
+        if not isinstance(target_memories, dict):
+            raise ValueError("memories da fonte principal deve ser um mapa.")
+        for memory_id, definition in memories.items():
+            if memory_id in target_memories:
+                raise ValueError(f"Memória duplicada: {memory_id}")
+            target_memories[str(memory_id)] = deepcopy(definition)
+
     return merged
 
 
 def load_source_document() -> dict[str, Any]:
-    base = load_editorial_yaml_text(EDITORIAL_PATH.read_text(encoding="utf-8"))
-    return _merge_continuation(base)
+    document = load_editorial_yaml_text(EDITORIAL_PATH.read_text(encoding="utf-8"))
+    for path in EXTENSION_PATHS:
+        if not path.is_file():
+            continue
+        extension = load_editorial_yaml_text(path.read_text(encoding="utf-8"))
+        document = _merge_extension(document, extension)
+    validate_memory_references(document)
+    return document
 
 
 def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
@@ -139,7 +159,7 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
 
 
 def load_editorial_pilot(secrets: Any) -> PilotScript:
-    """Carrega o piloto da fonte e adapta somente sua estrutura ao motor."""
+    """Carrega a fonte única e adapta somente sua estrutura ao motor."""
 
     ensure_editorial_pilot(secrets)
     compiled = compile_editorial_document(load_source_document())
