@@ -13,7 +13,7 @@ memories:
   helped_with_groceries:
     category: event
     importance: 8
-    summary: {user_name} aceitou esperar Mary e a ajudou a levar as compras até o carro.
+    summary: "{user_name} aceitou esperar Mary e a ajudou a levar as compras até o carro."
   exchanged_contact:
     category: relationship_progress
     importance: 9
@@ -41,7 +41,7 @@ memories:
   help_refused_at_checkout:
     category: boundary
     importance: 7
-    summary: {user_name} recusou esperar Mary no caixa; ela respeitou a decisão e encerrou o encontro sem insistir.
+    summary: "{user_name} recusou esperar Mary no caixa; ela respeitou a decisão e encerrou o encontro sem insistir."
 
 patch_beats:
   encontro_acidental_001:
