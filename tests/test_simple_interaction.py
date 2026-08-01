@@ -38,7 +38,7 @@ def test_stay_mantem_a_mesma_linha_sem_expor_marcador() -> None:
     assert updated.finished is False
 
 
-def test_advance_consumе_a_linha() -> None:
+def test_advance_consume_a_linha() -> None:
     engine, movement = _engine()
     state = StoryState()
 
