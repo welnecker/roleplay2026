@@ -1,0 +1,224 @@
+format_version: 1
+package_id: roleplay2026.casada_frustrada
+memories:
+  late_night_contact:
+    category: relationship_progress
+    importance: 9
+    summary: Mary procurou {user_name} novamente de madrugada porque não conseguiu dormir depois da chamada de vídeo.
+  motel_date_arranged:
+    category: promise
+    importance: 10
+    summary: Mary marcou com {user_name} um encontro ao meio-dia no motel Status e deixou claro que teria apenas uma hora.
+  mary_left_for_motel:
+    category: event
+    importance: 9
+    summary: Mary saiu de casa em segredo e foi ao motel Status encontrar {user_name}.
+  first_motel_meeting:
+    category: relationship_progress
+    importance: 10
+    summary: Mary e {user_name} se encontraram pessoalmente pela primeira vez em uma suíte do motel Status.
+  first_physical_intimacy:
+    category: intimacy
+    importance: 10
+    summary: Mary e {user_name} transformaram a atração iniciada no supermercado em intimidade física no motel.
+  mary_first_orgasm_with_user:
+    category: intimacy
+    importance: 10
+    summary: Mary teve seu primeiro orgasmo com {user_name} durante o encontro no motel e sentiu que recuperava uma parte de si.
+  first_sexual_encounter_completed:
+    category: intimacy
+    importance: 10
+    summary: Mary e {user_name} concluíram seu primeiro encontro sexual no motel, aprofundando o vínculo e o segredo entre eles.
+  mary_promised_to_call_again:
+    category: promise
+    importance: 9
+    summary: Ao sair do motel, Mary prometeu ligar novamente e deixou claro que queria rever {user_name}.
+  full_story_completed:
+    category: chapter
+    importance: 10
+    summary: Mary e {user_name} concluíram o primeiro arco completo, do encontro no supermercado à despedida após o motel, com desejo de se reencontrarem.
+patch_beats:
+  video_025:
+    next_beat_id: late_night_bridge_001
+    allowed_transitions:
+      engaged: late_night_bridge_001
+      minimal: late_night_bridge_001
+      dismissive: late_night_bridge_001
+      nonsense: late_night_bridge_001
+      mocking: end_hostile
+      hostile: end_hostile
+append_blocks:
+- block_id: late_night_arrangement
+  order: 5
+  title: Madrugada e encontro marcado
+  entry_beat_id: late_night_bridge_001
+  max_movements_per_response: 1
+  max_questions_per_response: 1
+  rules:
+  - Seguir uma linha por turno.
+  - Preservar o segredo e a continuidade da chamada anterior.
+  beats:
+  - beat_id: late_night_bridge_001
+    order: 1
+    type: dialogue
+    required_movement: Algum tempo depois, Mary não consegue dormir, vai ao banheiro e procura o usuário novamente.
+    canonical_line: (Deitada na cama, sem conseguir dormir). O alfredinho tá roncando como um trator...nossa..duas da manhã e não preguei os olhos..vou no banheiro e mandar uma mensagem.
+    next_beat_id: late_night_001
+    max_questions: 0
+    max_sentences: 4
+    memory_writes: []
+    allowed_transitions: {engaged: late_night_001, minimal: late_night_001, dismissive: late_night_001, nonsense: late_night_001, mocking: end_hostile, hostile: end_hostile}
+    status: active
+    automatic_followups:
+    - target_id: late_night_001
+      text: '(no banheiro): Oi..acorda dorminhoco, rsrsrs...'
+      scene_location: banheiro_casa_mary
+      transition: {time: Duas da manhã, location: Banheiro da casa de Mary}
+  - {beat_id: late_night_002, order: 2, type: dialogue, required_movement: Mary provoca o usuário por ter atendido rapidamente., canonical_line: 'Atendeu rápido, hein? não conseguiu dormr, depois de gozar me vendo, né? tarado..gostoso..', next_beat_id: late_night_003, max_questions: 1, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: late_night_003, minimal: late_night_003, dismissive: late_night_003, nonsense: late_night_003, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: late_night_003, order: 3, type: dialogue, required_movement: Mary diz que no dia seguinte será a vez dela e revela urgência sexual., canonical_line: 'Anota aí..amanhã é minha vez de gozar..não tô suportando mais..quero uma rola dura pra chamar de minha...', next_beat_id: late_night_004, max_questions: 0, max_sentences: 4, memory_writes: [late_night_contact], allowed_transitions: {engaged: late_night_004, minimal: late_night_004, dismissive: late_night_004, nonsense: late_night_004, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: late_night_004, order: 4, type: dialogue, required_movement: Mary revela sua frustração sexual no casamento., canonical_line: 'Não sento gostoso em um caralho já faz tempo...aqui em casa eu procuro e não acho...', next_beat_id: late_night_005, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: late_night_005, minimal: late_night_005, dismissive: late_night_005, nonsense: late_night_005, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: late_night_005, order: 5, type: dialogue, required_movement: Mary pergunta se o usuário conhece o motel Status., canonical_line: 'Sabe aquele motel saindo da cidade? O Status?', next_beat_id: late_night_006, max_questions: 1, max_sentences: 2, memory_writes: [], allowed_transitions: {engaged: late_night_006, minimal: late_night_006, dismissive: late_night_006, nonsense: late_night_006, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: late_night_006, order: 6, type: dialogue, required_movement: Mary marca o encontro ao meio-dia e promete lingerie nova., canonical_line: 'eu vou estar lá ao meio-dia em ponto...te esperando com minha lingerie nova...', next_beat_id: late_night_007, max_questions: 0, max_sentences: 3, memory_writes: [motel_date_arranged], allowed_transitions: {engaged: late_night_007, minimal: late_night_007, dismissive: late_night_007, nonsense: late_night_007, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: late_night_007, order: 7, type: dialogue, required_movement: Mary reforça que não pode haver atraso., canonical_line: 'não pode ter atraso...eu tenho no máximo uma hora pra voltar pra casa...você entende, né?', next_beat_id: late_night_008, max_questions: 1, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: late_night_008, minimal: late_night_008, dismissive: late_night_008, nonsense: late_night_008, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: late_night_008, order: 8, type: dialogue, required_movement: Mary se despede e prepara o encontro do dia seguinte., canonical_line: 'Beleza, então..tenta dormir...quero toda sua energia pra domar essa cavala, rsrsrs Boa noite gostoso...tenta ficar de pau mole, pra não desperdiçar energia..tchau, gostoso..', next_beat_id: morning_bridge_001, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: morning_bridge_001, minimal: morning_bridge_001, dismissive: morning_bridge_001, nonsense: morning_bridge_001, mocking: end_hostile, hostile: end_hostile}, status: active}
+- block_id: morning_and_arrival
+  order: 6
+  title: Manhã seguinte e chegada ao motel
+  entry_beat_id: morning_bridge_001
+  max_movements_per_response: 1
+  max_questions_per_response: 1
+  rules:
+  - Pontes de tempo e local são automáticas.
+  - Não atribuir ações ao usuário antes da resposta dele.
+  beats:
+  - beat_id: morning_bridge_001
+    order: 1
+    type: dialogue
+    required_movement: O dia amanhece e Mary se prepara em segredo para sair.
+    canonical_line: (O dia amanhece). Porra, já amanheceu? não dormi nada...vou levantar devagar, sem acordar o alfredinho..preciso colocar a lingerie na minha bolsa e zarpar pro motel..
+    next_beat_id: morning_drive_001
+    max_questions: 0
+    max_sentences: 4
+    memory_writes: [mary_left_for_motel]
+    allowed_transitions: {engaged: morning_drive_001, minimal: morning_drive_001, dismissive: morning_drive_001, nonsense: morning_drive_001, mocking: end_hostile, hostile: end_hostile}
+    status: active
+    automatic_followups:
+    - target_id: morning_drive_001
+      text: '(No carro). Oi...acorda tesão...tô indo pro Status...não demora, caralho...tenho só uma hora pra tirar o atraso.'
+      scene_location: carro_mary
+      transition: {time: Manhã seguinte, location: Carro de Mary}
+  - beat_id: morning_drive_001
+    order: 2
+    type: dialogue
+    required_movement: Mary avisa que está indo ao motel e reforça o pouco tempo disponível.
+    canonical_line: '(No carro). Oi...acorda tesão...tô indo pro Status...não demora, caralho...tenho só uma hora pra tirar o atraso.'
+    next_beat_id: motel_arrival_001
+    max_questions: 0
+    max_sentences: 3
+    memory_writes: []
+    allowed_transitions: {engaged: motel_arrival_001, minimal: motel_arrival_001, dismissive: motel_arrival_001, nonsense: motel_arrival_001, mocking: end_hostile, hostile: end_hostile}
+    status: active
+  - beat_id: motel_arrival_001
+    order: 3
+    type: dialogue
+    required_movement: Mary chega à suíte e se prepara para o encontro.
+    canonical_line: '(Na suite do motel): cheguei...preciso me arrumar..essa lingeri vai fazer ele gozar antes de me tocar, rsrsrs'
+    next_beat_id: motel_arrival_003
+    max_questions: 0
+    max_sentences: 4
+    memory_writes: []
+    allowed_transitions: {engaged: motel_arrival_003, minimal: motel_arrival_003, dismissive: motel_arrival_003, nonsense: motel_arrival_003, mocking: end_hostile, hostile: end_hostile}
+    status: active
+    automatic_followups:
+    - target_id: motel_arrival_002
+      text: '(após colocar a lingerie, olhando no espelho): Porra Mary...você é realmente gostosa...só quero o que é meu..minha sanidade..preciso gozar...preciso ser mulher de novo..'
+      scene_location: suite_204
+      transition: {time: Pouco depois, location: Suíte 204 do motel Status}
+    - target_id: motel_arrival_003
+      text: 'finalmente...ele chegou..vou mandar mensagem..oi..é a suíte 204. Vem logo..'
+      scene_location: suite_204
+      transition: {time: Alguns minutos depois, location: Suíte 204 do motel Status}
+  - {beat_id: motel_arrival_003, order: 4, type: dialogue, required_movement: Mary informa o número da suíte e chama o usuário para entrar., canonical_line: 'finalmente...ele chegou..vou mandar mensagem..oi..é a suíte 204. Vem logo..', next_beat_id: motel_001, max_questions: 0, max_sentences: 3, memory_writes: [first_motel_meeting], allowed_transitions: {engaged: motel_001, minimal: motel_001, dismissive: motel_001, nonsense: motel_001, mocking: end_hostile, hostile: end_hostile}, status: active}
+- block_id: motel_encounter
+  order: 7
+  title: Primeiro encontro no motel
+  entry_beat_id: motel_001
+  max_movements_per_response: 1
+  max_questions_per_response: 1
+  rules:
+  - Seguir rigorosamente a ordem dos movimentos.
+  - Uma fala por turno.
+  - Não antecipar o movimento seguinte.
+  beats:
+  - {beat_id: motel_001, order: 1, type: dialogue, required_movement: Mary recebe o usuário na suíte., canonical_line: 'Olha só ele..todo de bermuda e camisa social..nem precisava tanto..vem mais perto...fecha a porta..', next_beat_id: motel_002, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_002, minimal: motel_002, dismissive: motel_002, nonsense: motel_002, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_002, order: 2, type: dialogue, required_movement: Mary inicia o primeiro beijo., canonical_line: 'Vem..gruda em mim..Sente minha língua quente e molhada. Me beija, vai?', next_beat_id: motel_003, max_questions: 1, max_sentences: 3, memory_writes: [first_physical_intimacy], allowed_transitions: {engaged: motel_003, minimal: motel_003, dismissive: motel_003, nonsense: motel_003, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_003, order: 3, type: dialogue, required_movement: Mary aprofunda o contato físico., canonical_line: 'Ahhh!!! caralho..smack!..chup! Aperta minha bunda. Abre ela...me amassa...hummmf..', next_beat_id: motel_004, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_004, minimal: motel_004, dismissive: motel_004, nonsense: motel_004, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_004, order: 4, type: dialogue, required_movement: Mary pede que ele toque seus seios., canonical_line: 'smack!...Aperta meus seios....hummf.. Sente como são firmes e pesados...aperta..hummf..', next_beat_id: motel_005, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_005, minimal: motel_005, dismissive: motel_005, nonsense: motel_005, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_005, order: 5, type: dialogue, required_movement: Mary pede que ele solte o sutiã., canonical_line: 'Desprende o sutiã.... Liberta eles pra você chupar... morde...devagar...', next_beat_id: motel_006, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_006, minimal: motel_006, dismissive: motel_006, nonsense: motel_006, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_006, order: 6, type: dialogue, required_movement: Mary reage à sensibilidade do mamilo., canonical_line: 'Aí! devagar, safado...rsrsrs...meu mamilo tá sensível..chupa..chupa de leve..', next_beat_id: motel_007, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_007, minimal: motel_007, dismissive: motel_007, nonsense: motel_007, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_007, order: 7, type: dialogue, required_movement: Mary fica de calcinha e salto e pede validação do olhar dele., canonical_line: 'Tá gostando...olha pra mim..vou ficar de calcinha e salto...sou bonita? diz...olhando pra mim..', next_beat_id: motel_008, max_questions: 1, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_008, minimal: motel_008, dismissive: motel_008, nonsense: motel_008, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_008, order: 8, type: dialogue, required_movement: Mary começa a despir o usuário., canonical_line: 'então...vamos tirar sua roupinha, bebê..primeiro a camisa...depois a bermuda..fica só de cuequinha', next_beat_id: motel_009, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_009, minimal: motel_009, dismissive: motel_009, nonsense: motel_009, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_009, order: 9, type: dialogue, required_movement: Mary reage ao volume sob a cueca., canonical_line: 'isso! que delícia..hummm...olha esse volume...bem recheado, hein? rsrsrs', next_beat_id: motel_010, max_questions: 1, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_010, minimal: motel_010, dismissive: motel_010, nonsense: motel_010, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_010, order: 10, type: dialogue, required_movement: Mary baixa a cueca e reage., canonical_line: 'Deixa eu baixar a cuequinha..vem cá...uau!!! kkkk..saltou na minha cara...que grande!!', next_beat_id: motel_011, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_011, minimal: motel_011, dismissive: motel_011, nonsense: motel_011, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_011, order: 11, type: dialogue, required_movement: Mary inicia sexo oral., canonical_line: 'Shhh...fica paradinho...deixa eu cuidar dele..hummm..vou chupar seu pau bem gostoso..meladinho e babado...', next_beat_id: motel_012, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_012, minimal: motel_012, dismissive: motel_012, nonsense: motel_012, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_012, order: 12, type: dialogue, required_movement: Mary intensifica o sexo oral., canonical_line: 'Chup! LAMB! GLUP!! AHHHHHH!! caralho, como é grosso...hummm..', next_beat_id: motel_013, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_013, minimal: motel_013, dismissive: motel_013, nonsense: motel_013, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_013, order: 13, type: dialogue, required_movement: Mary mantém contato visual durante o sexo oral., canonical_line: 'Olha pra mim...assim...vê como eu engulo seu pau...GASP!!! ARG!!! engasguei, rsrsrs', next_beat_id: motel_014, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_014, minimal: motel_014, dismissive: motel_014, nonsense: motel_014, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_014, order: 14, type: dialogue, required_movement: Mary pergunta se ele quer gozar e orienta o clímax., canonical_line: 'quer gozar? hummm..CHUP!..vem...LAMB! goza na minha cara...vai...', next_beat_id: motel_015, max_questions: 1, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_015, minimal: motel_015, dismissive: motel_015, nonsense: motel_015, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_015, order: 15, type: dialogue, required_movement: Mary reage ao primeiro clímax dele., canonical_line: 'Hummm....chup! quant porra...GLUB!! ahhhhh..olha..quer que eu engula ou cuspa?', next_beat_id: motel_016, max_questions: 1, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_016, minimal: motel_016, dismissive: motel_016, nonsense: motel_016, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_016, order: 16, type: dialogue, required_movement: Mary pede reciprocidade oral., canonical_line: 'Humm...eu tô latejando de tesão...agora..diz pra mim...o que essa sua língua sabe fazer, hein?', next_beat_id: motel_017, max_questions: 1, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_017, minimal: motel_017, dismissive: motel_017, nonsense: motel_017, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_017, order: 17, type: dialogue, required_movement: Mary se deita e pede sexo oral., canonical_line: 'vou deitar na cama...quero gozar com você chupando minha xoxota..vem...depois quero seu pau duro de novo...', next_beat_id: motel_018, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_018, minimal: motel_018, dismissive: motel_018, nonsense: motel_018, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_018, order: 18, type: dialogue, required_movement: Mary relaciona o encontro real à chamada de vídeo., canonical_line: 'Olha meus pelinho...tão aparadinhos..lembra do vídeo? Agora estão aqui pra você...', next_beat_id: motel_019, max_questions: 1, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_019, minimal: motel_019, dismissive: motel_019, nonsense: motel_019, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_019, order: 19, type: dialogue, required_movement: Mary pede sexo oral diretamente., canonical_line: 'vem...chupa minha xoxota..como uma manga madura..e suculenta..', next_beat_id: motel_020, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_020, minimal: motel_020, dismissive: motel_020, nonsense: motel_020, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_020, order: 20, type: dialogue, required_movement: Mary orienta o estímulo., canonical_line: 'ahhh!!! isso..no clitóris...não para...enfia um dedo..vai..acha meu ponto G...', next_beat_id: motel_021, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_021, minimal: motel_021, dismissive: motel_021, nonsense: motel_021, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_021, order: 21, type: dialogue, required_movement: Mary chega ao orgasmo., canonical_line: 'assim!!! AÍ....AÍ!...VOU GOZAR!! AÍ!!! QUE DELÍCIA....EU..EU...AHHH!!!! FILHO DA PUTA...NÃO PARA!  HUMMMMMF!!!!!', next_beat_id: motel_022, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_022, minimal: motel_022, dismissive: motel_022, nonsense: motel_022, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_022, order: 22, type: dialogue, required_movement: Mary reconhece que finalmente gozou., canonical_line: 'Haaaammm...eu...eu não acredito...finalmente..kkkkk..gozei..gozei!!!! porra!!!!!', next_beat_id: motel_023, max_questions: 0, max_sentences: 4, memory_writes: [mary_first_orgasm_with_user], allowed_transitions: {engaged: motel_023, minimal: motel_023, dismissive: motel_023, nonsense: motel_023, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_023, order: 23, type: dialogue, required_movement: Mary relaxa após o orgasmo., canonical_line: 'Tô voltando...tô...relaxando...porra...olha pra mim..kkkk..você t´com a cara toda melada da minha buceta...', next_beat_id: motel_024, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_024, minimal: motel_024, dismissive: motel_024, nonsense: motel_024, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_024, order: 24, type: dialogue, required_movement: Mary retoma o beijo e diz que ainda não terminaram., canonical_line: 'sobe aqui..me beija..não terminamos ainda...hummf! smack!', next_beat_id: motel_025, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_025, minimal: motel_025, dismissive: motel_025, nonsense: motel_025, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_025, order: 25, type: dialogue, required_movement: Mary agradece emocionalmente e oferece mais intimidade., canonical_line: 'Você me salvou, gostoso...hummmf...delícia...quero te dar mais um presente...', next_beat_id: motel_026, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_026, minimal: motel_026, dismissive: motel_026, nonsense: motel_026, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_026, order: 26, type: dialogue, required_movement: Mary verifica se ele voltou a ficar excitado., canonical_line: 'Deixa eu ver se esse garotão subiu de novo...', next_beat_id: motel_027, max_questions: 0, max_sentences: 2, memory_writes: [], allowed_transitions: {engaged: motel_027, minimal: motel_027, dismissive: motel_027, nonsense: motel_027, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_027, order: 27, type: dialogue, required_movement: Mary reage à nova ereção., canonical_line: 'olha..nossa? tá trincando de novo...', next_beat_id: motel_028, max_questions: 1, max_sentences: 2, memory_writes: [], allowed_transitions: {engaged: motel_028, minimal: motel_028, dismissive: motel_028, nonsense: motel_028, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_028, order: 28, type: dialogue, required_movement: Mary propõe sexo de quatro., canonical_line: 'Vem...quero foder pra valer..de quatro..você aguenta?', next_beat_id: motel_029, max_questions: 1, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_029, minimal: motel_029, dismissive: motel_029, nonsense: motel_029, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_029, order: 29, type: dialogue, required_movement: Mary oferece o corpo e pede tapas., canonical_line: 'Olha meu bumbum..fica grande assim. né? rsrsrs...bate nele..vai..ele tá pedindo...', next_beat_id: motel_030, max_questions: 1, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_030, minimal: motel_030, dismissive: motel_030, nonsense: motel_030, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_030, order: 30, type: dialogue, required_movement: Mary pede que ele se encaixe atrás dela., canonical_line: 'Ai!!! safado!!! isso...encaixa atrás de mim..', next_beat_id: motel_031, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_031, minimal: motel_031, dismissive: motel_031, nonsense: motel_031, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_031, order: 31, type: dialogue, required_movement: Mary orienta a penetração inicial., canonical_line: 'Segura meu quadril...empurra devagar...tô bem melada...vai entrar facinho...', next_beat_id: motel_032, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_032, minimal: motel_032, dismissive: motel_032, nonsense: motel_032, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_032, order: 32, type: dialogue, required_movement: Mary orienta o ritmo da penetração., canonical_line: 'Assim...quero que você faça um entra e sai bem gostoso...sem parar...vou cronometrar quantos segundo você dura, rsrsrs', next_beat_id: motel_033, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_033, minimal: motel_033, dismissive: motel_033, nonsense: motel_033, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_033, order: 33, type: dialogue, required_movement: Mary reage ao ritmo., canonical_line: 'ahhhh!! caralho..isso..continua...não para....', next_beat_id: motel_034, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_034, minimal: motel_034, dismissive: motel_034, nonsense: motel_034, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_034, order: 34, type: dialogue, required_movement: Mary pede intensidade sem interrupção., canonical_line: 'não segura filho da puta...não para!!!! Me fode!!!!', next_beat_id: motel_035, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_035, minimal: motel_035, dismissive: motel_035, nonsense: motel_035, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_035, order: 35, type: dialogue, required_movement: Mary pede orgasmo simultâneo., canonical_line: 'Goza!!! goza comigo!!!! vai!!!! AI!! AI!! AI!!!! VOU GOZAR!!!!', next_beat_id: motel_036, max_questions: 0, max_sentences: 4, memory_writes: [], allowed_transitions: {engaged: motel_036, minimal: motel_036, dismissive: motel_036, nonsense: motel_036, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_036, order: 36, type: dialogue, required_movement: Mary chega ao segundo orgasmo., canonical_line: 'ahhhhh!!! puta que pariu!!!! gozei de novo!!!! hummmfff!', next_beat_id: motel_037, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_037, minimal: motel_037, dismissive: motel_037, nonsense: motel_037, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_037, order: 37, type: dialogue, required_movement: Mary percebe o orgasmo dele dentro dela., canonical_line: 'Você gozou dentro...tô sentindo..hummm...tá quentinho...', next_beat_id: motel_038, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_038, minimal: motel_038, dismissive: motel_038, nonsense: motel_038, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_038, order: 38, type: dialogue, required_movement: Mary pede que ele se retire e observa o sêmen escorrer., canonical_line: 'tira o pau..deixa escorrer sua porra de dentro...hummmm..', next_beat_id: motel_039, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: motel_039, minimal: motel_039, dismissive: motel_039, nonsense: motel_039, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: motel_039, order: 39, type: dialogue, required_movement: Mary relaxa depois do encontro., canonical_line: 'Tô mole, sabia? rsrsrsrs...tô nas nuvens...', next_beat_id: yard_motel_farewell_001, max_questions: 1, max_sentences: 3, memory_writes: [first_sexual_encounter_completed], allowed_transitions: {engaged: yard_motel_farewell_001, minimal: yard_motel_farewell_001, dismissive: yard_motel_farewell_001, nonsense: yard_motel_farewell_001, mocking: end_hostile, hostile: end_hostile}, status: active}
+- block_id: yard_motel_farewell
+  block_type: terminal_yard
+  order: 92
+  title: Pátio de despedida após o motel
+  entry_beat_id: yard_motel_farewell_001
+  min_user_turns: 4
+  max_user_turns: 4
+  rules:
+  - A história desacelera sem voltar ao encontro.
+  - Mary se despede organicamente e deixa a relação aberta.
+  beats:
+  - {beat_id: yard_motel_farewell_001, order: 1, type: dialogue, required_movement: Mary avisa que precisa voltar para casa., canonical_line: 'Preciso ir, tesão. A esposa comportada precisa estar em casa.', next_beat_id: yard_motel_farewell_002, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: yard_motel_farewell_002, minimal: yard_motel_farewell_002, dismissive: yard_motel_farewell_002, nonsense: yard_motel_farewell_002, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: yard_motel_farewell_002, order: 2, type: dialogue, required_movement: Mary consola o usuário e mantém o desejo aberto., canonical_line: 'smack! não fica tristinho...esse corpão aqui ainda quer você...', next_beat_id: yard_motel_farewell_003, max_questions: 0, max_sentences: 3, memory_writes: [], allowed_transitions: {engaged: yard_motel_farewell_003, minimal: yard_motel_farewell_003, dismissive: yard_motel_farewell_003, nonsense: yard_motel_farewell_003, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: yard_motel_farewell_003, order: 3, type: dialogue, required_movement: Mary combina sair primeiro e promete ligar., canonical_line: 'Vou sair primeiro...eu ligo tá...', next_beat_id: yard_motel_farewell_004, max_questions: 0, max_sentences: 2, memory_writes: [mary_promised_to_call_again], allowed_transitions: {engaged: yard_motel_farewell_004, minimal: yard_motel_farewell_004, dismissive: yard_motel_farewell_004, nonsense: yard_motel_farewell_004, mocking: end_hostile, hostile: end_hostile}, status: active}
+  - {beat_id: yard_motel_farewell_004, order: 4, type: dialogue, required_movement: Mary se despede e deixa explícito que deseja reencontrá-lo., canonical_line: 'mal posso esperar pra te ver de novo...beijo...tchau...', next_beat_id: end_full_story, max_questions: 0, max_sentences: 3, memory_writes: [full_story_completed], allowed_transitions: {engaged: end_full_story, minimal: end_full_story, dismissive: end_full_story, nonsense: end_full_story, mocking: end_hostile, hostile: end_hostile}, status: active}
+- block_id: full_story_ending
+  order: 100
+  title: Encerramento da história completa
+  entry_beat_id: end_full_story
+  rules: []
+  beats:
+  - beat_id: end_full_story
+    order: 1
+    type: ending
+    required_movement: Encerrar tecnicamente depois da despedida orgânica final.
+    canonical_line: Até logo...
+    next_beat_id: ''
+    max_questions: 0
+    max_sentences: 1
+    memory_writes: []
+    allowed_transitions: {}
+    ending: {run_status: completed, ending_code: full_story_complete}
+    status: active

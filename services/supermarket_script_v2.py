@@ -94,7 +94,11 @@ def _memory_ids(state: PilotState) -> list[str]:
 
 def _memory_writes_for_target(script: PilotScript, target_id: str) -> list[str]:
     source = script.beats.get(target_id) or script.endings.get(target_id) or {}
-    return [str(item).strip() for item in source.get("memory_writes", []) or [] if str(item).strip()]
+    return [
+        str(item).strip()
+        for item in source.get("memory_writes", []) or []
+        if str(item).strip()
+    ]
 
 
 def _finalize_turn(script: PilotScript, turn: PilotTurn) -> PilotTurn:
@@ -113,7 +117,11 @@ def _finalize_turn(script: PilotScript, turn: PilotTurn) -> PilotTurn:
     return replace(turn, state=updated, system_prompt=prompt)
 
 
-def _repeat_help_request(script: PilotScript, state: PilotState, user_text: str) -> PilotTurn:
+def _repeat_help_request(
+    script: PilotScript,
+    state: PilotState,
+    user_text: str,
+) -> PilotTurn:
     beat = script.beats["reencontro_fila_007"]
     units = beat.get("units") or []
     fallback = ""
@@ -152,9 +160,9 @@ def decide_supermarket_script_v2_turn(
     if current_id == "reencontro_fila_007":
         intent = classify_supermarket_intent(current_id, user_text)
         if intent == "accept":
-            synthetic = PilotState.from_dict(state.to_dict())
-            synthetic.node_id = "reencontro_fila_008"
-            turn = base_decide_turn(script, synthetic, user_text)
+            # O estado permanece no beat do pedido; o motor escolhe 008 como alvo.
+            # Colocar o estado previamente em 008 consumia essa fala e entregava 009.
+            turn = base_decide_turn(script, state, user_text)
             updated = PilotState.from_dict(turn.state.to_dict())
             updated.facts["help_to_car"] = "accepted"
             updated.facts["_scene_location"] = "estacionamento_caminho"
@@ -162,17 +170,26 @@ def decide_supermarket_script_v2_turn(
         if intent == "refuse":
             from services.supermarket_intent_pilot import decide_supermarket_turn
 
-            return _finalize_turn(script, decide_supermarket_turn(script, state, user_text))
+            return _finalize_turn(
+                script,
+                decide_supermarket_turn(script, state, user_text),
+            )
         return _repeat_help_request(script, state, user_text)
 
-    return _finalize_turn(script, base_decide_turn(script, state, user_text))
+    return _finalize_turn(
+        script,
+        base_decide_turn(script, state, user_text),
+    )
 
 
 def automatic_followups_after(target_id: str) -> tuple[dict[str, str], ...]:
     return _AUTOMATIC_FOLLOWUPS.get(str(target_id), ())
 
 
-def state_after_automatic_followup(state: PilotState, followup: dict[str, str]) -> PilotState:
+def state_after_automatic_followup(
+    state: PilotState,
+    followup: dict[str, str],
+) -> PilotState:
     updated = PilotState.from_dict(state.to_dict())
     updated.node_id = str(followup["target_id"])
     updated.pending_next_beat_id = ""

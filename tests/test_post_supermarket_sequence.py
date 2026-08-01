@@ -32,11 +32,13 @@ def test_opa_apos_primeira_mensagem_avanca_sem_encerrar() -> None:
     assert turn.state.node_id == "mensagens_iniciais_002"
 
 
-def test_continuacao_executavel_termina_no_patio_positivo() -> None:
+def test_continuacao_executavel_segue_ate_a_historia_completa() -> None:
     script = _script()
 
     assert script.beats["mensagens_iniciais_001"]["on_user"]["engaged"] == "mensagens_iniciais_002"
     assert script.beats["mensagens_iniciais_001"]["on_user"]["minimal"] == "mensagens_iniciais_002"
     assert "video_025" in script.beats
-    assert script.beats["video_025"]["on_user"]["engaged"] == "yard_chapter_complete_001"
-    assert script.beats["yard_chapter_complete_002"]["on_user"]["engaged"] == "end_chapter_one"
+    assert script.beats["video_025"]["on_user"]["engaged"] == "late_night_bridge_001"
+    assert script.beats["late_night_008"]["on_user"]["engaged"] == "morning_bridge_001"
+    assert script.beats["motel_039"]["on_user"]["engaged"] == "yard_motel_farewell_001"
+    assert script.beats["yard_motel_farewell_004"]["on_user"]["engaged"] == "end_full_story"
