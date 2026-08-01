@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ from services.supermarket_script_v2 import (
 PACKAGE_ID = "roleplay2026.casada_frustrada"
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "installed_stories" / "casada_frustrada"
 EDITORIAL_PATH = PACKAGE_ROOT / "supermarket_pilot.yaml"
+CONTINUATION_PATH = PACKAGE_ROOT / "supermarket_continuation.yaml"
 _EDITORIAL_REPOSITORY: GoogleSheetsEditorialRepository | None = None
 _EDITORIAL_READY = False
 _FREE_TEXT_KEYS = {
@@ -67,8 +69,45 @@ def load_editorial_yaml_text(text: str) -> dict[str, Any]:
     return raw
 
 
+def _iter_beats(document: dict[str, Any]):
+    for block in document.get("blocks", []) or []:
+        if not isinstance(block, dict):
+            continue
+        for beat in block.get("beats", []) or []:
+            if isinstance(beat, dict):
+                yield beat
+
+
+def _merge_continuation(document: dict[str, Any]) -> dict[str, Any]:
+    if not CONTINUATION_PATH.is_file():
+        return document
+
+    extension = load_editorial_yaml_text(CONTINUATION_PATH.read_text(encoding="utf-8"))
+    merged = deepcopy(document)
+    beats_by_id = {
+        str(beat.get("beat_id", "")): beat
+        for beat in _iter_beats(merged)
+        if str(beat.get("beat_id", "")).strip()
+    }
+
+    for beat_id, patch in dict(extension.get("patch_beats") or {}).items():
+        target = beats_by_id.get(str(beat_id))
+        if target is None:
+            raise ValueError(f"Beat a atualizar não encontrado: {beat_id}")
+        if not isinstance(patch, dict):
+            raise ValueError(f"Patch inválido para o beat {beat_id}")
+        target.update(deepcopy(patch))
+
+    append_blocks = extension.get("append_blocks") or []
+    if not isinstance(append_blocks, list):
+        raise ValueError("append_blocks deve ser uma lista.")
+    merged.setdefault("blocks", []).extend(deepcopy(append_blocks))
+    return merged
+
+
 def load_source_document() -> dict[str, Any]:
-    return load_editorial_yaml_text(EDITORIAL_PATH.read_text(encoding="utf-8"))
+    base = load_editorial_yaml_text(EDITORIAL_PATH.read_text(encoding="utf-8"))
+    return _merge_continuation(base)
 
 
 def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
