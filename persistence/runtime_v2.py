@@ -15,6 +15,9 @@ from persistence.v2_google_sheets import (
 )
 
 
+MAX_RECOVERED_INTERACTIONS = 500
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeSession:
     session_id: str
@@ -117,13 +120,24 @@ class GoogleSheetsV2RuntimeRepository:
         )
 
     def list_interactions(self, *, run_id: str, limit: int = 100) -> list[dict[str, object]]:
-        rows = self.interactions.list_recent_interactions(run_id=run_id, limit=min(limit, 20))
+        requested_limit = max(1, min(int(limit), MAX_RECOVERED_INTERACTIONS))
+        rows = [
+            row
+            for row in self.interactions.table.records()
+            if str(row.get("run_id", "")).strip() == run_id
+        ]
+        rows.sort(key=lambda row: int(row.get("sequence", 0) or 0))
+        rows = rows[-requested_limit:]
+
         result: list[dict[str, object]] = []
         for row in rows:
             metadata: dict[str, object] = {}
             raw_metadata = str(row.get("metadata_json", "") or "")
             if raw_metadata:
-                parsed = json.loads(raw_metadata)
+                try:
+                    parsed = json.loads(raw_metadata)
+                except json.JSONDecodeError:
+                    parsed = {}
                 if isinstance(parsed, dict):
                     metadata = dict(parsed)
             result.append(
@@ -131,6 +145,8 @@ class GoogleSheetsV2RuntimeRepository:
                     "role": str(row.get("role", "assistant")),
                     "content": str(row.get("content", "")),
                     "sequence": int(row.get("sequence", 0) or 0),
+                    "block_id": str(row.get("block_id", "")),
+                    "beat_id": str(row.get("beat_id", "")),
                     **metadata,
                 }
             )
