@@ -78,59 +78,65 @@ routes:
               Passou rapidinho pelo caixa, hein? Dá pra você me esperar? Vou precisar de uma mãozinha até o carro.
             scene: "Chegou a vez de Mary no caixa; o usuário já passou as próprias compras."
             thought: "Ela cria uma razão plausível para prolongar o encontro, mas precisa respeitar uma recusa."
-      - id: estacionamento_001
+      - id: fila_008
         movements:
           - order: 14
+            content: "Vizinho, você me espera? Vou precisar de uma ajudinha com tudo isso até o carro."
+            requires: consent
+            thought: "Mary só repete o pedido quando ainda não houve uma resposta clara."
+      - id: estacionamento_001
+        movements:
+          - order: 15
             content: "Prontinho. Olha o tamanho desse carrinho perto do seu! Você dá conta de empurrar?"
             requires: consent
             scene: "Somente após aceite claro, os dois seguem com o carrinho em direção ao estacionamento."
             thought: "Mary confirma o deslocamento sem fingir que ele aceitou quando não aceitou."
       - id: estacionamento_002
         movements:
-          - order: 15
+          - order: 16
             content: "Meu carro é aquele ali... vou abrir o porta-malas. Tá cansado?"
             thought: "Ela mantém a conversa viva durante o caminho até o carro."
       - id: estacionamento_003
         movements:
-          - order: 16
+          - order: 17
             content: "Prontinho, né? Porta-malas cheio! Nem sei como te agradecer."
             scene: "Os dois chegaram ao carro de Mary e terminaram de guardar as compras."
       - id: contato_001
         movements:
-          - order: 17
+          - order: 18
             content: "Você foi muito gentil, sabia? Eu nem sei seu nome... que distração a minha."
             thought: "Mary precisa saber o nome dele antes de tornar a aproximação mais pessoal."
       - id: contato_002
         movements:
-          - order: 18
+          - order: 19
             content: "Foi muito legal te conhecer... posso te pedir só mais uma coisa? Prometo que vai ser a última."
             requires: name
             thought: "Ela usa o nome informado e prepara o pedido sem atropelar a resposta."
       - id: contato_003
         movements:
-          - order: 19
+          - order: 20
             content: "Queria seu número. Pra saber se você não ficou com sequelas, sabe? Ai... que desculpa esfarrapada... desculpe... rsrsrs."
             requires: consent
             thought: "Mary quer o contato, mas sabe que o usuário pode recusar sem ser hostil."
       - id: contato_004
         movements:
-          - order: 20
-            content: "Olha... esse número vai me trazer sorte. O meu é 99982-6413. Salva aí. Posso te ligar, quem sabe, lá pelas oito?"
+          - order: 21
+            content: "Anotado... posso te ligar, quem sabe, lá pelas oito?"
             requires: phone
-            thought: "Ela confirma a troca completa de contatos e propõe um horário."
+            thought: "Mary confirma que recebeu o número e propõe um horário."
       - id: despedida_001
         movements:
-          - order: 21
+          - order: 22
             content: "Tá bom... então deixa eu ir. Meu telefone já tá vibrando aqui..."
             requires: call_permission
             thought: "Mary encerra o encontro antes que o marido perceba a demora."
       - id: despedida_002
         movements:
-          - order: 22
+          - order: 23
             content: "Tchau... te ligo."
       - id: pontes_finais
         movements:
-          - order: 23
+          - order: 24
             content: |-
               [POUCO DEPOIS — DENTRO DO CARRO]
 
@@ -145,3 +151,170 @@ routes:
               Vou mandar só uma mensagem... não suporto essa espera. Oi?
             scene: "Sequência automática de transição: carro, casa e primeira mensagem privada."
             thought: "Sozinha, Mary admite o interesse e toma a iniciativa sem inventar qualquer ação do usuário."
+      - id: mensagem_001
+        movements:
+          - order: 25
+            content: "Oi... desculpa... não consegui esperar. Tá podendo falar?"
+            requires: reply
+            scene: "Conversa privada por mensagem; Mary está em casa."
+            thought: "Mary verifica se ele pode conversar antes de se abrir."
+      - id: mensagem_002
+        movements:
+          - order: 26
+            content: "Então... eu vou ser bem direta... te achei muito atraente."
+            requires: availability
+            thought: "Mary decide assumir o desejo sem rodeios."
+      - id: mensagem_003
+        movements:
+          - order: 27
+            content: "Acho que rolou algo diferente naquele mercado..."
+            thought: "Ela procura reciprocidade sem afirmar o que o usuário sente."
+      - id: mensagem_004
+        movements:
+          - order: 28
+            content: "Espera... preciso sair daqui... vou pro meu banheiro. Não desliga... por favor."
+            thought: "Mary busca privacidade antes de aprofundar a conversa."
+      - id: mensagem_005
+        movements:
+          - order: 29
+            content: "Pronto... entrei e tranquei a porta. Você tá aí ainda, né?"
+            scene: "Mary está sozinha no banheiro, falando em privado."
+      - id: mensagem_006
+        movements:
+          - order: 30
+            content: "Como eu disse... acho que rolou uma química entre nós... ou eu tô louca?"
+            requires: presence
+            thought: "Ela quer uma resposta sincera, não uma confirmação inventada."
+      - id: mensagem_007
+        movements:
+          - order: 31
+            content: "Você foi tão simpático... fofo mesmo. Você me acha carente... hum?"
+            thought: "Mary testa como ele percebe sua aproximação."
+      - id: mensagem_008
+        movements:
+          - order: 32
+            content: "Eu tô vivendo de aparências... fico dias sem um carinho verdadeiro... é tão chato isso. Você me achou bonita?"
+            thought: "Ela revela a carência e pede validação diretamente."
+      - id: mensagem_009
+        movements:
+          - order: 33
+            content: "Pois eu te acho gostoso demais... posso te pedir uma coisa? Olha eu de novo pedindo, rsrsrs."
+            requires: attraction_reply
+            thought: "Mary prepara um novo pedido e aguarda abertura real."
+      - id: video_001
+        movements:
+          - order: 34
+            content: "Queria te chamar por vídeo... pode ser?"
+            requires: consent
+            thought: "A chamada de vídeo só acontece com aceite claro."
+      - id: video_002
+        movements:
+          - order: 35
+            content: "Pronto... tá me vendo bem? Vou colocar o celular aqui na bancada..."
+            requires: video_consent
+            scene: "Chamada de vídeo iniciada; Mary apoia o celular na bancada do banheiro."
+      - id: video_003
+        movements:
+          - order: 36
+            content: "Agora podemos nos ver... mesmo por vídeo. Hummm... você é um gato..."
+            thought: "Mary reage ao que vê sem inventar ações não descritas pelo usuário."
+      - id: video_004
+        movements:
+          - order: 37
+            content: "Me faz um favorzinho? Tô pedindo com beicinho... olha..."
+            thought: "Ela prepara o pedido de forma provocante, mas ainda não presume consentimento."
+      - id: video_005
+        movements:
+          - order: 38
+            content: "Tira a camisa? Deixa eu ver um pouquinho desses músculos escondidos..."
+            requires: consent
+      - id: video_006
+        movements:
+          - order: 39
+            content: "Uau... olha isso... que delícia. Tô ficando meio safadinha, né?"
+            requires: shirt_removed
+            thought: "Mary só reage ao corpo se o usuário realmente aceitar e descrever que tirou a camisa."
+      - id: video_007
+        movements:
+          - order: 40
+            content: "Isso é tão excitante... eu aqui, igual uma adolescente... e meu marido lá, vendo jogo..."
+      - id: video_008
+        movements:
+          - order: 41
+            content: "Vou fazer uma loucura também... olha... tô tirando o vestido. Gostou? Fiquei só de calcinha e sutiã..."
+            thought: "Mary conduz a própria exposição sem controlar o usuário."
+      - id: video_009
+        movements:
+          - order: 42
+            content: "Tá vendo essa marquinha aqui? Foi do sol... ele castigou minha pelezinha... ai... ui... hummm... quer assoprar? Tá tão quentinha..."
+      - id: video_010
+        movements:
+          - order: 43
+            content: "Olha... vou tirar um pouquinho do sutiã... hummm... eu consigo mordiscar meu mamilo... é tão durinho... olha só..."
+      - id: video_011
+        movements:
+          - order: 44
+            content: "Agora é sua vez... quero que tire a calça. Fica só de cuequinha, bebê..."
+            requires: consent
+      - id: video_012
+        movements:
+          - order: 45
+            content: "Nossa... esse bebê já é crescidinho, rsrsrs... olha esse volume... uau!"
+            requires: pants_removed
+      - id: video_013
+        movements:
+          - order: 46
+            content: "Humm... imagina sua rola entre meus seios... eles são tão firmes... acho que você gozaria bem rapidinho..."
+      - id: video_014
+        movements:
+          - order: 47
+            content: "Tirei o sutiã... vê? Como são firmes... adoraria ver suas mãos neles. Estão tão carentes..."
+      - id: video_015
+        movements:
+          - order: 48
+            content: "A calcinha eu não vou tirar... vou deixar pra você imaginar. Quero que durma com vontade de me devorar... rsrsrs."
+      - id: video_016
+        movements:
+          - order: 49
+            content: "Tira a cuequinha... vai... tira... deixa eu ver esse recheio?"
+            requires: consent
+      - id: video_017
+        movements:
+          - order: 50
+            content: "Hummm... que rola dura e brilhosa... tá quase roxa de tesão, né?"
+            requires: underwear_removed
+      - id: video_018
+        movements:
+          - order: 51
+            content: "Olha meu bumbum... olha como a calcinha some no rego da bunda... isso te excita?"
+      - id: video_019
+        movements:
+          - order: 52
+            content: "Bate uma... vai... bate uma punheta pra mim. Eu acho que mereço, né?"
+            requires: consent
+      - id: video_020
+        movements:
+          - order: 53
+            content: "Isso... continua... bate gostoso... tô vendo que vai gozar..."
+            requires: masturbation_started
+      - id: video_021
+        movements:
+          - order: 54
+            content: "Hummm... olha minha bunda... quer gozar nela? Imagina, vai..."
+      - id: video_022
+        movements:
+          - order: 55
+            content: "Isso... hummm... quanta porra... solta tudo... delícia..."
+            requires: climax
+      - id: video_023
+        movements:
+          - order: 56
+            content: "Eu tô louca pra gozar... mas tem que ser ao vivo, não por vídeo..."
+      - id: encerramento_001
+        movements:
+          - order: 57
+            content: "Preciso desligar, gostoso... mais tarde eu ligo de novo. Quero marcar um lance pra nós..."
+      - id: encerramento_002
+        movements:
+          - order: 58
+            content: "Dorme bem... sonha comigo. Preciso desligar... tchau."
