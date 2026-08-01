@@ -16,7 +16,7 @@ from persistence.v2_google_sheets import (
 
 
 MAX_RECOVERED_INTERACTIONS = 500
-RUNTIME_REPOSITORY_CONTRACT_VERSION = 2
+RUNTIME_REPOSITORY_CONTRACT_VERSION = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,22 +56,59 @@ class GoogleSheetsV2RuntimeRepository:
     def get_active_run(self, *, user_id: str, package_id: str) -> StoryRun | None:
         return self.runs.get_active_run(user_id=user_id, package_id=package_id)
 
+    def _was_false_message_ending(self, run: StoryRun) -> bool:
+        if run.status != "terminated" or run.ending_code != "mary_lost_interest":
+            return False
+
+        rows = [
+            row
+            for row in self.interactions.table.records()
+            if str(row.get("run_id", "")).strip() == run.run_id
+            and str(row.get("role", "")).strip() == "assistant"
+        ]
+        rows.sort(key=lambda row: int(row.get("sequence", 0) or 0))
+        nodes: list[str] = []
+        ending_codes: list[str] = []
+        for row in rows:
+            raw_metadata = str(row.get("metadata_json", "") or "")
+            try:
+                metadata = json.loads(raw_metadata) if raw_metadata else {}
+            except json.JSONDecodeError:
+                metadata = {}
+            if not isinstance(metadata, dict):
+                continue
+            nodes.append(str(metadata.get("pilot_node", "") or ""))
+            ending_codes.append(str(metadata.get("pilot_ending_code", "") or ""))
+
+        return (
+            len(nodes) >= 2
+            and nodes[-2] == "mensagens_iniciais_001"
+            and nodes[-1] in {"end_lost_interest", "end_pilot"}
+            and ending_codes[-1] == "mary_lost_interest"
+        )
+
     def get_resumable_completed_run(
         self,
         *,
         user_id: str,
         package_id: str,
     ) -> StoryRun | None:
-        """Retorna somente conclusão normal elegível para continuação editorial."""
+        """Retorna conclusão normal ou o falso encerramento conhecido da primeira mensagem."""
 
-        candidates = [
-            self.runs._from_row(row)
-            for row in self.runs.runs.records()
-            if str(row.get("user_id", "")).strip() == user_id
-            and str(row.get("package_id", "")).strip() == package_id
-            and str(row.get("status", "")).strip() == "completed"
-            and str(row.get("ending_code", "")).strip() in {"", "normal_completion"}
-        ]
+        candidates: list[StoryRun] = []
+        for row in self.runs.runs.records():
+            if str(row.get("user_id", "")).strip() != user_id:
+                continue
+            if str(row.get("package_id", "")).strip() != package_id:
+                continue
+            run = self.runs._from_row(row)
+            normal_completion = (
+                run.status == "completed"
+                and run.ending_code in {"", "normal_completion", "pilot_complete"}
+            )
+            if normal_completion or self._was_false_message_ending(run):
+                candidates.append(run)
+
         if not candidates:
             return None
         candidates.sort(key=lambda run: run.updated_at, reverse=True)
