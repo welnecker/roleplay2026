@@ -53,6 +53,37 @@ class GoogleSheetsV2RuntimeRepository:
     def get_active_run(self, *, user_id: str, package_id: str) -> StoryRun | None:
         return self.runs.get_active_run(user_id=user_id, package_id=package_id)
 
+    def get_resumable_completed_run(
+        self,
+        *,
+        user_id: str,
+        package_id: str,
+    ) -> StoryRun | None:
+        """Retorna somente conclusão normal elegível para continuação editorial."""
+
+        candidates = [
+            self.runs._from_row(row)
+            for row in self.runs.runs.records()
+            if str(row.get("user_id", "")).strip() == user_id
+            and str(row.get("package_id", "")).strip() == package_id
+            and str(row.get("status", "")).strip() == "completed"
+            and str(row.get("ending_code", "")).strip() in {"", "normal_completion"}
+        ]
+        if not candidates:
+            return None
+        candidates.sort(key=lambda run: run.updated_at, reverse=True)
+        return candidates[0]
+
+    def reactivate_run(self, run: StoryRun) -> StoryRun:
+        """Reabre a mesma execução paga sem criar ou consumir outro crédito."""
+
+        expected_version = run.state_version
+        run.status = "active"
+        run.ending_code = ""
+        run.ended_at = ""
+        run.updated_at = utc_now_iso()
+        return self.runs.update_run(run=run, expected_version=expected_version)
+
     def create_session(
         self,
         *,

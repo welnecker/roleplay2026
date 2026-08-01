@@ -5,12 +5,13 @@ from pathlib import Path
 from uuid import uuid4
 
 import streamlit as st
+import yaml
 
 from narrative_v2.models import StoryRun
 from persistence.runtime_v2 import GoogleSheetsV2RuntimeRepository, RuntimeSession
 from platform_core.auth import AuthenticatedUser
 from roleplay.models import StoryState
-from services.paid_run_access import finish_active_run
+from services.paid_run_access import clear_paid_access_cache, finish_active_run
 from services.v2_run_starter import start_v2_run_on_first_message
 
 
@@ -95,6 +96,69 @@ def _next_sequence_from_messages(messages: list[dict[str, object]]) -> int:
     return max(sequences, default=0) + 1
 
 
+def _current_story_max_order(package_id: str) -> int:
+    """Lê somente a quantidade editorial necessária para decidir uma migração."""
+
+    for package_root in INSTALLED_STORIES_ROOT.iterdir():
+        manifest_path = package_root / "manifest.yaml"
+        if not manifest_path.is_file():
+            continue
+        manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict) or str(manifest.get("package_id", "")) != package_id:
+            continue
+        entrypoint = str(manifest.get("entrypoint", "story.yaml") or "story.yaml")
+        story_path = package_root / entrypoint
+        story = yaml.safe_load(story_path.read_text(encoding="utf-8"))
+        if not isinstance(story, dict):
+            return 0
+        orders: list[int] = []
+        for route in story.get("routes", []) or []:
+            if not isinstance(route, dict):
+                continue
+            for beat in route.get("beats", []) or []:
+                if not isinstance(beat, dict):
+                    continue
+                for movement in beat.get("movements", []) or []:
+                    if isinstance(movement, dict):
+                        try:
+                            orders.append(int(movement.get("order", 0) or 0))
+                        except (TypeError, ValueError):
+                            continue
+        return max(orders, default=0)
+    return 0
+
+
+def _try_resume_completed_run(
+    repository: GoogleSheetsV2RuntimeRepository,
+    *,
+    user: AuthenticatedUser,
+    package_id: str,
+) -> tuple[StoryRun | None, StoryState, list[dict[str, object]]]:
+    candidate = repository.get_resumable_completed_run(
+        user_id=user.user_id,
+        package_id=package_id,
+    )
+    if candidate is None:
+        return None, StoryState(), []
+
+    messages = repository.list_interactions(
+        run_id=candidate.run_id,
+        limit=RECOVERY_HISTORY_LIMIT,
+    )
+    if not messages:
+        return None, StoryState(), []
+
+    state = _state_from_messages(messages)
+    last_consumed_order = max(state.consumed_orders, default=0)
+    if _current_story_max_order(package_id) <= last_consumed_order:
+        return None, StoryState(), []
+
+    run = repository.reactivate_run(candidate)
+    state.finished = False
+    clear_paid_access_cache(user_id=user.user_id, package_id=package_id)
+    return run, state, _ordered_messages(messages)
+
+
 def open_persistent_runtime(
     repository: GoogleSheetsV2RuntimeRepository,
     *,
@@ -111,16 +175,27 @@ def open_persistent_runtime(
     )
     session: RuntimeSession | None = None
     messages: list[dict[str, object]] = []
+    state = StoryState()
+
+    if run is not None:
+        messages = repository.list_interactions(
+            run_id=run.run_id,
+            limit=RECOVERY_HISTORY_LIMIT,
+        )
+        state = _state_from_messages(messages)
+    elif not restart:
+        run, state, messages = _try_resume_completed_run(
+            repository,
+            user=user,
+            package_id=package_id,
+        )
+
     if run is not None:
         session = repository.create_session(
             run_id=run.run_id,
             user_id=user.user_id,
             package_id=package_id,
             instance_id=resolved_instance,
-        )
-        messages = repository.list_interactions(
-            run_id=run.run_id,
-            limit=RECOVERY_HISTORY_LIMIT,
         )
 
     context = RuntimePersistenceContext(
@@ -131,7 +206,7 @@ def open_persistent_runtime(
         instance_id=resolved_instance,
         next_sequence=_next_sequence_from_messages(messages),
     )
-    return context, _state_from_messages(messages), _ordered_messages(messages)
+    return context, state, _ordered_messages(messages)
 
 
 def _ensure_run_and_session(
