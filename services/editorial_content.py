@@ -29,6 +29,7 @@ EXTENSION_PATHS = (
     PACKAGE_ROOT / "supermarket_continuation.yaml",
     PACKAGE_ROOT / "narrative_enhancements.yaml",
     PACKAGE_ROOT / "full_story.yaml",
+    PACKAGE_ROOT / "full_story_fixes.yaml",
 )
 _EDITORIAL_REPOSITORY: GoogleSheetsEditorialRepository | None = None
 _EDITORIAL_READY = False
