@@ -1,0 +1,34 @@
+format_version: 1
+package_id: roleplay2026.casada_frustrada
+append_blocks:
+  - block_id: full_story_bridge_targets
+    order: 8
+    title: Alvos formais das pontes automáticas
+    entry_beat_id: late_night_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Estes beats formalizam os últimos alvos das pontes automáticas para retomada e validação.
+    beats:
+      - beat_id: late_night_001
+        order: 1
+        type: dialogue
+        required_movement: Mary envia uma mensagem de madrugada e aguarda a resposta do usuário.
+        canonical_line: '(no banheiro): Oi..acorda dorminhoco, rsrsrs...'
+        next_beat_id: late_night_002
+        max_questions: 0
+        max_sentences: 2
+        memory_writes: []
+        allowed_transitions: {engaged: late_night_002, minimal: late_night_002, dismissive: late_night_002, nonsense: late_night_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: motel_arrival_002
+        order: 2
+        type: dialogue
+        required_movement: Mary se observa com a lingerie e reafirma o que busca no encontro.
+        canonical_line: '(após colocar a lingerie, olhando no espelho): Porra Mary...você é realmente gostosa...só quero o que é meu..minha sanidade..preciso gozar...preciso ser mulher de novo..'
+        next_beat_id: motel_arrival_003
+        max_questions: 0
+        max_sentences: 4
+        memory_writes: []
+        allowed_transitions: {engaged: motel_arrival_003, minimal: motel_arrival_003, dismissive: motel_arrival_003, nonsense: motel_arrival_003, mocking: end_hostile, hostile: end_hostile}
+        status: active
