@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from .interaction_control import consume_interaction_action
 from .models import Movement, StoryDefinition, StoryState
 
 
 class StoryEngine:
-    """Motor determinístico: o código controla ordem, beat e rota."""
+    """Motor linear: o roteiro fornece a linha; o modelo decide avançar, esperar ou encerrar."""
 
     def __init__(self, story: StoryDefinition) -> None:
         self.story = story
@@ -48,7 +49,16 @@ class StoryEngine:
                 f"Movimento fora de ordem: esperado={expected.order}, recebido={movement.order}."
             )
 
+        action = consume_interaction_action()
         updated = state.copy()
+
+        if action == "stay":
+            return updated
+
+        if action in {"end_negative", "end_hallucination", "end_refusal"}:
+            updated.finished = True
+            return updated
+
         updated.consumed_orders.append(movement.order)
         self._advance_empty_steps(updated)
         return updated

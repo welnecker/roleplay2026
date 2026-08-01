@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -17,14 +17,14 @@ class MovementDefinition(BaseModel):
 
     order: int = Field(ge=1)
     content: str = Field(min_length=1)
+    thought: str = ""
+    scene: str = ""
+    requires: Literal["", "answer", "plaza_confirmation", "consent", "name", "phone", "call_permission"] = ""
 
-    @field_validator("content")
+    @field_validator("content", "thought", "scene")
     @classmethod
-    def normalize_content(cls, value: str) -> str:
-        clean = value.strip()
-        if not clean:
-            raise ValueError("movement content cannot be blank")
-        return clean
+    def normalize_text(cls, value: str) -> str:
+        return value.strip()
 
 
 class BeatDefinition(BaseModel):

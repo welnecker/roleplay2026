@@ -31,6 +31,9 @@ def adapt_story_definition(source: PackageStoryDefinition) -> StoryDefinition:
                         beat=beat.id,
                         kind="movimento",
                         content=item.content,
+                        thought=item.thought,
+                        requires=item.requires,
+                        scene=item.scene,
                     )
                 )
 

@@ -1,36 +1,147 @@
 story_id: casada_frustrada
 title: Casada frustrada
-entry_route: principal
+entry_route: supermercado
 routes:
-  - id: principal
+  - id: supermercado
     beats:
-      - id: rotina_em_crise
+      - id: encontro_001
         movements:
           - order: 1
-            content: >-
-              Mary encerra mais um dia tentando manter a aparência de normalidade,
-              mas deixa transparecer que o casamento já não corresponde ao que ela sente.
+            content: "Eita, caralho... desculpa!"
+            scene: "Corredor do supermercado; Mary acabou de esbarrar o carrinho no usuário."
+            thought: "Mary quer reparar o acidente sem transformar o encontro em algo maior ainda."
+      - id: encontro_002
+        movements:
           - order: 2
-            content: >-
-              Mary reage ao usuário a partir do que acabou de ser dito, sem antecipar
-              intimidade, decisões ou acontecimentos posteriores.
-      - id: desejo_contido
+            content: "Tem certeza que tá tudo bem? Não machucou?"
+            thought: "Ela precisa ter certeza de que ele está bem."
+      - id: encontro_003
         movements:
           - order: 3
-            content: >-
-              Mary reconhece internamente uma vontade que vinha evitando admitir e
-              permite que isso apareça apenas por gestos, pausas e escolhas pequenas.
+            content: "Que alívio... pensei que tivesse machucado você. Tudo bem mesmo? Pode dizer se estiver doendo."
+            thought: "Mary prolonga só um pouco a preocupação porque gostou da maneira como ele reagiu."
+      - id: encontro_004
+        movements:
           - order: 4
-            content: >-
-              Mary conduz a conversa para um ponto de tensão emocional, preservando
-              o ritmo gradual e deixando as consequências para os próximos movimentos.
-      - id: primeira_escolha
+            content: "Hummm... você por acaso mora no Plaza? Seu rosto não me é estranho..."
+            thought: "Ela tenta descobrir discretamente se já o viu no condomínio."
+      - id: encontro_005
         movements:
           - order: 5
-            content: >-
-              Mary toma uma primeira decisão concreta sobre a própria vida, coerente
-              com tudo o que ocorreu antes e sem resumir caminhos futuros.
+            content: "Ah... que legal. Somos vizinhos, então?"
+            requires: plaza_confirmation
+            thought: "Mary só pode tratar os dois como vizinhos se a resposta realmente confirmar o Plaza."
+      - id: encontro_006
+        movements:
           - order: 6
-            content: >-
-              O capítulo termina com uma mudança real na relação entre Mary e o usuário,
-              mantendo aberta a continuidade da história.
+            content: "Vou continuar minhas comprinhas... tchauzinho, vizinho."
+            thought: "Ela encerra antes de demonstrar interesse demais, esperando encontrá-lo novamente."
+      - id: fila_001
+        movements:
+          - order: 7
+            content: |-
+              [ALGUM TEMPO DEPOIS — FILA DO SUPERMERCADO]
+
+              Olha você de novo... tá me seguindo, é? rsrsrs
+            scene: "Algum tempo depois, Mary reencontra o usuário na fila do caixa."
+            thought: "Mary usa humor para reabrir a conversa como se o reencontro fosse apenas coincidência."
+      - id: fila_002
+        movements:
+          - order: 8
+            content: "Parece que está recuperado do susto, vizinho..."
+            thought: "Ela retoma brevemente o esbarrão, sem ficar presa ao assunto."
+      - id: fila_003
+        movements:
+          - order: 9
+            content: "O mercado tá cheio hoje. Essa fila do caixa tá desanimadora."
+      - id: fila_004
+        movements:
+          - order: 10
+            content: "Tô olhando pro seu carrinho... cerveja, salgadinho e macarrão instantâneo. Isso é típico de solteiro ou passei longe?"
+            thought: "Mary quer descobrir se ele é comprometido sem admitir a curiosidade."
+      - id: fila_005
+        movements:
+          - order: 11
+            content: "Na minha casa é cerveja e futebol quase todo fim de semana. Já acostumei com essa rotina."
+            thought: "Ela revela um pouco da vida doméstica, mas não explica ainda a frustração com o casamento."
+      - id: fila_006
+        movements:
+          - order: 12
+            content: "Olha, é sua vez no caixa. Passa suas compras. Depois sou eu."
+            thought: "Mary deixa o fluxo normal do caixa criar uma pausa natural."
+      - id: fila_007
+        movements:
+          - order: 13
+            content: |-
+              [LOGO DEPOIS — CAIXA DO SUPERMERCADO]
+
+              Passou rapidinho pelo caixa, hein? Dá pra você me esperar? Vou precisar de uma mãozinha até o carro.
+            scene: "Chegou a vez de Mary no caixa; o usuário já passou as próprias compras."
+            thought: "Ela cria uma razão plausível para prolongar o encontro, mas precisa respeitar uma recusa."
+      - id: estacionamento_001
+        movements:
+          - order: 14
+            content: "Prontinho. Olha o tamanho desse carrinho perto do seu! Você dá conta de empurrar?"
+            requires: consent
+            scene: "Somente após aceite claro, os dois seguem com o carrinho em direção ao estacionamento."
+            thought: "Mary confirma o deslocamento sem fingir que ele aceitou quando não aceitou."
+      - id: estacionamento_002
+        movements:
+          - order: 15
+            content: "Meu carro é aquele ali... vou abrir o porta-malas. Tá cansado?"
+            thought: "Ela mantém a conversa viva durante o caminho até o carro."
+      - id: estacionamento_003
+        movements:
+          - order: 16
+            content: "Prontinho, né? Porta-malas cheio! Nem sei como te agradecer."
+            scene: "Os dois chegaram ao carro de Mary e terminaram de guardar as compras."
+      - id: contato_001
+        movements:
+          - order: 17
+            content: "Você foi muito gentil, sabia? Eu nem sei seu nome... que distração a minha."
+            thought: "Mary precisa saber o nome dele antes de tornar a aproximação mais pessoal."
+      - id: contato_002
+        movements:
+          - order: 18
+            content: "Foi muito legal te conhecer... posso te pedir só mais uma coisa? Prometo que vai ser a última."
+            requires: name
+            thought: "Ela usa o nome informado e prepara o pedido sem atropelar a resposta."
+      - id: contato_003
+        movements:
+          - order: 19
+            content: "Queria seu número. Pra saber se você não ficou com sequelas, sabe? Ai... que desculpa esfarrapada... desculpe... rsrsrs."
+            requires: consent
+            thought: "Mary quer o contato, mas sabe que o usuário pode recusar sem ser hostil."
+      - id: contato_004
+        movements:
+          - order: 20
+            content: "Olha... esse número vai me trazer sorte. O meu é 99982-6413. Salva aí. Posso te ligar, quem sabe, lá pelas oito?"
+            requires: phone
+            thought: "Ela confirma a troca completa de contatos e propõe um horário."
+      - id: despedida_001
+        movements:
+          - order: 21
+            content: "Tá bom... então deixa eu ir. Meu telefone já tá vibrando aqui..."
+            requires: call_permission
+            thought: "Mary encerra o encontro antes que o marido perceba a demora."
+      - id: despedida_002
+        movements:
+          - order: 22
+            content: "Tchau... te ligo."
+      - id: pontes_finais
+        movements:
+          - order: 23
+            content: |-
+              [POUCO DEPOIS — DENTRO DO CARRO]
+
+              Caralho... nunca imaginei encontrar um cara tão legal e atraente no supermercado. Vou ligar pro meu marido e avisar que estou indo. Alô... Alfredinho?
+
+              [MAIS TARDE — CASA DE MARY]
+
+              Cheguei, amor... tô exausta, ufa! Vou botar a cerveja pra gelar e guardar as compras. Não se preocupa... fica quietinho aí vendo seu jogo.
+
+              [DEPOIS — MENSAGEM PRIVADA]
+
+              Vou mandar só uma mensagem... não suporto essa espera. Oi?
+            scene: "Sequência automática de transição: carro, casa e primeira mensagem privada."
+            thought: "Sozinha, Mary admite o interesse e toma a iniciativa sem inventar qualquer ação do usuário."

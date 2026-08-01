@@ -10,6 +10,9 @@ class Movement:
     beat: str
     kind: str
     content: str
+    thought: str = ""
+    requires: str = ""
+    scene: str = ""
     condition: str = ""
 
 
