@@ -218,9 +218,13 @@ class GoogleSheetsV2RuntimeRepository:
             )
 
     def list_run_memory_ids(self, *, run_id: str) -> list[str]:
+        runs = getattr(self, "runs", None)
+        memories = getattr(runs, "memories", None)
+        if memories is None:
+            return []
         values = {
             str(row.get("memory_id", "")).strip()
-            for row in self.runs.memories.records()
+            for row in memories.records()
             if str(row.get("run_id", "")).strip() == run_id
             and str(row.get("memory_id", "")).strip()
         }
