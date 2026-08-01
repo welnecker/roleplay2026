@@ -15,6 +15,7 @@ from services.v2_run_starter import start_v2_run_on_first_message
 
 
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
+RECOVERY_HISTORY_LIMIT = 500
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,12 +60,25 @@ def restore_story_state(raw: dict[str, object]) -> StoryState:
     )
 
 
+def _ordered_messages(messages: list[dict[str, object]]) -> list[dict[str, object]]:
+    return sorted(
+        messages,
+        key=lambda item: int(item.get("sequence", 0) or 0),
+    )
+
+
 def _state_from_messages(messages: list[dict[str, object]]) -> StoryState:
-    for message in reversed(messages):
+    for message in reversed(_ordered_messages(messages)):
         raw = message.get("_story_state")
         if isinstance(raw, dict):
             return restore_story_state(raw)
-    assistant_count = sum(1 for item in messages if str(item.get("role", "")) == "assistant")
+
+    assistant_messages = [
+        item
+        for item in _ordered_messages(messages)
+        if str(item.get("role", "")) == "assistant"
+    ]
+    assistant_count = len(assistant_messages)
     return StoryState(
         step_index=assistant_count,
         consumed_orders=list(range(1, assistant_count + 1)),
@@ -104,7 +118,10 @@ def open_persistent_runtime(
             package_id=package_id,
             instance_id=resolved_instance,
         )
-        messages = repository.list_interactions(run_id=run.run_id, limit=100)
+        messages = repository.list_interactions(
+            run_id=run.run_id,
+            limit=RECOVERY_HISTORY_LIMIT,
+        )
 
     context = RuntimePersistenceContext(
         package_id=package_id,
@@ -114,7 +131,7 @@ def open_persistent_runtime(
         instance_id=resolved_instance,
         next_sequence=_next_sequence_from_messages(messages),
     )
-    return context, _state_from_messages(messages), messages
+    return context, _state_from_messages(messages), _ordered_messages(messages)
 
 
 def _ensure_run_and_session(
