@@ -16,6 +16,7 @@ from persistence.v2_google_sheets import (
 
 
 MAX_RECOVERED_INTERACTIONS = 500
+RUNTIME_REPOSITORY_CONTRACT_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +34,8 @@ class RuntimeSession:
 
 class GoogleSheetsV2RuntimeRepository:
     """Runtime operacional gravado exclusivamente em ROLEPLAY_RUNTIME."""
+
+    contract_version = RUNTIME_REPOSITORY_CONTRACT_VERSION
 
     def __init__(self, spreadsheet: Spreadsheet) -> None:
         self.spreadsheet = spreadsheet
