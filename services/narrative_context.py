@@ -89,16 +89,11 @@ def build_narrative_context(
     memory_ids: Iterable[str],
     facts: dict[str, str] | None = None,
 ) -> str:
-    return (
-        character_context(document)
-        + "\n\n"
-        + render_active_memories(document, memory_ids, facts)
-    )
+    return character_context(document) + "\n\n" + render_active_memories(document, memory_ids, facts)
 
 
 def validate_memory_references(document: dict[str, Any]) -> None:
-    catalog = memory_catalog(document)
-    known = set(catalog)
+    known = set(memory_catalog(document))
     for block in document.get("blocks", []) or []:
         if not isinstance(block, dict):
             continue
@@ -108,9 +103,45 @@ def validate_memory_references(document: dict[str, Any]) -> None:
             beat_id = str(beat.get("beat_id", ""))
             for memory_id in beat.get("memory_writes", []) or []:
                 if str(memory_id) not in known:
-                    raise ValueError(
-                        f"Memória inexistente no beat {beat_id}: {memory_id}"
-                    )
+                    raise ValueError(f"Memória inexistente no beat {beat_id}: {memory_id}")
+
+
+def validate_terminal_yards(document: dict[str, Any]) -> None:
+    """Garante desaceleração real: dois movimentos e saída exclusivamente terminal."""
+
+    ending_ids = {
+        str(beat.get("beat_id", ""))
+        for block in document.get("blocks", []) or []
+        if isinstance(block, dict)
+        for beat in block.get("beats", []) or []
+        if isinstance(beat, dict) and str(beat.get("type", "dialogue")) == "ending"
+    }
+    for block in document.get("blocks", []) or []:
+        if not isinstance(block, dict) or str(block.get("block_type", "")) != "terminal_yard":
+            continue
+        block_id = str(block.get("block_id", ""))
+        beats = [
+            beat
+            for beat in block.get("beats", []) or []
+            if isinstance(beat, dict) and str(beat.get("type", "dialogue")) != "ending"
+        ]
+        if len(beats) < 2:
+            raise ValueError(f"Pátio terminal {block_id} precisa de pelo menos dois movimentos.")
+        if int(block.get("min_user_turns", 0) or 0) < 2:
+            raise ValueError(f"Pátio terminal {block_id} precisa de min_user_turns >= 2.")
+        yard_ids = {str(beat.get("beat_id", "")) for beat in beats}
+        for index, beat in enumerate(beats):
+            transitions = dict(beat.get("allowed_transitions") or {})
+            ordinary_targets = {
+                str(target)
+                for kind, target in transitions.items()
+                if kind not in {"mocking", "hostile"} and str(target).strip()
+            }
+            if index < len(beats) - 1:
+                if not ordinary_targets or not ordinary_targets.issubset(yard_ids):
+                    raise ValueError(f"Pátio {block_id} saiu antes da despedida final.")
+            elif not ordinary_targets or not ordinary_targets.issubset(ending_ids):
+                raise ValueError(f"Último movimento do pátio {block_id} deve apontar para ending.")
 
 
 def _items(value: Any) -> list[str]:
