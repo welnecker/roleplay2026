@@ -48,9 +48,26 @@ def test_nome_e_reconhecido_antes_do_proximo_beat() -> None:
     assert turn.target_id == "ask_name"
     assert turn.state.node_id == "ask_name"
     assert turn.state.facts["user_name"] == "Janio"
+    assert turn.state.facts["_acknowledged_user_name"] == "Janio"
     assert turn.state.pending_next_beat_id == "ask_favor"
     assert "Janio" in turn.visible_fallback
     assert "você se chama Mary" in turn.system_prompt
+
+
+def test_fato_pre_extraido_ainda_e_reconhecido_no_turno_atual() -> None:
+    facts = extract_user_facts("Me chamo Janio. E você?", {})
+    signal = detect_organic_signal("Me chamo Janio. E você?", facts)
+
+    assert signal is not None
+    assert signal.kind == "fact_acknowledgement"
+    assert signal.facts["_acknowledged_user_name"] == "Janio"
+
+    repeated = detect_organic_signal(
+        "Me chamo Janio. E você?",
+        signal.facts,
+    )
+    assert repeated is not None
+    assert repeated.kind == "direct_question"
 
 
 def test_turno_seguinte_retoma_o_beat_pendente() -> None:
