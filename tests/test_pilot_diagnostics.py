@@ -41,9 +41,10 @@ def test_resposta_nova_e_preservada() -> None:
     assert result.guard_reason == "model_response_accepted"
 
 
-def test_validador_preserva_reacao_e_anexa_beat_quando_modelo_o_omite() -> None:
+def test_validador_preserva_pensamento_reacao_e_anexa_beat_quando_modelo_o_omite() -> None:
+    thought = "[PENSAMENTO]\nIsso mexeu comigo.\n[/PENSAMENTO]"
     raw = (
-        "[PENSAMENTO]\nIsso mexeu comigo.\n[/PENSAMENTO]\n\n"
+        f"{thought}\n\n"
         "Acertou em cheio... só de imaginar já fico sem rumo.\n\n"
         "Eu continuaria provocando e abriria outra pergunta fora do beat."
     )
@@ -59,11 +60,43 @@ def test_validador_preserva_reacao_e_anexa_beat_quando_modelo_o_omite() -> None:
         recent_assistant_messages=[],
     )
 
-    assert result.response.startswith("Acertou em cheio")
+    assert result.response.startswith(thought)
+    assert "Acertou em cheio" in result.response
     assert result.response.endswith(fallback)
     assert "outra pergunta" not in result.response
     assert result.used_fallback is False
     assert result.guard_reason == "reaction_preserved_fallback_appended"
+
+
+def test_motel_preserva_pensamento_e_termina_no_beat_canonico() -> None:
+    thought = (
+        "[PENSAMENTO]\n"
+        "Ele acha que eu já estou satisfeita, mas eu ainda quero mais.\n"
+        "[/PENSAMENTO]"
+    )
+    fallback = (
+        "Você me salvou, gostoso...hummmf...delícia..."
+        "quero te dar mais um presente..."
+    )
+    raw = (
+        f"{thought}\n\n"
+        "Ainda não, gostoso... você só me deixou querendo mais.\n\n"
+        f"{fallback}\n\n"
+        "Agora vou antecipar uma ação que pertence ao próximo beat."
+    )
+
+    result = finalize_model_response(
+        raw_response=raw,
+        cleaned_response=raw,
+        fallback=fallback,
+        recent_assistant_messages=[],
+    )
+
+    assert result.response.startswith(thought)
+    assert "Ainda não, gostoso" in result.response
+    assert result.response.endswith(fallback)
+    assert "antecipar uma ação" not in result.response
+    assert result.guard_reason == "motel_canonical_boundary"
 
 
 def test_nao_preserva_reacao_com_narracao_proibida() -> None:
