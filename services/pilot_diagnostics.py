@@ -31,8 +31,6 @@ def finalize_model_response(
     fallback: str,
     recent_assistant_messages: Iterable[str],
 ) -> GuardedResponse:
-    """Rejeita repetição e preserva a progressão editorial do turno."""
-
     raw = str(raw_response or "").strip()
     cleaned = str(cleaned_response or "").strip()
     safe_fallback = str(fallback or "").strip()
@@ -44,26 +42,24 @@ def finalize_model_response(
             fallback=safe_fallback,
             recent_assistant_messages=recent,
         )
-        used_fallback = _normalize(integrated) == _normalize(safe_fallback)
         return GuardedResponse(
             integrated,
             False,
-            used_fallback,
+            _normalize(integrated) == _normalize(safe_fallback),
             "motel_canonical_boundary",
         )
 
-    if safe_fallback and _is_farewell_teaser_line(safe_fallback):
+    if safe_fallback and _is_integrated_boundary_line(safe_fallback):
         integrated = _reaction_before_canonical(
             response=raw or cleaned,
             fallback=safe_fallback,
             recent_assistant_messages=recent,
         )
-        used_fallback = _normalize(integrated) == _normalize(safe_fallback)
         return GuardedResponse(
             integrated,
             False,
-            used_fallback,
-            "farewell_teaser_boundary",
+            _normalize(integrated) == _normalize(safe_fallback),
+            "integrated_canonical_boundary",
         )
 
     if not cleaned:
@@ -71,12 +67,7 @@ def finalize_model_response(
 
     repeated = _repeats_recent_anchor(cleaned, recent)
     if repeated and _normalize(cleaned) != _normalize(safe_fallback):
-        return GuardedResponse(
-            safe_fallback,
-            True,
-            True,
-            "repeated_recent_anchor",
-        )
+        return GuardedResponse(safe_fallback, True, True, "repeated_recent_anchor")
 
     used_fallback = bool(safe_fallback) and _normalize(cleaned) == _normalize(safe_fallback)
     if used_fallback and raw and _normalize(raw) != _normalize(cleaned):
@@ -98,65 +89,49 @@ def finalize_model_response(
 
 
 @lru_cache(maxsize=1)
-def _motel_canonical_lines() -> frozenset[str]:
-    """Lê a fonte editorial compilada; não duplica o roteiro no código."""
-
+def _compiled_beats() -> tuple[dict[str, Any], ...]:
     try:
         from services.editorial_compiler import compile_editorial_document
         from services.editorial_content import load_source_document
 
         compiled = compile_editorial_document(load_source_document())
         scene = compiled.get("scene") or {}
-        beats = scene.get("beats") or []
-        result: set[str] = set()
-        for beat in beats:
-            if not isinstance(beat, dict):
-                continue
-            beat_id = str(beat.get("beat_id", "") or "")
-            if not re.fullmatch(r"motel_\d+", beat_id):
-                continue
-            units = beat.get("units") or []
-            for unit in units:
-                if not isinstance(unit, dict) or unit.get("kind") != "dialogue":
-                    continue
-                line = str(unit.get("anchor") or unit.get("text") or "").strip()
-                if line:
-                    result.add(_normalize(line))
-                    break
-        return frozenset(result)
+        return tuple(item for item in scene.get("beats") or [] if isinstance(item, dict))
     except Exception:
-        LOGGER.exception("Não foi possível carregar as linhas canônicas do motel")
-        return frozenset()
+        LOGGER.exception("Não foi possível carregar os beats editoriais")
+        return ()
 
 
 @lru_cache(maxsize=1)
-def _farewell_teaser_lines() -> frozenset[str]:
-    """Lê apenas o beat editorial penúltimo que deve combinar reação e despedida."""
+def _motel_canonical_lines() -> frozenset[str]:
+    result: set[str] = set()
+    for beat in _compiled_beats():
+        if not re.fullmatch(r"motel_\d+", str(beat.get("beat_id", "") or "")):
+            continue
+        line = _dialogue_line(beat)
+        if line:
+            result.add(_normalize(line))
+    return frozenset(result)
 
-    try:
-        from services.editorial_compiler import compile_editorial_document
-        from services.editorial_content import load_source_document
 
-        compiled = compile_editorial_document(load_source_document())
-        scene = compiled.get("scene") or {}
-        beats = scene.get("beats") or []
-        result: set[str] = set()
-        for beat in beats:
-            if not isinstance(beat, dict):
-                continue
-            if str(beat.get("beat_id", "") or "") != "yard_motel_farewell_004":
-                continue
-            for unit in beat.get("units") or []:
-                if not isinstance(unit, dict) or unit.get("kind") != "dialogue":
-                    continue
-                line = str(unit.get("anchor") or unit.get("text") or "").strip()
-                if line:
-                    result.add(_normalize(line))
-                    break
-        return frozenset(result)
-    except Exception:
-        LOGGER.exception("Não foi possível carregar a despedida canônica penúltima")
-        return frozenset()
+@lru_cache(maxsize=1)
+def _integrated_boundary_lines() -> frozenset[str]:
+    result: set[str] = set()
+    for beat in _compiled_beats():
+        if str(beat.get("response_boundary", "") or "") != "integrated_canonical":
+            continue
+        line = _dialogue_line(beat)
+        if line:
+            result.add(_normalize(line))
+    return frozenset(result)
+
+
+def _dialogue_line(beat: dict[str, Any]) -> str:
+    for unit in beat.get("units") or []:
+        if not isinstance(unit, dict) or unit.get("kind") != "dialogue":
+            continue
+        return str(unit.get("anchor") or unit.get("text") or "").strip()
+    return ""
 
 
 def _is_motel_canonical_line(fallback: str) -> bool:
@@ -164,9 +139,9 @@ def _is_motel_canonical_line(fallback: str) -> bool:
     return bool(normalized) and normalized in _motel_canonical_lines()
 
 
-def _is_farewell_teaser_line(fallback: str) -> bool:
+def _is_integrated_boundary_line(fallback: str) -> bool:
     normalized = _normalize(fallback)
-    return bool(normalized) and normalized in _farewell_teaser_lines()
+    return bool(normalized) and normalized in _integrated_boundary_lines()
 
 
 def build_turn_diagnostics(
@@ -182,8 +157,6 @@ def build_turn_diagnostics(
     repeated_recent_anchor: bool = False,
     system_prompt: str = "",
 ) -> dict[str, object]:
-    """Cria um retrato compacto e serializável da decisão narrativa do turno."""
-
     previous_node = str(getattr(previous_state, "node_id", "") or "")
     previous_pending = str(getattr(previous_state, "pending_next_beat_id", "") or "")
     previous_interstitial = int(getattr(previous_state, "interstitial_turns", 0) or 0)
@@ -259,8 +232,6 @@ def log_exception(stage: str, exc: BaseException, **context: object) -> None:
 
 
 def _split_optional_thought(text: str) -> tuple[str, str]:
-    """Separa um pensamento válido sem alterar seu conteúdo ou posição semântica."""
-
     raw = str(text or "").strip()
     match = _THOUGHT_PATTERN.search(raw)
     if match is None:
@@ -280,8 +251,6 @@ def _reaction_before_canonical(
     fallback: str,
     recent_assistant_messages: list[str],
 ) -> str:
-    """Mantém pensamento e reação, reaplica o beat exato e corta a continuação."""
-
     raw = str(response or "").strip()
     safe_fallback = str(fallback or "").strip()
     if not raw:
@@ -301,8 +270,6 @@ def _reaction_before_canonical(
 
 
 def _prefix_before_anchor(text: str, anchor: str) -> str | None:
-    """Localiza a fala canônica por palavras, independentemente da pontuação."""
-
     text_tokens = [
         (match.group(0).casefold(), match.start())
         for match in re.finditer(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ]+", str(text or ""))
@@ -340,8 +307,6 @@ def _preserve_reaction_and_append_fallback(
     fallback: str,
     recent_assistant_messages: list[str],
 ) -> str:
-    """Recupera pensamento e reação inicial quando o modelo esquece o beat."""
-
     raw = str(raw_response or "").strip()
     safe_fallback = str(fallback or "").strip()
     if not raw or not safe_fallback:
@@ -378,7 +343,6 @@ def _first_sentences(text: str, *, limit: int) -> str:
     compact = " ".join(str(text or "").split())
     if not compact:
         return ""
-
     protected = re.sub(r"\.{2,}", _ELLIPSIS_TOKEN, compact)
     pieces = re.split(r"(?<=[.!?])\s+", protected)
     selected = " ".join(pieces[: max(1, int(limit))]).strip()

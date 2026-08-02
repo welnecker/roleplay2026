@@ -16,7 +16,9 @@ class OrganicSignal:
 _NAME_PATTERNS = (
     re.compile(r"\bme\s+chamo\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
     re.compile(r"\bmeu\s+nome\s+[ée]\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
+    re.compile(r"\bsou\s+(?:o\s+|a\s+)?([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})\b", re.IGNORECASE),
 )
+_PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?55[\s.-]?)?(?:\(?\d{2}\)?[\s.-]?)?\d(?:[\s.-]?\d){7,10}(?!\d)")
 _EXCLUSIVE_REACTION_PATTERNS = (
     re.compile(r"\bvoc[eê]\s+(?:é|e)\s+(?:[\wÀ-ÖØ-öø-ÿ'’-]+\s+){0,3}louca\b", re.IGNORECASE),
     re.compile(r"\b(?:tenho medo|tô com medo|estou com medo|é perigoso|e perigoso|não quero morrer|nao quero morrer)\b", re.IGNORECASE),
@@ -28,32 +30,56 @@ _INTEGRATED_REACTION_PATTERNS = (
     re.compile(r"\b(?:linda|lindo|gostosa|gostoso|deliciosa|delicioso|tesão|tesao|sexy)\b", re.IGNORECASE),
     re.compile(r"\b(?:corpo|quadril|bunda|seios?|peitos?|xoxota|buceta|pau|rola)\b", re.IGNORECASE),
 )
+_INVALID_NAMES = frozenset({"homem", "mulher", "cara", "gata", "princesa"})
+
+
+def extract_user_facts(
+    user_text: str,
+    known_facts: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Extrai fatos explícitos sem depender de existir uma reação orgânica."""
+
+    facts = dict(known_facts or {})
+    text = " ".join(str(user_text or "").strip().split())
+    if not text:
+        return facts
+
+    phone = _extract_phone(text)
+    if phone:
+        facts["user_phone"] = phone
+
+    name = _extract_name(text)
+    if name:
+        facts["user_name"] = name
+
+    return facts
 
 
 def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = None) -> OrganicSignal | None:
-    """Classifica contribuições orgânicas como exclusivas ou integradas ao beat."""
+    """Classifica a reação e reconhece fatos explícitos ainda não respondidos."""
 
     text = " ".join(user_text.strip().split())
     if not text:
         return None
 
-    facts = dict(known_facts or {})
-    for pattern in _NAME_PATTERNS:
-        match = pattern.search(text)
-        if match:
-            name = _clean_name(match.group(1))
-            if name:
-                facts["user_name"] = name
-                return OrganicSignal(
-                    kind="fact_acknowledgement",
-                    facts=facts,
-                    instruction=(
-                        f"Reconheça claramente que o nome do usuário é {name}. "
-                        "Use o nome na resposta e, se ele perguntou o seu nome, diga que você se chama Mary. "
-                        "Responda ao tom de vizinhança ou brincadeira antes de retomar o roteiro."
-                    ),
-                    fallback=f"{name}... prazer. Agora não esqueço mais, rsrsrs. Eu sou a Mary.",
-                )
+    facts = extract_user_facts(text, known_facts)
+    stated_name = _extract_name(text)
+    acknowledged_name = str(facts.get("_acknowledged_user_name", "")).strip()
+
+    # A extração pode ocorrer antes desta função. O reconhecimento depende do que
+    # foi dito no turno atual, não apenas da comparação entre estado antigo e novo.
+    if stated_name and stated_name.casefold() != acknowledged_name.casefold():
+        facts["_acknowledged_user_name"] = stated_name
+        return OrganicSignal(
+            kind="fact_acknowledgement",
+            facts=facts,
+            instruction=(
+                f"Reconheça claramente que o nome do usuário é {stated_name}. "
+                "Use o nome na resposta e, se ele perguntou o seu nome, diga que você se chama Mary. "
+                "Responda ao tom de vizinhança ou brincadeira antes de retomar o roteiro."
+            ),
+            fallback=f"{stated_name}... prazer. Agora não esqueço mais, rsrsrs. Eu sou a Mary.",
+        )
 
     known_name = str(facts.get("user_name", "")).strip()
     lowered = text.casefold()
@@ -116,6 +142,27 @@ def render_facts(facts: dict[str, Any]) -> str:
         if not str(key).startswith("_") and str(value).strip()
     ]
     return ", ".join(items) if items else "nenhum fato pessoal confirmado"
+
+
+def _extract_name(text: str) -> str:
+    for pattern in _NAME_PATTERNS:
+        match = pattern.search(str(text or ""))
+        if match is None:
+            continue
+        name = _clean_name(match.group(1))
+        if name and name.casefold() not in _INVALID_NAMES:
+            return name
+    return ""
+
+
+def _extract_phone(text: str) -> str:
+    match = _PHONE_PATTERN.search(str(text or ""))
+    if match is None:
+        return ""
+    digits = re.sub(r"\D", "", match.group(0))
+    if digits.startswith("55") and len(digits) > 11:
+        digits = digits[2:]
+    return digits if 8 <= len(digits) <= 11 else ""
 
 
 def _clean_name(value: str) -> str:

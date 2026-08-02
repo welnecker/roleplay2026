@@ -5,6 +5,7 @@ from services.editorial_content import load_source_document
 from services.pilot_supermarket import PilotScript, PilotState
 from services.supermarket_script_v2 import (
     automatic_followups_after,
+    decide_supermarket_script_v2_turn,
     prepare_supermarket_script_v2,
     state_after_automatic_followup,
 )
@@ -26,6 +27,29 @@ def test_fonte_unica_compila_sequencia_do_supermercado() -> None:
     assert "Vou continuar minhas comprinhas" in script.beats["encontro_acidental_006"]["units"][0]["anchor"]
     assert script.beats["encontro_acidental_004"]["on_user"]["engaged"] == "encontro_acidental_005"
     assert script.beats["encontro_acidental_005"]["on_user"]["engaged"] == "encontro_acidental_006"
+
+
+def test_telefone_ja_informado_aplica_salto_declarado_no_roteiro() -> None:
+    script = _script()
+    assert script.beats["reencontro_fila_013"]["skip_when_facts"] == {
+        "user_phone": "reencontro_fila_014"
+    }
+
+    state = PilotState(
+        node_id="reencontro_fila_012",
+        facts={"user_phone": "999711721"},
+    )
+    turn = decide_supermarket_script_v2_turn(
+        script,
+        state,
+        "Sou Janio... ao seu dispor, princesa.",
+    )
+
+    assert turn.target_id == "reencontro_fila_014"
+    assert turn.state.node_id == "reencontro_fila_014"
+    assert turn.state.facts["user_phone"] == "999711721"
+    assert turn.state.facts["_declared_skip_applied"] == "reencontro_fila_013"
+    assert "Queria seu número" not in turn.visible_fallback
 
 
 def test_despedida_dispara_tres_pontes_sem_turno_do_usuario() -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.organic_interaction import detect_organic_signal
+from services.organic_interaction import detect_organic_signal, extract_user_facts
 from services.pilot_supermarket import PilotScript, PilotState, clean_model_response, decide_turn
 
 
@@ -14,49 +14,25 @@ def _script() -> PilotScript:
                     {
                         "beat_id": "ask_name",
                         "objective": "Descobrir o nome do usuário.",
-                        "units": [
-                            {
-                                "kind": "dialogue",
-                                "anchor": "Você não disse seu nome ainda.",
-                            },
-                            {"kind": "wait_user"},
-                        ],
+                        "units": [{"kind": "dialogue", "anchor": "Você não disse seu nome ainda."}, {"kind": "wait_user"}],
                         "on_user": {"engaged": "ask_favor", "minimal": "ask_favor"},
                     },
                     {
                         "beat_id": "ask_favor",
                         "objective": "Pedir uma ajuda curta ao usuário.",
-                        "units": [
-                            {
-                                "kind": "dialogue",
-                                "anchor": "Foi muito legal te conhecer... posso te pedir só mais uma coisa?",
-                            },
-                            {"kind": "wait_user"},
-                        ],
+                        "units": [{"kind": "dialogue", "anchor": "Foi muito legal te conhecer... posso te pedir só mais uma coisa?"}, {"kind": "wait_user"}],
                         "on_user": {"engaged": "ask_number", "minimal": "ask_number"},
                     },
                     {
                         "beat_id": "ask_number",
                         "objective": "Pedir o número do usuário.",
-                        "units": [
-                            {
-                                "kind": "dialogue",
-                                "anchor": "Queria seu número.",
-                            },
-                            {"kind": "wait_user"},
-                        ],
+                        "units": [{"kind": "dialogue", "anchor": "Queria seu número."}, {"kind": "wait_user"}],
                         "on_user": {"engaged": "share_number", "minimal": "share_number"},
                     },
                     {
                         "beat_id": "share_number",
                         "objective": "Compartilhar o número de Mary.",
-                        "units": [
-                            {
-                                "kind": "dialogue",
-                                "anchor": "Olha... esse número vai me trazer sorte. Anota o meu também.",
-                            },
-                            {"kind": "wait_user"},
-                        ],
+                        "units": [{"kind": "dialogue", "anchor": "Olha... esse número vai me trazer sorte. Anota o meu também."}, {"kind": "wait_user"}],
                         "on_user": {"engaged": "share_number"},
                     },
                 ],
@@ -68,30 +44,35 @@ def _script() -> PilotScript:
 
 def test_nome_e_reconhecido_antes_do_proximo_beat() -> None:
     state = PilotState(node_id="ask_name")
-
-    turn = decide_turn(
-        _script(),
-        state,
-        "Ah... que cabeça a minha. Me chamo Janio, prazer, mas você não disse o seu.",
-    )
-
+    turn = decide_turn(_script(), state, "Ah... que cabeça a minha. Me chamo Janio, prazer, mas você não disse o seu.")
     assert turn.target_id == "ask_name"
     assert turn.state.node_id == "ask_name"
     assert turn.state.facts["user_name"] == "Janio"
+    assert turn.state.facts["_acknowledged_user_name"] == "Janio"
     assert turn.state.pending_next_beat_id == "ask_favor"
     assert "Janio" in turn.visible_fallback
     assert "você se chama Mary" in turn.system_prompt
 
 
-def test_turno_seguinte_retoma_o_beat_pendente() -> None:
-    first = decide_turn(
-        _script(),
-        PilotState(node_id="ask_name"),
+def test_fato_pre_extraido_ainda_e_reconhecido_no_turno_atual() -> None:
+    facts = extract_user_facts("Me chamo Janio. E você?", {})
+    signal = detect_organic_signal("Me chamo Janio. E você?", facts)
+
+    assert signal is not None
+    assert signal.kind == "fact_acknowledgement"
+    assert signal.facts["_acknowledged_user_name"] == "Janio"
+
+    repeated = detect_organic_signal(
         "Me chamo Janio. E você?",
+        signal.facts,
     )
+    assert repeated is not None
+    assert repeated.kind == "direct_question"
 
+
+def test_turno_seguinte_retoma_o_beat_pendente() -> None:
+    first = decide_turn(_script(), PilotState(node_id="ask_name"), "Me chamo Janio. E você?")
     second = decide_turn(_script(), first.state, "Prazer, Mary.")
-
     assert second.target_id == "ask_favor"
     assert second.state.pending_next_beat_id == ""
     assert "Foi muito legal te conhecer" in second.visible_fallback
@@ -99,13 +80,7 @@ def test_turno_seguinte_retoma_o_beat_pendente() -> None:
 
 def test_desafio_de_soletrar_usa_nome_memorizado_sem_antecipar_fala() -> None:
     state = PilotState(node_id="ask_number", facts={"user_name": "Janio"})
-
-    turn = decide_turn(
-        _script(),
-        state,
-        "Eu dou o número se você soletrar meu nome, rsrsrs.",
-    )
-
+    turn = decide_turn(_script(), state, "Eu dou o número se você soletrar meu nome, rsrsrs.")
     assert turn.target_id == "ask_number"
     assert turn.state.pending_next_beat_id == "share_number"
     assert "J-A-N-I-O" in turn.visible_fallback
@@ -115,21 +90,30 @@ def test_desafio_de_soletrar_usa_nome_memorizado_sem_antecipar_fala() -> None:
 
 
 def test_pergunta_direta_avanca_e_e_respondida_no_novo_beat() -> None:
-    turn = decide_turn(
-        _script(),
-        PilotState(node_id="ask_favor"),
-        "Claro, mas onde está o seu carro?",
-    )
-
+    turn = decide_turn(_script(), PilotState(node_id="ask_favor"), "Claro, mas onde está o seu carro?")
     assert turn.target_id == "ask_number"
     assert turn.state.node_id == "ask_number"
     assert turn.state.pending_next_beat_id == ""
     assert "Responda primeiro à pergunta direta" in turn.system_prompt
 
 
+def test_telefone_e_extraido_mesmo_sem_sinal_organico() -> None:
+    facts = extract_user_facts(
+        "Anota aí, gata: 999711721... mas conversa comigo direito, hein?",
+        {},
+    )
+    assert facts["user_phone"] == "999711721"
+
+    signal = detect_organic_signal(
+        "Pede o que quiser... rainha do meu castelo.",
+        facts,
+    )
+    assert signal is None
+    assert facts["user_phone"] == "999711721"
+
+
 def test_nome_de_mary_em_primeira_pessoa_nao_aciona_fallback() -> None:
     response = "Eu sou a Mary, muito prazer! E você, como se chama?"
-
     assert clean_model_response(response, "fallback") == response
 
 
