@@ -6,7 +6,11 @@ from typing import Any
 
 import services.pilot_supermarket as pilot_supermarket_module
 from services.narrative_context import build_narrative_context
-from services.organic_interaction import detect_organic_signal, render_facts
+from services.organic_interaction import (
+    detect_organic_signal,
+    extract_user_facts,
+    render_facts,
+)
 from services.pilot_supermarket import (
     PilotScript,
     PilotState,
@@ -32,8 +36,6 @@ _STRICT_MOTEL_BEAT = re.compile(r"^motel_\d+$")
 
 
 def _is_strict_motel_beat(beat_id: str) -> bool:
-    """No motel, cada fala canônica representa uma ação física sequencial."""
-
     return bool(_STRICT_MOTEL_BEAT.fullmatch(str(beat_id or "").strip()))
 
 
@@ -108,8 +110,6 @@ def prepare_supermarket_script_v2(script: PilotScript) -> PilotScript:
 
 
 def classify_contextual_user_message(text: str) -> str:
-    """Não confunde vocabulário sexual contextual com ataque pessoal direto."""
-
     engagement = base_classify_user_message(text)
     if engagement != "hostile":
         return engagement
@@ -137,8 +137,6 @@ def _memory_writes_for_target(script: PilotScript, target_id: str) -> list[str]:
 
 
 def _finalize_turn(script: PilotScript, turn: PilotTurn) -> PilotTurn:
-    """Anexa identidade/memórias e aplica travas editoriais do movimento."""
-
     previous_ids = _memory_ids(turn.state)
     context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
     writes = _memory_writes_for_target(script, turn.target_id)
@@ -181,6 +179,50 @@ def _normal_target(script: PilotScript, state: PilotState, engagement: str) -> s
     )
 
 
+def _state_with_extracted_facts(state: PilotState, user_text: str) -> PilotState:
+    updated = PilotState.from_dict(state.to_dict())
+    updated.facts = extract_user_facts(user_text, updated.facts)
+    return updated
+
+
+def _routing_state_for_declared_skips(
+    script: PilotScript,
+    state: PilotState,
+    engagement: str,
+) -> PilotState:
+    """Aplica saltos descritos no conteúdo editorial, sem conhecer IDs ou fatos específicos."""
+
+    candidate = _normal_target(script, state, engagement)
+    last_skipped = ""
+    visited: set[str] = set()
+
+    while candidate and candidate not in visited:
+        visited.add(candidate)
+        beat = script.beats.get(candidate) or {}
+        rules = beat.get("skip_when_facts") or {}
+        if not isinstance(rules, dict):
+            break
+
+        next_target = ""
+        for fact_name, configured_target in rules.items():
+            if str(state.facts.get(str(fact_name), "") or "").strip():
+                next_target = str(configured_target or "").strip()
+                break
+        if not next_target:
+            break
+
+        last_skipped = candidate
+        candidate = next_target
+
+    if not last_skipped:
+        return state
+
+    routed = PilotState.from_dict(state.to_dict())
+    routed.node_id = last_skipped
+    routed.facts["_declared_skip_applied"] = last_skipped
+    return routed
+
+
 def _organic_slack_enabled(script: PilotScript) -> bool:
     raw = script.raw.get("organic_slack") or {}
     return isinstance(raw, dict) and bool(raw.get("enabled", False))
@@ -191,8 +233,6 @@ def _organic_slack_turn(
     state: PilotState,
     user_text: str,
 ) -> PilotTurn | None:
-    """Oferece uma resposta livre e exclusiva antes de retomar o próximo beat."""
-
     if not _organic_slack_enabled(script):
         return None
     if state.pending_next_beat_id or state.interstitial_turns >= 1:
@@ -269,36 +309,24 @@ def _repeat_help_request(
     )
 
 
-def _routing_state_without_redundant_phone_request(state: PilotState) -> PilotState:
-    """Avança pela confirmação quando o telefone já foi informado antes do pedido editorial."""
-
-    current_id = state.node_id
-    known_phone = str(state.facts.get("user_phone", "") or "").strip()
-    if current_id != "reencontro_fila_012" or not known_phone:
-        return state
-
-    routed = PilotState.from_dict(state.to_dict())
-    routed.node_id = "reencontro_fila_013"
-    routed.facts["_phone_request_skipped"] = "true"
-    return routed
-
-
 def decide_supermarket_script_v2_turn(
     script: PilotScript,
     state: PilotState,
     user_text: str,
 ) -> PilotTurn:
-    """Decide a transição; o roteiro fornece conteúdo, memória e pátios terminais."""
+    """Decide a transição usando fatos e regras declaradas pelo roteiro."""
 
-    organic = _organic_slack_turn(script, state, user_text)
+    working_state = _state_with_extracted_facts(state, user_text)
+
+    organic = _organic_slack_turn(script, working_state, user_text)
     if organic is not None:
         return _finalize_turn(script, organic)
 
-    current_id = state.node_id or script.first_beat_id
+    current_id = working_state.node_id or script.first_beat_id
     if current_id == "reencontro_fila_007":
         intent = classify_supermarket_intent(current_id, user_text)
         if intent == "accept":
-            turn = base_decide_turn(script, state, user_text)
+            turn = base_decide_turn(script, working_state, user_text)
             updated = PilotState.from_dict(turn.state.to_dict())
             updated.facts["help_to_car"] = "accepted"
             updated.facts["_scene_location"] = "estacionamento_caminho"
@@ -307,13 +335,14 @@ def decide_supermarket_script_v2_turn(
         if intent == "refuse":
             from services.supermarket_intent_pilot import decide_supermarket_turn
 
-            turn = decide_supermarket_turn(script, state, user_text)
+            turn = decide_supermarket_turn(script, working_state, user_text)
             updated = PilotState.from_dict(turn.state.to_dict())
             updated.facts["_organic_interstitial"] = "false"
             return _finalize_turn(script, replace(turn, state=updated))
-        return _repeat_help_request(script, state, user_text)
+        return _repeat_help_request(script, working_state, user_text)
 
-    routing_state = _routing_state_without_redundant_phone_request(state)
+    engagement = classify_contextual_user_message(user_text)
+    routing_state = _routing_state_for_declared_skips(script, working_state, engagement)
     turn = base_decide_turn(script, routing_state, user_text)
     updated = PilotState.from_dict(turn.state.to_dict())
     updated.facts["_organic_interstitial"] = "false"
