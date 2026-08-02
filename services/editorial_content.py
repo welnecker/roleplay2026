@@ -125,6 +125,12 @@ def _merge_extension(document: dict[str, Any], extension: dict[str, Any]) -> dic
         raise ValueError("append_blocks deve ser uma lista.")
     merged.setdefault("blocks", []).extend(deepcopy(append_blocks))
 
+    organic_slack = extension.get("organic_slack")
+    if organic_slack is not None:
+        if not isinstance(organic_slack, dict):
+            raise ValueError("organic_slack deve ser um mapa.")
+        merged["organic_slack"] = deepcopy(organic_slack)
+
     incoming_memories = _memory_entries(extension.get("memories"))
     if incoming_memories:
         existing_memories = _memory_entries(merged.get("memories"))
