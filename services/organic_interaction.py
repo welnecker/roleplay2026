@@ -21,11 +21,11 @@ _EXCLUSIVE_REACTION_PATTERNS = (
     re.compile(r"\bvoc[eê]\s+(?:é|e)\s+(?:[\wÀ-ÖØ-öø-ÿ'’-]+\s+){0,3}louca\b", re.IGNORECASE),
     re.compile(r"\b(?:tenho medo|tô com medo|estou com medo|é perigoso|e perigoso|não quero morrer|nao quero morrer)\b", re.IGNORECASE),
     re.compile(r"\bmas\b.*\b(?:perigoso|medo|morrer|risco|arriscado)\b", re.IGNORECASE),
+    re.compile(r"\b(?:chupa|fode|goza)\b.*\b(?:vadia|vagabunda|safada)\b", re.IGNORECASE),
 )
 _INTEGRATED_REACTION_PATTERNS = (
     re.compile(r"\bvoc[eê]\s+(?:é|e|tá|ta|parece|ficou|fica|chupa|fode|goza)\b", re.IGNORECASE),
     re.compile(r"\b(?:linda|lindo|gostosa|gostoso|deliciosa|delicioso|tesão|tesao|sexy)\b", re.IGNORECASE),
-    re.compile(r"\b(?:chupa|fode|goza)\b.*\b(?:vadia|vagabunda|safada)\b", re.IGNORECASE),
     re.compile(r"\b(?:corpo|quadril|bunda|seios?|peitos?|xoxota|buceta|pau|rola)\b", re.IGNORECASE),
 )
 
