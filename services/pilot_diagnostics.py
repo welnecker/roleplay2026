@@ -9,6 +9,10 @@ from typing import Any, Iterable
 
 
 LOGGER = logging.getLogger("roleplay2026.pilot")
+_THOUGHT_PATTERN = re.compile(
+    r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
+    flags=re.IGNORECASE | re.DOTALL,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,13 +208,29 @@ def log_exception(stage: str, exc: BaseException, **context: object) -> None:
     )
 
 
+def _split_optional_thought(text: str) -> tuple[str, str]:
+    """Separa um pensamento válido sem alterar seu conteúdo ou posição semântica."""
+
+    raw = str(text or "").strip()
+    match = _THOUGHT_PATTERN.search(raw)
+    if match is None:
+        return "", raw
+    thought = match.group(0).strip()
+    body = f"{raw[:match.start()]}\n\n{raw[match.end():]}".strip()
+    return thought, body
+
+
+def _join_response_parts(*parts: str) -> str:
+    return "\n\n".join(part.strip() for part in parts if str(part or "").strip())
+
+
 def _reaction_before_canonical(
     *,
     response: str,
     fallback: str,
     recent_assistant_messages: list[str],
 ) -> str:
-    """Mantém a resposta ao usuário, reaplica o beat exato e corta qualquer continuação."""
+    """Mantém pensamento e reação, reaplica o beat exato e corta a continuação."""
 
     raw = str(response or "").strip()
     safe_fallback = str(fallback or "").strip()
@@ -221,21 +241,13 @@ def _reaction_before_canonical(
     if any(marker in lowered for marker in ("<end_run", "end_run", "```json", '"event"')):
         return safe_fallback
 
-    without_thought = re.sub(
-        r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
-        "",
-        raw,
-        flags=re.IGNORECASE | re.DOTALL,
-    ).strip()
-
-    prefix = _prefix_before_anchor(without_thought, safe_fallback)
+    thought, body = _split_optional_thought(raw)
+    prefix = _prefix_before_anchor(body, safe_fallback)
     if prefix is None:
-        prefix = without_thought
+        prefix = body
 
     reaction = _safe_reaction(prefix, recent_assistant_messages)
-    if not reaction:
-        return safe_fallback
-    return f"{reaction}\n\n{safe_fallback}"
+    return _join_response_parts(thought, reaction, safe_fallback)
 
 
 def _prefix_before_anchor(text: str, anchor: str) -> str | None:
@@ -278,7 +290,7 @@ def _preserve_reaction_and_append_fallback(
     fallback: str,
     recent_assistant_messages: list[str],
 ) -> str:
-    """Recupera só a reação inicial segura quando o modelo esquece o beat."""
+    """Recupera pensamento e reação inicial quando o modelo esquece o beat."""
 
     raw = str(raw_response or "").strip()
     safe_fallback = str(fallback or "").strip()
@@ -290,21 +302,16 @@ def _preserve_reaction_and_append_fallback(
     if _normalize(safe_fallback) in _normalize(raw):
         return ""
 
-    without_thought = re.sub(
-        r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
-        "",
-        raw,
-        flags=re.IGNORECASE | re.DOTALL,
-    ).strip()
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", without_thought) if part.strip()]
+    thought, body = _split_optional_thought(raw)
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", body) if part.strip()]
     for paragraph in paragraphs:
         if _looks_like_unsafe_narration(paragraph):
             continue
         reaction = _first_sentences(paragraph, limit=2)
         if not reaction or _repeats_recent_anchor(reaction, recent_assistant_messages):
             continue
-        return f"{reaction}\n\n{safe_fallback}"
-    return ""
+        return _join_response_parts(thought, reaction, safe_fallback)
+    return _join_response_parts(thought, safe_fallback) if thought else ""
 
 
 def _looks_like_unsafe_narration(text: str) -> bool:

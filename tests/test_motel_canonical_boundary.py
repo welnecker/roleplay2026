@@ -24,6 +24,7 @@ def test_motel_preserva_reacao_e_corta_tudo_depois_do_beat() -> None:
     )
 
     assert result.response == (
+        "[PENSAMENTO]\nQuero mais.\n[/PENSAMENTO]\n\n"
         "Ainda não terminei, safado... tenho mais para você.\n\n"
         f"{fallback}"
     )
