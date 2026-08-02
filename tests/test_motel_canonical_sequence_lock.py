@@ -24,16 +24,20 @@ def test_todos_os_beats_numericos_do_motel_sao_canonicos() -> None:
     assert _is_strict_motel_beat("motel_saida") is False
 
 
-def test_turno_do_motel_forca_exatamente_a_fala_do_beat() -> None:
+def test_turno_do_motel_reage_e_traz_a_fala_canonica() -> None:
     turn = decide_supermarket_script_v2_turn(
         _script(),
         PilotState(node_id="motel_024"),
-        "smack! fala o que mais você quer, safada...",
+        "smack! hummm... tá saciada?",
     )
 
     assert turn.target_id == "motel_025"
-    assert turn.state.facts["_force_fixed_response"] == "true"
+    assert turn.state.facts["_force_fixed_response"] == "false"
+    assert turn.state.facts["_strict_motel_canonical"] == "true"
     assert turn.visible_fallback.startswith("Você me salvou, gostoso")
+    assert "Responda primeiro" in turn.system_prompt
+    assert "linha canônica" in turn.system_prompt
+    assert "não acrescente nada depois" in turn.system_prompt.casefold()
 
 
 def test_motel_nao_abre_folga_organica_que_atrasaria_a_sequencia() -> None:
@@ -47,7 +51,8 @@ def test_motel_nao_abre_folga_organica_que_atrasaria_a_sequencia() -> None:
     assert turn.state.pending_next_beat_id == ""
     assert turn.state.interstitial_turns == 0
     assert turn.state.facts["_organic_interstitial"] == "false"
-    assert turn.state.facts["_force_fixed_response"] == "true"
+    assert turn.state.facts["_force_fixed_response"] == "false"
+    assert turn.state.facts["_strict_motel_canonical"] == "true"
 
 
 def test_fora_do_motel_modelo_continua_livre() -> None:
@@ -59,3 +64,4 @@ def test_fora_do_motel_modelo_continua_livre() -> None:
 
     assert turn.target_id == "video_008"
     assert turn.state.facts["_force_fixed_response"] == "false"
+    assert turn.state.facts["_strict_motel_canonical"] == "false"
