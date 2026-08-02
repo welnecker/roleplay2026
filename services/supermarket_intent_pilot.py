@@ -37,6 +37,11 @@ _ACCEPT_PATTERNS = (
     r"\b(?:sim|claro|beleza|com certeza|pode deixar|eu ajudo|vou ajudar|te ajudo|vamos|bora)\b",
     r"\b(?:vou esperar|espero aqui|pode contar comigo)\b",
 )
+_NO_RUSH_ACCEPT_PATTERNS = (
+    r"\b(?:não|nao)\s+(?:estou|tô|to)\s+com\s+pressa\b",
+    r"\b(?:estou|tô|to)\s+sem\s+pressa\b",
+    r"\bsem\s+pressa\b",
+)
 _REFUSE_PATTERNS = (
     r"\b(?:não|nao)\s+(?:posso|consigo|vou|quero|dá|da)\b",
     r"\b(?:prefiro não|melhor não|não vai dar|não dá|não consigo|não quero)\b",
@@ -108,13 +113,22 @@ def prepare_supermarket_script(script: PilotScript) -> PilotScript:
     return script
 
 
+def _matches_any(value: str, patterns: tuple[str, ...]) -> bool:
+    return any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in patterns)
+
+
 def classify_supermarket_intent(current_beat_id: str, text: str) -> UserIntent:
     value = " ".join(str(text or "").casefold().split())
-    if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in _POSTPONE_PATTERNS):
-        return "postpone"
-    if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in _REFUSE_PATTERNS):
+
+    # “Não estou/tô com pressa” contém literalmente “estou/tô com pressa”.
+    # Reconheça primeiro essa negação como disponibilidade para não repetir o pedido.
+    if _matches_any(value, _NO_RUSH_ACCEPT_PATTERNS):
+        return "accept"
+    if _matches_any(value, _REFUSE_PATTERNS):
         return "refuse"
-    if any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in _ACCEPT_PATTERNS):
+    if _matches_any(value, _POSTPONE_PATTERNS):
+        return "postpone"
+    if _matches_any(value, _ACCEPT_PATTERNS):
         return "accept"
     if "?" in value:
         return "question"
