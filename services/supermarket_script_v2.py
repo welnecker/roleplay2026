@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
+import services.pilot_supermarket as pilot_supermarket_module
 from services.narrative_context import build_narrative_context
 from services.organic_interaction import detect_organic_signal, render_facts
 from services.pilot_supermarket import (
@@ -94,6 +95,10 @@ def _register_automatic_followups(script: PilotScript) -> None:
 
 def prepare_supermarket_script_v2(script: PilotScript) -> PilotScript:
     _register_automatic_followups(script)
+    # base_decide_turn resolve o classificador pelo namespace do módulo original.
+    # Instalar a versão contextual aqui impede que linguagem sexual da própria cena
+    # seja encerrada como hostilidade antes de a integração orgânica acontecer.
+    pilot_supermarket_module.classify_user_message = classify_contextual_user_message
     return script
 
 

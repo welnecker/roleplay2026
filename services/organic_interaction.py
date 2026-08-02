@@ -17,16 +17,21 @@ _NAME_PATTERNS = (
     re.compile(r"\bme\s+chamo\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
     re.compile(r"\bmeu\s+nome\s+[ée]\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
 )
-_FREE_REACTION_PATTERNS = (
-    re.compile(r"\bvoc[eê]\s+(?:é|e|tá|ta|parece|ficou|fica|chupa|fode|goza)\b", re.IGNORECASE),
+_EXCLUSIVE_REACTION_PATTERNS = (
+    re.compile(r"\bvoc[eê]\s+(?:é|e)\s+(?:[\wÀ-ÖØ-öø-ÿ'’-]+\s+){0,3}louca\b", re.IGNORECASE),
     re.compile(r"\b(?:tenho medo|tô com medo|estou com medo|é perigoso|e perigoso|não quero morrer|nao quero morrer)\b", re.IGNORECASE),
     re.compile(r"\bmas\b.*\b(?:perigoso|medo|morrer|risco|arriscado)\b", re.IGNORECASE),
     re.compile(r"\b(?:chupa|fode|goza)\b.*\b(?:vadia|vagabunda|safada)\b", re.IGNORECASE),
 )
+_INTEGRATED_REACTION_PATTERNS = (
+    re.compile(r"\bvoc[eê]\s+(?:é|e|tá|ta|parece|ficou|fica|chupa|fode|goza)\b", re.IGNORECASE),
+    re.compile(r"\b(?:linda|lindo|gostosa|gostoso|deliciosa|delicioso|tesão|tesao|sexy)\b", re.IGNORECASE),
+    re.compile(r"\b(?:corpo|quadril|bunda|seios?|peitos?|xoxota|buceta|pau|rola)\b", re.IGNORECASE),
+)
 
 
 def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = None) -> OrganicSignal | None:
-    """Detecta contribuições que merecem uma resposta exclusiva antes do próximo beat."""
+    """Classifica contribuições orgânicas como exclusivas ou integradas ao beat."""
 
     text = " ".join(user_text.strip().split())
     if not text:
@@ -64,19 +69,28 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             fallback=f"Ah, então é assim? Um desafio! {known_name}... {spelling}. Acertei? rsrsrsrs.",
         )
 
-    # Ressalvas, preocupações e provocações contextuais precisam ser reconhecidas
-    # antes da regra genérica de pergunta. Caso contrário, uma frase como
-    # "é perigoso... não quero morrer, né?" vira apenas direct_question e não
-    # abre a folga orgânica exclusiva.
-    if len(text.split()) >= 3 and any(pattern.search(text) for pattern in _FREE_REACTION_PATTERNS):
+    if len(text.split()) >= 3 and any(pattern.search(text) for pattern in _EXCLUSIVE_REACTION_PATTERNS):
         return OrganicSignal(
             kind="free_reaction",
             facts=facts,
             instruction=(
-                "Reaja livremente ao comentário, preocupação ou provocação do usuário dentro da personalidade, memória e situação atual de Mary. "
-                "Esta resposta é uma folga orgânica: não avance o acontecimento, não recite e não parafraseie a próxima linha canônica."
+                "Reaja exclusivamente à preocupação, ressalva ou comentário sensível do usuário. "
+                "Não avance o acontecimento, não recite e não parafraseie a próxima linha canônica nesta resposta."
             ),
             fallback="Calma... eu entendi o que você quis dizer. Não vou ignorar isso.",
+        )
+
+    if len(text.split()) >= 3 and any(pattern.search(text) for pattern in _INTEGRATED_REACTION_PATTERNS):
+        return OrganicSignal(
+            kind="integrated_reaction",
+            facts=facts,
+            instruction=(
+                "Responda primeiro ao conteúdo específico do usuário em uma ou duas frases curtas e naturais. "
+                "Em seguida, conecte essa reação à linha canônica do movimento atual na mesma mensagem. "
+                "A reação e o beat devem formar uma única continuidade. Não abra uma pergunta paralela, "
+                "não repita uma provocação já respondida e não antecipe o próximo beat."
+            ),
+            fallback="Eu ouvi exatamente o que você disse... e isso mexeu comigo.",
         )
 
     if "?" in text and len(text.split()) >= 3:
