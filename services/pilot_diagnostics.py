@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import json
 import logging
 import re
@@ -25,45 +26,93 @@ def finalize_model_response(
     fallback: str,
     recent_assistant_messages: Iterable[str],
 ) -> GuardedResponse:
-    """Preserva a reação do modelo e encerra sempre no beat canônico."""
+    """Rejeita repetição e preserva a progressão editorial do turno."""
 
     raw = str(raw_response or "").strip()
     cleaned = str(cleaned_response or "").strip()
     safe_fallback = str(fallback or "").strip()
     recent = [str(item or "") for item in recent_assistant_messages]
 
-    if not safe_fallback:
-        if not cleaned:
-            return GuardedResponse("", False, True, "empty_response")
-        repeated = _repeats_recent_anchor(cleaned, recent)
-        if repeated:
-            return GuardedResponse("", True, True, "repeated_recent_anchor")
-        return GuardedResponse(cleaned, False, False, "model_response_accepted")
-
-    source = raw or cleaned
-    integrated = _reaction_before_canonical(
-        response=source,
-        fallback=safe_fallback,
-        recent_assistant_messages=recent,
-    )
-    if integrated:
-        repeated = _repeats_recent_anchor(integrated, recent)
-        if repeated and _normalize(integrated) != _normalize(safe_fallback):
-            return GuardedResponse(
-                safe_fallback,
-                True,
-                True,
-                "repeated_recent_anchor",
-            )
+    if safe_fallback and _is_motel_canonical_line(safe_fallback):
+        integrated = _reaction_before_canonical(
+            response=raw or cleaned,
+            fallback=safe_fallback,
+            recent_assistant_messages=recent,
+        )
         used_fallback = _normalize(integrated) == _normalize(safe_fallback)
         return GuardedResponse(
             integrated,
             False,
             used_fallback,
-            "canonical_boundary_applied",
+            "motel_canonical_boundary",
         )
 
-    return GuardedResponse(safe_fallback, False, True, "canonical_fallback_only")
+    if not cleaned:
+        return GuardedResponse(safe_fallback, False, True, "empty_response")
+
+    repeated = _repeats_recent_anchor(cleaned, recent)
+    if repeated and _normalize(cleaned) != _normalize(safe_fallback):
+        return GuardedResponse(
+            safe_fallback,
+            True,
+            True,
+            "repeated_recent_anchor",
+        )
+
+    used_fallback = bool(safe_fallback) and _normalize(cleaned) == _normalize(safe_fallback)
+    if used_fallback and raw and _normalize(raw) != _normalize(cleaned):
+        integrated = _preserve_reaction_and_append_fallback(
+            raw_response=raw,
+            fallback=safe_fallback,
+            recent_assistant_messages=recent,
+        )
+        if integrated:
+            return GuardedResponse(
+                integrated,
+                False,
+                False,
+                "reaction_preserved_fallback_appended",
+            )
+        return GuardedResponse(cleaned, repeated, True, "validator_fallback")
+
+    return GuardedResponse(cleaned, repeated, used_fallback, "model_response_accepted")
+
+
+@lru_cache(maxsize=1)
+def _motel_canonical_lines() -> frozenset[str]:
+    """Lê a fonte editorial compilada; não duplica o roteiro no código."""
+
+    try:
+        from services.editorial_compiler import compile_editorial_document
+        from services.editorial_content import load_source_document
+
+        compiled = compile_editorial_document(load_source_document())
+        scene = compiled.get("scene") or {}
+        beats = scene.get("beats") or []
+        result: set[str] = set()
+        for beat in beats:
+            if not isinstance(beat, dict):
+                continue
+            beat_id = str(beat.get("beat_id", "") or "")
+            if not re.fullmatch(r"motel_\d+", beat_id):
+                continue
+            units = beat.get("units") or []
+            for unit in units:
+                if not isinstance(unit, dict) or unit.get("kind") != "dialogue":
+                    continue
+                line = str(unit.get("anchor") or unit.get("text") or "").strip()
+                if line:
+                    result.add(_normalize(line))
+                    break
+        return frozenset(result)
+    except Exception:
+        LOGGER.exception("Não foi possível carregar as linhas canônicas do motel")
+        return frozenset()
+
+
+def _is_motel_canonical_line(fallback: str) -> bool:
+    normalized = _normalize(fallback)
+    return bool(normalized) and normalized in _motel_canonical_lines()
 
 
 def build_turn_diagnostics(
@@ -161,12 +210,10 @@ def _reaction_before_canonical(
     fallback: str,
     recent_assistant_messages: list[str],
 ) -> str:
-    """Mantém somente a reação anterior ao beat e reaplica o beat editorial exato."""
+    """Mantém a resposta ao usuário, reaplica o beat exato e corta qualquer continuação."""
 
     raw = str(response or "").strip()
     safe_fallback = str(fallback or "").strip()
-    if not safe_fallback:
-        return raw
     if not raw:
         return safe_fallback
 
@@ -192,10 +239,10 @@ def _reaction_before_canonical(
 
 
 def _prefix_before_anchor(text: str, anchor: str) -> str | None:
-    """Localiza a fala canônica por sequência de palavras, ignorando pontuação."""
+    """Localiza a fala canônica por palavras, independentemente da pontuação."""
 
     text_tokens = [
-        (match.group(0).casefold(), match.start(), match.end())
+        (match.group(0).casefold(), match.start())
         for match in re.finditer(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ]+", str(text or ""))
     ]
     anchor_tokens = [
@@ -222,6 +269,41 @@ def _safe_reaction(text: str, recent_assistant_messages: list[str]) -> str:
         if not reaction or _repeats_recent_anchor(reaction, recent_assistant_messages):
             continue
         return reaction
+    return ""
+
+
+def _preserve_reaction_and_append_fallback(
+    *,
+    raw_response: str,
+    fallback: str,
+    recent_assistant_messages: list[str],
+) -> str:
+    """Recupera só a reação inicial segura quando o modelo esquece o beat."""
+
+    raw = str(raw_response or "").strip()
+    safe_fallback = str(fallback or "").strip()
+    if not raw or not safe_fallback:
+        return ""
+    lowered = raw.casefold()
+    if any(marker in lowered for marker in ("<end_run", "end_run", "```json", '"event"')):
+        return ""
+    if _normalize(safe_fallback) in _normalize(raw):
+        return ""
+
+    without_thought = re.sub(
+        r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
+        "",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    ).strip()
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", without_thought) if part.strip()]
+    for paragraph in paragraphs:
+        if _looks_like_unsafe_narration(paragraph):
+            continue
+        reaction = _first_sentences(paragraph, limit=2)
+        if not reaction or _repeats_recent_anchor(reaction, recent_assistant_messages):
+            continue
+        return f"{reaction}\n\n{safe_fallback}"
     return ""
 
 
