@@ -19,9 +19,10 @@ _NAME_PATTERNS = (
 )
 _FREE_REACTION_PATTERNS = (
     re.compile(r"\bmary\b", re.IGNORECASE),
-    re.compile(r"\bvoc[eê]\s+(?:é|e|tá|ta|parece|ficou|fica)\b", re.IGNORECASE),
+    re.compile(r"\bvoc[eê]\s+(?:é|e|tá|ta|parece|ficou|fica|chupa|fode|goza)\b", re.IGNORECASE),
     re.compile(r"\b(?:eu\s+)?(?:acho|gostei|adorei|quero|tenho medo|tô com medo|estou com medo)\b", re.IGNORECASE),
     re.compile(r"\bmas\b", re.IGNORECASE),
+    re.compile(r"\b(?:chupa|fode|goza)\b.*\b(?:vadia|vagabunda|safada)\b", re.IGNORECASE),
 )
 
 
