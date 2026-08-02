@@ -16,6 +16,7 @@ class OrganicSignal:
 _NAME_PATTERNS = (
     re.compile(r"\bme\s+chamo\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
     re.compile(r"\bmeu\s+nome\s+[ée]\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
+    re.compile(r"\bsou\s+(?:o\s+|a\s+)?([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})\b", re.IGNORECASE),
 )
 _PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?55[\s.-]?)?(?:\(?\d{2}\)?[\s.-]?)?\d(?:[\s.-]?\d){7,10}(?!\d)")
 _EXCLUSIVE_REACTION_PATTERNS = (
@@ -31,42 +32,58 @@ _INTEGRATED_REACTION_PATTERNS = (
 )
 
 
-def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = None) -> OrganicSignal | None:
-    """Classifica contribuições orgânicas e incorpora fatos explícitos ao estado."""
+def extract_user_facts(
+    user_text: str,
+    known_facts: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Extrai fatos explícitos sem depender de existir uma reação orgânica."""
 
-    text = " ".join(user_text.strip().split())
+    facts = dict(known_facts or {})
+    text = " ".join(str(user_text or "").strip().split())
     if not text:
-        return None
+        return facts
 
-    facts = known_facts if isinstance(known_facts, dict) else {}
     phone = _extract_phone(text)
     if phone:
         facts["user_phone"] = phone
 
     for pattern in _NAME_PATTERNS:
         match = pattern.search(text)
-        if match:
-            name = _clean_name(match.group(1))
-            if name:
-                facts["user_name"] = name
-                return OrganicSignal(
-                    kind="fact_acknowledgement",
-                    facts=facts,
-                    instruction=(
-                        f"Reconheça claramente que o nome do usuário é {name}. "
-                        "Use o nome na resposta e, se ele perguntou o seu nome, diga que você se chama Mary. "
-                        "Responda ao tom de vizinhança ou brincadeira antes de retomar o roteiro."
-                    ),
-                    fallback=f"{name}... prazer. Agora não esqueço mais, rsrsrs. Eu sou a Mary.",
-                )
+        if match is None:
+            continue
+        name = _clean_name(match.group(1))
+        if name and name.casefold() not in {"homem", "mulher", "cara", "gata", "princesa"}:
+            facts["user_name"] = name
+            break
+
+    return facts
+
+
+def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = None) -> OrganicSignal | None:
+    """Classifica a reação; a extração de fatos ocorre independentemente do resultado."""
+
+    text = " ".join(user_text.strip().split())
+    if not text:
+        return None
+
+    original_facts = dict(known_facts or {})
+    facts = extract_user_facts(text, original_facts)
+    new_name = str(facts.get("user_name", "")).strip()
+    previous_name = str(original_facts.get("user_name", "")).strip()
+
+    if new_name and new_name != previous_name:
+        return OrganicSignal(
+            kind="fact_acknowledgement",
+            facts=facts,
+            instruction=(
+                f"Reconheça claramente que o nome do usuário é {new_name}. "
+                "Use o nome na resposta e, se ele perguntou o seu nome, diga que você se chama Mary. "
+                "Responda ao tom de vizinhança ou brincadeira antes de retomar o roteiro."
+            ),
+            fallback=f"{new_name}... prazer. Agora não esqueço mais, rsrsrs. Eu sou a Mary.",
+        )
 
     known_name = str(facts.get("user_name", "")).strip()
-    known_phone = str(facts.get("user_phone", "")).strip()
-    phone_memory_instruction = (
-        f" O usuário já informou o telefone {known_phone}; reconheça que ele já está anotado e não peça o número novamente."
-        if known_phone
-        else ""
-    )
     lowered = text.casefold()
     if known_name and any(term in lowered for term in ("soletra", "soletrar", "como se escreve", "letra por letra")):
         spelling = "-".join(list(known_name.upper()))
@@ -87,7 +104,6 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             instruction=(
                 "Reaja exclusivamente à preocupação, ressalva ou comentário sensível do usuário. "
                 "Não avance o acontecimento, não recite e não parafraseie a próxima linha canônica nesta resposta."
-                f"{phone_memory_instruction}"
             ),
             fallback="Calma... eu entendi o que você quis dizer. Não vou ignorar isso.",
         )
@@ -101,13 +117,8 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
                 "Em seguida, conecte essa reação à linha canônica do movimento atual na mesma mensagem. "
                 "A reação e o beat devem formar uma única continuidade. Não abra uma pergunta paralela, "
                 "não repita uma provocação já respondida e não antecipe o próximo beat."
-                f"{phone_memory_instruction}"
             ),
-            fallback=(
-                "Seu número já está anotado... eu não esqueci."
-                if known_phone
-                else "Eu ouvi exatamente o que você disse... e isso mexeu comigo."
-            ),
+            fallback="Eu ouvi exatamente o que você disse... e isso mexeu comigo.",
         )
 
     if "?" in text and len(text.split()) >= 3:
@@ -117,7 +128,6 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             instruction=(
                 "Responda primeiro à pergunta direta do usuário de forma curta e natural. "
                 "Depois conecte a resposta ao movimento atual sem ignorar o que ele perguntou."
-                f"{phone_memory_instruction}"
             ),
             fallback="Espera... deixa eu te responder direito antes de continuar.",
         )
