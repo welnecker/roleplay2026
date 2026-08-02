@@ -13,6 +13,7 @@ _THOUGHT_PATTERN = re.compile(
     r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
     flags=re.IGNORECASE | re.DOTALL,
 )
+_ELLIPSIS_TOKEN = "<ELLIPSIS>"
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,8 +378,11 @@ def _first_sentences(text: str, *, limit: int) -> str:
     compact = " ".join(str(text or "").split())
     if not compact:
         return ""
-    pieces = re.split(r"(?<=[.!?])\s+", compact)
-    return " ".join(pieces[: max(1, int(limit))]).strip()
+
+    protected = re.sub(r"\.{2,}", _ELLIPSIS_TOKEN, compact)
+    pieces = re.split(r"(?<=[.!?])\s+", protected)
+    selected = " ".join(pieces[: max(1, int(limit))]).strip()
+    return selected.replace(_ELLIPSIS_TOKEN, "...")
 
 
 def _repeats_recent_anchor(response: str, recent_messages: list[str]) -> bool:
