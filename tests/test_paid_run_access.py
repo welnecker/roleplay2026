@@ -29,10 +29,46 @@ class FakeRuns:
         return run
 
 
+class ConcurrentFakeRuns:
+    def __init__(self) -> None:
+        self.read_count = 0
+        self.update_count = 0
+        self.updated: StoryRun | None = None
+
+    @staticmethod
+    def _run(version: int) -> StoryRun:
+        return StoryRun(
+            run_id="run_1",
+            credit_id="credit_1",
+            user_id="user_1",
+            package_id="story_1",
+            script_version="1.0.0",
+            current_block_id="block_1",
+            current_beat_id="beat_1",
+            state_version=version,
+        )
+
+    def get_active_run(self, *, user_id: str, package_id: str) -> StoryRun:
+        self.read_count += 1
+        return self._run(1 if self.read_count == 1 else 3)
+
+    def update_run(self, *, run: StoryRun, expected_version: int) -> StoryRun:
+        self.update_count += 1
+        if self.update_count == 1:
+            assert expected_version == 1
+            raise RuntimeError(
+                "Versão concorrente na run run_1: esperada=1, atual=3."
+            )
+        assert expected_version == 3
+        run.state_version = 4
+        self.updated = run
+        return run
+
+
 @dataclass
 class FakeRepositories:
     credits: FakeCredits
-    runs: FakeRuns
+    runs: object
 
 
 def _clear_caches() -> None:
@@ -108,4 +144,31 @@ def test_run_encerrada_remove_acesso(monkeypatch) -> None:
     assert finished.ended_at
     assert access.state == "locked"
     assert access.allowed is False
+    _clear_caches()
+
+
+def test_encerramento_recarrega_run_apos_versao_concorrente(monkeypatch) -> None:
+    _clear_caches()
+    runs = ConcurrentFakeRuns()
+    repositories = FakeRepositories(credits=FakeCredits(), runs=runs)
+    monkeypatch.setattr(
+        paid_run_access,
+        "build_v2_narrative_repositories",
+        lambda secrets: repositories,
+    )
+
+    finished = paid_run_access.finish_active_run(
+        secrets={},
+        user_id="user_1",
+        package_id="story_1",
+        status="completed",
+        ending_code="normal_completion",
+    )
+
+    assert finished is not None
+    assert finished.status == "completed"
+    assert finished.ending_code == "normal_completion"
+    assert finished.state_version == 4
+    assert runs.read_count == 2
+    assert runs.update_count == 2
     _clear_caches()

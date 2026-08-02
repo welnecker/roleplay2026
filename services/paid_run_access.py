@@ -155,6 +155,11 @@ def revoke_available_credits(*, secrets: Any, user_id: str, package_id: str) -> 
     return revoked
 
 
+def _is_concurrent_version_error(exc: BaseException) -> bool:
+    message = str(exc).casefold()
+    return "versão concorrente" in message or "versao concorrente" in message
+
+
 def finish_active_run(
     *,
     secrets: Any,
@@ -163,28 +168,46 @@ def finish_active_run(
     status: Literal["completed", "terminated"],
     ending_code: str,
 ) -> StoryRun | None:
+    """Finaliza a run e refaz uma vez a atualização quando a versão ficou obsoleta.
+
+    As interações finais podem incrementar ``state_version`` imediatamente antes do
+    encerramento. Nesse caso, o objeto em cache está correto quanto à identidade da
+    run, mas traz uma versão anterior. Recarregar a run ativa e repetir a atualização
+    torna o fechamento idempotente sem ocultar outros tipos de erro.
+    """
+
     repositories = _repositories(secrets)
 
-    run = _cached_active_run(
-        secrets=secrets,
-        user_id=user_id,
-        package_id=package_id,
-    )
-    if run is None:
-        run = repositories.runs.get_active_run(user_id=user_id, package_id=package_id)
-    if run is None:
-        clear_paid_access_cache(user_id=user_id, package_id=package_id)
-        return None
+    for attempt in range(2):
+        run = repositories.runs.get_active_run(
+            user_id=user_id,
+            package_id=package_id,
+        )
+        if run is None:
+            clear_paid_access_cache(user_id=user_id, package_id=package_id)
+            return None
 
-    expected_version = run.state_version
-    now = utc_now_iso()
-    run.status = status
-    run.ending_code = ending_code
-    run.ended_at = now
-    run.updated_at = now
-    updated = repositories.runs.update_run(run=run, expected_version=expected_version)
-    clear_paid_access_cache(user_id=user_id, package_id=package_id)
-    return updated
+        expected_version = run.state_version
+        now = utc_now_iso()
+        run.status = status
+        run.ending_code = ending_code
+        run.ended_at = now
+        run.updated_at = now
+        try:
+            updated = repositories.runs.update_run(
+                run=run,
+                expected_version=expected_version,
+            )
+        except Exception as exc:
+            if attempt == 0 and _is_concurrent_version_error(exc):
+                clear_paid_access_cache(user_id=user_id, package_id=package_id)
+                continue
+            raise
+
+        clear_paid_access_cache(user_id=user_id, package_id=package_id)
+        return updated
+
+    return None
 
 
 def terminate_paid_access(
