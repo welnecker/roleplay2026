@@ -13,6 +13,7 @@ _THOUGHT_PATTERN = re.compile(
     r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
     flags=re.IGNORECASE | re.DOTALL,
 )
+_ELLIPSIS_TOKEN = "<ELLIPSIS>"
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +50,20 @@ def finalize_model_response(
             False,
             used_fallback,
             "motel_canonical_boundary",
+        )
+
+    if safe_fallback and _is_farewell_teaser_line(safe_fallback):
+        integrated = _reaction_before_canonical(
+            response=raw or cleaned,
+            fallback=safe_fallback,
+            recent_assistant_messages=recent,
+        )
+        used_fallback = _normalize(integrated) == _normalize(safe_fallback)
+        return GuardedResponse(
+            integrated,
+            False,
+            used_fallback,
+            "farewell_teaser_boundary",
         )
 
     if not cleaned:
@@ -114,9 +129,44 @@ def _motel_canonical_lines() -> frozenset[str]:
         return frozenset()
 
 
+@lru_cache(maxsize=1)
+def _farewell_teaser_lines() -> frozenset[str]:
+    """Lê apenas o beat editorial penúltimo que deve combinar reação e despedida."""
+
+    try:
+        from services.editorial_compiler import compile_editorial_document
+        from services.editorial_content import load_source_document
+
+        compiled = compile_editorial_document(load_source_document())
+        scene = compiled.get("scene") or {}
+        beats = scene.get("beats") or []
+        result: set[str] = set()
+        for beat in beats:
+            if not isinstance(beat, dict):
+                continue
+            if str(beat.get("beat_id", "") or "") != "yard_motel_farewell_004":
+                continue
+            for unit in beat.get("units") or []:
+                if not isinstance(unit, dict) or unit.get("kind") != "dialogue":
+                    continue
+                line = str(unit.get("anchor") or unit.get("text") or "").strip()
+                if line:
+                    result.add(_normalize(line))
+                    break
+        return frozenset(result)
+    except Exception:
+        LOGGER.exception("Não foi possível carregar a despedida canônica penúltima")
+        return frozenset()
+
+
 def _is_motel_canonical_line(fallback: str) -> bool:
     normalized = _normalize(fallback)
     return bool(normalized) and normalized in _motel_canonical_lines()
+
+
+def _is_farewell_teaser_line(fallback: str) -> bool:
+    normalized = _normalize(fallback)
+    return bool(normalized) and normalized in _farewell_teaser_lines()
 
 
 def build_turn_diagnostics(
@@ -328,8 +378,11 @@ def _first_sentences(text: str, *, limit: int) -> str:
     compact = " ".join(str(text or "").split())
     if not compact:
         return ""
-    pieces = re.split(r"(?<=[.!?])\s+", compact)
-    return " ".join(pieces[: max(1, int(limit))]).strip()
+
+    protected = re.sub(r"\.{2,}", _ELLIPSIS_TOKEN, compact)
+    pieces = re.split(r"(?<=[.!?])\s+", protected)
+    selected = " ".join(pieces[: max(1, int(limit))]).strip()
+    return selected.replace(_ELLIPSIS_TOKEN, "...")
 
 
 def _repeats_recent_anchor(response: str, recent_messages: list[str]) -> bool:

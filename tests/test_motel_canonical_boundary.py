@@ -48,6 +48,34 @@ def test_motel_anexa_beat_quando_modelo_responde_mas_o_omite() -> None:
     assert result.guard_reason == "motel_canonical_boundary"
 
 
+def test_despedida_penultima_preserva_pensamento_reacao_e_beat() -> None:
+    fallback = "mal posso esperar pra te ver de novo...beijo...tchau..."
+    raw = (
+        "[PENSAMENTO]\n"
+        "Ele não consegue tirar os olhos de mim e eu adoro esse poder que tenho sobre ele.\n"
+        "[/PENSAMENTO]\n\n"
+        "Safado! Se você continuar olhando assim eu não consigo atravessar aquela porta... rsrsrs.\n\n"
+        "Mal posso esperar pra te ver de novo... beijo... tchau..."
+    )
+
+    result = finalize_model_response(
+        raw_response=raw,
+        cleaned_response=fallback,
+        fallback=fallback,
+        recent_assistant_messages=[],
+    )
+
+    assert result.response == (
+        "[PENSAMENTO]\n"
+        "Ele não consegue tirar os olhos de mim e eu adoro esse poder que tenho sobre ele.\n"
+        "[/PENSAMENTO]\n\n"
+        "Safado! Se você continuar olhando assim eu não consigo atravessar aquela porta... rsrsrs.\n\n"
+        f"{fallback}"
+    )
+    assert result.guard_reason == "farewell_teaser_boundary"
+    assert result.used_fallback is False
+
+
 def test_fora_do_motel_mantem_resposta_normal() -> None:
     raw = "Chegamos. Vou abrir o porta-malas."
 
