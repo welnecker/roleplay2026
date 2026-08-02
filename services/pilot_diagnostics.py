@@ -25,41 +25,45 @@ def finalize_model_response(
     fallback: str,
     recent_assistant_messages: Iterable[str],
 ) -> GuardedResponse:
-    """Rejeita repetição e preserva reação válida antes do beat canônico."""
+    """Preserva a reação do modelo e encerra sempre no beat canônico."""
 
     raw = str(raw_response or "").strip()
     cleaned = str(cleaned_response or "").strip()
     safe_fallback = str(fallback or "").strip()
-    if not cleaned:
-        return GuardedResponse(safe_fallback, False, True, "empty_response")
-
     recent = [str(item or "") for item in recent_assistant_messages]
-    repeated = _repeats_recent_anchor(cleaned, recent)
-    if repeated and _normalize(cleaned) != _normalize(safe_fallback):
-        return GuardedResponse(
-            safe_fallback,
-            True,
-            True,
-            "repeated_recent_anchor",
-        )
 
-    used_fallback = bool(safe_fallback) and _normalize(cleaned) == _normalize(safe_fallback)
-    if used_fallback and raw and _normalize(raw) != _normalize(cleaned):
-        integrated = _preserve_reaction_and_append_fallback(
-            raw_response=raw,
-            fallback=safe_fallback,
-            recent_assistant_messages=recent,
-        )
-        if integrated:
+    if not safe_fallback:
+        if not cleaned:
+            return GuardedResponse("", False, True, "empty_response")
+        repeated = _repeats_recent_anchor(cleaned, recent)
+        if repeated:
+            return GuardedResponse("", True, True, "repeated_recent_anchor")
+        return GuardedResponse(cleaned, False, False, "model_response_accepted")
+
+    source = raw or cleaned
+    integrated = _reaction_before_canonical(
+        response=source,
+        fallback=safe_fallback,
+        recent_assistant_messages=recent,
+    )
+    if integrated:
+        repeated = _repeats_recent_anchor(integrated, recent)
+        if repeated and _normalize(integrated) != _normalize(safe_fallback):
             return GuardedResponse(
-                integrated,
-                False,
-                False,
-                "reaction_preserved_fallback_appended",
+                safe_fallback,
+                True,
+                True,
+                "repeated_recent_anchor",
             )
-        return GuardedResponse(cleaned, repeated, True, "validator_fallback")
+        used_fallback = _normalize(integrated) == _normalize(safe_fallback)
+        return GuardedResponse(
+            integrated,
+            False,
+            used_fallback,
+            "canonical_boundary_applied",
+        )
 
-    return GuardedResponse(cleaned, repeated, used_fallback, "model_response_accepted")
+    return GuardedResponse(safe_fallback, False, True, "canonical_fallback_only")
 
 
 def build_turn_diagnostics(
@@ -151,23 +155,24 @@ def log_exception(stage: str, exc: BaseException, **context: object) -> None:
     )
 
 
-def _preserve_reaction_and_append_fallback(
+def _reaction_before_canonical(
     *,
-    raw_response: str,
+    response: str,
     fallback: str,
     recent_assistant_messages: list[str],
 ) -> str:
-    """Recupera só a reação inicial segura quando o modelo esquece o beat."""
+    """Mantém somente a reação anterior ao beat e reaplica o beat editorial exato."""
 
-    raw = str(raw_response or "").strip()
+    raw = str(response or "").strip()
     safe_fallback = str(fallback or "").strip()
-    if not raw or not safe_fallback:
-        return ""
+    if not safe_fallback:
+        return raw
+    if not raw:
+        return safe_fallback
+
     lowered = raw.casefold()
     if any(marker in lowered for marker in ("<end_run", "end_run", "```json", '"event"')):
-        return ""
-    if _normalize(safe_fallback) in _normalize(raw):
-        return ""
+        return safe_fallback
 
     without_thought = re.sub(
         r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
@@ -175,14 +180,48 @@ def _preserve_reaction_and_append_fallback(
         raw,
         flags=re.IGNORECASE | re.DOTALL,
     ).strip()
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", without_thought) if part.strip()]
+
+    prefix = _prefix_before_anchor(without_thought, safe_fallback)
+    if prefix is None:
+        prefix = without_thought
+
+    reaction = _safe_reaction(prefix, recent_assistant_messages)
+    if not reaction:
+        return safe_fallback
+    return f"{reaction}\n\n{safe_fallback}"
+
+
+def _prefix_before_anchor(text: str, anchor: str) -> str | None:
+    """Localiza a fala canônica por sequência de palavras, ignorando pontuação."""
+
+    text_tokens = [
+        (match.group(0).casefold(), match.start(), match.end())
+        for match in re.finditer(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ]+", str(text or ""))
+    ]
+    anchor_tokens = [
+        match.group(0).casefold()
+        for match in re.finditer(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ]+", str(anchor or ""))
+    ]
+    if not text_tokens or not anchor_tokens or len(anchor_tokens) > len(text_tokens):
+        return None
+
+    words = [item[0] for item in text_tokens]
+    size = len(anchor_tokens)
+    for index in range(len(words) - size + 1):
+        if words[index : index + size] == anchor_tokens:
+            return str(text or "")[: text_tokens[index][1]].strip()
+    return None
+
+
+def _safe_reaction(text: str, recent_assistant_messages: list[str]) -> str:
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", str(text or "")) if part.strip()]
     for paragraph in paragraphs:
         if _looks_like_unsafe_narration(paragraph):
             continue
         reaction = _first_sentences(paragraph, limit=2)
         if not reaction or _repeats_recent_anchor(reaction, recent_assistant_messages):
             continue
-        return f"{reaction}\n\n{safe_fallback}"
+        return reaction
     return ""
 
 
