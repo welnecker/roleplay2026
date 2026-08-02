@@ -18,10 +18,9 @@ _NAME_PATTERNS = (
     re.compile(r"\bmeu\s+nome\s+[ée]\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
 )
 _FREE_REACTION_PATTERNS = (
-    re.compile(r"\bmary\b", re.IGNORECASE),
     re.compile(r"\bvoc[eê]\s+(?:é|e|tá|ta|parece|ficou|fica|chupa|fode|goza)\b", re.IGNORECASE),
-    re.compile(r"\b(?:eu\s+)?(?:acho|gostei|adorei|quero|tenho medo|tô com medo|estou com medo)\b", re.IGNORECASE),
-    re.compile(r"\bmas\b", re.IGNORECASE),
+    re.compile(r"\b(?:tenho medo|tô com medo|estou com medo|é perigoso|e perigoso|não quero morrer|nao quero morrer)\b", re.IGNORECASE),
+    re.compile(r"\bmas\b.*\b(?:perigoso|medo|morrer|risco|arriscado)\b", re.IGNORECASE),
     re.compile(r"\b(?:chupa|fode|goza)\b.*\b(?:vadia|vagabunda|safada)\b", re.IGNORECASE),
 )
 
@@ -70,10 +69,10 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             kind="direct_question",
             facts=facts,
             instruction=(
-                "Responda somente à pergunta, preocupação ou ressalva do usuário, de forma curta, viva e coerente com Mary. "
-                "Não recite nem misture a próxima fala obrigatória do roteiro nesta resposta."
+                "Responda primeiro à pergunta direta do usuário de forma curta e natural. "
+                "Depois conecte a resposta ao movimento atual sem ignorar o que ele perguntou."
             ),
-            fallback="Calma... deixa eu te responder direito antes de continuar.",
+            fallback="Espera... deixa eu te responder direito antes de continuar.",
         )
 
     if len(text.split()) >= 3 and any(pattern.search(text) for pattern in _FREE_REACTION_PATTERNS):
