@@ -226,9 +226,9 @@ def _routing_state_for_declared_skips(
     routed.pending_next_beat_id = final_target
     routed.facts["_declared_skip_applied"] = ",".join(skipped)
 
-    # Fatos recém-descobertos continuam disponíveis para a fala integrada, mas não
-    # criam um turno intermediário que faria o motor reapresentar o beat pulado.
-    for fact_name, value in routed.facts.items():
+    # Itera sobre uma fotografia estável porque as marcações de reconhecimento
+    # são adicionadas ao mesmo dicionário durante este processamento.
+    for fact_name, value in list(routed.facts.items()):
         if fact_name.startswith("_") or original_facts.get(fact_name) == value:
             continue
         routed.facts[f"_acknowledged_{fact_name}"] = value
