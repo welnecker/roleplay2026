@@ -25,7 +25,7 @@ def finalize_model_response(
     fallback: str,
     recent_assistant_messages: Iterable[str],
 ) -> GuardedResponse:
-    """Rejeita repetição evidente e preserva a fala alinhada ao beat atual."""
+    """Rejeita repetição e preserva reação válida antes do beat canônico."""
 
     raw = str(raw_response or "").strip()
     cleaned = str(cleaned_response or "").strip()
@@ -44,12 +44,22 @@ def finalize_model_response(
         )
 
     used_fallback = bool(safe_fallback) and _normalize(cleaned) == _normalize(safe_fallback)
-    reason = (
-        "validator_fallback"
-        if used_fallback and raw and _normalize(raw) != _normalize(cleaned)
-        else "model_response_accepted"
-    )
-    return GuardedResponse(cleaned, repeated, used_fallback, reason)
+    if used_fallback and raw and _normalize(raw) != _normalize(cleaned):
+        integrated = _preserve_reaction_and_append_fallback(
+            raw_response=raw,
+            fallback=safe_fallback,
+            recent_assistant_messages=recent,
+        )
+        if integrated:
+            return GuardedResponse(
+                integrated,
+                False,
+                False,
+                "reaction_preserved_fallback_appended",
+            )
+        return GuardedResponse(cleaned, repeated, True, "validator_fallback")
+
+    return GuardedResponse(cleaned, repeated, used_fallback, "model_response_accepted")
 
 
 def build_turn_diagnostics(
@@ -141,13 +151,64 @@ def log_exception(stage: str, exc: BaseException, **context: object) -> None:
     )
 
 
+def _preserve_reaction_and_append_fallback(
+    *,
+    raw_response: str,
+    fallback: str,
+    recent_assistant_messages: list[str],
+) -> str:
+    """Recupera só a reação inicial segura quando o modelo esquece o beat."""
+
+    raw = str(raw_response or "").strip()
+    safe_fallback = str(fallback or "").strip()
+    if not raw or not safe_fallback:
+        return ""
+    lowered = raw.casefold()
+    if any(marker in lowered for marker in ("<end_run", "end_run", "```json", '"event"')):
+        return ""
+    if _normalize(safe_fallback) in _normalize(raw):
+        return ""
+
+    without_thought = re.sub(
+        r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
+        "",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    ).strip()
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", without_thought) if part.strip()]
+    for paragraph in paragraphs:
+        if _looks_like_unsafe_narration(paragraph):
+            continue
+        reaction = _first_sentences(paragraph, limit=2)
+        if not reaction or _repeats_recent_anchor(reaction, recent_assistant_messages):
+            continue
+        return f"{reaction}\n\n{safe_fallback}"
+    return ""
+
+
+def _looks_like_unsafe_narration(text: str) -> bool:
+    patterns = (
+        r"\bMary\s+(?:sorri|ri|olha|observa|caminha|segura|respira|inclina|aproxima|afasta|encosta|vira)\b",
+        r"\bela\s+(?:sorri|ri|olha|observa|caminha|segura|respira|inclina|aproxima|afasta|encosta|vira)\b",
+        r"\b(?:eu\s+)?(?:sorrio|rio|dou um passo|caminho|seguro|ajeito|observo|olho|recuo|respiro|inclino|aproximo|afasto|encosto)\b",
+        r"\*[^*]+\*",
+    )
+    return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
+
+
+def _first_sentences(text: str, *, limit: int) -> str:
+    compact = " ".join(str(text or "").split())
+    if not compact:
+        return ""
+    pieces = re.split(r"(?<=[.!?])\s+", compact)
+    return " ".join(pieces[: max(1, int(limit))]).strip()
+
+
 def _repeats_recent_anchor(response: str, recent_messages: list[str]) -> bool:
     normalized_response = _normalize(response)
     if not normalized_response:
         return False
 
-    # Primeiro procura unidades longas já ditas. A comparação por inclusão evita que
-    # reticências ou uma frase introdutória escondam a repetição literal principal.
     for message in recent_messages[-6:]:
         for unit in _meaningful_units(message):
             if unit in normalized_response:
@@ -165,7 +226,6 @@ def _repeats_recent_anchor(response: str, recent_messages: list[str]) -> bool:
 
 
 def _meaningful_units(text: str) -> set[str]:
-    # Reticências não devem quebrar uma âncora em fragmentos artificiais.
     compact = re.sub(r"\.{2,}", " ", str(text or ""))
     parts = re.split(r"(?<=[!?])\s+|(?<=\.)\s+|\n+", compact)
     result: set[str] = set()
