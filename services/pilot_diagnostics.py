@@ -14,10 +14,6 @@ _THOUGHT_PATTERN = re.compile(
     flags=re.IGNORECASE | re.DOTALL,
 )
 _ELLIPSIS_TOKEN = "<ELLIPSIS>"
-_INTEGRATED_BOUNDARY_BEAT_IDS = frozenset({
-    "yard_motel_farewell_004",
-    "reencontro_fila_015",
-})
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,8 +31,6 @@ def finalize_model_response(
     fallback: str,
     recent_assistant_messages: Iterable[str],
 ) -> GuardedResponse:
-    """Rejeita repetição e preserva a progressão editorial do turno."""
-
     raw = str(raw_response or "").strip()
     cleaned = str(cleaned_response or "").strip()
     safe_fallback = str(fallback or "").strip()
@@ -73,12 +67,7 @@ def finalize_model_response(
 
     repeated = _repeats_recent_anchor(cleaned, recent)
     if repeated and _normalize(cleaned) != _normalize(safe_fallback):
-        return GuardedResponse(
-            safe_fallback,
-            True,
-            True,
-            "repeated_recent_anchor",
-        )
+        return GuardedResponse(safe_fallback, True, True, "repeated_recent_anchor")
 
     used_fallback = bool(safe_fallback) and _normalize(cleaned) == _normalize(safe_fallback)
     if used_fallback and raw and _normalize(raw) != _normalize(cleaned):
@@ -129,7 +118,7 @@ def _motel_canonical_lines() -> frozenset[str]:
 def _integrated_boundary_lines() -> frozenset[str]:
     result: set[str] = set()
     for beat in _compiled_beats():
-        if str(beat.get("beat_id", "") or "") not in _INTEGRATED_BOUNDARY_BEAT_IDS:
+        if str(beat.get("response_boundary", "") or "") != "integrated_canonical":
             continue
         line = _dialogue_line(beat)
         if line:
@@ -168,8 +157,6 @@ def build_turn_diagnostics(
     repeated_recent_anchor: bool = False,
     system_prompt: str = "",
 ) -> dict[str, object]:
-    """Cria um retrato compacto e serializável da decisão narrativa do turno."""
-
     previous_node = str(getattr(previous_state, "node_id", "") or "")
     previous_pending = str(getattr(previous_state, "pending_next_beat_id", "") or "")
     previous_interstitial = int(getattr(previous_state, "interstitial_turns", 0) or 0)
