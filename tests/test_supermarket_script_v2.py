@@ -29,13 +29,16 @@ def test_fonte_unica_compila_sequencia_do_supermercado() -> None:
     assert script.beats["encontro_acidental_005"]["on_user"]["engaged"] == "encontro_acidental_006"
 
 
-def test_telefone_ja_informado_pula_pedido_redundante() -> None:
+def test_telefone_ja_informado_aplica_salto_declarado_no_roteiro() -> None:
     script = _script()
+    assert script.beats["reencontro_fila_013"]["skip_when_facts"] == {
+        "user_phone": "reencontro_fila_014"
+    }
+
     state = PilotState(
         node_id="reencontro_fila_012",
         facts={"user_phone": "999711721"},
     )
-
     turn = decide_supermarket_script_v2_turn(
         script,
         state,
@@ -45,8 +48,7 @@ def test_telefone_ja_informado_pula_pedido_redundante() -> None:
     assert turn.target_id == "reencontro_fila_014"
     assert turn.state.node_id == "reencontro_fila_014"
     assert turn.state.facts["user_phone"] == "999711721"
-    assert turn.state.facts["_phone_request_skipped"] == "true"
-    assert "Anotado" in turn.visible_fallback
+    assert turn.state.facts["_declared_skip_applied"] == "reencontro_fila_013"
     assert "Queria seu número" not in turn.visible_fallback
 
 
