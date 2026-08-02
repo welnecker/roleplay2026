@@ -72,7 +72,35 @@ def test_despedida_penultima_preserva_pensamento_reacao_e_beat() -> None:
         "Safado! Se você continuar olhando assim eu não consigo atravessar aquela porta... rsrsrs.\n\n"
         f"{fallback}"
     )
-    assert result.guard_reason == "farewell_teaser_boundary"
+    assert result.guard_reason == "integrated_canonical_boundary"
+    assert result.used_fallback is False
+
+
+def test_ultimo_beat_do_reencontro_preserva_resposta_sobre_o_marido() -> None:
+    fallback = "Tá bom... então deixa eu ir. Meu telefone já tá vibrando aqui..."
+    raw = (
+        "[PENSAMENTO]\n"
+        "Ele quer saber o tamanho do perigo, mas eu sei manter isso em segredo.\n"
+        "[/PENSAMENTO]\n\n"
+        "Relaxa, Janio. Ele não vai dar piti porque não vai saber de nada.\n\n"
+        "Tá bom... então deixa eu ir. Meu telefone já tá vibrando aqui e eu preciso chegar."
+    )
+
+    result = finalize_model_response(
+        raw_response=raw,
+        cleaned_response=fallback,
+        fallback=fallback,
+        recent_assistant_messages=[],
+    )
+
+    assert result.response == (
+        "[PENSAMENTO]\n"
+        "Ele quer saber o tamanho do perigo, mas eu sei manter isso em segredo.\n"
+        "[/PENSAMENTO]\n\n"
+        "Relaxa, Janio. Ele não vai dar piti porque não vai saber de nada.\n\n"
+        f"{fallback}"
+    )
+    assert result.guard_reason == "integrated_canonical_boundary"
     assert result.used_fallback is False
 
 
