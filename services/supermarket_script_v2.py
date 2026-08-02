@@ -4,11 +4,12 @@ from dataclasses import replace
 from typing import Any
 
 from services.narrative_context import build_narrative_context
+from services.organic_interaction import detect_organic_signal, render_facts
 from services.pilot_supermarket import (
     PilotScript,
     PilotState,
     PilotTurn,
-    classify_user_message,
+    classify_user_message as base_classify_user_message,
     clean_model_response as base_clean_model_response,
     decide_turn as base_decide_turn,
 )
@@ -16,6 +17,15 @@ from services.supermarket_intent_pilot import classify_supermarket_intent
 
 
 _AUTOMATIC_FOLLOWUPS: dict[str, tuple[dict[str, str], ...]] = {}
+_SEXUAL_CONTEXT_TERMS = (
+    "chupa", "chupar", "fode", "foder", "goza", "gozar", "gostosa", "gostoso",
+    "delícia", "delicia", "tesão", "tesao", "pau", "rola", "xoxota", "buceta",
+)
+_CONTEXTUAL_INSULT_TERMS = ("vadia", "vagabunda")
+_DIRECT_ABUSE_PATTERNS = (
+    "você é uma vadia", "voce e uma vadia", "sua vadia", "você é vagabunda",
+    "voce e vagabunda", "sua vagabunda",
+)
 
 
 def _humanize_scene_location(value: str) -> str:
@@ -87,6 +97,21 @@ def prepare_supermarket_script_v2(script: PilotScript) -> PilotScript:
     return script
 
 
+def classify_contextual_user_message(text: str) -> str:
+    """Não confunde vocabulário sexual contextual com ataque pessoal direto."""
+
+    engagement = base_classify_user_message(text)
+    if engagement != "hostile":
+        return engagement
+
+    value = " ".join(str(text or "").casefold().split())
+    if any(pattern in value for pattern in _DIRECT_ABUSE_PATTERNS):
+        return engagement
+    has_contextual_term = any(term in value for term in _CONTEXTUAL_INSULT_TERMS)
+    has_sexual_context = any(term in value for term in _SEXUAL_CONTEXT_TERMS)
+    return "engaged" if has_contextual_term and has_sexual_context else engagement
+
+
 def _memory_ids(state: PilotState) -> list[str]:
     raw = str(state.facts.get("_active_memory_ids", "") or "")
     return [item.strip() for item in raw.split(",") if item.strip()]
@@ -117,6 +142,73 @@ def _finalize_turn(script: PilotScript, turn: PilotTurn) -> PilotTurn:
     return replace(turn, state=updated, system_prompt=prompt)
 
 
+def _normal_target(script: PilotScript, state: PilotState, engagement: str) -> str:
+    current_id = state.node_id or script.first_beat_id
+    beat = script.beats.get(current_id) or {}
+    transitions = beat.get("on_user") or {}
+    return str(
+        transitions.get(engagement)
+        or transitions.get("engaged")
+        or beat.get("terminal_transition")
+        or ""
+    )
+
+
+def _organic_slack_enabled(script: PilotScript) -> bool:
+    raw = script.raw.get("organic_slack") or {}
+    return isinstance(raw, dict) and bool(raw.get("enabled", False))
+
+
+def _organic_slack_turn(
+    script: PilotScript,
+    state: PilotState,
+    user_text: str,
+) -> PilotTurn | None:
+    """Oferece uma resposta livre e exclusiva antes de retomar o próximo beat."""
+
+    if not _organic_slack_enabled(script):
+        return None
+    if state.pending_next_beat_id or state.interstitial_turns >= 1:
+        return None
+    current_id = state.node_id or script.first_beat_id
+    if current_id == "reencontro_fila_007":
+        return None
+
+    signal = detect_organic_signal(user_text, state.facts)
+    if signal is None or signal.kind != "free_reaction":
+        return None
+
+    engagement = classify_contextual_user_message(user_text)
+    if engagement in {"hostile", "mocking"}:
+        return None
+    next_id = _normal_target(script, state, engagement)
+    if not next_id:
+        return None
+
+    updated = PilotState.from_dict(state.to_dict())
+    updated.facts = signal.facts
+    updated.facts["_organic_interstitial"] = "true"
+    updated.pending_next_beat_id = next_id
+    updated.interstitial_turns = 1
+    prompt = (
+        "Você é Mary. Este é um TURNO ORGÂNICO INTERMEDIÁRIO.\n"
+        "Responda somente ao que o usuário acabou de dizer, com liberdade emocional e continuidade.\n"
+        "Permaneça no mesmo local, momento e eixo narrativo.\n"
+        "Não execute, não cite, não parafraseie e não misture a próxima linha canônica.\n"
+        "Não avance tempo, local ou acontecimento. A próxima linha do roteiro será retomada em outro turno.\n"
+        f"FATOS CONFIRMADOS: {render_facts(updated.facts)}\n"
+        f"MENSAGEM DO USUÁRIO: {user_text}\n"
+        f"ORIENTAÇÃO DE REAÇÃO: {signal.instruction}"
+    )
+    return PilotTurn(
+        engagement=engagement,  # type: ignore[arg-type]
+        target_id=current_id,
+        visible_fallback=signal.fallback,
+        system_prompt=prompt,
+        state=updated,
+    )
+
+
 def _repeat_help_request(
     script: PilotScript,
     state: PilotState,
@@ -134,10 +226,11 @@ def _repeat_help_request(
     updated.pending_next_beat_id = ""
     updated.interstitial_turns = 0
     updated.facts["_scene_location"] = "supermercado_caixa"
+    updated.facts["_organic_interstitial"] = "false"
     return _finalize_turn(
         script,
         PilotTurn(
-            engagement=classify_user_message(user_text),
+            engagement=classify_contextual_user_message(user_text),  # type: ignore[arg-type]
             target_id="reencontro_fila_007",
             visible_fallback=fallback,
             system_prompt=(
@@ -156,30 +249,33 @@ def decide_supermarket_script_v2_turn(
 ) -> PilotTurn:
     """Decide a transição; o roteiro fornece conteúdo, memória e pátios terminais."""
 
+    organic = _organic_slack_turn(script, state, user_text)
+    if organic is not None:
+        return _finalize_turn(script, organic)
+
     current_id = state.node_id or script.first_beat_id
     if current_id == "reencontro_fila_007":
         intent = classify_supermarket_intent(current_id, user_text)
         if intent == "accept":
-            # O estado permanece no beat do pedido; o motor escolhe 008 como alvo.
-            # Colocar o estado previamente em 008 consumia essa fala e entregava 009.
             turn = base_decide_turn(script, state, user_text)
             updated = PilotState.from_dict(turn.state.to_dict())
             updated.facts["help_to_car"] = "accepted"
             updated.facts["_scene_location"] = "estacionamento_caminho"
+            updated.facts["_organic_interstitial"] = "false"
             return _finalize_turn(script, replace(turn, state=updated))
         if intent == "refuse":
             from services.supermarket_intent_pilot import decide_supermarket_turn
 
-            return _finalize_turn(
-                script,
-                decide_supermarket_turn(script, state, user_text),
-            )
+            turn = decide_supermarket_turn(script, state, user_text)
+            updated = PilotState.from_dict(turn.state.to_dict())
+            updated.facts["_organic_interstitial"] = "false"
+            return _finalize_turn(script, replace(turn, state=updated))
         return _repeat_help_request(script, state, user_text)
 
-    return _finalize_turn(
-        script,
-        base_decide_turn(script, state, user_text),
-    )
+    turn = base_decide_turn(script, state, user_text)
+    updated = PilotState.from_dict(turn.state.to_dict())
+    updated.facts["_organic_interstitial"] = "false"
+    return _finalize_turn(script, replace(turn, state=updated))
 
 
 def automatic_followups_after(target_id: str) -> tuple[dict[str, str], ...]:
@@ -194,6 +290,7 @@ def state_after_automatic_followup(
     updated.node_id = str(followup["target_id"])
     updated.pending_next_beat_id = ""
     updated.interstitial_turns = 0
+    updated.facts["_organic_interstitial"] = "false"
     location = str(followup.get("scene_location", ""))
     if location:
         updated.facts["_scene_location"] = location

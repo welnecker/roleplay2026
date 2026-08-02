@@ -1,5 +1,7 @@
 format_version: 1
 package_id: roleplay2026.casada_frustrada
+organic_slack:
+  enabled: true
 append_blocks:
   - block_id: full_story_bridge_targets
     order: 8

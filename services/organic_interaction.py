@@ -17,10 +17,16 @@ _NAME_PATTERNS = (
     re.compile(r"\bme\s+chamo\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
     re.compile(r"\bmeu\s+nome\s+[ée]\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
 )
+_FREE_REACTION_PATTERNS = (
+    re.compile(r"\bvoc[eê]\s+(?:é|e|tá|ta|parece|ficou|fica|chupa|fode|goza)\b", re.IGNORECASE),
+    re.compile(r"\b(?:tenho medo|tô com medo|estou com medo|é perigoso|e perigoso|não quero morrer|nao quero morrer)\b", re.IGNORECASE),
+    re.compile(r"\bmas\b.*\b(?:perigoso|medo|morrer|risco|arriscado)\b", re.IGNORECASE),
+    re.compile(r"\b(?:chupa|fode|goza)\b.*\b(?:vadia|vagabunda|safada)\b", re.IGNORECASE),
+)
 
 
 def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = None) -> OrganicSignal | None:
-    """Detecta contribuições que merecem resposta antes do próximo beat."""
+    """Detecta contribuições que merecem uma resposta exclusiva antes do próximo beat."""
 
     text = " ".join(user_text.strip().split())
     if not text:
@@ -53,9 +59,24 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             facts=facts,
             instruction=(
                 f"Aceite o desafio com humor e soletre o nome corretamente: {spelling}. "
-                "Depois, retome de modo natural a intenção do beat, sem parecer que mudou de assunto abruptamente."
+                "Não execute a próxima linha canônica nesta mesma resposta."
             ),
             fallback=f"Ah, então é assim? Um desafio! {known_name}... {spelling}. Acertei? rsrsrsrs.",
+        )
+
+    # Ressalvas, preocupações e provocações contextuais precisam ser reconhecidas
+    # antes da regra genérica de pergunta. Caso contrário, uma frase como
+    # "é perigoso... não quero morrer, né?" vira apenas direct_question e não
+    # abre a folga orgânica exclusiva.
+    if len(text.split()) >= 3 and any(pattern.search(text) for pattern in _FREE_REACTION_PATTERNS):
+        return OrganicSignal(
+            kind="free_reaction",
+            facts=facts,
+            instruction=(
+                "Reaja livremente ao comentário, preocupação ou provocação do usuário dentro da personalidade, memória e situação atual de Mary. "
+                "Esta resposta é uma folga orgânica: não avance o acontecimento, não recite e não parafraseie a próxima linha canônica."
+            ),
+            fallback="Calma... eu entendi o que você quis dizer. Não vou ignorar isso.",
         )
 
     if "?" in text and len(text.split()) >= 3:
@@ -64,7 +85,7 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             facts=facts,
             instruction=(
                 "Responda primeiro à pergunta direta do usuário de forma curta e natural. "
-                "Não ignore a pergunta para recitar a próxima fala obrigatória."
+                "Depois conecte a resposta ao movimento atual sem ignorar o que ele perguntou."
             ),
             fallback="Espera... deixa eu te responder direito antes de continuar.",
         )
