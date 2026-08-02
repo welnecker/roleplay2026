@@ -30,6 +30,7 @@ EXTENSION_PATHS = (
     PACKAGE_ROOT / "narrative_enhancements.yaml",
     PACKAGE_ROOT / "full_story.yaml",
     PACKAGE_ROOT / "full_story_fixes.yaml",
+    PACKAGE_ROOT / "personality_guardrails.yaml",
 )
 _EDITORIAL_REPOSITORY: GoogleSheetsEditorialRepository | None = None
 _EDITORIAL_READY = False
@@ -104,6 +105,37 @@ def _memory_entries(value: Any) -> list[dict[str, Any]]:
     return []
 
 
+def _append_unique_strings(target: dict[str, Any], key: str, values: Any) -> None:
+    if not isinstance(values, list):
+        raise ValueError(f"{key}.append deve ser uma lista.")
+    current = [str(item).strip() for item in target.get(key, []) or [] if str(item).strip()]
+    for item in values:
+        text = str(item).strip()
+        if text and text not in current:
+            current.append(text)
+    target[key] = current
+
+
+def _merge_character_patch(merged: dict[str, Any], extension: dict[str, Any]) -> None:
+    patch = extension.get("character_patch")
+    if patch is None:
+        return
+    if not isinstance(patch, dict):
+        raise ValueError("character_patch deve ser um mapa.")
+
+    character = merged.setdefault("character", {})
+    if not isinstance(character, dict):
+        raise ValueError("character deve ser um mapa.")
+
+    for profile_key in ("physical_profile", "psychological_profile", "speech_style"):
+        profile_patch = patch.get(profile_key)
+        if profile_patch is None:
+            continue
+        if not isinstance(profile_patch, dict):
+            raise ValueError(f"character_patch.{profile_key} deve ser um mapa.")
+        _append_unique_strings(character, profile_key, profile_patch.get("append", []))
+
+
 def _merge_extension(document: dict[str, Any], extension: dict[str, Any]) -> dict[str, Any]:
     merged = deepcopy(document)
     beats_by_id = {
@@ -130,6 +162,8 @@ def _merge_extension(document: dict[str, Any], extension: dict[str, Any]) -> dic
         if not isinstance(organic_slack, dict):
             raise ValueError("organic_slack deve ser um mapa.")
         merged["organic_slack"] = deepcopy(organic_slack)
+
+    _merge_character_patch(merged, extension)
 
     incoming_memories = _memory_entries(extension.get("memories"))
     if incoming_memories:
