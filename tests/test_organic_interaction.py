@@ -127,6 +127,28 @@ def test_pergunta_direta_avanca_e_e_respondida_no_novo_beat() -> None:
     assert "Responda primeiro à pergunta direta" in turn.system_prompt
 
 
+def test_telefone_informado_e_persistido_sem_pedir_novamente() -> None:
+    facts: dict[str, str] = {}
+
+    first = detect_organic_signal(
+        "Anota aí, gata: 999711721... mas conversa comigo direito, hein?",
+        facts,
+    )
+
+    assert first is not None
+    assert facts["user_phone"] == "999711721"
+    assert first.facts["user_phone"] == "999711721"
+
+    second = detect_organic_signal(
+        "Pede o que quiser... você virou rainha do meu castelo, gata.",
+        facts,
+    )
+
+    assert second is not None
+    assert "já informou o telefone 999711721" in second.instruction
+    assert "não peça o número novamente" in second.instruction
+
+
 def test_nome_de_mary_em_primeira_pessoa_nao_aciona_fallback() -> None:
     response = "Eu sou a Mary, muito prazer! E você, como se chama?"
 
