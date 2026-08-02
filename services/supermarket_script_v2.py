@@ -269,6 +269,20 @@ def _repeat_help_request(
     )
 
 
+def _routing_state_without_redundant_phone_request(state: PilotState) -> PilotState:
+    """Avança pela confirmação quando o telefone já foi informado antes do pedido editorial."""
+
+    current_id = state.node_id
+    known_phone = str(state.facts.get("user_phone", "") or "").strip()
+    if current_id != "reencontro_fila_012" or not known_phone:
+        return state
+
+    routed = PilotState.from_dict(state.to_dict())
+    routed.node_id = "reencontro_fila_013"
+    routed.facts["_phone_request_skipped"] = "true"
+    return routed
+
+
 def decide_supermarket_script_v2_turn(
     script: PilotScript,
     state: PilotState,
@@ -299,7 +313,8 @@ def decide_supermarket_script_v2_turn(
             return _finalize_turn(script, replace(turn, state=updated))
         return _repeat_help_request(script, state, user_text)
 
-    turn = base_decide_turn(script, state, user_text)
+    routing_state = _routing_state_without_redundant_phone_request(state)
+    turn = base_decide_turn(script, routing_state, user_text)
     updated = PilotState.from_dict(turn.state.to_dict())
     updated.facts["_organic_interstitial"] = "false"
     return _finalize_turn(script, replace(turn, state=updated))
