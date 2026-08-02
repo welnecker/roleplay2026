@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import re
 from typing import Any
 
 import services.pilot_supermarket as pilot_supermarket_module
@@ -27,6 +28,13 @@ _DIRECT_ABUSE_PATTERNS = (
     "você é uma vadia", "voce e uma vadia", "sua vadia", "você é vagabunda",
     "voce e vagabunda", "sua vagabunda",
 )
+_STRICT_MOTEL_BEAT = re.compile(r"^motel_\d+$")
+
+
+def _is_strict_motel_beat(beat_id: str) -> bool:
+    """No motel, cada fala canônica representa uma ação física sequencial."""
+
+    return bool(_STRICT_MOTEL_BEAT.fullmatch(str(beat_id or "").strip()))
 
 
 def _humanize_scene_location(value: str) -> str:
@@ -95,9 +103,6 @@ def _register_automatic_followups(script: PilotScript) -> None:
 
 def prepare_supermarket_script_v2(script: PilotScript) -> PilotScript:
     _register_automatic_followups(script)
-    # base_decide_turn resolve o classificador pelo namespace do módulo original.
-    # Instalar a versão contextual aqui impede que linguagem sexual da própria cena
-    # seja encerrada como hostilidade antes de a integração orgânica acontecer.
     pilot_supermarket_module.classify_user_message = classify_contextual_user_message
     return script
 
@@ -132,7 +137,7 @@ def _memory_writes_for_target(script: PilotScript, target_id: str) -> list[str]:
 
 
 def _finalize_turn(script: PilotScript, turn: PilotTurn) -> PilotTurn:
-    """Anexa identidade/memórias ao prompt e registra ativações do beat entregue."""
+    """Anexa identidade/memórias e aplica travas editoriais do movimento."""
 
     previous_ids = _memory_ids(turn.state)
     context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
@@ -142,6 +147,9 @@ def _finalize_turn(script: PilotScript, turn: PilotTurn) -> PilotTurn:
     active_ids = list(dict.fromkeys([*previous_ids, *writes]))
     updated.facts["_active_memory_ids"] = ",".join(active_ids)
     updated.facts["_pending_memory_writes"] = ",".join(writes)
+    updated.facts["_force_fixed_response"] = (
+        "true" if _is_strict_motel_beat(turn.target_id) else "false"
+    )
 
     prompt = f"{context}\n\n{turn.system_prompt}".strip()
     return replace(turn, state=updated, system_prompt=prompt)
@@ -176,7 +184,7 @@ def _organic_slack_turn(
     if state.pending_next_beat_id or state.interstitial_turns >= 1:
         return None
     current_id = state.node_id or script.first_beat_id
-    if current_id == "reencontro_fila_007":
+    if current_id == "reencontro_fila_007" or _is_strict_motel_beat(current_id):
         return None
 
     signal = detect_organic_signal(user_text, state.facts)
