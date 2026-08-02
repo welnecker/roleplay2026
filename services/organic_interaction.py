@@ -64,6 +64,21 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             fallback=f"Ah, então é assim? Um desafio! {known_name}... {spelling}. Acertei? rsrsrsrs.",
         )
 
+    # Ressalvas, preocupações e provocações contextuais precisam ser reconhecidas
+    # antes da regra genérica de pergunta. Caso contrário, uma frase como
+    # "é perigoso... não quero morrer, né?" vira apenas direct_question e não
+    # abre a folga orgânica exclusiva.
+    if len(text.split()) >= 3 and any(pattern.search(text) for pattern in _FREE_REACTION_PATTERNS):
+        return OrganicSignal(
+            kind="free_reaction",
+            facts=facts,
+            instruction=(
+                "Reaja livremente ao comentário, preocupação ou provocação do usuário dentro da personalidade, memória e situação atual de Mary. "
+                "Esta resposta é uma folga orgânica: não avance o acontecimento, não recite e não parafraseie a próxima linha canônica."
+            ),
+            fallback="Calma... eu entendi o que você quis dizer. Não vou ignorar isso.",
+        )
+
     if "?" in text and len(text.split()) >= 3:
         return OrganicSignal(
             kind="direct_question",
@@ -73,17 +88,6 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
                 "Depois conecte a resposta ao movimento atual sem ignorar o que ele perguntou."
             ),
             fallback="Espera... deixa eu te responder direito antes de continuar.",
-        )
-
-    if len(text.split()) >= 3 and any(pattern.search(text) for pattern in _FREE_REACTION_PATTERNS):
-        return OrganicSignal(
-            kind="free_reaction",
-            facts=facts,
-            instruction=(
-                "Reaja livremente ao comentário do usuário dentro da personalidade, memória e situação atual de Mary. "
-                "Esta resposta é uma folga orgânica: não avance o acontecimento, não recite e não parafraseie a próxima linha canônica."
-            ),
-            fallback="Você me desmonta quando fala assim... deixa eu respirar um pouquinho.",
         )
 
     return None
