@@ -154,6 +154,11 @@ def _normal_target(script: PilotScript, state: PilotState, engagement: str) -> s
     )
 
 
+def _organic_slack_enabled(script: PilotScript) -> bool:
+    raw = script.raw.get("organic_slack") or {}
+    return isinstance(raw, dict) and bool(raw.get("enabled", False))
+
+
 def _organic_slack_turn(
     script: PilotScript,
     state: PilotState,
@@ -161,6 +166,8 @@ def _organic_slack_turn(
 ) -> PilotTurn | None:
     """Oferece uma resposta livre e exclusiva antes de retomar o próximo beat."""
 
+    if not _organic_slack_enabled(script):
+        return None
     if state.pending_next_beat_id or state.interstitial_turns >= 1:
         return None
     current_id = state.node_id or script.first_beat_id
@@ -168,7 +175,7 @@ def _organic_slack_turn(
         return None
 
     signal = detect_organic_signal(user_text, state.facts)
-    if signal is None or signal.kind not in {"direct_question", "free_reaction"}:
+    if signal is None or signal.kind != "free_reaction":
         return None
 
     engagement = classify_contextual_user_message(user_text)
