@@ -147,11 +147,25 @@ def _finalize_turn(script: PilotScript, turn: PilotTurn) -> PilotTurn:
     active_ids = list(dict.fromkeys([*previous_ids, *writes]))
     updated.facts["_active_memory_ids"] = ",".join(active_ids)
     updated.facts["_pending_memory_writes"] = ",".join(writes)
-    updated.facts["_force_fixed_response"] = (
-        "true" if _is_strict_motel_beat(turn.target_id) else "false"
-    )
 
-    prompt = f"{context}\n\n{turn.system_prompt}".strip()
+    strict_motel = _is_strict_motel_beat(turn.target_id)
+    updated.facts["_force_fixed_response"] = "false"
+    updated.facts["_strict_motel_canonical"] = "true" if strict_motel else "false"
+
+    prompt = turn.system_prompt
+    if strict_motel:
+        prompt = (
+            f"{prompt}\n\n"
+            "CONTINUIDADE ESTRITA DO MOTEL:\n"
+            "- Responda primeiro ao conteúdo específico do usuário em uma ou duas frases curtas e naturais.\n"
+            "- Em seguida, entregue a linha canônica do movimento atual, preservando integralmente seu sentido e sua ação.\n"
+            "- A reação e a linha canônica devem formar uma única fala contínua.\n"
+            "- Não antecipe nenhuma ação, posição, penetração, orgasmo, despedida ou acontecimento de beats posteriores.\n"
+            "- Não acrescente nada depois da linha canônica.\n"
+            "- Não abra uma nova pergunta além da que já existir na própria linha canônica."
+        )
+
+    prompt = f"{context}\n\n{prompt}".strip()
     return replace(turn, state=updated, system_prompt=prompt)
 
 
