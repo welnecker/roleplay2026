@@ -290,7 +290,10 @@ for message in messages:
     render_message(str(message.get("role", "assistant")), str(message.get("content", "")))
 
 if pilot_state.finished or story_state.finished:
-    st.success("Cena concluída.") if pilot_state.run_status == "completed" else st.info("Mary encerrou a interação.")
+    if pilot_state.run_status == "completed":
+        st.success("Cena concluída.")
+    else:
+        st.info("Mary encerrou a interação.")
     st.caption("A última fala foi registrada. Esta execução não aceita novas mensagens.")
     if st.button("Voltar à biblioteca", type="primary", use_container_width=True):
         return_to_library()
@@ -405,25 +408,27 @@ try:
     messages.append({"role": "assistant", "content": assistant_text, **metadata})
     final_pilot_state = turn.state
 
-    for followup in automatic_followups_after(turn.target_id):
-        final_pilot_state = state_after_automatic_followup(final_pilot_state, followup)
-        updated_story_state = advance_story_state(updated_story_state)
-        followup_metadata = bridge_metadata(str(followup["target_id"]), final_pilot_state)
-        updated_context = persist_assistant_message(
-            repository,
-            context=updated_context,
-            user=user,
-            state=updated_story_state,
-            assistant_text=str(followup["text"]),
-            assistant_metadata=followup_metadata,
-        )
-        messages.append(
-            {
-                "role": "assistant",
-                "content": str(followup["text"]),
-                **followup_metadata,
-            }
-        )
+    is_organic_interstitial = turn.state.facts.get("_organic_interstitial") == "true"
+    if not is_organic_interstitial:
+        for followup in automatic_followups_after(turn.target_id):
+            final_pilot_state = state_after_automatic_followup(final_pilot_state, followup)
+            updated_story_state = advance_story_state(updated_story_state)
+            followup_metadata = bridge_metadata(str(followup["target_id"]), final_pilot_state)
+            updated_context = persist_assistant_message(
+                repository,
+                context=updated_context,
+                user=user,
+                state=updated_story_state,
+                assistant_text=str(followup["text"]),
+                assistant_metadata=followup_metadata,
+            )
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": str(followup["text"]),
+                    **followup_metadata,
+                }
+            )
 except Exception as exc:
     log_exception(
         "persist_turn_or_bridge",
