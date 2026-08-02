@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import json
 import logging
 import re
@@ -25,15 +26,30 @@ def finalize_model_response(
     fallback: str,
     recent_assistant_messages: Iterable[str],
 ) -> GuardedResponse:
-    """Rejeita repetição e preserva reação válida antes do beat canônico."""
+    """Rejeita repetição e preserva a progressão editorial do turno."""
 
     raw = str(raw_response or "").strip()
     cleaned = str(cleaned_response or "").strip()
     safe_fallback = str(fallback or "").strip()
+    recent = [str(item or "") for item in recent_assistant_messages]
+
+    if safe_fallback and _is_motel_canonical_line(safe_fallback):
+        integrated = _reaction_before_canonical(
+            response=raw or cleaned,
+            fallback=safe_fallback,
+            recent_assistant_messages=recent,
+        )
+        used_fallback = _normalize(integrated) == _normalize(safe_fallback)
+        return GuardedResponse(
+            integrated,
+            False,
+            used_fallback,
+            "motel_canonical_boundary",
+        )
+
     if not cleaned:
         return GuardedResponse(safe_fallback, False, True, "empty_response")
 
-    recent = [str(item or "") for item in recent_assistant_messages]
     repeated = _repeats_recent_anchor(cleaned, recent)
     if repeated and _normalize(cleaned) != _normalize(safe_fallback):
         return GuardedResponse(
@@ -60,6 +76,43 @@ def finalize_model_response(
         return GuardedResponse(cleaned, repeated, True, "validator_fallback")
 
     return GuardedResponse(cleaned, repeated, used_fallback, "model_response_accepted")
+
+
+@lru_cache(maxsize=1)
+def _motel_canonical_lines() -> frozenset[str]:
+    """Lê a fonte editorial compilada; não duplica o roteiro no código."""
+
+    try:
+        from services.editorial_compiler import compile_editorial_document
+        from services.editorial_content import load_source_document
+
+        compiled = compile_editorial_document(load_source_document())
+        scene = compiled.get("scene") or {}
+        beats = scene.get("beats") or []
+        result: set[str] = set()
+        for beat in beats:
+            if not isinstance(beat, dict):
+                continue
+            beat_id = str(beat.get("beat_id", "") or "")
+            if not re.fullmatch(r"motel_\d+", beat_id):
+                continue
+            units = beat.get("units") or []
+            for unit in units:
+                if not isinstance(unit, dict) or unit.get("kind") != "dialogue":
+                    continue
+                line = str(unit.get("anchor") or unit.get("text") or "").strip()
+                if line:
+                    result.add(_normalize(line))
+                    break
+        return frozenset(result)
+    except Exception:
+        LOGGER.exception("Não foi possível carregar as linhas canônicas do motel")
+        return frozenset()
+
+
+def _is_motel_canonical_line(fallback: str) -> bool:
+    normalized = _normalize(fallback)
+    return bool(normalized) and normalized in _motel_canonical_lines()
 
 
 def build_turn_diagnostics(
@@ -149,6 +202,74 @@ def log_exception(stage: str, exc: BaseException, **context: object) -> None:
         json.dumps(payload, ensure_ascii=False, default=str),
         exc,
     )
+
+
+def _reaction_before_canonical(
+    *,
+    response: str,
+    fallback: str,
+    recent_assistant_messages: list[str],
+) -> str:
+    """Mantém a resposta ao usuário, reaplica o beat exato e corta qualquer continuação."""
+
+    raw = str(response or "").strip()
+    safe_fallback = str(fallback or "").strip()
+    if not raw:
+        return safe_fallback
+
+    lowered = raw.casefold()
+    if any(marker in lowered for marker in ("<end_run", "end_run", "```json", '"event"')):
+        return safe_fallback
+
+    without_thought = re.sub(
+        r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
+        "",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    ).strip()
+
+    prefix = _prefix_before_anchor(without_thought, safe_fallback)
+    if prefix is None:
+        prefix = without_thought
+
+    reaction = _safe_reaction(prefix, recent_assistant_messages)
+    if not reaction:
+        return safe_fallback
+    return f"{reaction}\n\n{safe_fallback}"
+
+
+def _prefix_before_anchor(text: str, anchor: str) -> str | None:
+    """Localiza a fala canônica por palavras, independentemente da pontuação."""
+
+    text_tokens = [
+        (match.group(0).casefold(), match.start())
+        for match in re.finditer(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ]+", str(text or ""))
+    ]
+    anchor_tokens = [
+        match.group(0).casefold()
+        for match in re.finditer(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ]+", str(anchor or ""))
+    ]
+    if not text_tokens or not anchor_tokens or len(anchor_tokens) > len(text_tokens):
+        return None
+
+    words = [item[0] for item in text_tokens]
+    size = len(anchor_tokens)
+    for index in range(len(words) - size + 1):
+        if words[index : index + size] == anchor_tokens:
+            return str(text or "")[: text_tokens[index][1]].strip()
+    return None
+
+
+def _safe_reaction(text: str, recent_assistant_messages: list[str]) -> str:
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", str(text or "")) if part.strip()]
+    for paragraph in paragraphs:
+        if _looks_like_unsafe_narration(paragraph):
+            continue
+        reaction = _first_sentences(paragraph, limit=2)
+        if not reaction or _repeats_recent_anchor(reaction, recent_assistant_messages):
+            continue
+        return reaction
+    return ""
 
 
 def _preserve_reaction_and_append_fallback(
