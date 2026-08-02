@@ -30,6 +30,7 @@ _INTEGRATED_REACTION_PATTERNS = (
     re.compile(r"\b(?:linda|lindo|gostosa|gostoso|deliciosa|delicioso|tesão|tesao|sexy)\b", re.IGNORECASE),
     re.compile(r"\b(?:corpo|quadril|bunda|seios?|peitos?|xoxota|buceta|pau|rola)\b", re.IGNORECASE),
 )
+_INVALID_NAMES = frozenset({"homem", "mulher", "cara", "gata", "princesa"})
 
 
 def extract_user_facts(
@@ -47,40 +48,37 @@ def extract_user_facts(
     if phone:
         facts["user_phone"] = phone
 
-    for pattern in _NAME_PATTERNS:
-        match = pattern.search(text)
-        if match is None:
-            continue
-        name = _clean_name(match.group(1))
-        if name and name.casefold() not in {"homem", "mulher", "cara", "gata", "princesa"}:
-            facts["user_name"] = name
-            break
+    name = _extract_name(text)
+    if name:
+        facts["user_name"] = name
 
     return facts
 
 
 def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = None) -> OrganicSignal | None:
-    """Classifica a reação; a extração de fatos ocorre independentemente do resultado."""
+    """Classifica a reação e reconhece fatos explícitos ainda não respondidos."""
 
     text = " ".join(user_text.strip().split())
     if not text:
         return None
 
-    original_facts = dict(known_facts or {})
-    facts = extract_user_facts(text, original_facts)
-    new_name = str(facts.get("user_name", "")).strip()
-    previous_name = str(original_facts.get("user_name", "")).strip()
+    facts = extract_user_facts(text, known_facts)
+    stated_name = _extract_name(text)
+    acknowledged_name = str(facts.get("_acknowledged_user_name", "")).strip()
 
-    if new_name and new_name != previous_name:
+    # A extração pode ocorrer antes desta função. O reconhecimento depende do que
+    # foi dito no turno atual, não apenas da comparação entre estado antigo e novo.
+    if stated_name and stated_name.casefold() != acknowledged_name.casefold():
+        facts["_acknowledged_user_name"] = stated_name
         return OrganicSignal(
             kind="fact_acknowledgement",
             facts=facts,
             instruction=(
-                f"Reconheça claramente que o nome do usuário é {new_name}. "
+                f"Reconheça claramente que o nome do usuário é {stated_name}. "
                 "Use o nome na resposta e, se ele perguntou o seu nome, diga que você se chama Mary. "
                 "Responda ao tom de vizinhança ou brincadeira antes de retomar o roteiro."
             ),
-            fallback=f"{new_name}... prazer. Agora não esqueço mais, rsrsrs. Eu sou a Mary.",
+            fallback=f"{stated_name}... prazer. Agora não esqueço mais, rsrsrs. Eu sou a Mary.",
         )
 
     known_name = str(facts.get("user_name", "")).strip()
@@ -144,6 +142,17 @@ def render_facts(facts: dict[str, Any]) -> str:
         if not str(key).startswith("_") and str(value).strip()
     ]
     return ", ".join(items) if items else "nenhum fato pessoal confirmado"
+
+
+def _extract_name(text: str) -> str:
+    for pattern in _NAME_PATTERNS:
+        match = pattern.search(str(text or ""))
+        if match is None:
+            continue
+        name = _clean_name(match.group(1))
+        if name and name.casefold() not in _INVALID_NAMES:
+            return name
+    return ""
 
 
 def _extract_phone(text: str) -> str:
