@@ -17,6 +17,7 @@ _NAME_PATTERNS = (
     re.compile(r"\bme\s+chamo\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
     re.compile(r"\bmeu\s+nome\s+[ée]\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
 )
+_PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?55[\s.-]?)?(?:\(?\d{2}\)?[\s.-]?)?\d(?:[\s.-]?\d){7,10}(?!\d)")
 _EXCLUSIVE_REACTION_PATTERNS = (
     re.compile(r"\bvoc[eê]\s+(?:é|e)\s+(?:[\wÀ-ÖØ-öø-ÿ'’-]+\s+){0,3}louca\b", re.IGNORECASE),
     re.compile(r"\b(?:tenho medo|tô com medo|estou com medo|é perigoso|e perigoso|não quero morrer|nao quero morrer)\b", re.IGNORECASE),
@@ -31,13 +32,17 @@ _INTEGRATED_REACTION_PATTERNS = (
 
 
 def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = None) -> OrganicSignal | None:
-    """Classifica contribuições orgânicas como exclusivas ou integradas ao beat."""
+    """Classifica contribuições orgânicas e incorpora fatos explícitos ao estado."""
 
     text = " ".join(user_text.strip().split())
     if not text:
         return None
 
-    facts = dict(known_facts or {})
+    facts = known_facts if isinstance(known_facts, dict) else {}
+    phone = _extract_phone(text)
+    if phone:
+        facts["user_phone"] = phone
+
     for pattern in _NAME_PATTERNS:
         match = pattern.search(text)
         if match:
@@ -56,6 +61,12 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
                 )
 
     known_name = str(facts.get("user_name", "")).strip()
+    known_phone = str(facts.get("user_phone", "")).strip()
+    phone_memory_instruction = (
+        f" O usuário já informou o telefone {known_phone}; reconheça que ele já está anotado e não peça o número novamente."
+        if known_phone
+        else ""
+    )
     lowered = text.casefold()
     if known_name and any(term in lowered for term in ("soletra", "soletrar", "como se escreve", "letra por letra")):
         spelling = "-".join(list(known_name.upper()))
@@ -76,6 +87,7 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             instruction=(
                 "Reaja exclusivamente à preocupação, ressalva ou comentário sensível do usuário. "
                 "Não avance o acontecimento, não recite e não parafraseie a próxima linha canônica nesta resposta."
+                f"{phone_memory_instruction}"
             ),
             fallback="Calma... eu entendi o que você quis dizer. Não vou ignorar isso.",
         )
@@ -89,8 +101,13 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
                 "Em seguida, conecte essa reação à linha canônica do movimento atual na mesma mensagem. "
                 "A reação e o beat devem formar uma única continuidade. Não abra uma pergunta paralela, "
                 "não repita uma provocação já respondida e não antecipe o próximo beat."
+                f"{phone_memory_instruction}"
             ),
-            fallback="Eu ouvi exatamente o que você disse... e isso mexeu comigo.",
+            fallback=(
+                "Seu número já está anotado... eu não esqueci."
+                if known_phone
+                else "Eu ouvi exatamente o que você disse... e isso mexeu comigo."
+            ),
         )
 
     if "?" in text and len(text.split()) >= 3:
@@ -100,6 +117,7 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             instruction=(
                 "Responda primeiro à pergunta direta do usuário de forma curta e natural. "
                 "Depois conecte a resposta ao movimento atual sem ignorar o que ele perguntou."
+                f"{phone_memory_instruction}"
             ),
             fallback="Espera... deixa eu te responder direito antes de continuar.",
         )
@@ -116,6 +134,16 @@ def render_facts(facts: dict[str, Any]) -> str:
         if not str(key).startswith("_") and str(value).strip()
     ]
     return ", ".join(items) if items else "nenhum fato pessoal confirmado"
+
+
+def _extract_phone(text: str) -> str:
+    match = _PHONE_PATTERN.search(str(text or ""))
+    if match is None:
+        return ""
+    digits = re.sub(r"\D", "", match.group(0))
+    if digits.startswith("55") and len(digits) > 11:
+        digits = digits[2:]
+    return digits if 8 <= len(digits) <= 11 else ""
 
 
 def _clean_name(value: str) -> str:
