@@ -17,10 +17,16 @@ _NAME_PATTERNS = (
     re.compile(r"\bme\s+chamo\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
     re.compile(r"\bmeu\s+nome\s+[ée]\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
 )
+_FREE_REACTION_PATTERNS = (
+    re.compile(r"\bmary\b", re.IGNORECASE),
+    re.compile(r"\bvoc[eê]\s+(?:é|e|tá|ta|parece|ficou|fica)\b", re.IGNORECASE),
+    re.compile(r"\b(?:eu\s+)?(?:acho|gostei|adorei|quero|tenho medo|tô com medo|estou com medo)\b", re.IGNORECASE),
+    re.compile(r"\bmas\b", re.IGNORECASE),
+)
 
 
 def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = None) -> OrganicSignal | None:
-    """Detecta contribuições que merecem resposta antes do próximo beat."""
+    """Detecta contribuições que merecem uma resposta exclusiva antes do próximo beat."""
 
     text = " ".join(user_text.strip().split())
     if not text:
@@ -53,7 +59,7 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             facts=facts,
             instruction=(
                 f"Aceite o desafio com humor e soletre o nome corretamente: {spelling}. "
-                "Depois, retome de modo natural a intenção do beat, sem parecer que mudou de assunto abruptamente."
+                "Não execute a próxima linha canônica nesta mesma resposta."
             ),
             fallback=f"Ah, então é assim? Um desafio! {known_name}... {spelling}. Acertei? rsrsrsrs.",
         )
@@ -63,10 +69,21 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             kind="direct_question",
             facts=facts,
             instruction=(
-                "Responda primeiro à pergunta direta do usuário de forma curta e natural. "
-                "Não ignore a pergunta para recitar a próxima fala obrigatória."
+                "Responda somente à pergunta, preocupação ou ressalva do usuário, de forma curta, viva e coerente com Mary. "
+                "Não recite nem misture a próxima fala obrigatória do roteiro nesta resposta."
             ),
-            fallback="Espera... deixa eu te responder direito antes de continuar.",
+            fallback="Calma... deixa eu te responder direito antes de continuar.",
+        )
+
+    if len(text.split()) >= 3 and any(pattern.search(text) for pattern in _FREE_REACTION_PATTERNS):
+        return OrganicSignal(
+            kind="free_reaction",
+            facts=facts,
+            instruction=(
+                "Reaja livremente ao comentário do usuário dentro da personalidade, memória e situação atual de Mary. "
+                "Esta resposta é uma folga orgânica: não avance o acontecimento, não recite e não parafraseie a próxima linha canônica."
+            ),
+            fallback="Você me desmonta quando fala assim... deixa eu respirar um pouquinho.",
         )
 
     return None
