@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
+from services.editorial_beat_context import build_beat_context, render_beat_context
 from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
@@ -54,15 +55,13 @@ def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória narrativa e continuidade canônica ao turno decidido."""
+    """Aplica memória, BeatContext universal e continuidade canônica ao turno."""
 
     previous_ids = _memory_ids(turn.state)
-    context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
+    narrative_context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
     writes = _memory_writes_for_target(script, turn.target_id)
     updated = EditorialState.from_dict(turn.state.to_dict())
-    updated.facts["_active_memory_ids"] = ",".join(
-        dict.fromkeys([*previous_ids, *writes])
-    )
+    updated.facts["_active_memory_ids"] = ",".join(dict.fromkeys([*previous_ids, *writes]))
     updated.facts["_pending_memory_writes"] = ",".join(writes)
 
     strict = _is_strict_canonical_beat(script, turn.target_id)
@@ -72,7 +71,15 @@ def finalize_editorial_turn(
     if state_fact:
         updated.facts[state_fact] = "true" if strict else "false"
 
-    prompt = turn.system_prompt
+    prepared_turn = replace(turn, state=updated)
+    beat_context = build_beat_context(script, turn.state, prepared_turn)
+    prompt_parts = [
+        narrative_context,
+        render_beat_context(beat_context),
+        turn.system_prompt,
+    ]
+    prompt = "\n\n".join(part.strip() for part in prompt_parts if part.strip())
+
     if strict:
         title = str(strict_policy.get("prompt_title", "") or "").strip()
         title = title or "CONTINUIDADE CANÔNICA ESTRITA"
@@ -86,11 +93,7 @@ def finalize_editorial_turn(
             "- Não abra uma nova pergunta além da que já existir na própria linha canônica."
         )
 
-    return replace(
-        turn,
-        state=updated,
-        system_prompt=f"{context}\n\n{prompt}".strip(),
-    )
+    return replace(prepared_turn, system_prompt=prompt.strip())
 
 
 __all__ = ["finalize_editorial_turn"]
