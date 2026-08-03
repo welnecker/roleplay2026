@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.pilot_supermarket import PilotScript, PilotState
+from services.editorial_runtime_impl import PilotScript, PilotState
 from services.supermarket_intent_pilot import (
     classify_supermarket_intent,
     decide_supermarket_turn,
