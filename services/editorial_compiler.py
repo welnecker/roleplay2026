@@ -1,9 +1,79 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, Iterable
 
 from services.editorial_engine import compile_transition_rules
+
+
+_DEFAULT_UNKNOWN_FACTS = (
+    "ações, decisões, falas, pensamentos e intenções do usuário que não tenham sido declarados",
+    "localização exata, distância ou deslocamento que não tenham sido declarados",
+    "quantidade, medida, peso, conteúdo ou composição que não tenham sido declarados",
+    "roupas, objetos, aparência ou condição física que não tenham sido declarados",
+    "causa, risco, esforço, urgência ou consequência que não tenham sido declarados",
+    "acontecimentos, decisões ou resultados pertencentes a beats futuros",
+)
+
+
+def _string_items(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        return [text] if text else []
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _unique(items: Iterable[str]) -> list[str]:
+    return list(dict.fromkeys(str(item).strip() for item in items if str(item).strip()))
+
+
+def _compiled_factual_contract(
+    source: dict[str, Any],
+    constraints: dict[str, Any],
+) -> tuple[list[str], list[str], list[str]]:
+    """Produz um contrato factual para qualquer beat sem inventar conteúdo.
+
+    A derivação usa somente campos autorais já presentes no beat. Declarações
+    explícitas ampliam e especializam a base; nunca são descartadas pelos
+    padrões universais.
+    """
+
+    required_movement = str(source.get("required_movement", "") or "").strip()
+    canonical_line = str(source.get("canonical_line", "") or "").strip()
+    dramatic_direction = str(source.get("dramatic_direction", "") or "").strip()
+
+    legacy_scope = _string_items(source.get("fact_scope") or constraints.get("fact_scope"))
+    explicit_topics = _string_items(
+        source.get("allowed_topics") or constraints.get("allowed_topics")
+    )
+    explicit_confirmed = _string_items(
+        source.get("confirmed_facts") or constraints.get("confirmed_facts")
+    )
+    explicit_unknown = _string_items(
+        source.get("unknown_facts") or constraints.get("unknown_facts")
+    )
+
+    derived_topics = [
+        text
+        for text in (required_movement, dramatic_direction)
+        if text
+    ]
+    derived_confirmed = []
+    if required_movement:
+        derived_confirmed.append(f"movimento autorizado neste beat: {required_movement}")
+    if canonical_line:
+        derived_confirmed.append(
+            f"conteúdo semântico autorizado pela linha canônica: {canonical_line}"
+        )
+
+    allowed_topics = _unique((*explicit_topics, *legacy_scope, *derived_topics))
+    confirmed_facts = _unique((*explicit_confirmed, *derived_confirmed))
+    unknown_facts = _unique((*explicit_unknown, *_DEFAULT_UNKNOWN_FACTS))
+    return allowed_topics, confirmed_facts, unknown_facts
 
 
 def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
@@ -52,16 +122,11 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                 legacy_transitions = {"engaged": next_beat_id}
 
             constraints = deepcopy(source.get("constraints") or {})
+            allowed_topics, confirmed_facts, unknown_facts = _compiled_factual_contract(
+                source,
+                constraints,
+            )
             fact_scope = deepcopy(source.get("fact_scope") or constraints.get("fact_scope") or [])
-            allowed_topics = deepcopy(
-                source.get("allowed_topics") or constraints.get("allowed_topics") or fact_scope
-            )
-            confirmed_facts = deepcopy(
-                source.get("confirmed_facts") or constraints.get("confirmed_facts") or []
-            )
-            unknown_facts = deepcopy(
-                source.get("unknown_facts") or constraints.get("unknown_facts") or []
-            )
 
             beats.append(
                 {
@@ -90,6 +155,7 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "allowed_topics": allowed_topics,
                     "confirmed_facts": confirmed_facts,
                     "unknown_facts": unknown_facts,
+                    "factual_contract_mode": "explicit+derived",
                     "constraints": constraints,
                 }
             )
