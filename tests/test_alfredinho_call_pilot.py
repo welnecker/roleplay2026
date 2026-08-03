@@ -6,7 +6,7 @@ from services.alfredinho_call_pilot import (
     decide_alfredinho_call_turn,
     prepare_alfredinho_call_script,
 )
-from services.pilot_supermarket import PilotScript, PilotState
+from services.editorial_runtime_impl import PilotScript, PilotState
 
 
 def _script() -> PilotScript:
