@@ -12,17 +12,17 @@ from packages.models import InstalledStoryPackage
 from persistence.editorial import GoogleSheetsEditorialRepository
 from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
-import services.pilot_supermarket as pilot_supermarket_module
+import services.pilot_supermarket as legacy_runtime_module
 from services.editorial_package_loader import (
     compile_editorial_package,
     editorial_story_start,
     load_editorial_document,
 )
-from services.pilot_supermarket import PilotScript
-from services.supermarket_script_v2 import (
-    clean_supermarket_script_v2_response,
-    decide_supermarket_script_v2_turn,
+from services.editorial_progression import (
+    clean_supermarket_script_v2_response as _legacy_clean_response,
+    decide_editorial_progression_turn,
 )
+from services.editorial_runtime import EditorialScript
 
 
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
@@ -41,8 +41,10 @@ _FREE_TEXT_PATTERN = re.compile(
     r"^(?P<indent>\s*)(?P<key>" + "|".join(sorted(_FREE_TEXT_KEYS)) + r"):\s*(?P<value>.*)$"
 )
 
-pilot_supermarket_module.decide_turn = decide_supermarket_script_v2_turn
-pilot_supermarket_module.clean_model_response = clean_supermarket_script_v2_response
+# Compatibilidade interna enquanto a implementação histórica ainda delega sua
+# decisão avançada ao módulo de progressão editorial.
+legacy_runtime_module.decide_turn = decide_editorial_progression_turn
+legacy_runtime_module.clean_model_response = _legacy_clean_response
 
 
 def _protect_editorial_plain_scalars(text: str) -> str:
@@ -154,12 +156,12 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
 def load_editorial_package(
     secrets: Any,
     package: InstalledStoryPackage,
-) -> PilotScript:
+) -> EditorialScript:
     ensure_editorial_package(secrets, package)
     return compile_editorial_package(package)
 
 
-def load_editorial_pilot(secrets: Any) -> PilotScript:
+def load_editorial_pilot(secrets: Any) -> EditorialScript:
     """Fachada temporária; novos fluxos devem passar o pacote explicitamente."""
 
     package = _default_editorial_package()
