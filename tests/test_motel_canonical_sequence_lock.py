@@ -2,32 +2,32 @@ from __future__ import annotations
 
 from services.editorial_compiler import compile_editorial_document
 from services.editorial_content import load_source_document
-from services.pilot_supermarket import PilotScript, PilotState
-from services.supermarket_script_v2 import (
-    _is_strict_motel_beat,
-    decide_supermarket_script_v2_turn,
-    prepare_supermarket_script_v2,
+from services.editorial_progression import (
+    decide_editorial_progression_turn,
+    prepare_editorial_script,
 )
+from services.editorial_runtime import EditorialScript, EditorialState
 
 
-def _script() -> PilotScript:
-    return prepare_supermarket_script_v2(
-        PilotScript(compile_editorial_document(load_source_document()))
+def _script() -> EditorialScript:
+    return prepare_editorial_script(
+        EditorialScript(compile_editorial_document(load_source_document()))
     )
 
 
-def test_todos_os_beats_numericos_do_motel_sao_canonicos() -> None:
-    assert _is_strict_motel_beat("motel_001") is True
-    assert _is_strict_motel_beat("motel_025") is True
-    assert _is_strict_motel_beat("motel_999") is True
-    assert _is_strict_motel_beat("video_008") is False
-    assert _is_strict_motel_beat("motel_saida") is False
+def test_card_declara_prefixo_de_continuidade_canonica() -> None:
+    script = _script()
+    policy = script.raw["organic_slack"]["strict_canonical"]
+
+    assert policy["beat_prefixes"] == ["motel_"]
+    assert policy["state_fact"] == "_strict_motel_canonical"
+    assert policy["prompt_title"] == "CONTINUIDADE ESTRITA DO MOTEL"
 
 
 def test_turno_do_motel_reage_e_traz_a_fala_canonica() -> None:
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         _script(),
-        PilotState(node_id="motel_024"),
+        EditorialState(node_id="motel_024"),
         "smack! hummm... tá saciada?",
     )
 
@@ -41,9 +41,9 @@ def test_turno_do_motel_reage_e_traz_a_fala_canonica() -> None:
 
 
 def test_motel_nao_abre_folga_organica_que_atrasaria_a_sequencia() -> None:
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         _script(),
-        PilotState(node_id="motel_025"),
+        EditorialState(node_id="motel_025"),
         "você está completamente louca e eu quero mais",
     )
 
@@ -56,9 +56,9 @@ def test_motel_nao_abre_folga_organica_que_atrasaria_a_sequencia() -> None:
 
 
 def test_fora_do_motel_modelo_continua_livre() -> None:
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         _script(),
-        PilotState(node_id="video_007"),
+        EditorialState(node_id="video_007"),
         "sim, continua",
     )
 
