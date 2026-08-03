@@ -7,6 +7,7 @@ from services.editorial_diagnostics import (
     build_editorial_turn_diagnostics,
     finalize_editorial_model_response,
 )
+from services.editorial_diagnostics_impl import GuardedResponse
 from services.editorial_progression import (
     decide_editorial_progression_turn,
     prepare_editorial_script,
@@ -21,7 +22,6 @@ from services.editorial_runtime import (
     decide_editorial_turn,
 )
 from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
-from services.pilot_diagnostics import GuardedResponse
 
 
 def test_tipos_editoriais_preservam_compatibilidade() -> None:

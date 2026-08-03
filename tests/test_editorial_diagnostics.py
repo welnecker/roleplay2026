@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.pilot_diagnostics import finalize_model_response
+from services.editorial_diagnostics import finalize_editorial_model_response
 
 
 def test_repeticao_recente_forca_fallback() -> None:
@@ -12,7 +12,7 @@ def test_repeticao_recente_forca_fallback() -> None:
         "rsrsrsrs. Obrigada pela ajuda."
     )
 
-    result = finalize_model_response(
+    result = finalize_editorial_model_response(
         raw_response=raw,
         cleaned_response=raw,
         fallback="Chegamos. Vou abrir o porta-malas.",
@@ -28,7 +28,7 @@ def test_repeticao_recente_forca_fallback() -> None:
 def test_resposta_nova_e_preservada() -> None:
     raw = "Chegamos. Vou abrir o porta-malas."
 
-    result = finalize_model_response(
+    result = finalize_editorial_model_response(
         raw_response=raw,
         cleaned_response=raw,
         fallback="Fala alternativa.",
@@ -53,7 +53,7 @@ def test_validador_preserva_pensamento_reacao_e_anexa_beat_quando_modelo_o_omite
         "Gostou? Fiquei só de calcinha e sutiã..."
     )
 
-    result = finalize_model_response(
+    result = finalize_editorial_model_response(
         raw_response=raw,
         cleaned_response=fallback,
         fallback=fallback,
@@ -85,7 +85,7 @@ def test_motel_preserva_pensamento_e_termina_no_beat_canonico() -> None:
         "Agora vou antecipar uma ação que pertence ao próximo beat."
     )
 
-    result = finalize_model_response(
+    result = finalize_editorial_model_response(
         raw_response=raw,
         cleaned_response=raw,
         fallback=fallback,
@@ -103,7 +103,7 @@ def test_nao_preserva_reacao_com_narracao_proibida() -> None:
     fallback = "Me faz um favorzinho?"
     raw = "*Mary sorri e se aproxima* Eu gostei disso."
 
-    result = finalize_model_response(
+    result = finalize_editorial_model_response(
         raw_response=raw,
         cleaned_response=fallback,
         fallback=fallback,
