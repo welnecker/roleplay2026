@@ -21,13 +21,22 @@ def test_todo_turno_recebe_contrato_de_beat() -> None:
     previous = EditorialState()
     turn = decide_editorial_turn(script, previous, "Olá, prazer em conhecer você.")
 
-    context = build_beat_context(script, turn.state, turn)
+    context = build_beat_context(script, previous, turn)
     rendered = render_beat_context(context)
 
     assert context.target_beat_id == turn.target_id
     assert "CONTRATO DO BEAT ATUAL" in rendered
     assert "Movimento obrigatório" in rendered
-    assert "Não invente detalhes concretos" in rendered
+    assert "não autoriza inventar causas" in rendered
+
+
+def test_compilador_preserva_escopo_factual_de_qualquer_beat() -> None:
+    script = _card_script()
+    beat = script.beats["reencontro_fila_007"]
+
+    assert "fact_scope" in beat
+    assert "Mary está no caixa do supermercado com suas compras" in beat["fact_scope"]
+    assert "roupas, calçados, esforço físico, risco e urgência não estão confirmados" in beat["fact_scope"]
 
 
 def test_adiamento_declara_resultados_sem_prompt_artesanal() -> None:
@@ -42,14 +51,16 @@ def test_adiamento_declara_resultados_sem_prompt_artesanal() -> None:
     assert "Sem pressa... você consegue" not in turn.system_prompt
 
 
-def test_pergunta_proibe_inventar_detalhes_concretos() -> None:
+def test_pergunta_recebe_escopo_factual_e_proibicoes() -> None:
     script = _card_script()
     previous = EditorialState(node_id="reencontro_fila_007")
     turn = decide_editorial_turn(script, previous, "Por que você precisa de ajuda?")
 
     assert turn.target_id == "reencontro_fila_007"
     assert "responder brevemente à pergunta usando apenas fatos confirmados" in turn.system_prompt
-    assert "inventar motivo, compras, risco ou localização do carro" in turn.system_prompt
+    assert "inventar causa específica, quantidade, peso, conteúdo das compras" in turn.system_prompt
+    assert "Escopo factual permitido" in turn.system_prompt
+    assert "roupas, calçados, esforço físico, risco e urgência não estão confirmados" in turn.system_prompt
     assert "solicitar uma decisão explícita" in turn.system_prompt
 
 
