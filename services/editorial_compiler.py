@@ -53,6 +53,15 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
 
             constraints = deepcopy(source.get("constraints") or {})
             fact_scope = deepcopy(source.get("fact_scope") or constraints.get("fact_scope") or [])
+            allowed_topics = deepcopy(
+                source.get("allowed_topics") or constraints.get("allowed_topics") or fact_scope
+            )
+            confirmed_facts = deepcopy(
+                source.get("confirmed_facts") or constraints.get("confirmed_facts") or []
+            )
+            unknown_facts = deepcopy(
+                source.get("unknown_facts") or constraints.get("unknown_facts") or []
+            )
 
             beats.append(
                 {
@@ -78,6 +87,9 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "skip_when_facts": deepcopy(source.get("skip_when_facts") or {}),
                     "response_boundary": str(source.get("response_boundary", "") or ""),
                     "fact_scope": fact_scope,
+                    "allowed_topics": allowed_topics,
+                    "confirmed_facts": confirmed_facts,
+                    "unknown_facts": unknown_facts,
                     "constraints": constraints,
                 }
             )

@@ -21,11 +21,16 @@ def _context(**overrides):
         "transition_status": "decision_pending",
         "required_outcomes": ("reconhecer o adiamento", "pedir decisão explícita"),
         "forbidden_outcomes": ("encerrar o encontro", "presumir recusa"),
-        "fact_scope": (
+        "allowed_topics": ("o pedido para esperar", "a ajuda com as compras"),
+        "confirmed_facts": (
             "Mary está no caixa com compras",
-            "roupas e esforço físico não estão confirmados",
+            "local da cena: supermercado_caixa",
         ),
-        "confirmed_facts": {"scene_location": "supermercado_caixa"},
+        "unknown_facts": (
+            "o lugar exato onde o usuário deve esperar",
+            "o peso das compras",
+            "roupas e calçados",
+        ),
         "max_sentences": 3,
         "max_questions": 1,
         "response_boundary": "",
@@ -52,20 +57,26 @@ def test_validacao_deterministica_aplica_limites_do_beat() -> None:
     assert "max_questions_exceeded" in result.violations
 
 
-def test_contexto_renderiza_escopo_e_fatos_confirmados() -> None:
+def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
     rendered = render_beat_context(_context())
 
-    assert "Escopo factual permitido" in rendered
-    assert "roupas e esforço físico não estão confirmados" in rendered
-    assert "scene_location: supermercado_caixa" in rendered
-    assert "não autoriza inventar causas" in rendered
+    assert "FATOS CONFIRMADOS" in rendered
+    assert "Mary está no caixa com compras" in rendered
+    assert "FATOS DESCONHECIDOS" in rendered
+    assert "o lugar exato onde o usuário deve esperar" in rendered
+    assert "ASSUNTOS PERMITIDOS" in rendered
+    assert "não podem ser concretizados" in rendered
 
 
-def test_prompt_semantico_exige_rejeicao_de_detalhe_plausivel() -> None:
+def test_prompt_semantico_exige_auditoria_de_desconhecidos() -> None:
     prompt = build_semantic_evaluation_prompt(_context())
 
-    assert "detalhe plausível" in prompt
-    assert "roupas, calçados" in prompt
+    assert "compare cada afirmação concreta" in prompt
+    assert "FATOS DESCONHECIDOS" in prompt
+    assert "ali fora" in prompt
+    assert "no estacionamento" in prompt
+    assert "está pesado" in prompt
+    assert "por causa do salto" in prompt
     assert "invented_unconfirmed_detail" in prompt
     assert "um único objeto JSON" in prompt
 
@@ -113,3 +124,4 @@ def test_regeneracao_recebe_motivos_objetivos() -> None:
     assert "failed_to_request_explicit_decision" in prompt
     assert "anticipated_future_beat" in prompt
     assert "não acrescente fatos" in prompt
+    assert "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS" in prompt
