@@ -17,16 +17,16 @@ from services.editorial_routing import (
     routing_state_for_declared_skips,
     state_with_extracted_facts,
 )
-from services.editorial_runtime_impl import (
-    PilotScript,
-    PilotState,
-    PilotTurn,
-    decide_turn as base_decide_turn,
+from services.editorial_runtime_impl import decide_turn as base_decide_turn
+from services.editorial_runtime_types import (
+    EditorialScript,
+    EditorialState,
+    EditorialTurn,
 )
 from services.editorial_turn_finalization import finalize_editorial_turn
 
 
-def prepare_editorial_script(script: PilotScript) -> PilotScript:
+def prepare_editorial_script(script: EditorialScript) -> EditorialScript:
     """Prepara políticas e pontes pertencentes ao próprio roteiro editorial."""
 
     prepare_editorial_followups(script)
@@ -35,10 +35,10 @@ def prepare_editorial_script(script: PilotScript) -> PilotScript:
 
 
 def decide_editorial_progression_turn(
-    script: PilotScript,
-    state: PilotState,
+    script: EditorialScript,
+    state: EditorialState,
     user_text: str,
-) -> PilotTurn:
+) -> EditorialTurn:
     """Decide transições comuns e decisões especiais declaradas pelo card."""
 
     original_facts = dict(state.facts)
@@ -56,7 +56,7 @@ def decide_editorial_progression_turn(
         classify_message=classify_contextual_editorial_message,
     )
     if special is not None:
-        updated = PilotState.from_dict(special.state.to_dict())
+        updated = EditorialState.from_dict(special.state.to_dict())
         updated.facts["_organic_interstitial"] = "false"
         return finalize_editorial_turn(script, replace(special, state=updated))
 
@@ -68,6 +68,6 @@ def decide_editorial_progression_turn(
         original_facts=original_facts,
     )
     turn = base_decide_turn(script, routing_state, user_text)
-    updated = PilotState.from_dict(turn.state.to_dict())
+    updated = EditorialState.from_dict(turn.state.to_dict())
     updated.facts["_organic_interstitial"] = "false"
     return finalize_editorial_turn(script, replace(turn, state=updated))
