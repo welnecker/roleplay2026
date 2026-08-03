@@ -4,14 +4,14 @@ from services.editorial_compiler import compile_editorial_document
 from services.editorial_content import load_source_document
 from services.editorial_runtime_impl import PilotScript, PilotState
 from services.editorial_progression import (
-    decide_supermarket_script_v2_turn,
-    prepare_supermarket_script_v2,
+    decide_editorial_progression_turn,
+    prepare_editorial_script,
 )
 
 
 def _script() -> PilotScript:
     document = load_source_document()
-    return prepare_supermarket_script_v2(PilotScript(compile_editorial_document(document)))
+    return prepare_editorial_script(PilotScript(compile_editorial_document(document)))
 
 
 def test_opa_apos_primeira_mensagem_avanca_sem_encerrar() -> None:
@@ -24,7 +24,7 @@ def test_opa_apos_primeira_mensagem_avanca_sem_encerrar() -> None:
         facts={"active_interlocutor": "janio"},
     )
 
-    turn = decide_supermarket_script_v2_turn(script, state, "Opa...")
+    turn = decide_editorial_progression_turn(script, state, "Opa...")
 
     assert turn.finished is False
     assert turn.target_id == "mensagens_iniciais_002"
