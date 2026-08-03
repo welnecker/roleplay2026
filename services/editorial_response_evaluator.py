@@ -41,6 +41,23 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
         "semantic_rejection_without_reason",
     }
 )
+_VIOLATION_GUIDANCE = {
+    "invented_unconfirmed_detail": (
+        "Remova todo detalhe concreto que não esteja literalmente nos fatos confirmados ou no escopo factual. "
+        "Não explique a causa do pedido com peso, quantidade, roupa, risco, esforço, urgência ou objeto específico."
+    ),
+    "contradicted_confirmed_fact": "Reescreva sem contradizer nenhum fato confirmado.",
+    "failed_required_outcome": "Realize todos os resultados obrigatórios de modo direto e breve.",
+    "performed_forbidden_outcome": "Remova qualquer resultado listado como proibido.",
+    "presumed_user_decision": "Mantenha a decisão do usuário explicitamente pendente.",
+    "anticipated_future_beat": "Permaneça estritamente no beat atual, sem narrar o que acontecerá depois.",
+    "closed_pending_route": "Não encerre uma interação cuja decisão ainda está pendente.",
+    "failed_to_answer_user_question": "Responda diretamente à pergunta usando apenas fatos confirmados.",
+    "failed_to_request_explicit_decision": "Ao final, peça uma decisão explícita sem pressão.",
+    "treated_postpone_as_refusal": "Reconheça o adiamento sem convertê-lo em recusa.",
+    "treated_question_as_acceptance": "Trate a pergunta como pedido de esclarecimento, não como aceite.",
+    "character_voice_broken": "Preserve a voz natural da personagem sem acrescentar fatos.",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,13 +187,25 @@ def build_regeneration_prompt(
     base_prompt: str,
     violations: tuple[str, ...],
 ) -> str:
-    reasons = "\n".join(f"- {item}" for item in violations) or "- resposta_rejeitada"
+    unique = tuple(dict.fromkeys(str(item).strip() for item in violations if str(item).strip()))
+    guidance = [
+        _VIOLATION_GUIDANCE.get(item, f"Corrija estritamente a violação: {item}.")
+        for item in unique
+    ]
+    reasons = "\n".join(f"- {item}" for item in unique) or "- resposta_rejeitada"
+    instructions = "\n".join(f"- {item}" for item in guidance)
     return (
         f"{str(base_prompt or '').strip()}\n\n"
-        "A resposta anterior foi rejeitada. Gere uma nova resposta inteiramente nova e natural. "
-        "Não comente a avaliação, não repita trechos rejeitados e não acrescente fatos para tornar a fala mais interessante.\n"
+        "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
+        "A resposta anterior foi rejeitada. Reconstrua a fala do zero, em forma mínima e natural.\n"
+        "Use somente os fatos confirmados e os resultados obrigatórios já presentes no contrato acima.\n"
+        "Não acrescente explicações, justificativas, humor concreto, imagens, objetos, roupas, riscos ou causas para enriquecer a fala.\n"
+        "Quando faltar um fato, formule de modo neutro em vez de completar a lacuna.\n"
+        "Não comente a avaliação e não repita nenhum detalhe rejeitado.\n"
         "MOTIVOS OBJETIVOS DA REJEIÇÃO:\n"
-        f"{reasons}"
+        f"{reasons}\n"
+        "INSTRUÇÕES DE CORREÇÃO:\n"
+        f"{instructions}"
     ).strip()
 
 
