@@ -8,11 +8,6 @@ PLAYER_PATH = (
     / "pages"
     / "2_Historia_Editorial.py"
 )
-LEGACY_PLAYER_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "pages"
-    / "2_Piloto_Supermercado.py"
-)
 
 
 def test_player_editorial_resolve_pacote_selecionado_pelo_manifesto() -> None:
@@ -40,9 +35,7 @@ def test_sessoes_e_confirmacoes_sao_isoladas_por_package_id() -> None:
     assert "package_id=PACKAGE_ID" in source
 
 
-def test_arquivo_antigo_e_apenas_fachada_de_compatibilidade() -> None:
-    source = LEGACY_PLAYER_PATH.read_text(encoding="utf-8")
+def test_player_legado_foi_removido() -> None:
+    legacy = PLAYER_PATH.with_name("2_Piloto_Supermercado.py")
 
-    assert 'with_name("2_Historia_Editorial.py")' in source
-    assert "selected_package_id" not in source
-    assert "load_editorial_package" not in source
+    assert not legacy.exists()
