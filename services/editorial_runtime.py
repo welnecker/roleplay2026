@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-"""API estável do runtime editorial.
+"""API pública do runtime editorial.
 
-A implementação histórica ainda vive em ``pilot_supermarket`` durante a migração.
-Novos consumidores devem importar somente deste módulo.
+A implementação concreta vive em ``editorial_runtime_impl``. Consumidores do
+app e novos cards devem importar apenas deste módulo.
 """
 
-from services.pilot_supermarket import (
+from services.editorial_runtime_impl import (
     Engagement,
     PilotScript,
     PilotState,
