@@ -25,4 +25,6 @@ def test_implementacao_concreta_nao_fica_no_modulo_piloto() -> None:
     assert "class PilotState" not in legacy
     assert "class PilotScript" not in legacy
     assert "def decide_turn(" not in legacy
-    assert "from services.editorial_runtime_impl import *" in legacy
+    assert "from services import editorial_runtime_impl as _editorial_runtime_impl" in legacy
+    assert "sys.modules[__name__] = _editorial_runtime_impl" in legacy
+    assert "from services.editorial_runtime_impl import *" not in legacy
