@@ -19,9 +19,11 @@ def test_contrato_de_metadados_nao_conhece_historia_especifica() -> None:
         assert forbidden not in source
 
 
-def test_esquema_atual_e_legado_ficam_centralizados() -> None:
+def test_contrato_usa_apenas_esquema_editorial() -> None:
     source = MODULE.read_text(encoding="utf-8")
 
     assert 'EDITORIAL_STATE_KEY = "editorial_state"' in source
-    assert 'LEGACY_STATE_KEY = "pilot_state"' in source
-    assert "include_legacy_aliases" in source
+    assert "LEGACY_STATE_KEY" not in source
+    assert "include_legacy_aliases" not in source
+    assert '"pilot_state"' not in source
+    assert '"pilot_node"' not in source

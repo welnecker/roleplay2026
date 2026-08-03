@@ -7,7 +7,7 @@ from services.editorial_metadata import (
 )
 
 
-def test_metadados_editoriais_sao_o_contrato_principal() -> None:
+def test_metadados_editoriais_sao_o_unico_contrato() -> None:
     metadata = build_editorial_metadata(
         node_id="beat_002",
         engagement="engaged",
@@ -25,9 +25,10 @@ def test_metadados_editoriais_sao_o_contrato_principal() -> None:
     assert metadata["editorial_diagnostics"] == {
         "transition_reason": "normal_transition"
     }
+    assert not any(key.startswith("pilot") for key in metadata)
 
 
-def test_aliases_legados_sao_espelhos_temporarios() -> None:
+def test_encerramento_usa_evento_editorial() -> None:
     metadata = build_editorial_metadata(
         node_id="beat_end",
         engagement="engaged",
@@ -38,46 +39,26 @@ def test_aliases_legados_sao_espelhos_temporarios() -> None:
         diagnostics={"finished": True},
     )
 
-    assert metadata["pilot_state"] is metadata["editorial_state"]
-    assert metadata["pilot_node"] == metadata["editorial_node"]
-    assert metadata["pilot_end_event"] == metadata["editorial_end_event"] == "END_RUN"
-    assert metadata["pilot_run_status"] == metadata["editorial_run_status"]
-    assert metadata["pilot_ending_code"] == metadata["editorial_ending_code"]
+    assert metadata["editorial_end_event"] == "END_RUN"
+    assert metadata["editorial_run_status"] == "completed"
+    assert metadata["editorial_ending_code"] == "success"
 
 
-def test_aliases_legados_podem_ser_desligados_no_futuro() -> None:
-    metadata = build_editorial_metadata(
-        node_id="beat_003",
-        engagement="minimal",
-        state={"node_id": "beat_003"},
-        finished=False,
-        run_status="active",
-        ending_code="",
-        include_legacy_aliases=False,
-    )
-
-    assert "editorial_state" in metadata
-    assert not any(key.startswith("pilot") for key in metadata)
-
-
-def test_recuperacao_prioriza_estado_editorial() -> None:
+def test_recuperacao_considera_apenas_estado_editorial() -> None:
     messages = [
-        {"pilot_state": {"node_id": "legacy"}},
-        {
-            "editorial_state": {"node_id": "current"},
-            "pilot_state": {"node_id": "mirror"},
-        },
+        {"pilot_state": {"node_id": "ignored"}},
+        {"editorial_state": {"node_id": "current"}},
     ]
 
     assert recover_editorial_state_payload(messages) == {"node_id": "current"}
 
 
-def test_recuperacao_aceita_save_legado() -> None:
+def test_recuperacao_sem_estado_editorial_retorna_none() -> None:
     messages = [
         {"role": "assistant", "pilot_state": {"node_id": "legacy_beat"}}
     ]
 
-    assert recover_editorial_state_payload(messages) == {"node_id": "legacy_beat"}
+    assert recover_editorial_state_payload(messages) is None
 
 
 def test_bridge_usa_o_mesmo_contrato() -> None:
@@ -90,3 +71,4 @@ def test_bridge_usa_o_mesmo_contrato() -> None:
     assert metadata["automatic_bridge"] is True
     assert metadata["editorial_end_event"] == ""
     assert metadata["editorial_run_status"] == "active"
+    assert not any(key.startswith("pilot") for key in metadata)
