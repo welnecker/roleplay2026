@@ -83,7 +83,7 @@ def _is_streamlit_call(node: ast.AST, method: str) -> bool:
 
 
 def test_delta_generator_nao_e_renderizado_por_expressao_solteira() -> None:
-    source = Path("pages/2_Historia_Editorial.py").read_text(encoding="utf-8")
+    source = Path("services/editorial_player_runtime.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     success_in_ternary = any(
