@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from services.editorial_engine.models import (
+    NarrativeEffect,
     TransitionCondition,
     TransitionDecision,
     TransitionEffects,
@@ -30,15 +31,26 @@ def _integer_mapping(value: Any, *, field_name: str) -> dict[str, int]:
         raise ValueError(f"{field_name} aceita somente valores inteiros.") from exc
 
 
+def _string_tuple(value: Any, *, field_name: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} deve ser uma lista.")
+    return tuple(str(item).strip() for item in value if str(item).strip())
+
+
 def _compile_declared_rule(raw: Any, index: int) -> TransitionRule:
     if not isinstance(raw, Mapping):
         raise ValueError("Cada item de transitions deve ser um mapa.")
     condition_raw = raw.get("when") or {}
+    effects_raw = raw.get("effects") or {}
+    narrative_raw = raw.get("narrative_effect") or {}
     if not isinstance(condition_raw, Mapping):
         raise ValueError("when deve ser um mapa.")
-    effects_raw = raw.get("effects") or {}
     if not isinstance(effects_raw, Mapping):
         raise ValueError("effects deve ser um mapa.")
+    if not isinstance(narrative_raw, Mapping):
+        raise ValueError("narrative_effect deve ser um mapa.")
 
     transition_id = str(raw.get("id", "") or "").strip() or f"transition_{index + 1}"
     next_beat_id = str(raw.get("next", "") or "").strip()
@@ -47,21 +59,10 @@ def _compile_declared_rule(raw: Any, index: int) -> TransitionRule:
         intent=str(condition_raw.get("intent", "") or "").strip(),
         engagement=str(condition_raw.get("engagement", "") or "").strip(),
         facts=_string_mapping(condition_raw.get("facts"), field_name="when.facts"),
-        relationship=_integer_mapping(
-            condition_raw.get("relationship"),
-            field_name="when.relationship",
-        ),
+        relationship=_integer_mapping(condition_raw.get("relationship"), field_name="when.relationship"),
         always=bool(condition_raw.get("always", False)),
     )
-    if not any(
-        (
-            condition.intent,
-            condition.engagement,
-            condition.facts,
-            condition.relationship,
-            condition.always,
-        )
-    ):
+    if not any((condition.intent, condition.engagement, condition.facts, condition.relationship, condition.always)):
         raise ValueError(f"Transição {transition_id!r} não possui condição.")
 
     return TransitionRule(
@@ -72,10 +73,12 @@ def _compile_declared_rule(raw: Any, index: int) -> TransitionRule:
         priority=int(raw.get("priority", 0) or 0),
         effects=TransitionEffects(
             facts=_string_mapping(effects_raw.get("facts"), field_name="effects.facts"),
-            relationship=_integer_mapping(
-                effects_raw.get("relationship"),
-                field_name="effects.relationship",
-            ),
+            relationship=_integer_mapping(effects_raw.get("relationship"), field_name="effects.relationship"),
+        ),
+        narrative_effect=NarrativeEffect(
+            status=str(narrative_raw.get("status", "") or "").strip(),
+            required_outcomes=_string_tuple(narrative_raw.get("required_outcomes"), field_name="narrative_effect.required_outcomes"),
+            forbidden_outcomes=_string_tuple(narrative_raw.get("forbidden_outcomes"), field_name="narrative_effect.forbidden_outcomes"),
         ),
         prompt=str(raw.get("prompt", "") or "").strip(),
         fallback=str(raw.get("fallback", "") or "").strip(),
@@ -83,8 +86,6 @@ def _compile_declared_rule(raw: Any, index: int) -> TransitionRule:
 
 
 def compile_transition_rules(source: Mapping[str, Any]) -> tuple[TransitionRule, ...]:
-    """Compila formatos novo e legados para um contrato interno único."""
-
     declared = source.get("transitions")
     if declared is not None:
         if not isinstance(declared, list):
@@ -117,32 +118,20 @@ def compile_transition_rules(source: Mapping[str, Any]) -> tuple[TransitionRule,
     return ()
 
 
-def _relationship_matches(
-    requirements: Mapping[str, int],
-    relationship: Mapping[str, int],
-) -> bool:
+def _relationship_matches(requirements: Mapping[str, int], relationship: Mapping[str, int]) -> bool:
     for expression, expected in requirements.items():
         if expression.endswith("_gte"):
-            attribute = expression[:-4]
-            if int(relationship.get(attribute, 0)) < expected:
+            if int(relationship.get(expression[:-4], 0)) < expected:
                 return False
         elif expression.endswith("_lte"):
-            attribute = expression[:-4]
-            if int(relationship.get(attribute, 0)) > expected:
+            if int(relationship.get(expression[:-4], 0)) > expected:
                 return False
         elif int(relationship.get(expression, 0)) != expected:
             return False
     return True
 
 
-def _matches(
-    condition: TransitionCondition,
-    *,
-    intent: str,
-    engagement: str,
-    facts: Mapping[str, str],
-    relationship: Mapping[str, int],
-) -> bool:
+def _matches(condition: TransitionCondition, *, intent: str, engagement: str, facts: Mapping[str, str], relationship: Mapping[str, int]) -> bool:
     if condition.intent and condition.intent != intent:
         return False
     if condition.engagement and condition.engagement != engagement:
@@ -151,9 +140,7 @@ def _matches(
         return False
     if not _relationship_matches(condition.relationship, relationship):
         return False
-    return condition.always or any(
-        (condition.intent, condition.engagement, condition.facts, condition.relationship)
-    )
+    return condition.always or any((condition.intent, condition.engagement, condition.facts, condition.relationship))
 
 
 def evaluate_transition_rules(
@@ -165,8 +152,6 @@ def evaluate_transition_rules(
     facts: Mapping[str, str] | None = None,
     relationship: Mapping[str, int] | None = None,
 ) -> TransitionDecision | None:
-    """Seleciona deterministicamente a primeira regra válida por prioridade."""
-
     indexed = list(enumerate(rules))
     indexed.sort(key=lambda item: (-item[1].priority, item[0]))
     for _, rule in indexed:
@@ -183,6 +168,7 @@ def evaluate_transition_rules(
             target_beat_id=current_beat_id if rule.stay else rule.next_beat_id,
             stay=rule.stay,
             effects=rule.effects,
+            narrative_effect=rule.narrative_effect,
             prompt=rule.prompt,
             fallback=rule.fallback,
         )
