@@ -2,18 +2,18 @@ from services.editorial_compiler import compile_editorial_document
 from services.editorial_content import load_source_document
 from services.editorial_runtime_impl import PilotScript, PilotState
 from services.editorial_progression import (
-    decide_supermarket_script_v2_turn,
-    prepare_supermarket_script_v2,
+    decide_editorial_progression_turn,
+    prepare_editorial_script,
 )
 
 
 def test_fala_sexual_contextual_nao_encerra_historia() -> None:
-    script = prepare_supermarket_script_v2(
+    script = prepare_editorial_script(
         PilotScript(compile_editorial_document(load_source_document()))
     )
     state = PilotState(node_id="motel_006")
 
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         script,
         state,
         "sim... ahhhh!!! você chupa igual uma vadia...",
