@@ -165,7 +165,7 @@ def render_login() -> None:
     _left, center, _right = st.columns([1, 1.15, 1])
     with center:
         st.markdown("<div class='hero'><h1>Roleplay 2026</h1></div>", unsafe_allow_html=True)
-        st.write("Uma biblioteca de histórias interativas independentes.")
+        st.write("Prepare-se para uma nova experiência.")
 
         repository, account_error = account_repository()
         login_tab, register_tab = st.tabs(["Entrar", "Criar conta"])
@@ -234,7 +234,7 @@ def render_login() -> None:
         elif repository is None:
             st.caption("Modo local: qualquer e-mail válido e senha não vazia permitem o acesso.")
         else:
-            st.caption("Contas e senhas protegidas por Argon2 no Google Sheets.")
+            st.caption("Contas e senhas protegidas.")
 
 
 def render_library(user: AuthenticatedUser) -> None:
