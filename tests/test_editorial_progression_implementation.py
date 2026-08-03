@@ -5,8 +5,9 @@ from pathlib import Path
 
 PUBLIC_API = Path("services/editorial_progression.py")
 IMPLEMENTATION = Path("services/editorial_progression_impl.py")
-SUPPORT = Path("services/editorial_progression_support.py")
+FINALIZATION = Path("services/editorial_turn_finalization.py")
 HISTORICAL_ALIAS = Path("services/supermarket_script_v2.py")
+REMOVED_SUPPORT = Path("services/editorial_progression_support.py")
 REMOVED_LEGACY = Path("services/editorial_progression_legacy.py")
 
 
@@ -17,18 +18,21 @@ def test_api_publica_aponta_para_implementacao_editorial() -> None:
     assert "from services.supermarket_script_v2 import" not in source
 
 
-def test_progressao_ativa_usa_suporte_editorial_definitivo() -> None:
+def test_progressao_ativa_usa_modulos_editoriais_definitivos() -> None:
     implementation = IMPLEMENTATION.read_text(encoding="utf-8")
-    support = SUPPORT.read_text(encoding="utf-8")
+    finalization = FINALIZATION.read_text(encoding="utf-8")
     historical = HISTORICAL_ALIAS.read_text(encoding="utf-8")
 
     assert "def decide_supermarket_script_v2_turn(" in implementation
-    assert "from services import editorial_progression_support as _support" in implementation
+    assert "from services.editorial_turn_finalization import" in implementation
+    assert "finalize_editorial_turn(" in implementation
+    assert "editorial_progression_support" not in implementation
     assert "editorial_progression_legacy" not in implementation
-    assert "def prepare_supermarket_script_v2(" in support
+    assert "def finalize_editorial_turn(" in finalization
     assert "def decide_supermarket_script_v2_turn(" not in historical
     assert "def prepare_supermarket_script_v2(" not in historical
     assert "sys.modules[__name__] = _editorial_progression_impl" in historical
+    assert not REMOVED_SUPPORT.exists()
     assert not REMOVED_LEGACY.exists()
 
 
