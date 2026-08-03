@@ -19,7 +19,7 @@ from services.editorial_package_loader import (
     load_editorial_document,
 )
 from services.editorial_progression import (
-    clean_supermarket_script_v2_response as _legacy_clean_response,
+    clean_editorial_progression_response,
     decide_editorial_progression_turn,
 )
 from services.editorial_runtime import EditorialScript
@@ -44,7 +44,7 @@ _FREE_TEXT_PATTERN = re.compile(
 # Compatibilidade interna enquanto a implementação histórica ainda delega sua
 # decisão avançada ao módulo de progressão editorial.
 legacy_runtime_module.decide_turn = decide_editorial_progression_turn
-legacy_runtime_module.clean_model_response = _legacy_clean_response
+legacy_runtime_module.clean_model_response = clean_editorial_progression_response
 
 
 def _protect_editorial_plain_scalars(text: str) -> str:
