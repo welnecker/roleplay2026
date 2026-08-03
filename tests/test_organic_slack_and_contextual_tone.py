@@ -4,7 +4,7 @@ from pathlib import Path
 from services.editorial_compiler import compile_editorial_document
 from services.editorial_content import load_source_document
 from services.pilot_supermarket import PilotScript, PilotState
-from services.supermarket_script_v2 import (
+from services.editorial_progression import (
     classify_contextual_user_message,
     decide_supermarket_script_v2_turn,
     prepare_supermarket_script_v2,
