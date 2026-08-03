@@ -40,6 +40,8 @@ class TransitionRule:
     stay: bool = False
     priority: int = 0
     effects: TransitionEffects = field(default_factory=TransitionEffects)
+    prompt: str = ""
+    fallback: str = ""
 
     def __post_init__(self) -> None:
         if not self.transition_id.strip():
@@ -56,3 +58,5 @@ class TransitionDecision:
     target_beat_id: str
     stay: bool
     effects: TransitionEffects
+    prompt: str = ""
+    fallback: str = ""
