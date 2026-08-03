@@ -4,7 +4,7 @@ from dataclasses import replace
 import re
 from typing import Any, Literal
 
-from services.pilot_supermarket import (
+from services.editorial_runtime_impl import (
     PilotScript,
     PilotState,
     PilotTurn,
@@ -120,8 +120,6 @@ def _matches_any(value: str, patterns: tuple[str, ...]) -> bool:
 def classify_supermarket_intent(current_beat_id: str, text: str) -> UserIntent:
     value = " ".join(str(text or "").casefold().split())
 
-    # “Não estou/tô com pressa” contém literalmente “estou/tô com pressa”.
-    # Reconheça primeiro essa negação como disponibilidade para não repetir o pedido.
     if _matches_any(value, _NO_RUSH_ACCEPT_PATTERNS):
         return "accept"
     if _matches_any(value, _REFUSE_PATTERNS):

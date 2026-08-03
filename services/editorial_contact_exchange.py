@@ -4,8 +4,8 @@ from dataclasses import replace
 import re
 from typing import Any
 
-from services.pilot_supermarket import PilotScript, PilotState, PilotTurn, classify_user_message
-from services.supermarket_intent_pilot import (
+from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn, classify_user_message
+from services.editorial_intent import (
     apply_supermarket_document_overrides,
     decide_supermarket_turn,
     prepare_supermarket_script,

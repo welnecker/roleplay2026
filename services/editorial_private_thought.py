@@ -4,12 +4,12 @@ from dataclasses import replace
 import re
 from typing import Any
 
-from services.alfredinho_call_pilot import (
+from services.editorial_partner_call import (
     apply_alfredinho_call_overrides,
     decide_alfredinho_call_turn,
     prepare_alfredinho_call_script,
 )
-from services.pilot_supermarket import (
+from services.editorial_runtime_impl import (
     PilotScript,
     PilotState,
     PilotTurn,

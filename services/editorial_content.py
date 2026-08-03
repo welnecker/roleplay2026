@@ -12,7 +12,7 @@ from packages.models import InstalledStoryPackage
 from persistence.editorial import GoogleSheetsEditorialRepository
 from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
-import services.pilot_supermarket as legacy_runtime_module
+from services import editorial_runtime_impl as runtime_impl
 from services.editorial_package_loader import (
     compile_editorial_package,
     editorial_story_start,
@@ -43,8 +43,8 @@ _FREE_TEXT_PATTERN = re.compile(
 
 # Compatibilidade interna enquanto a implementação histórica ainda delega sua
 # decisão avançada ao módulo de progressão editorial.
-legacy_runtime_module.decide_turn = decide_editorial_progression_turn
-legacy_runtime_module.clean_model_response = clean_editorial_progression_response
+runtime_impl.decide_turn = decide_editorial_progression_turn
+runtime_impl.clean_model_response = clean_editorial_progression_response
 
 
 def _protect_editorial_plain_scalars(text: str) -> str:

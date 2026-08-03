@@ -4,13 +4,13 @@ from dataclasses import replace
 import re
 from typing import Any
 
-from services.contact_exchange_pilot import (
+from services.editorial_contact_exchange import (
     CONTACT_EXCHANGE_VERSION,
     apply_contact_exchange_overrides,
     decide_contact_exchange_turn,
     prepare_contact_exchange_script,
 )
-from services.pilot_supermarket import PilotScript, PilotState, PilotTurn, classify_user_message
+from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn, classify_user_message
 
 ALFREDINHO_CALL_VERSION = "1.0.3-alfredinho-open-call"
 
@@ -126,8 +126,6 @@ def decide_alfredinho_call_turn(
     prepare_alfredinho_call_script(script)
     current_id = state.node_id or script.first_beat_id
 
-    # Depois que Mary encerrou a ligação em um turno próprio, a próxima interação
-    # libera normalmente o beat de chegada em casa.
     if current_id == "retorno_casa_001" and state.facts.get("alfredinho_call_closed") == "true":
         turn = decide_contact_exchange_turn(script, state, user_text)
         updated = PilotState.from_dict(turn.state.to_dict())
