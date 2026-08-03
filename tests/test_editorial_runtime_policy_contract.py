@@ -3,12 +3,22 @@ from __future__ import annotations
 from pathlib import Path
 
 from packages.loader import load_manifest
-from services.editorial_package_loader import load_editorial_document
+from services.editorial_package_loader import (
+    compile_editorial_package,
+    load_editorial_document,
+)
+from services.editorial_progression import (
+    decide_editorial_progression_turn,
+    editorial_followups_after,
+    state_after_editorial_followup,
+)
+from services.editorial_runtime import EditorialState
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CARD_ROOT = ROOT / "installed_stories" / "casada_frustrada"
 FIXTURE_ROOT = ROOT / "tests" / "fixtures" / "editorial_cards" / "encontro_no_cafe"
+IMPLEMENTATION = ROOT / "services" / "editorial_progression_impl.py"
 
 
 def test_casada_frustrada_declara_politicas_especificas_no_pacote() -> None:
@@ -44,3 +54,51 @@ def test_manifesto_carrega_politica_por_ultimo() -> None:
     extensions = package.manifest.runtime.editorial.extensions
 
     assert extensions[-1] == "content/extensions/runtime.yaml"
+
+
+def test_continuidade_estrita_e_ativada_pela_politica_do_card() -> None:
+    package = load_manifest(CARD_ROOT / "manifest.yaml")
+    script = compile_editorial_package(package)
+
+    turn = decide_editorial_progression_turn(
+        script,
+        EditorialState(node_id="motel_006"),
+        "sim... continua",
+    )
+
+    assert turn.state.facts["_strict_motel_canonical"] == "true"
+    assert "CONTINUIDADE ESTRITA DO MOTEL" in turn.system_prompt
+
+
+def test_card_sem_politica_nao_recebe_estado_de_continuidade_estrita() -> None:
+    package = load_manifest(FIXTURE_ROOT / "manifest.yaml")
+    script = compile_editorial_package(package)
+
+    turn = decide_editorial_progression_turn(
+        script,
+        EditorialState(node_id=script.first_beat_id),
+        "sim",
+    )
+
+    assert "_strict_motel_canonical" not in turn.state.facts
+
+
+def test_pontes_aplicam_atualizacoes_de_estado_declaradas() -> None:
+    package = load_manifest(CARD_ROOT / "manifest.yaml")
+    compile_editorial_package(package)
+    followups = editorial_followups_after("reencontro_fila_016")
+
+    home_state = state_after_editorial_followup(EditorialState(), followups[0])
+    message_state = state_after_editorial_followup(home_state, followups[-1])
+
+    assert home_state.facts["alfredinho_has_voice"] == "false"
+    assert message_state.facts["active_interlocutor"] == "janio"
+    assert message_state.facts["alfredinho_has_voice"] == "false"
+
+
+def test_runtime_nao_contem_ids_das_politicas_extraidas() -> None:
+    source = IMPLEMENTATION.read_text(encoding="utf-8")
+
+    assert "_STRICT_MOTEL_BEAT" not in source
+    assert 'startswith("retorno_casa_")' not in source
+    assert '== "mensagens_iniciais_001"' not in source
