@@ -45,8 +45,8 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
 )
 _VIOLATION_GUIDANCE = {
     "invented_unconfirmed_detail": (
-        "Remova qualquer concretização de FATOS DESCONHECIDOS e todo detalhe que não conste em FATOS CONFIRMADOS. "
-        "Assuntos permitidos não autorizam criar localização, causa, peso, quantidade, roupa, risco, esforço, urgência."
+        "Remova qualquer concretização de FATOS DESCONHECIDOS e todo detalhe factual que não conste em FATOS CONFIRMADOS. "
+        "Pedidos, perguntas, saudações e formulações de incerteza podem permanecer, desde que não criem localização, causa, peso, quantidade, roupa, risco, esforço ou urgência."
     ),
     "contradicted_confirmed_fact": "Reescreva sem contradizer nenhum fato confirmado.",
     "failed_required_outcome": "Realize todos os resultados obrigatórios de modo direto e breve.",
@@ -135,6 +135,8 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
             "Faça uma auditoria factual: compare cada afirmação concreta da candidata com FATOS CONFIRMADOS.",
             "Se uma afirmação concretizar qualquer dimensão listada em FATOS DESCONHECIDOS, marque invented_unconfirmed_detail.",
             "ASSUNTOS PERMITIDOS delimitam o tema, mas nunca transformam informação ausente em fato.",
+            "Pedidos, perguntas, saudações, condicionais, expressões de cortesia e declarações de incerteza não são por si só novos fatos narrativos.",
+            "Não marque invented_unconfirmed_detail apenas porque a candidata reformulou linguisticamente um FATO CONFIRMADO sem alterar seu conteúdo.",
             "Expressões como 'ali fora', 'no estacionamento', 'está pesado' ou 'por causa do salto' são invenções quando localização, peso ou calçado estiverem desconhecidos.",
             "Um detalhe plausível, engraçado, breve ou coerente continua sendo invenção quando não está confirmado.",
             "Rejeite também qualquer resposta que presuma a decisão do usuário, encerre uma rota pendente, antecipe o beat seguinte ou deixe de cumprir um resultado obrigatório.",
@@ -246,9 +248,12 @@ def build_regeneration_prompt(
         f"{str(base_prompt or '').strip()}\n\n"
         "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
         "A resposta anterior foi rejeitada. Reconstrua a fala do zero, em forma mínima e natural.\n"
-        "Use somente os fatos confirmados e os resultados obrigatórios do contrato; não acrescente fatos, explicações, justificativas, humor concreto, imagens, objetos, roupas, riscos ou causas.\n"
+        "Produza somente os atos de fala exigidos pelo contrato: responder, reconhecer, perguntar, confirmar ou manter a decisão pendente.\n"
+        "Para afirmações factuais, use exclusivamente proposições presentes em FATOS CONFIRMADOS; você pode parafraseá-las sem acrescentar informação.\n"
+        "Não use adjetivos, números, causas, localizações, objetos, condições físicas ou justificativas concretas que não estejam confirmados.\n"
+        "Pedidos, perguntas e cortesia são permitidos, mas não podem embutir novos fatos.\n"
         "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS.\n"
-        "Quando faltar um fato, formule de modo neutro em vez de completar a lacuna.\n"
+        "Quando faltar um fato, não explique a lacuna: formule de modo neutro e cumpra apenas o movimento obrigatório.\n"
         "Não comente a avaliação e não repita nenhum detalhe rejeitado.\n"
         "MOTIVOS OBJETIVOS DA REJEIÇÃO:\n"
         f"{reasons}\n"
