@@ -11,7 +11,7 @@ from services.editorial_runtime_impl import PilotScript, PilotState
 
 
 IMPLEMENTATION = Path("services/editorial_progression_impl.py")
-SUPPORT = Path("services/editorial_progression_support.py")
+REMOVED_SUPPORT = Path("services/editorial_progression_support.py")
 
 
 def _script(name: str, target_id: str) -> PilotScript:
@@ -74,9 +74,7 @@ def test_progressao_ativa_usa_modulo_proprio_de_pontes() -> None:
     source = IMPLEMENTATION.read_text(encoding="utf-8")
 
     assert "from services.editorial_followups import" in source
-    assert "_support.automatic_followups_after" not in source
-    assert "_support.state_after_automatic_followup" not in source
-    assert "_support.render_automatic_followup_text" not in source
+    assert "editorial_progression_support" not in source
 
 
 def test_pontes_ficam_associadas_ao_script_preparado() -> None:
@@ -102,9 +100,9 @@ def test_ponte_aplica_local_e_fatos_declarados() -> None:
     assert followup["text"].startswith("[DEPOIS — OUTRO LUGAR]")
 
 
-def test_support_nao_e_mais_fonte_ativa_das_pontes() -> None:
+def test_suporte_monolitico_de_pontes_foi_removido() -> None:
     implementation = IMPLEMENTATION.read_text(encoding="utf-8")
-    support = SUPPORT.read_text(encoding="utf-8")
 
     assert "prepare_editorial_followups(script)" in implementation
-    assert "_AUTOMATIC_FOLLOWUPS" in support
+    assert not REMOVED_SUPPORT.exists()
+    assert "_AUTOMATIC_FOLLOWUPS" not in implementation

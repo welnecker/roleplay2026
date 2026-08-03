@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 
 import services.pilot_supermarket as pilot_supermarket_module
-from services import editorial_progression_support as _support
 from services.editorial_declared_decisions import decide_declared_special_turn
 from services.editorial_followups import (
     editorial_followups_after,
@@ -18,7 +17,13 @@ from services.editorial_routing import (
     routing_state_for_declared_skips,
     state_with_extracted_facts,
 )
-from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
+from services.editorial_runtime_impl import (
+    PilotScript,
+    PilotState,
+    PilotTurn,
+    decide_turn as base_decide_turn,
+)
+from services.editorial_turn_finalization import finalize_editorial_turn
 
 
 render_automatic_followup_text = render_editorial_followup_text
@@ -48,19 +53,19 @@ def decide_supermarket_script_v2_turn(
 
     organic = organic_editorial_turn(script, working_state, user_text)
     if organic is not None:
-        return _support._finalize_turn(script, organic)
+        return finalize_editorial_turn(script, organic)
 
     special = decide_declared_special_turn(
         script,
         working_state,
         user_text,
-        base_decide=_support.base_decide_turn,
+        base_decide=base_decide_turn,
         classify_message=classify_contextual_user_message,
     )
     if special is not None:
         updated = PilotState.from_dict(special.state.to_dict())
         updated.facts["_organic_interstitial"] = "false"
-        return _support._finalize_turn(script, replace(special, state=updated))
+        return finalize_editorial_turn(script, replace(special, state=updated))
 
     engagement = classify_contextual_user_message(user_text)
     routing_state = routing_state_for_declared_skips(
@@ -69,7 +74,7 @@ def decide_supermarket_script_v2_turn(
         engagement,
         original_facts=original_facts,
     )
-    turn = _support.base_decide_turn(script, routing_state, user_text)
+    turn = base_decide_turn(script, routing_state, user_text)
     updated = PilotState.from_dict(turn.state.to_dict())
     updated.facts["_organic_interstitial"] = "false"
-    return _support._finalize_turn(script, replace(turn, state=updated))
+    return finalize_editorial_turn(script, replace(turn, state=updated))
