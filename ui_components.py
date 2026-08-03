@@ -64,12 +64,9 @@ def _clear_story_session(package_id: str, user_id: str = "") -> None:
     st.session_state.pop("payment_access_ready", None)
 
     if user_id:
-        prefixes = (
-            f"editorial:{user_id}:{package_id}:",
-            f"pilot:{user_id}:{package_id}:",
-        )
+        prefix = f"editorial:{user_id}:{package_id}:"
         for key in list(st.session_state.keys()):
-            if str(key).startswith(prefixes):
+            if str(key).startswith(prefix):
                 st.session_state.pop(key, None)
 
 
