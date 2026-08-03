@@ -1,0 +1,5 @@
+format_version: 1
+patch_beats:
+  cafe_002:
+    max_questions: 1
+    max_sentences: 2

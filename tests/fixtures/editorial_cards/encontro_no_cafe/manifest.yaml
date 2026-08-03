@@ -1,0 +1,31 @@
+format_version: 2
+package_id: example.encontro_no_cafe
+version: 1.0.0
+author:
+  id: tests
+  name: Testes
+entrypoint: story.yaml
+runtime:
+  kind: editorial
+  editorial:
+    source: content/editorial.yaml
+    extensions:
+      - content/extensions/guardrails.yaml
+card:
+  title: Encontro no café
+  subtitle: Uma conversa breve e independente.
+  description: Card editorial mínimo usado para provar isolamento entre pacotes.
+  genres:
+    - Romance
+  chapter_label: Capítulo único
+  cover: ""
+  character_profile:
+    name: Clara
+    identity: Clara é uma mulher adulta que encontra o usuário em um café.
+    personality: Observadora, gentil e direta.
+    intention: Descobrir se a conversa merece continuar.
+commerce:
+  access: free
+  price_cents: 0
+  currency: BRL
+  replay_policy: reuse_access
