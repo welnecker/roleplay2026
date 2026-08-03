@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-import services.pilot_supermarket as pilot_supermarket_module
+from services import editorial_runtime_impl as runtime_impl
 from services.editorial_declared_decisions import decide_declared_special_turn
 from services.editorial_followups import (
     editorial_followups_after,
@@ -37,7 +37,7 @@ def prepare_supermarket_script_v2(script: PilotScript) -> PilotScript:
     """Prepara políticas e pontes pertencentes ao próprio roteiro editorial."""
 
     prepare_editorial_followups(script)
-    pilot_supermarket_module.classify_user_message = classify_contextual_user_message
+    runtime_impl.classify_user_message = classify_contextual_user_message
     return script
 
 
