@@ -13,10 +13,31 @@ class OrganicSignal:
     fallback: str
 
 
-_NAME_PATTERNS = (
-    re.compile(r"\bme\s+chamo\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
-    re.compile(r"\bmeu\s+nome\s+[ée]\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})", re.IGNORECASE),
-    re.compile(r"\bsou\s+(?:o\s+|a\s+)?([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30})\b", re.IGNORECASE),
+@dataclass(frozen=True, slots=True)
+class NameEvidence:
+    value: str
+    source: str
+    confidence: str
+
+
+_NAME_TOKEN = r"[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,30}"
+_EXPLICIT_NAME_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "me_chamo",
+        re.compile(rf"\bme\s+chamo\s+(?P<name>{_NAME_TOKEN})\b", re.IGNORECASE),
+    ),
+    (
+        "meu_nome_e",
+        re.compile(rf"\bmeu\s+nome\s+[ée]\s+(?P<name>{_NAME_TOKEN})\b", re.IGNORECASE),
+    ),
+    (
+        "pode_me_chamar",
+        re.compile(rf"\bpode\s+me\s+chamar\s+de\s+(?P<name>{_NAME_TOKEN})\b", re.IGNORECASE),
+    ),
+)
+_PRESENTATION_CLAUSE_PATTERN = re.compile(
+    rf"(?:^|(?<=[.!?;])\s+)(?:eu\s+)?sou\s+(?:(?:o|a)\s+)?(?P<name>{_NAME_TOKEN})(?=$|\s*[,!.?;])",
+    re.IGNORECASE,
 )
 _PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?55[\s.-]?)?(?:\(?\d{2}\)?[\s.-]?)?\d(?:[\s.-]?\d){7,10}(?!\d)")
 _EXCLUSIVE_REACTION_PATTERNS = (
@@ -37,7 +58,7 @@ def extract_user_facts(
     user_text: str,
     known_facts: dict[str, str] | None = None,
 ) -> dict[str, str]:
-    """Extrai fatos explícitos sem depender de existir uma reação orgânica."""
+    """Extrai somente fatos sustentados por evidência explícita na mensagem."""
 
     facts = dict(known_facts or {})
     text = " ".join(str(user_text or "").strip().split())
@@ -48,37 +69,38 @@ def extract_user_facts(
     if phone:
         facts["user_phone"] = phone
 
-    name = _extract_name(text)
-    if name:
-        facts["user_name"] = name
+    evidence = extract_name_evidence(text)
+    if evidence is not None:
+        current_name = str(facts.get("user_name", "") or "").strip()
+        if not current_name or evidence.confidence == "explicit" or current_name.casefold() == evidence.value.casefold():
+            facts["user_name"] = evidence.value
+            facts["_user_name_source"] = evidence.source
 
     return facts
 
 
 def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = None) -> OrganicSignal | None:
-    """Classifica a reação e reconhece fatos explícitos ainda não respondidos."""
+    """Classifica a reação e reconhece nomes explicitamente apresentados."""
 
     text = " ".join(user_text.strip().split())
     if not text:
         return None
 
     facts = extract_user_facts(text, known_facts)
-    stated_name = _extract_name(text)
+    evidence = extract_name_evidence(text)
     acknowledged_name = str(facts.get("_acknowledged_user_name", "")).strip()
 
-    # A extração pode ocorrer antes desta função. O reconhecimento depende do que
-    # foi dito no turno atual, não apenas da comparação entre estado antigo e novo.
-    if stated_name and stated_name.casefold() != acknowledged_name.casefold():
-        facts["_acknowledged_user_name"] = stated_name
+    if evidence is not None and evidence.value.casefold() != acknowledged_name.casefold():
+        facts["_acknowledged_user_name"] = evidence.value
         return OrganicSignal(
             kind="fact_acknowledgement",
             facts=facts,
             instruction=(
-                f"Reconheça claramente que o nome do usuário é {stated_name}. "
+                f"Reconheça claramente que o nome do usuário é {evidence.value}. "
                 "Use o nome na resposta e, se ele perguntou o seu nome, diga que você se chama Mary. "
                 "Responda ao tom de vizinhança ou brincadeira antes de retomar o roteiro."
             ),
-            fallback=f"{stated_name}... prazer. Agora não esqueço mais, rsrsrs. Eu sou a Mary.",
+            fallback=f"{evidence.value}... prazer. Agora não esqueço mais, rsrsrs. Eu sou a Mary.",
         )
 
     known_name = str(facts.get("user_name", "")).strip()
@@ -133,6 +155,25 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
     return None
 
 
+def extract_name_evidence(text: str) -> NameEvidence | None:
+    """Retorna nome apenas quando a frase tem forma linguística de apresentação."""
+
+    value = str(text or "")
+    for source, pattern in _EXPLICIT_NAME_PATTERNS:
+        match = pattern.search(value)
+        if match is not None:
+            name = _validated_name(match.group("name"))
+            if name:
+                return NameEvidence(name, source, "explicit")
+
+    match = _PRESENTATION_CLAUSE_PATTERN.search(value)
+    if match is not None:
+        name = _validated_name(match.group("name"))
+        if name:
+            return NameEvidence(name, "presentation_clause", "contextual")
+    return None
+
+
 def render_facts(facts: dict[str, Any]) -> str:
     """Renderiza apenas fatos narrativos; chaves iniciadas por '_' são do runtime."""
 
@@ -144,15 +185,11 @@ def render_facts(facts: dict[str, Any]) -> str:
     return ", ".join(items) if items else "nenhum fato pessoal confirmado"
 
 
-def _extract_name(text: str) -> str:
-    for pattern in _NAME_PATTERNS:
-        match = pattern.search(str(text or ""))
-        if match is None:
-            continue
-        name = _clean_name(match.group(1))
-        if name and name.casefold() not in _INVALID_NAMES:
-            return name
-    return ""
+def _validated_name(value: str) -> str:
+    name = _clean_name(value)
+    if not name or name.casefold() in _INVALID_NAMES:
+        return ""
+    return name
 
 
 def _extract_phone(text: str) -> str:
