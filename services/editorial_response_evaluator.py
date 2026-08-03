@@ -199,7 +199,7 @@ def build_regeneration_prompt(
         "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
         "A resposta anterior foi rejeitada. Reconstrua a fala do zero, em forma mínima e natural.\n"
         "Use somente os fatos confirmados e os resultados obrigatórios já presentes no contrato acima.\n"
-        "Não acrescente explicações, justificativas, humor concreto, imagens, objetos, roupas, riscos ou causas para enriquecer a fala.\n"
+        "Não acrescente fatos, explicações, justificativas, humor concreto, imagens, objetos, roupas, riscos ou causas para enriquecer a fala.\n"
         "Quando faltar um fato, formule de modo neutro em vez de completar a lacuna.\n"
         "Não comente a avaliação e não repita nenhum detalhe rejeitado.\n"
         "MOTIVOS OBJETIVOS DA REJEIÇÃO:\n"
