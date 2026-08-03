@@ -1,0 +1,30 @@
+format_version: 2
+package_id: example.grafo_condicional
+version: 1.0.0
+author:
+  id: tests
+  name: Testes
+entrypoint: story.yaml
+runtime:
+  kind: editorial
+  editorial:
+    source: content/editorial.yaml
+    extensions: []
+card:
+  title: Grafo condicional
+  subtitle: Fixture independente para transições declarativas.
+  description: Card mínimo usado para validar o engine genérico.
+  genres:
+    - Teste
+  chapter_label: Capítulo único
+  cover: ""
+  character_profile:
+    name: Alex
+    identity: Personagem adulto de teste.
+    personality: Direto e observador.
+    intention: Validar escolhas declarativas.
+commerce:
+  access: free
+  price_cents: 0
+  currency: BRL
+  replay_policy: reuse_access
