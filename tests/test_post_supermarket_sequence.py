@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from services.editorial_compiler import compile_editorial_document
 from services.editorial_content import load_source_document
-from services.pilot_supermarket import PilotScript, PilotState
+from services.editorial_runtime_impl import PilotScript, PilotState
 from services.editorial_progression import (
     decide_supermarket_script_v2_turn,
     prepare_supermarket_script_v2,
