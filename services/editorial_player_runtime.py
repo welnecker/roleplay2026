@@ -11,29 +11,34 @@ from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
 from services.dialogue_presentation import render_dialogue_html, with_optional_thought_guidance
 from services.editorial_content import find_editorial_package, load_editorial_package
+from services.editorial_diagnostics import (
+    build_editorial_turn_diagnostics,
+    finalize_editorial_model_response,
+    log_editorial_exception,
+    log_editorial_turn,
+)
+from services.editorial_metadata import (
+    build_editorial_bridge_metadata,
+    build_editorial_metadata,
+    recover_editorial_state_payload,
+)
+from services.editorial_progression import (
+    editorial_followups_after,
+    state_after_editorial_followup,
+)
+from services.editorial_runtime import (
+    EditorialScript,
+    EditorialState,
+    clean_editorial_model_response,
+    decide_editorial_turn,
+    editorial_opening_text,
+)
 from services.paid_run_access import get_paid_run_access, terminate_paid_access
-from services.pilot_diagnostics import (
-    build_turn_diagnostics,
-    finalize_model_response,
-    log_exception,
-    log_turn,
-)
-from services.pilot_supermarket import (
-    PilotScript,
-    PilotState,
-    clean_model_response,
-    decide_turn,
-    opening_text,
-)
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
     persist_assistant_message,
     persist_turn,
-)
-from services.supermarket_script_v2 import (
-    automatic_followups_after,
-    state_after_automatic_followup,
 )
 from ui_components import CARD_CSS
 
@@ -73,7 +78,7 @@ st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 
 @st.cache_resource(show_spinner=False)
-def load_script(package_id: str) -> PilotScript:
+def load_script(package_id: str) -> EditorialScript:
     package = find_editorial_package(package_id)
     if package is None:
         raise RuntimeError(f"Pacote editorial não encontrado: {package_id}")
@@ -100,12 +105,9 @@ def session_keys(user_id: str) -> tuple[str, str, str, str]:
     )
 
 
-def recover_editorial_state(messages: list[dict[str, object]]) -> PilotState:
-    for message in reversed(messages):
-        raw = message.get("pilot_state")
-        if isinstance(raw, dict):
-            return PilotState.from_dict(raw)
-    return PilotState()
+def recover_editorial_state(messages: list[dict[str, object]]) -> EditorialState:
+    payload = recover_editorial_state_payload(messages)
+    return EditorialState.from_dict(payload) if payload is not None else EditorialState()
 
 
 def ensure_runtime(
@@ -113,7 +115,7 @@ def ensure_runtime(
     *,
     package_version: str,
     restart: bool = False,
-) -> tuple[RuntimePersistenceContext, StoryState, list[dict[str, object]], PilotState]:
+) -> tuple[RuntimePersistenceContext, StoryState, list[dict[str, object]], EditorialState]:
     context_key, story_key, messages_key, state_key = session_keys(user.user_id)
     if restart:
         for key in (context_key, story_key, messages_key, state_key):
@@ -127,7 +129,7 @@ def ensure_runtime(
         isinstance(context, RuntimePersistenceContext)
         and isinstance(story_state, StoryState)
         and isinstance(messages, list)
-        and isinstance(editorial_state, PilotState)
+        and isinstance(editorial_state, EditorialState)
     ):
         return context, story_state, messages, editorial_state
 
@@ -175,7 +177,7 @@ def save_session(
     context: RuntimePersistenceContext,
     story_state: StoryState,
     messages: list[dict[str, object]],
-    editorial_state: PilotState,
+    editorial_state: EditorialState,
 ) -> None:
     context_key, story_key, messages_key, state_key = session_keys(user.user_id)
     st.session_state[context_key] = context
@@ -207,7 +209,12 @@ def end_story_and_return(user: AuthenticatedUser) -> None:
             ending_code="user_abandoned",
         )
     except Exception as exc:
-        log_exception("terminate_paid_access", exc, user_id=user.user_id, package_id=PACKAGE_ID)
+        log_editorial_exception(
+            "terminate_paid_access",
+            exc,
+            user_id=user.user_id,
+            package_id=PACKAGE_ID,
+        )
         st.error(f"Não foi possível encerrar a história: {exc}")
         return
     clear_session(user)
@@ -228,19 +235,6 @@ def advance_story_state(state: StoryState, *, finished: bool = False) -> StorySt
     return updated
 
 
-def bridge_metadata(node_id: str, editorial_state: PilotState) -> dict[str, object]:
-    return {
-        "pilot": True,
-        "pilot_node": node_id,
-        "pilot_engagement": "automatic_bridge",
-        "pilot_state": editorial_state.to_dict(),
-        "pilot_end_event": "",
-        "pilot_run_status": "active",
-        "pilot_ending_code": "",
-        "automatic_bridge": True,
-    }
-
-
 user = authenticated_user()
 if user is None:
     st.error("Entre na sua conta antes de abrir a história.")
@@ -252,7 +246,7 @@ fresh_start = prepare_after_payment(user)
 try:
     script = load_script(PACKAGE_ID)
 except Exception as exc:
-    log_exception("load_editorial_script", exc, package_id=PACKAGE_ID)
+    log_editorial_exception("load_editorial_script", exc, package_id=PACKAGE_ID)
     st.error(f"Não foi possível carregar o roteiro editorial: {exc}")
     st.stop()
 
@@ -263,7 +257,12 @@ try:
         package_version=str(script.raw.get("script_version", PACKAGE.manifest.version)),
     )
 except Exception as exc:
-    log_exception("open_runtime", exc, user_id=user.user_id, package_id=PACKAGE_ID)
+    log_editorial_exception(
+        "open_runtime",
+        exc,
+        user_id=user.user_id,
+        package_id=PACKAGE_ID,
+    )
     st.error(f"Não foi possível abrir a história: {exc}")
     st.stop()
 
@@ -275,7 +274,12 @@ if not editorial_state.finished and not story_state.finished:
             package_id=PACKAGE_ID,
         )
     except Exception as exc:
-        log_exception("check_paid_access", exc, user_id=user.user_id, package_id=PACKAGE_ID)
+        log_editorial_exception(
+            "check_paid_access",
+            exc,
+            user_id=user.user_id,
+            package_id=PACKAGE_ID,
+        )
         st.error(f"Não foi possível verificar o acesso: {exc}")
         st.stop()
     if not access.allowed:
@@ -311,7 +315,7 @@ st.title(PACKAGE_TITLE)
 st.caption(PACKAGE_SUBTITLE or "História editorial")
 
 if not messages:
-    render_message("assistant", opening_text(script))
+    render_message("assistant", editorial_opening_text(script))
 for message in messages:
     render_message(str(message.get("role", "assistant")), str(message.get("content", "")))
 
@@ -330,10 +334,10 @@ if not user_text:
     st.stop()
 
 try:
-    turn = decide_turn(script, editorial_state, user_text)
+    turn = decide_editorial_turn(script, editorial_state, user_text)
 except Exception as exc:
-    log_exception(
-        "decide_turn",
+    log_editorial_exception(
+        "decide_editorial_turn",
         exc,
         user_id=user.user_id,
         package_id=PACKAGE_ID,
@@ -364,10 +368,13 @@ if api_key and not force_fixed:
             history=history,
             user_text=user_text,
         )
-        cleaned_response = clean_model_response(raw_model_response, turn.visible_fallback)
+        cleaned_response = clean_editorial_model_response(
+            raw_model_response,
+            turn.visible_fallback,
+        )
     except OpenRouterError as exc:
         generation_error = str(exc)
-        log_exception(
+        log_editorial_exception(
             "openrouter_generation",
             exc,
             user_id=user.user_id,
@@ -381,7 +388,7 @@ recent_assistant_messages = [
     for item in messages
     if str(item.get("role", "")) == "assistant"
 ][-6:]
-guarded = finalize_model_response(
+guarded = finalize_editorial_model_response(
     raw_response=raw_model_response,
     cleaned_response=cleaned_response,
     fallback=turn.visible_fallback,
@@ -389,7 +396,7 @@ guarded = finalize_model_response(
 )
 assistant_text = turn.visible_fallback if force_fixed else guarded.response
 
-diagnostics = build_turn_diagnostics(
+diagnostics = build_editorial_turn_diagnostics(
     user_text=user_text,
     previous_state=editorial_state,
     turn=turn,
@@ -401,19 +408,18 @@ diagnostics = build_turn_diagnostics(
     repeated_recent_anchor=False if force_fixed else guarded.repeated_recent_anchor,
     system_prompt=system_prompt,
 )
-log_turn(diagnostics)
+log_editorial_turn(diagnostics)
 
 updated_story_state = advance_story_state(story_state, finished=turn.finished)
-metadata: dict[str, object] = {
-    "pilot": True,
-    "pilot_node": turn.target_id,
-    "pilot_engagement": turn.engagement,
-    "pilot_state": turn.state.to_dict(),
-    "pilot_end_event": "END_RUN" if turn.finished else "",
-    "pilot_run_status": turn.run_status,
-    "pilot_ending_code": turn.ending_code,
-    "pilot_diagnostics": diagnostics,
-}
+metadata = build_editorial_metadata(
+    node_id=turn.target_id,
+    engagement=turn.engagement,
+    state=turn.state.to_dict(),
+    finished=turn.finished,
+    run_status=turn.run_status,
+    ending_code=turn.ending_code,
+    diagnostics=diagnostics,
+)
 repository = runtime_repository()
 if repository is None:
     st.error("Google Sheets ficou indisponível durante a interação.")
@@ -436,10 +442,16 @@ try:
 
     is_organic_interstitial = turn.state.facts.get("_organic_interstitial") == "true"
     if not is_organic_interstitial:
-        for followup in automatic_followups_after(turn.target_id):
-            final_editorial_state = state_after_automatic_followup(final_editorial_state, followup)
+        for followup in editorial_followups_after(turn.target_id):
+            final_editorial_state = state_after_editorial_followup(
+                final_editorial_state,
+                followup,
+            )
             updated_story_state = advance_story_state(updated_story_state)
-            followup_metadata = bridge_metadata(str(followup["target_id"]), final_editorial_state)
+            followup_metadata = build_editorial_bridge_metadata(
+                node_id=str(followup["target_id"]),
+                state=final_editorial_state.to_dict(),
+            )
             updated_context = persist_assistant_message(
                 repository,
                 context=updated_context,
@@ -456,7 +468,7 @@ try:
                 }
             )
 except Exception as exc:
-    log_exception(
+    log_editorial_exception(
         "persist_turn_or_bridge",
         exc,
         user_id=user.user_id,
