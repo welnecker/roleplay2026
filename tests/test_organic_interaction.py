@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from services.organic_interaction import detect_organic_signal, extract_user_facts
+from services.organic_interaction import (
+    detect_organic_signal,
+    extract_name_evidence,
+    extract_user_facts,
+)
 from services.pilot_supermarket import PilotScript, PilotState, clean_model_response, decide_turn
 
 
@@ -110,6 +114,60 @@ def test_telefone_e_extraido_mesmo_sem_sinal_organico() -> None:
     )
     assert signal is None
     assert facts["user_phone"] == "999711721"
+
+
+def test_predicativo_nao_e_interpretado_como_nome() -> None:
+    text = "Carente e necessitada, pode crer, gata... acho que eu sou a solução dos seus probleminhas."
+
+    assert extract_name_evidence(text) is None
+    facts = extract_user_facts(text, {"active_interlocutor": "janio"})
+    assert "user_name" not in facts
+
+    signal = detect_organic_signal(text, facts)
+    assert signal is None or signal.kind != "fact_acknowledgement"
+
+
+def test_predicativos_profissoes_e_papeis_nao_sobrescrevem_nome_confirmado() -> None:
+    known = {"user_name": "Janio", "_acknowledged_user_name": "Janio"}
+    phrases = (
+        "Eu sou a solução desse problema.",
+        "Eu sou o dono do carro.",
+        "Eu sou um cara tranquilo.",
+        "Acho que sou o responsável por isso.",
+    )
+
+    for phrase in phrases:
+        facts = extract_user_facts(phrase, known)
+        assert facts["user_name"] == "Janio"
+        signal = detect_organic_signal(phrase, facts)
+        assert signal is None or signal.kind != "fact_acknowledgement"
+
+
+def test_apresentacoes_inequivocas_continuam_sendo_aceitas() -> None:
+    examples = {
+        "Me chamo Janio.": "Janio",
+        "Meu nome é Janio.": "Janio",
+        "Pode me chamar de Janio.": "Janio",
+        "Sou Janio.": "Janio",
+        "Sou o Janio, prazer.": "Janio",
+        "Sou a Ana. Prazer.": "Ana",
+    }
+
+    for text, expected in examples.items():
+        evidence = extract_name_evidence(text)
+        assert evidence is not None
+        assert evidence.value == expected
+
+
+def test_nome_confirmado_so_e_substituido_por_apresentacao_explicita() -> None:
+    known = {"user_name": "Janio", "_acknowledged_user_name": "Janio"}
+
+    contextual = extract_user_facts("Sou o Carlos, prazer.", known)
+    assert contextual["user_name"] == "Janio"
+
+    explicit = extract_user_facts("Meu nome é Carlos.", known)
+    assert explicit["user_name"] == "Carlos"
+    assert explicit["_user_name_source"] == "meu_nome_e"
 
 
 def test_nome_de_mary_em_primeira_pessoa_nao_aciona_fallback() -> None:
