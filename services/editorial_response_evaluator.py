@@ -43,8 +43,8 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
 )
 _VIOLATION_GUIDANCE = {
     "invented_unconfirmed_detail": (
-        "Remova todo detalhe concreto que não esteja literalmente nos fatos confirmados ou no escopo factual. "
-        "Não explique a causa do pedido com peso, quantidade, roupa, risco, esforço, urgência ou objeto específico."
+        "Remova qualquer concretização de FATOS DESCONHECIDOS e todo detalhe que não conste em FATOS CONFIRMADOS. "
+        "Assuntos permitidos não autorizam criar localização, causa, peso, quantidade, roupa, risco, esforço ou urgência."
     ),
     "contradicted_confirmed_fact": "Reescreva sem contradizer nenhum fato confirmado.",
     "failed_required_outcome": "Realize todos os resultados obrigatórios de modo direto e breve.",
@@ -109,8 +109,11 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
         (
             "Você é um avaliador editorial estrito. Não reescreva a resposta.",
             "Avalie somente se a candidata obedece integralmente ao contrato narrativo.",
-            "O escopo factual não autoriza detalhes concretos adicionais. Um detalhe plausível, engraçado ou coerente continua sendo invenção quando não está confirmado.",
-            "Rejeite causas, quantidades, objetos, roupas, calçados, riscos, distâncias, condições físicas, urgências ou localizações específicas não declaradas.",
+            "Faça uma auditoria factual: compare cada afirmação concreta da candidata com FATOS CONFIRMADOS.",
+            "Se uma afirmação concretizar qualquer dimensão listada em FATOS DESCONHECIDOS, marque invented_unconfirmed_detail.",
+            "ASSUNTOS PERMITIDOS delimitam o tema, mas nunca transformam informação ausente em fato.",
+            "Expressões como 'ali fora', 'no estacionamento', 'está pesado' ou 'por causa do salto' são invenções quando localização, peso ou calçado estiverem desconhecidos.",
+            "Um detalhe plausível, engraçado, breve ou coerente continua sendo invenção quando não está confirmado.",
             "Rejeite também qualquer resposta que presuma a decisão do usuário, encerre uma rota pendente, antecipe o beat seguinte ou deixe de cumprir um resultado obrigatório.",
             "Responda exclusivamente com um único objeto JSON válido, sem markdown e sem comentário:",
             '{"valid": true, "violations": []}',
@@ -198,7 +201,8 @@ def build_regeneration_prompt(
         f"{str(base_prompt or '').strip()}\n\n"
         "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
         "A resposta anterior foi rejeitada. Reconstrua a fala do zero, em forma mínima e natural.\n"
-        "Use somente os fatos confirmados e os resultados obrigatórios já presentes no contrato acima; não acrescente fatos, explicações, justificativas, humor concreto, imagens, objetos, roupas, riscos ou causas para enriquecer a fala.\n"
+        "Use somente os FATOS CONFIRMADOS e os resultados obrigatórios do contrato; não acrescente fatos, explicações, justificativas, humor concreto, imagens, objetos, roupas, riscos ou causas.\n"
+        "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS.\n"
         "Quando faltar um fato, formule de modo neutro em vez de completar a lacuna.\n"
         "Não comente a avaliação e não repita nenhum detalhe rejeitado.\n"
         "MOTIVOS OBJETIVOS DA REJEIÇÃO:\n"
