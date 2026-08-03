@@ -3,7 +3,7 @@ from pathlib import Path
 
 from services.editorial_compiler import compile_editorial_document
 from services.editorial_content import load_source_document
-from services.pilot_supermarket import PilotScript, PilotState
+from services.editorial_runtime_impl import PilotScript, PilotState
 from services.editorial_progression import (
     classify_contextual_user_message,
     decide_supermarket_script_v2_turn,
