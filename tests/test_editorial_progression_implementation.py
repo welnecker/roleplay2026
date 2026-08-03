@@ -24,6 +24,9 @@ def test_progressao_ativa_usa_modulos_editoriais_definitivos() -> None:
 
     assert "def decide_supermarket_script_v2_turn(" in implementation
     assert "from services.editorial_turn_finalization import" in implementation
+    assert "from services import editorial_runtime_impl as runtime_impl" in implementation
+    assert "runtime_impl.classify_user_message = classify_contextual_user_message" in implementation
+    assert "services.pilot_supermarket" not in implementation
     assert "finalize_editorial_turn(" in implementation
     assert "editorial_progression_support" not in implementation
     assert "editorial_progression_legacy" not in implementation
