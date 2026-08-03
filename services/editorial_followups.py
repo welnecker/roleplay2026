@@ -3,16 +3,16 @@ from __future__ import annotations
 from contextvars import ContextVar
 from typing import Any
 
-from services.editorial_runtime_impl import PilotScript, PilotState
+from services.editorial_runtime_types import EditorialScript, EditorialState
 
 
-_ACTIVE_SCRIPT: ContextVar[PilotScript | None] = ContextVar(
+_ACTIVE_SCRIPT: ContextVar[EditorialScript | None] = ContextVar(
     "active_editorial_followup_script",
     default=None,
 )
 
 
-def _organic_policy(script: PilotScript) -> dict[str, Any]:
+def _organic_policy(script: EditorialScript) -> dict[str, Any]:
     policy = script.raw.get("organic_slack") or {}
     return policy if isinstance(policy, dict) else {}
 
@@ -44,7 +44,7 @@ def render_editorial_followup_text(followup: dict[str, Any]) -> str:
     return f"[{heading.upper()}]\n\n{text}" if heading else text
 
 
-def _declared_state_updates(script: PilotScript, target_id: str) -> dict[str, str]:
+def _declared_state_updates(script: EditorialScript, target_id: str) -> dict[str, str]:
     state_updates = _organic_policy(script).get("state_updates") or {}
     if not isinstance(state_updates, dict):
         return {}
@@ -68,7 +68,7 @@ def _declared_state_updates(script: PilotScript, target_id: str) -> dict[str, st
     return updates
 
 
-def prepare_editorial_followups(script: PilotScript) -> PilotScript:
+def prepare_editorial_followups(script: EditorialScript) -> EditorialScript:
     registered: dict[str, tuple[dict[str, Any], ...]] = {}
     for block in script.raw.get("blocks", []):
         if not isinstance(block, dict):
@@ -115,10 +115,10 @@ def editorial_followups_after(target_id: str) -> tuple[dict[str, Any], ...]:
 
 
 def state_after_editorial_followup(
-    state: PilotState,
+    state: EditorialState,
     followup: dict[str, Any],
-) -> PilotState:
-    updated = PilotState.from_dict(state.to_dict())
+) -> EditorialState:
+    updated = EditorialState.from_dict(state.to_dict())
     updated.node_id = str(followup["target_id"])
     updated.pending_next_beat_id = ""
     updated.interstitial_turns = 0
