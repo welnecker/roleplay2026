@@ -4,7 +4,8 @@ from dataclasses import replace
 import re
 from typing import Any
 
-from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn, classify_user_message
+from services.editorial_runtime_impl import classify_user_message
+from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.editorial_intent import (
     apply_supermarket_document_overrides,
     decide_supermarket_turn,
@@ -46,7 +47,7 @@ def apply_contact_exchange_overrides(document: dict[str, Any]) -> dict[str, Any]
     return document
 
 
-def prepare_contact_exchange_script(script: PilotScript) -> PilotScript:
+def prepare_contact_exchange_script(script: EditorialScript) -> EditorialScript:
     script = prepare_supermarket_script(script)
     beat = script.beats.get("reencontro_fila_014")
     if not beat:
@@ -66,23 +67,23 @@ def prepare_contact_exchange_script(script: PilotScript) -> PilotScript:
 
 
 def decide_contact_exchange_turn(
-    script: PilotScript,
-    state: PilotState,
+    script: EditorialScript,
+    state: EditorialState,
     user_text: str,
-) -> PilotTurn:
+) -> EditorialTurn:
     """Preenche o número prometido caso uma run antiga ainda pare no beat 014."""
 
     prepare_contact_exchange_script(script)
     current_id = state.node_id or script.first_beat_id
     if current_id == "reencontro_fila_014" and _NUMBER_REQUEST.search(str(user_text or "")):
-        updated = PilotState.from_dict(state.to_dict())
+        updated = EditorialState.from_dict(state.to_dict())
         updated.node_id = "reencontro_fila_014"
         updated.pending_next_beat_id = ""
         updated.interstitial_turns = 0
         updated.facts["mary_phone_shared"] = "true"
         updated.facts["_last_user_intent"] = "request_contact_detail"
         fallback = f"Claro. O meu é {MARY_PHONE_NUMBER}. Salva aí."
-        return PilotTurn(
+        return EditorialTurn(
             engagement=classify_user_message(user_text),
             target_id="reencontro_fila_014",
             visible_fallback=fallback,
@@ -98,6 +99,6 @@ def decide_contact_exchange_turn(
     turn = decide_supermarket_turn(script, state, user_text)
     if turn.target_id != "reencontro_fila_014":
         return turn
-    updated = PilotState.from_dict(turn.state.to_dict())
+    updated = EditorialState.from_dict(turn.state.to_dict())
     updated.facts["mary_phone_shared"] = "true"
     return replace(turn, state=updated)
