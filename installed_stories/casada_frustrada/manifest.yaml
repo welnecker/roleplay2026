@@ -15,8 +15,8 @@ runtime:
       - content/extensions/story.yaml
       - content/extensions/fixes.yaml
       - content/extensions/guardrails.yaml
-      - content/extensions/runtime.yaml
       - content/extensions/transitions.yaml
+      - content/extensions/runtime.yaml
 card:
   title: Casada frustrada
   subtitle: Mary tenta reconstruir a própria vida sem esconder o que deseja.
