@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.contact_exchange_pilot import (
+from services.editorial_contact_exchange import (
     MARY_PHONE_NUMBER,
     apply_contact_exchange_overrides,
     decide_contact_exchange_turn,
