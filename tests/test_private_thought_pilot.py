@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.private_thought_pilot import (
+from services.editorial_private_thought import (
     PRIVATE_THOUGHT_VERSION,
     apply_private_thought_overrides,
     sanitize_private_thought_response,
