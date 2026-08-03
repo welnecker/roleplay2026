@@ -240,8 +240,8 @@ def render_login() -> None:
 def render_library(user: AuthenticatedUser) -> None:
     header, actions = st.columns([4, 1])
     with header:
-        st.title("Sua biblioteca")
-        st.caption(f"Olá, {user.display_name}. Escolha uma história para começar ou continuar.")
+        st.title("Mergulhe em uma história cheia de emoção e malícia")
+        st.caption(f"Olá, {user.display_name}. Escolha seu card favorito e interaja com profundidade.")
     with actions:
         if st.button("Sair", use_container_width=True):
             st.session_state.authenticated_user = None
