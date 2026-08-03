@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.pilot_supermarket import PilotScript, PilotState
+from services.editorial_runtime_impl import PilotScript, PilotState
 from services.editorial_progression import decide_supermarket_script_v2_turn
 
 
