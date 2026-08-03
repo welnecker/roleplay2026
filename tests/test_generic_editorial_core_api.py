@@ -10,6 +10,8 @@ from services.editorial_diagnostics import (
 from services.editorial_progression import (
     decide_editorial_progression_turn,
     prepare_editorial_script,
+    decide_supermarket_script_v2_turn,
+    prepare_supermarket_script_v2,
 )
 from services.editorial_runtime import (
     EditorialScript,
@@ -20,10 +22,6 @@ from services.editorial_runtime import (
 )
 from services.pilot_diagnostics import GuardedResponse
 from services.pilot_supermarket import PilotScript, PilotState, PilotTurn
-from services.supermarket_script_v2 import (
-    decide_supermarket_script_v2_turn,
-    prepare_supermarket_script_v2,
-)
 
 
 def test_tipos_editoriais_preservam_compatibilidade() -> None:
