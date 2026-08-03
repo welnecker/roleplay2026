@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-"""Diagnóstico e proteção de respostas do runtime editorial."""
+"""API pública de diagnóstico e proteção de respostas editoriais."""
 
-from services.pilot_diagnostics import (
+from services.editorial_diagnostics_impl import (
     GuardedResponse,
     build_turn_diagnostics,
     finalize_model_response,
