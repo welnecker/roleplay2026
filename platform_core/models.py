@@ -29,3 +29,8 @@ class StoryCard:
     chapter_label: str = ""
     cover_url: str = ""
     is_tasting: bool = False
+    profile_name: str = ""
+    profile_identity: str = ""
+    profile_personality: str = ""
+    profile_intention: str = ""
+    replay_requires_purchase: bool = False
