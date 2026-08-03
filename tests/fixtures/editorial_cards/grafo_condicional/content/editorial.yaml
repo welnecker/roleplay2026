@@ -1,0 +1,71 @@
+package_id: example.grafo_condicional
+script_version: 1.0.0
+introduction: Fixture técnica para validar transições condicionais.
+blocks:
+  - block_id: escolha
+    order: 1
+    title: Escolha
+    entry_beat_id: escolha_001
+    beats:
+      - beat_id: escolha_001
+        order: 1
+        required_movement: Alex apresenta uma escolha e aguarda decisão explícita.
+        canonical_line: Você aceita continuar?
+        dramatic_direction: Não presumir a resposta.
+        max_questions: 1
+        max_sentences: 2
+        transitions:
+          - id: aceitar
+            priority: 100
+            when:
+              intent: accept
+            next: aceito_001
+            effects:
+              facts:
+                escolha: aceita
+              relationship:
+                trust: 1
+          - id: recusar
+            priority: 100
+            when:
+              intent: refuse
+            next: recusado_001
+            effects:
+              facts:
+                escolha: recusada
+          - id: perguntar
+            priority: 50
+            when:
+              intent: question
+            stay: true
+          - id: indefinido
+            priority: 0
+            when:
+              always: true
+            stay: true
+      - beat_id: aceito_001
+        order: 2
+        required_movement: Alex reconhece o aceite.
+        canonical_line: Então vamos continuar.
+        dramatic_direction: Confirmar sem acrescentar nova escolha.
+        next_beat_id: fim_aceito
+      - beat_id: recusado_001
+        order: 3
+        required_movement: Alex respeita a recusa.
+        canonical_line: Tudo bem, paramos por aqui.
+        dramatic_direction: Encerrar sem insistência.
+        next_beat_id: fim_recusado
+      - beat_id: fim_aceito
+        order: 4
+        type: ending
+        canonical_line: Escolha aceita.
+        ending:
+          run_status: completed
+          ending_code: accepted
+      - beat_id: fim_recusado
+        order: 5
+        type: ending
+        canonical_line: Escolha recusada.
+        ending:
+          run_status: terminated
+          ending_code: refused

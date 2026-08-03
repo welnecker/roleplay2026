@@ -3,6 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from services.editorial_engine import compile_transition_rules
+
 
 def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
     """Converte o documento editorial em uma cena executável sem alterar o conteúdo."""
@@ -44,10 +46,10 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                 continue
 
             canonical_line = str(source.get("canonical_line", ""))
-            transitions = dict(source.get("allowed_transitions") or {})
+            legacy_transitions = dict(source.get("allowed_transitions") or {})
             next_beat_id = str(source.get("next_beat_id", "") or "").strip()
-            if next_beat_id and not transitions:
-                transitions = {"engaged": next_beat_id}
+            if next_beat_id and not legacy_transitions:
+                legacy_transitions = {"engaged": next_beat_id}
 
             beats.append(
                 {
@@ -63,7 +65,8 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                         },
                         {"unit_id": f"{beat_id}_wait", "kind": "wait_user"},
                     ],
-                    "on_user": transitions,
+                    "on_user": legacy_transitions,
+                    "transition_rules": compile_transition_rules(source),
                     "terminal_transition": "",
                     "memory_writes": [str(item) for item in source.get("memory_writes", [])],
                     "max_questions": int(source.get("max_questions", 1) or 0),
