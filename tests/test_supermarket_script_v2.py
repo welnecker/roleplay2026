@@ -4,16 +4,16 @@ from services.editorial_compiler import compile_editorial_document
 from services.editorial_content import load_source_document
 from services.editorial_runtime_impl import PilotScript, PilotState
 from services.editorial_progression import (
-    automatic_followups_after,
-    decide_supermarket_script_v2_turn,
-    prepare_supermarket_script_v2,
-    state_after_automatic_followup,
+    decide_editorial_progression_turn,
+    editorial_followups_after,
+    prepare_editorial_script,
+    state_after_editorial_followup,
 )
 
 
 def _script() -> PilotScript:
     document = load_source_document()
-    return prepare_supermarket_script_v2(PilotScript(compile_editorial_document(document)))
+    return prepare_editorial_script(PilotScript(compile_editorial_document(document)))
 
 
 def test_fonte_unica_compila_sequencia_do_supermercado() -> None:
@@ -39,7 +39,7 @@ def test_telefone_ja_informado_aplica_salto_declarado_no_roteiro() -> None:
         node_id="reencontro_fila_012",
         facts={"user_phone": "999711721"},
     )
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         script,
         state,
         "Sou Janio... ao seu dispor, princesa.",
@@ -54,7 +54,7 @@ def test_telefone_ja_informado_aplica_salto_declarado_no_roteiro() -> None:
 
 def test_despedida_dispara_tres_pontes_sem_turno_do_usuario() -> None:
     _script()
-    followups = automatic_followups_after("reencontro_fila_016")
+    followups = editorial_followups_after("reencontro_fila_016")
 
     assert [item["target_id"] for item in followups] == [
         "retorno_casa_001",
@@ -68,8 +68,8 @@ def test_despedida_dispara_tres_pontes_sem_turno_do_usuario() -> None:
 
 def test_primeira_despedida_e_caixa_usam_pontes_declaradas_no_yaml() -> None:
     _script()
-    first_reencounter = automatic_followups_after("encontro_acidental_006")
-    checkout = automatic_followups_after("reencontro_fila_006")
+    first_reencounter = editorial_followups_after("encontro_acidental_006")
+    checkout = editorial_followups_after("reencontro_fila_006")
 
     assert first_reencounter[0]["target_id"] == "reencontro_fila_001"
     assert "tá me seguindo" in first_reencounter[0]["text"]
@@ -80,8 +80,8 @@ def test_primeira_despedida_e_caixa_usam_pontes_declaradas_no_yaml() -> None:
 def test_estado_final_libera_usuario_somente_em_janio() -> None:
     _script()
     state = PilotState(node_id="reencontro_fila_016")
-    for followup in automatic_followups_after("reencontro_fila_016"):
-        state = state_after_automatic_followup(state, followup)
+    for followup in editorial_followups_after("reencontro_fila_016"):
+        state = state_after_editorial_followup(state, followup)
 
     assert state.node_id == "mensagens_iniciais_001"
     assert state.facts["_scene_location"] == "mensagem_privada_janio"
