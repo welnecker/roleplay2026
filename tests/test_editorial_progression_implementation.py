@@ -16,20 +16,25 @@ def test_api_publica_aponta_para_implementacao_editorial() -> None:
 
     assert "from services.editorial_progression_impl import" in source
     assert "from services.supermarket_script_v2 import" not in source
+    assert "prepare_supermarket_script_v2" not in source
+    assert "decide_supermarket_script_v2_turn" not in source
 
 
 def test_progressao_ativa_usa_modulos_editoriais_definitivos() -> None:
     implementation = IMPLEMENTATION.read_text(encoding="utf-8")
     finalization = FINALIZATION.read_text(encoding="utf-8")
 
-    assert "def decide_supermarket_script_v2_turn(" in implementation
+    assert "def decide_editorial_progression_turn(" in implementation
+    assert "def prepare_editorial_script(" in implementation
     assert "from services.editorial_turn_finalization import" in implementation
     assert "from services import editorial_runtime_impl as runtime_impl" in implementation
-    assert "runtime_impl.classify_user_message = classify_contextual_user_message" in implementation
+    assert "runtime_impl.classify_user_message = classify_contextual_editorial_message" in implementation
     assert "services.pilot_supermarket" not in implementation
     assert "finalize_editorial_turn(" in implementation
     assert "editorial_progression_support" not in implementation
     assert "editorial_progression_legacy" not in implementation
+    assert "supermarket_script_v2" not in implementation
+    assert "automatic_followup" not in implementation
     assert "def finalize_editorial_turn(" in finalization
     assert not REMOVED_HISTORICAL_ALIAS.exists()
     assert not REMOVED_SUPPORT.exists()
