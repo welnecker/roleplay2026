@@ -1,0 +1,20 @@
+format_version: 1
+package_id: roleplay2026.casada_frustrada
+organic_slack:
+  enabled: true
+  excluded_beats:
+    - reencontro_fila_007
+  strict_canonical:
+    beat_prefixes:
+      - motel_
+    state_fact: _strict_motel_canonical
+    prompt_title: CONTINUIDADE ESTRITA DO MOTEL
+  state_updates:
+    automatic_followups:
+      - target_prefix: retorno_casa_
+        facts:
+          alfredinho_has_voice: "false"
+      - target_id: mensagens_iniciais_001
+        facts:
+          active_interlocutor: janio
+          alfredinho_has_voice: "false"
