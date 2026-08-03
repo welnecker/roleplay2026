@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import logging
 import re
 from typing import Any
 
 from services.editorial_beat_context import BeatContext, render_beat_context
 
 
+LOGGER = logging.getLogger("editorial.evaluation")
 _TECHNICAL_MARKERS = (
     "<end_run",
     "end_run",
@@ -66,6 +68,13 @@ class ResponseEvaluation:
     violations: tuple[str, ...] = ()
 
 
+def _log_evaluation(stage: str, **payload: object) -> None:
+    LOGGER.info(
+        "editorial_evaluation %s",
+        json.dumps({"stage": stage, **payload}, ensure_ascii=False, default=str),
+    )
+
+
 def _sentence_count(text: str) -> int:
     body = _THOUGHT_PATTERN.sub("", str(text or "")).strip()
     if not body:
@@ -82,7 +91,14 @@ def evaluate_deterministic_response(
     violations: list[str] = []
 
     if not text:
-        return ResponseEvaluation(False, ("empty_response",))
+        result = ResponseEvaluation(False, ("empty_response",))
+        _log_evaluation(
+            "candidate_deterministic",
+            candidate=text,
+            valid=result.valid,
+            violations=result.violations,
+        )
+        return result
 
     lowered = text.casefold()
     if any(marker.casefold() in lowered for marker in _TECHNICAL_MARKERS):
@@ -100,7 +116,14 @@ def evaluate_deterministic_response(
     if context.max_questions and text.count("?") > context.max_questions:
         violations.append("max_questions_exceeded")
 
-    return ResponseEvaluation(not violations, tuple(violations))
+    result = ResponseEvaluation(not violations, tuple(violations))
+    _log_evaluation(
+        "candidate_deterministic",
+        candidate=text,
+        valid=result.valid,
+        violations=result.violations,
+    )
+    return result
 
 
 def build_semantic_evaluation_prompt(context: BeatContext) -> str:
@@ -141,17 +164,25 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
     try:
         payload: Any = json.loads(text)
     except (TypeError, ValueError, json.JSONDecodeError):
-        return ResponseEvaluation(False, ("semantic_evaluator_invalid_json",))
+        result = ResponseEvaluation(False, ("semantic_evaluator_invalid_json",))
+        _log_evaluation("semantic_result", raw=text, valid=False, violations=result.violations)
+        return result
 
     if not isinstance(payload, dict) or set(payload) != {"valid", "violations"}:
-        return ResponseEvaluation(False, ("semantic_evaluator_invalid_payload",))
+        result = ResponseEvaluation(False, ("semantic_evaluator_invalid_payload",))
+        _log_evaluation("semantic_result", raw=text, valid=False, violations=result.violations)
+        return result
 
     if not isinstance(payload.get("valid"), bool):
-        return ResponseEvaluation(False, ("semantic_evaluator_invalid_payload",))
+        result = ResponseEvaluation(False, ("semantic_evaluator_invalid_payload",))
+        _log_evaluation("semantic_result", raw=text, valid=False, violations=result.violations)
+        return result
 
     raw_violations = payload.get("violations")
     if not isinstance(raw_violations, list):
-        return ResponseEvaluation(False, ("semantic_evaluator_invalid_violations",))
+        result = ResponseEvaluation(False, ("semantic_evaluator_invalid_violations",))
+        _log_evaluation("semantic_result", raw=text, valid=False, violations=result.violations)
+        return result
 
     violations: list[str] = []
     for item in raw_violations:
@@ -167,8 +198,16 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
     if not valid and not unique:
         unique = ("semantic_rejection_without_reason",)
     if valid and unique:
-        return ResponseEvaluation(False, unique)
-    return ResponseEvaluation(valid, unique)
+        result = ResponseEvaluation(False, unique)
+    else:
+        result = ResponseEvaluation(valid, unique)
+    _log_evaluation(
+        "semantic_result",
+        raw=text,
+        valid=result.valid,
+        violations=result.violations,
+    )
+    return result
 
 
 def merge_evaluations(*evaluations: ResponseEvaluation) -> ResponseEvaluation:
@@ -179,10 +218,16 @@ def merge_evaluations(*evaluations: ResponseEvaluation) -> ResponseEvaluation:
             for violation in evaluation.violations
         )
     )
-    return ResponseEvaluation(
+    result = ResponseEvaluation(
         all(evaluation.valid for evaluation in evaluations) and not violations,
         violations,
     )
+    _log_evaluation(
+        "combined_result",
+        valid=result.valid,
+        violations=result.violations,
+    )
+    return result
 
 
 def build_regeneration_prompt(
