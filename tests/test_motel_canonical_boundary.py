@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.pilot_diagnostics import finalize_model_response
+from services.editorial_diagnostics import finalize_editorial_model_response
 
 
 def test_motel_preserva_reacao_e_corta_tudo_depois_do_beat() -> None:
@@ -16,7 +16,7 @@ def test_motel_preserva_reacao_e_corta_tudo_depois_do_beat() -> None:
         "Agora eu quero antecipar a penetração e os movimentos seguintes."
     )
 
-    result = finalize_model_response(
+    result = finalize_editorial_model_response(
         raw_response=raw,
         cleaned_response=raw,
         fallback=fallback,
@@ -37,7 +37,7 @@ def test_motel_anexa_beat_quando_modelo_responde_mas_o_omite() -> None:
     fallback = "Deixa eu ver se esse garotão subiu de novo..."
     raw = "Você ainda vai descobrir, gostoso... não estou nem perto de terminar."
 
-    result = finalize_model_response(
+    result = finalize_editorial_model_response(
         raw_response=raw,
         cleaned_response=raw,
         fallback=fallback,
@@ -58,7 +58,7 @@ def test_despedida_penultima_preserva_pensamento_reacao_e_beat() -> None:
         "Mal posso esperar pra te ver de novo... beijo... tchau..."
     )
 
-    result = finalize_model_response(
+    result = finalize_editorial_model_response(
         raw_response=raw,
         cleaned_response=fallback,
         fallback=fallback,
@@ -86,7 +86,7 @@ def test_ultimo_beat_do_reencontro_preserva_resposta_sobre_o_marido() -> None:
         "Tá bom... então deixa eu ir. Meu telefone já tá vibrando aqui e eu preciso chegar."
     )
 
-    result = finalize_model_response(
+    result = finalize_editorial_model_response(
         raw_response=raw,
         cleaned_response=fallback,
         fallback=fallback,
@@ -107,7 +107,7 @@ def test_ultimo_beat_do_reencontro_preserva_resposta_sobre_o_marido() -> None:
 def test_fora_do_motel_mantem_resposta_normal() -> None:
     raw = "Chegamos. Vou abrir o porta-malas."
 
-    result = finalize_model_response(
+    result = finalize_editorial_model_response(
         raw_response=raw,
         cleaned_response=raw,
         fallback="Fala alternativa.",
