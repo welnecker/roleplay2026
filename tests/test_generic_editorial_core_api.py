@@ -11,8 +11,6 @@ from services.editorial_diagnostics_impl import GuardedResponse
 from services.editorial_progression import (
     decide_editorial_progression_turn,
     prepare_editorial_script,
-    decide_supermarket_script_v2_turn,
-    prepare_supermarket_script_v2,
 )
 from services.editorial_runtime import (
     EditorialScript,
@@ -31,9 +29,12 @@ def test_tipos_editoriais_preservam_compatibilidade() -> None:
     assert EditorialGuardedResponse is GuardedResponse
 
 
-def test_progressao_editorial_preserva_implementacao_atual() -> None:
-    assert prepare_editorial_script is prepare_supermarket_script_v2
-    assert decide_editorial_progression_turn is decide_supermarket_script_v2_turn
+def test_progressao_editorial_expoe_apenas_nomes_definitivos() -> None:
+    assert callable(prepare_editorial_script)
+    assert callable(decide_editorial_progression_turn)
+    source = Path("services/editorial_progression.py").read_text(encoding="utf-8")
+    assert "prepare_supermarket_script_v2" not in source
+    assert "decide_supermarket_script_v2_turn" not in source
 
 
 def test_api_editorial_expoe_operacoes_principais() -> None:

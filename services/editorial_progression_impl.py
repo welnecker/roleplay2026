@@ -26,22 +26,15 @@ from services.editorial_runtime_impl import (
 from services.editorial_turn_finalization import finalize_editorial_turn
 
 
-render_automatic_followup_text = render_editorial_followup_text
-classify_contextual_user_message = classify_contextual_editorial_message
-automatic_followups_after = editorial_followups_after
-state_after_automatic_followup = state_after_editorial_followup
-clean_supermarket_script_v2_response = clean_editorial_progression_response
-
-
-def prepare_supermarket_script_v2(script: PilotScript) -> PilotScript:
+def prepare_editorial_script(script: PilotScript) -> PilotScript:
     """Prepara políticas e pontes pertencentes ao próprio roteiro editorial."""
 
     prepare_editorial_followups(script)
-    runtime_impl.classify_user_message = classify_contextual_user_message
+    runtime_impl.classify_user_message = classify_contextual_editorial_message
     return script
 
 
-def decide_supermarket_script_v2_turn(
+def decide_editorial_progression_turn(
     script: PilotScript,
     state: PilotState,
     user_text: str,
@@ -60,14 +53,14 @@ def decide_supermarket_script_v2_turn(
         working_state,
         user_text,
         base_decide=base_decide_turn,
-        classify_message=classify_contextual_user_message,
+        classify_message=classify_contextual_editorial_message,
     )
     if special is not None:
         updated = PilotState.from_dict(special.state.to_dict())
         updated.facts["_organic_interstitial"] = "false"
         return finalize_editorial_turn(script, replace(special, state=updated))
 
-    engagement = classify_contextual_user_message(user_text)
+    engagement = classify_contextual_editorial_message(user_text)
     routing_state = routing_state_for_declared_skips(
         script,
         working_state,

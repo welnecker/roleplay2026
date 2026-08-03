@@ -5,14 +5,14 @@ from services.editorial_content import load_source_document
 from services.narrative_context import build_narrative_context, memory_catalog
 from services.editorial_runtime_impl import PilotScript, PilotState
 from services.editorial_progression import (
-    decide_supermarket_script_v2_turn,
-    prepare_supermarket_script_v2,
+    decide_editorial_progression_turn,
+    prepare_editorial_script,
 )
 
 
 def _script() -> PilotScript:
     document = load_source_document()
-    return prepare_supermarket_script_v2(PilotScript(compile_editorial_document(document)))
+    return prepare_editorial_script(PilotScript(compile_editorial_document(document)))
 
 
 def test_ficha_e_memorias_entram_no_contexto_do_modelo() -> None:
@@ -45,7 +45,7 @@ def test_beat_concluido_declara_memoria_pendente_e_prompt_recebe_passado() -> No
         },
     )
 
-    turn = decide_supermarket_script_v2_turn(script, state, "Pode falar, Mary.")
+    turn = decide_editorial_progression_turn(script, state, "Pode falar, Mary.")
 
     assert turn.target_id == "mensagens_iniciais_003"
     assert "Mary e Janio se conheceram" in turn.system_prompt
@@ -58,7 +58,7 @@ def test_recusa_no_caixa_entra_no_patio_sem_encerrar_abruptamente() -> None:
     script = _script()
     state = PilotState(node_id="reencontro_fila_007")
 
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         script,
         state,
         "Desculpa, não posso esperar. Tenho um compromisso.",
@@ -76,7 +76,7 @@ def test_aceite_no_caixa_nao_pula_o_movimento_do_carrinho() -> None:
     script = _script()
     state = PilotState(node_id="reencontro_fila_007")
 
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         script,
         state,
         "Claro, eu espero e te ajudo.",
@@ -91,7 +91,7 @@ def test_chamada_nao_encerra_e_avanca_para_a_madrugada() -> None:
     script = _script()
     state = PilotState(node_id="video_025")
 
-    turn = decide_supermarket_script_v2_turn(script, state, "Boa noite, Mary.")
+    turn = decide_editorial_progression_turn(script, state, "Boa noite, Mary.")
 
     assert turn.target_id == "late_night_bridge_001"
     assert turn.finished is False

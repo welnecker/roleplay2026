@@ -2,22 +2,16 @@ from __future__ import annotations
 
 """API pública de preparação e progressão de roteiros editoriais."""
 
-from services.editorial_progression_impl import (
-    automatic_followups_after,
-    classify_contextual_user_message,
-    clean_supermarket_script_v2_response,
-    decide_supermarket_script_v2_turn,
-    prepare_supermarket_script_v2,
-    state_after_automatic_followup,
+from services.editorial_followups import (
+    editorial_followups_after,
+    state_after_editorial_followup,
 )
-
-
-prepare_editorial_script = prepare_supermarket_script_v2
-decide_editorial_progression_turn = decide_supermarket_script_v2_turn
-classify_contextual_editorial_message = classify_contextual_user_message
-clean_editorial_progression_response = clean_supermarket_script_v2_response
-editorial_followups_after = automatic_followups_after
-state_after_editorial_followup = state_after_automatic_followup
+from services.editorial_message_policy import classify_contextual_editorial_message
+from services.editorial_progression_impl import (
+    decide_editorial_progression_turn,
+    prepare_editorial_script,
+)
+from services.editorial_response_policy import clean_editorial_progression_response
 
 
 __all__ = [

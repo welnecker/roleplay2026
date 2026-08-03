@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from services.editorial_runtime_impl import PilotScript, PilotState
-from services.editorial_progression import decide_supermarket_script_v2_turn
+from services.editorial_progression import decide_editorial_progression_turn
 
 
 def _script(*, cycle: bool = False) -> PilotScript:
@@ -44,7 +44,7 @@ def _script(*, cycle: bool = False) -> PilotScript:
 
 
 def test_saltos_declarativos_encadeados_chegam_ao_primeiro_beat_nao_satisfeito() -> None:
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         _script(),
         PilotState(node_id="start", facts={"fact_a": "1", "fact_b": "1"}),
         "Continue normalmente.",
@@ -58,7 +58,7 @@ def test_saltos_declarativos_encadeados_chegam_ao_primeiro_beat_nao_satisfeito()
 
 def test_ciclo_em_saltos_declarativos_falha_com_erro_editorial_claro() -> None:
     with pytest.raises(ValueError, match="Ciclo em skip_when_facts"):
-        decide_supermarket_script_v2_turn(
+        decide_editorial_progression_turn(
             _script(cycle=True),
             PilotState(node_id="start", facts={"fact_a": "1", "fact_b": "1"}),
             "Continue normalmente.",

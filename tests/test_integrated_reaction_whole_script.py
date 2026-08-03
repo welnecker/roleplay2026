@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from services.organic_interaction import detect_organic_signal
 from services.editorial_runtime_impl import PilotScript, PilotState
-from services.editorial_progression import decide_supermarket_script_v2_turn
+from services.editorial_progression import decide_editorial_progression_turn
 
 
 def _script() -> PilotScript:
@@ -60,7 +60,7 @@ def test_provocacao_sexual_vira_reacao_integrada() -> None:
 
 
 def test_reacao_integrada_avanca_e_entrega_o_beat_na_mesma_resposta() -> None:
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         _script(),
         PilotState(node_id="video_003"),
         "Você é linda... esse corpo está me deixando louco de desejo.",
@@ -76,7 +76,7 @@ def test_reacao_integrada_avanca_e_entrega_o_beat_na_mesma_resposta() -> None:
 
 
 def test_preocupacao_real_continua_com_folga_exclusiva() -> None:
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         _script(),
         PilotState(node_id="video_003"),
         "Eu quero, mas é perigoso... não quero morrer, né?",
