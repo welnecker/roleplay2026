@@ -4,21 +4,21 @@ from typing import Any
 
 from services.editorial_message_policy import classify_contextual_editorial_message
 from services.editorial_routing import normal_editorial_target
-from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
+from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.organic_interaction import detect_organic_signal, render_facts
 
 
-def _organic_policy(script: PilotScript) -> dict[str, Any]:
+def _organic_policy(script: EditorialScript) -> dict[str, Any]:
     policy = script.raw.get("organic_slack") or {}
     return policy if isinstance(policy, dict) else {}
 
 
-def _strict_canonical_policy(script: PilotScript) -> dict[str, Any]:
+def _strict_canonical_policy(script: EditorialScript) -> dict[str, Any]:
     policy = _organic_policy(script).get("strict_canonical") or {}
     return policy if isinstance(policy, dict) else {}
 
 
-def is_strict_canonical_beat(script: PilotScript, beat_id: str) -> bool:
+def is_strict_canonical_beat(script: EditorialScript, beat_id: str) -> bool:
     clean = str(beat_id or "").strip()
     policy = _strict_canonical_policy(script)
     beat_ids = {
@@ -34,7 +34,7 @@ def is_strict_canonical_beat(script: PilotScript, beat_id: str) -> bool:
     return clean in beat_ids or any(clean.startswith(prefix) for prefix in prefixes)
 
 
-def _excluded_from_organic_slack(script: PilotScript, beat_id: str) -> bool:
+def _excluded_from_organic_slack(script: EditorialScript, beat_id: str) -> bool:
     excluded = {
         str(item).strip()
         for item in _organic_policy(script).get("excluded_beats", []) or []
@@ -43,7 +43,7 @@ def _excluded_from_organic_slack(script: PilotScript, beat_id: str) -> bool:
     return str(beat_id or "").strip() in excluded
 
 
-def _character_name(script: PilotScript) -> str:
+def _character_name(script: EditorialScript) -> str:
     character = script.raw.get("character") or {}
     if isinstance(character, dict):
         name = str(character.get("name", "") or "").strip()
@@ -53,10 +53,10 @@ def _character_name(script: PilotScript) -> str:
 
 
 def organic_editorial_turn(
-    script: PilotScript,
-    state: PilotState,
+    script: EditorialScript,
+    state: EditorialState,
     user_text: str,
-) -> PilotTurn | None:
+) -> EditorialTurn | None:
     if (
         not bool(_organic_policy(script).get("enabled", False))
         or state.pending_next_beat_id
@@ -82,7 +82,7 @@ def organic_editorial_turn(
     if not next_id:
         return None
 
-    updated = PilotState.from_dict(state.to_dict())
+    updated = EditorialState.from_dict(state.to_dict())
     updated.facts = signal.facts
     updated.facts["_organic_interstitial"] = "true"
     updated.pending_next_beat_id = next_id
@@ -97,7 +97,7 @@ def organic_editorial_turn(
         f"MENSAGEM DO USUÁRIO: {user_text}\n"
         f"ORIENTAÇÃO DE REAÇÃO: {signal.instruction}"
     )
-    return PilotTurn(
+    return EditorialTurn(
         engagement=engagement,  # type: ignore[arg-type]
         target_id=current_id,
         visible_fallback=signal.fallback,

@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
-from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
+from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
 
-DecisionFunction = Callable[[PilotScript, PilotState, str], PilotTurn]
+DecisionFunction = Callable[[EditorialScript, EditorialState, str], EditorialTurn]
 ClassifierFunction = Callable[[str], str]
 
 
@@ -15,7 +15,7 @@ class _SafeFormat(dict[str, str]):
         return "{" + key + "}"
 
 
-def _character_name(script: PilotScript) -> str:
+def _character_name(script: EditorialScript) -> str:
     character = script.raw.get("character") or {}
     if isinstance(character, dict):
         name = str(character.get("name", "") or "").strip()
@@ -24,7 +24,7 @@ def _character_name(script: PilotScript) -> str:
     return "A personagem"
 
 
-def _special_decisions(script: PilotScript) -> list[dict[str, Any]]:
+def _special_decisions(script: EditorialScript) -> list[dict[str, Any]]:
     organic = script.raw.get("organic_slack") or {}
     if not isinstance(organic, dict):
         return []
@@ -34,7 +34,7 @@ def _special_decisions(script: PilotScript) -> list[dict[str, Any]]:
     return [item for item in rules if isinstance(item, dict)]
 
 
-def _rule_for_beat(script: PilotScript, beat_id: str) -> dict[str, Any] | None:
+def _rule_for_beat(script: EditorialScript, beat_id: str) -> dict[str, Any] | None:
     clean = str(beat_id or "").strip()
     for rule in _special_decisions(script):
         if str(rule.get("beat_id", "") or "").strip() == clean:
@@ -76,7 +76,7 @@ def _classify_declared_intent(rule: dict[str, Any], user_text: str) -> str:
     return default_intent
 
 
-def _dialogue_anchor(script: PilotScript, beat_id: str) -> str:
+def _dialogue_anchor(script: EditorialScript, beat_id: str) -> str:
     source = script.beats.get(beat_id) or script.endings.get(beat_id) or {}
     for unit in source.get("units", []) or []:
         if isinstance(unit, dict) and unit.get("kind") == "dialogue":
@@ -97,13 +97,13 @@ def _declared_facts(outcome: dict[str, Any], variables: dict[str, str]) -> dict[
 
 
 def decide_declared_special_turn(
-    script: PilotScript,
-    state: PilotState,
+    script: EditorialScript,
+    state: EditorialState,
     user_text: str,
     *,
     base_decide: DecisionFunction,
     classify_message: ClassifierFunction,
-) -> PilotTurn | None:
+) -> EditorialTurn | None:
     """Executa uma decisão especial inteiramente descrita pelo documento editorial."""
 
     current_id = state.node_id or script.first_beat_id
@@ -131,9 +131,9 @@ def decide_declared_special_turn(
 
     if mode == "advance":
         turn = base_decide(script, state, user_text)
-        updated = PilotState.from_dict(turn.state.to_dict())
+        updated = EditorialState.from_dict(turn.state.to_dict())
         updated.facts.update(_declared_facts(outcome, variables))
-        return PilotTurn(
+        return EditorialTurn(
             engagement=turn.engagement,
             target_id=turn.target_id,
             visible_fallback=turn.visible_fallback,
@@ -150,7 +150,7 @@ def decide_declared_special_turn(
         if not target_id or target_id not in script.beats:
             raise ValueError(f"Destino especial inexistente: {target_id!r}")
 
-    updated = PilotState.from_dict(state.to_dict())
+    updated = EditorialState.from_dict(state.to_dict())
     updated.node_id = target_id
     updated.finished = False
     updated.run_status = "active"
@@ -163,7 +163,7 @@ def decide_declared_special_turn(
         script, target_id
     )
     prompt = _render(outcome.get("prompt"), variables)
-    return PilotTurn(
+    return EditorialTurn(
         engagement=classify_message(user_text),  # type: ignore[arg-type]
         target_id=target_id,
         visible_fallback=fallback,

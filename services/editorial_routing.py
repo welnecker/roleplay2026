@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.editorial_runtime_impl import PilotScript, PilotState
+from services.editorial_runtime_types import EditorialScript, EditorialState
 from services.organic_interaction import extract_user_facts
 
 
-def normal_editorial_target(script: PilotScript, state: PilotState, engagement: str) -> str:
+def normal_editorial_target(
+    script: EditorialScript,
+    state: EditorialState,
+    engagement: str,
+) -> str:
     current_id = state.node_id or script.first_beat_id
     beat = script.beats.get(current_id) or {}
     transitions = beat.get("on_user") or {}
@@ -18,8 +22,11 @@ def normal_editorial_target(script: PilotScript, state: PilotState, engagement: 
     )
 
 
-def state_with_extracted_facts(state: PilotState, user_text: str) -> PilotState:
-    updated = PilotState.from_dict(state.to_dict())
+def state_with_extracted_facts(
+    state: EditorialState,
+    user_text: str,
+) -> EditorialState:
+    updated = EditorialState.from_dict(state.to_dict())
     updated.facts = extract_user_facts(user_text, updated.facts)
     return updated
 
@@ -35,7 +42,7 @@ def _skip_target_for_beat(beat: dict[str, Any], facts: dict[str, str]) -> str:
 
 
 def resolve_declared_editorial_target(
-    script: PilotScript,
+    script: EditorialScript,
     initial_target: str,
     facts: dict[str, str],
 ) -> tuple[str, tuple[str, ...]]:
@@ -65,12 +72,12 @@ def resolve_declared_editorial_target(
 
 
 def routing_state_for_declared_skips(
-    script: PilotScript,
-    state: PilotState,
+    script: EditorialScript,
+    state: EditorialState,
     engagement: str,
     *,
     original_facts: dict[str, str],
-) -> PilotState:
+) -> EditorialState:
     initial_target = state.pending_next_beat_id or normal_editorial_target(
         script, state, engagement
     )
@@ -80,7 +87,7 @@ def routing_state_for_declared_skips(
     if not skipped:
         return state
 
-    routed = PilotState.from_dict(state.to_dict())
+    routed = EditorialState.from_dict(state.to_dict())
     routed.pending_next_beat_id = final_target
     routed.facts["_declared_skip_applied"] = ",".join(skipped)
 
