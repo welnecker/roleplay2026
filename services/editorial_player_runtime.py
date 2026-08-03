@@ -13,7 +13,6 @@ from services.dialogue_presentation import render_dialogue_html, with_optional_t
 from services.editorial_content import find_editorial_package, load_editorial_package
 from services.editorial_diagnostics import (
     build_editorial_turn_diagnostics,
-    finalize_editorial_model_response,
     log_editorial_exception,
     log_editorial_turn,
 )
@@ -26,12 +25,24 @@ from services.editorial_progression import (
     editorial_followups_after,
     state_after_editorial_followup,
 )
+from services.editorial_response_evaluator import (
+    build_regeneration_prompt,
+    build_semantic_evaluation_prompt,
+    build_semantic_evaluation_request,
+    evaluate_deterministic_response,
+    merge_evaluations,
+    parse_semantic_evaluation,
+)
 from services.editorial_runtime import (
     EditorialScript,
     EditorialState,
     clean_editorial_model_response,
     decide_editorial_turn,
     editorial_opening_text,
+)
+from services.editorial_transaction import (
+    commit_editorial_turn,
+    prepare_pending_editorial_turn,
 )
 from services.paid_run_access import get_paid_run_access, terminate_paid_access
 from services.runtime_persistence import (
@@ -45,6 +56,8 @@ from ui_components import CARD_CSS
 
 MODEL_DEFAULT = "google/gemini-3-flash-preview"
 PAYMENT_QUOTA_WINDOW_SECONDS = 65.0
+MAX_GENERATION_ATTEMPTS = 2
+OPERATIONAL_GENERATION_ERROR = "Não foi possível gerar a resposta agora. Tente novamente."
 
 
 def selected_editorial_package() -> InstalledStoryPackage:
@@ -334,10 +347,11 @@ if not user_text:
     st.stop()
 
 try:
-    turn = decide_editorial_turn(script, editorial_state, user_text)
+    proposed_turn = decide_editorial_turn(script, editorial_state, user_text)
+    pending = prepare_pending_editorial_turn(script, editorial_state, proposed_turn)
 except Exception as exc:
     log_editorial_exception(
-        "decide_editorial_turn",
+        "prepare_editorial_turn",
         exc,
         user_id=user.user_id,
         package_id=PACKAGE_ID,
@@ -350,51 +364,97 @@ except Exception as exc:
 
 api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
 model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
-system_prompt = with_optional_thought_guidance(turn.system_prompt)
+if not api_key:
+    log_editorial_exception(
+        "openrouter_not_configured",
+        RuntimeError("OPENROUTER_API_KEY ausente"),
+        user_id=user.user_id,
+        package_id=PACKAGE_ID,
+        node_id=editorial_state.node_id,
+        target_id=proposed_turn.target_id,
+    )
+    st.error(OPERATIONAL_GENERATION_ERROR)
+    st.stop()
+
+history = [
+    {"role": str(item.get("role", "assistant")), "content": str(item.get("content", ""))}
+    for item in messages[-12:]
+]
+base_prompt = with_optional_thought_guidance(pending.prompt)
+evaluation_prompt = build_semantic_evaluation_prompt(pending.context)
 raw_model_response = ""
-cleaned_response = turn.visible_fallback
-generation_error = ""
-force_fixed = turn.state.facts.get("_force_fixed_response") == "true"
-if api_key and not force_fixed:
-    history = [
-        {"role": str(item.get("role", "assistant")), "content": str(item.get("content", ""))}
-        for item in messages[-12:]
-    ]
+assistant_text = ""
+violations: tuple[str, ...] = ()
+attempts = 0
+
+for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
+    attempts = attempt
+    generation_prompt = (
+        base_prompt
+        if attempt == 1
+        else build_regeneration_prompt(
+            base_prompt=base_prompt,
+            violations=violations,
+        )
+    )
     try:
         raw_model_response = generate_response(
             api_key=api_key,
             model=model,
-            system_prompt=system_prompt,
+            system_prompt=generation_prompt,
             history=history,
             user_text=user_text,
         )
-        cleaned_response = clean_editorial_model_response(
-            raw_model_response,
-            turn.visible_fallback,
+        candidate = clean_editorial_model_response(raw_model_response, "")
+        deterministic = evaluate_deterministic_response(candidate, pending.context)
+        semantic_raw = generate_response(
+            api_key=api_key,
+            model=model,
+            system_prompt=evaluation_prompt,
+            history=[],
+            user_text=build_semantic_evaluation_request(
+                user_text=user_text,
+                candidate=candidate,
+            ),
         )
+        semantic = parse_semantic_evaluation(semantic_raw)
+        combined = merge_evaluations(deterministic, semantic)
     except OpenRouterError as exc:
-        generation_error = str(exc)
         log_editorial_exception(
-            "openrouter_generation",
+            "openrouter_generation_or_evaluation",
             exc,
             user_id=user.user_id,
             package_id=PACKAGE_ID,
             node_id=editorial_state.node_id,
-            target_id=turn.target_id,
+            target_id=proposed_turn.target_id,
+            attempt=attempt,
         )
+        st.error(OPERATIONAL_GENERATION_ERROR)
+        st.stop()
 
-recent_assistant_messages = [
-    str(item.get("content", ""))
-    for item in messages
-    if str(item.get("role", "")) == "assistant"
-][-6:]
-guarded = finalize_editorial_model_response(
-    raw_response=raw_model_response,
-    cleaned_response=cleaned_response,
-    fallback=turn.visible_fallback,
-    recent_assistant_messages=recent_assistant_messages,
-)
-assistant_text = turn.visible_fallback if force_fixed else guarded.response
+    if combined.valid:
+        assistant_text = candidate
+        violations = ()
+        break
+    violations = combined.violations
+
+if not assistant_text:
+    log_editorial_exception(
+        "editorial_response_rejected",
+        RuntimeError("Resposta rejeitada após regeneração controlada"),
+        user_id=user.user_id,
+        package_id=PACKAGE_ID,
+        node_id=editorial_state.node_id,
+        target_id=proposed_turn.target_id,
+        attempts=attempts,
+        violations=violations,
+    )
+    st.error(OPERATIONAL_GENERATION_ERROR)
+    st.stop()
+
+committed = commit_editorial_turn(pending, assistant_text)
+turn = committed.turn
+final_editorial_state = committed.state
 
 diagnostics = build_editorial_turn_diagnostics(
     user_text=user_text,
@@ -402,19 +462,22 @@ diagnostics = build_editorial_turn_diagnostics(
     turn=turn,
     raw_model_response=raw_model_response,
     final_response=assistant_text,
-    fallback=turn.visible_fallback,
-    generation_error=generation_error,
-    guard_reason="fixed_script_bridge" if force_fixed else guarded.guard_reason,
-    repeated_recent_anchor=False if force_fixed else guarded.repeated_recent_anchor,
-    system_prompt=system_prompt,
+    fallback="",
+    generation_error="",
+    guard_reason="transactional_response_approved",
+    repeated_recent_anchor=False,
+    system_prompt=base_prompt,
 )
+diagnostics["generation_attempts"] = attempts
+diagnostics["evaluation_violations"] = list(violations)
+diagnostics["state_committed_after_approval"] = True
 log_editorial_turn(diagnostics)
 
 updated_story_state = advance_story_state(story_state, finished=turn.finished)
 metadata = build_editorial_metadata(
     node_id=turn.target_id,
     engagement=turn.engagement,
-    state=turn.state.to_dict(),
+    state=final_editorial_state.to_dict(),
     finished=turn.finished,
     run_status=turn.run_status,
     ending_code=turn.ending_code,
@@ -438,9 +501,8 @@ try:
 
     messages.append({"role": "user", "content": user_text})
     messages.append({"role": "assistant", "content": assistant_text, **metadata})
-    final_editorial_state = turn.state
 
-    is_organic_interstitial = turn.state.facts.get("_organic_interstitial") == "true"
+    is_organic_interstitial = final_editorial_state.facts.get("_organic_interstitial") == "true"
     if not is_organic_interstitial:
         for followup in editorial_followups_after(turn.target_id):
             final_editorial_state = state_after_editorial_followup(
@@ -481,8 +543,4 @@ except Exception as exc:
     st.stop()
 
 save_session(user, updated_context, updated_story_state, messages, final_editorial_state)
-if generation_error:
-    st.toast(f"OpenRouter indisponível; fala segura usada: {generation_error}")
-elif not force_fixed and guarded.repeated_recent_anchor:
-    st.toast("Uma repetição narrativa foi bloqueada e a fala do beat foi restaurada.")
 st.rerun()
