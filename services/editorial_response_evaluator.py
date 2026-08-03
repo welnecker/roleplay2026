@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass
 import json
 import logging
@@ -10,6 +11,10 @@ from services.editorial_beat_context import BeatContext, render_beat_context
 
 
 LOGGER = logging.getLogger("editorial.evaluation")
+_LAST_EVALUATED_CANDIDATE: ContextVar[str] = ContextVar(
+    "editorial_last_evaluated_candidate",
+    default="",
+)
 _TECHNICAL_MARKERS = (
     "<end_run",
     "end_run",
@@ -59,6 +64,11 @@ _VIOLATION_GUIDANCE = {
     "treated_postpone_as_refusal": "Reconheça o adiamento sem convertê-lo em recusa.",
     "treated_question_as_acceptance": "Trate a pergunta como pedido de esclarecimento, não como aceite.",
     "character_voice_broken": "Preserve a voz natural da personagem sem acrescentar fatos.",
+    "max_sentences_exceeded": "Reduza a fala visível ao máximo de frases definido no contrato.",
+    "max_questions_exceeded": (
+        "Use no máximo uma pergunta total. Transforme comentários como 'hein?' em afirmações, "
+        "mantendo apenas a pergunta que solicita a decisão explícita."
+    ),
 }
 
 
@@ -75,8 +85,12 @@ def _log_evaluation(stage: str, **payload: object) -> None:
     )
 
 
+def _visible_dialogue(text: str) -> str:
+    return _THOUGHT_PATTERN.sub("", str(text or "")).strip()
+
+
 def _sentence_count(text: str) -> int:
-    body = _THOUGHT_PATTERN.sub("", str(text or "")).strip()
+    body = _visible_dialogue(text)
     if not body:
         return 0
     chunks = re.split(r"(?<=[.!?])(?:\s+|$)", body)
@@ -88,6 +102,7 @@ def evaluate_deterministic_response(
     context: BeatContext,
 ) -> ResponseEvaluation:
     text = str(response or "").strip()
+    _LAST_EVALUATED_CANDIDATE.set(text)
     violations: list[str] = []
 
     if not text:
@@ -111,9 +126,10 @@ def evaluate_deterministic_response(
     if "[PENSAMENTO]" in residual.upper() or "[/PENSAMENTO]" in residual.upper():
         violations.append("malformed_thought_block")
 
-    if context.max_sentences and _sentence_count(text) > context.max_sentences:
+    visible = _visible_dialogue(text)
+    if context.max_sentences and _sentence_count(visible) > context.max_sentences:
         violations.append("max_sentences_exceeded")
-    if context.max_questions and text.count("?") > context.max_questions:
+    if context.max_questions and visible.count("?") > context.max_questions:
         violations.append("max_questions_exceeded")
 
     result = ResponseEvaluation(not violations, tuple(violations))
@@ -234,6 +250,7 @@ def build_regeneration_prompt(
     *,
     base_prompt: str,
     violations: tuple[str, ...],
+    rejected_candidate: str = "",
 ) -> str:
     unique = tuple(dict.fromkeys(str(item).strip() for item in violations if str(item).strip()))
     guidance = [
@@ -242,6 +259,14 @@ def build_regeneration_prompt(
     ]
     reasons = "\n".join(f"- {item}" for item in unique) or "- resposta_rejeitada"
     instructions = "\n".join(f"- {item}" for item in guidance)
+    rejected = str(rejected_candidate or _LAST_EVALUATED_CANDIDATE.get() or "").strip()
+    rejected_block = (
+        "\nRESPOSTA REJEITADA — use apenas para identificar e remover os erros; não a parafraseie:\n"
+        f"{rejected}\n"
+        if rejected
+        else ""
+    )
+    _LAST_EVALUATED_CANDIDATE.set("")
     return (
         f"{str(base_prompt or '').strip()}\n\n"
         "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
@@ -249,7 +274,8 @@ def build_regeneration_prompt(
         "Use somente os fatos confirmados e os resultados obrigatórios do contrato; não acrescente fatos, explicações, justificativas, humor concreto, imagens, objetos, roupas, riscos ou causas.\n"
         "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS.\n"
         "Quando faltar um fato, formule de modo neutro em vez de completar a lacuna.\n"
-        "Não comente a avaliação e não repita nenhum detalhe rejeitado.\n"
+        "Não comente a avaliação e não repita, substitua por sinônimo ou desloque nenhum detalhe rejeitado.\n"
+        f"{rejected_block}"
         "MOTIVOS OBJETIVOS DA REJEIÇÃO:\n"
         f"{reasons}\n"
         "INSTRUÇÕES DE CORREÇÃO:\n"
