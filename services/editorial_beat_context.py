@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from services.editorial_engine.models import NarrativeEffect, TransitionRule
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
 
@@ -33,9 +34,26 @@ def _dialogue_fields(beat: Mapping[str, Any]) -> tuple[str, str]:
     return "", ""
 
 
-def _narrative_effect(turn: EditorialTurn) -> Mapping[str, Any]:
-    value = getattr(turn, "narrative_effect", None)
-    return value if isinstance(value, Mapping) else {}
+def _selected_narrative_effect(
+    source: Mapping[str, Any],
+    *,
+    user_intent: str,
+    target_id: str,
+) -> NarrativeEffect:
+    rules = [
+        rule
+        for rule in source.get("transition_rules", ()) or ()
+        if isinstance(rule, TransitionRule)
+    ]
+    rules.sort(key=lambda rule: -rule.priority)
+    for rule in rules:
+        intent_matches = not rule.condition.intent or rule.condition.intent == user_intent
+        target_matches = (rule.stay and target_id == str(source.get("beat_id", ""))) or (
+            not rule.stay and rule.next_beat_id == target_id
+        )
+        if intent_matches and target_matches:
+            return rule.narrative_effect
+    return NarrativeEffect()
 
 
 def build_beat_context(
@@ -43,28 +61,18 @@ def build_beat_context(
     previous_state: EditorialState,
     turn: EditorialTurn,
 ) -> BeatContext:
-    """Constrói o contrato narrativo universal do turno.
-
-    Todos os beats passam por este contexto. Transições condicionais apenas
-    acrescentam efeitos narrativos estruturados; não criam um pipeline paralelo.
-    """
+    """Constrói o contrato narrativo universal do turno."""
 
     source_id = previous_state.node_id or script.first_beat_id
     target_id = turn.target_id or source_id
     source = script.beats.get(source_id) or {}
     target = script.beats.get(target_id) or source
     canonical_line, dramatic_direction = _dialogue_fields(target)
-    effect = _narrative_effect(turn)
-
-    required = tuple(
-        str(item).strip()
-        for item in effect.get("required_outcomes", []) or []
-        if str(item).strip()
-    )
-    forbidden = tuple(
-        str(item).strip()
-        for item in effect.get("forbidden_outcomes", []) or []
-        if str(item).strip()
+    user_intent = str(turn.state.facts.get("_last_user_intent", "") or "").strip()
+    effect = _selected_narrative_effect(
+        source,
+        user_intent=user_intent,
+        target_id=target_id,
     )
     facts = {
         str(key): str(value)
@@ -78,10 +86,10 @@ def build_beat_context(
         objective=str(target.get("objective") or source.get("objective") or "").strip(),
         canonical_line=canonical_line,
         dramatic_direction=dramatic_direction,
-        user_intent=str(turn.state.facts.get("_last_user_intent", "") or "").strip(),
-        transition_status=str(effect.get("status", "") or "").strip(),
-        required_outcomes=required,
-        forbidden_outcomes=forbidden,
+        user_intent=user_intent,
+        transition_status=effect.status,
+        required_outcomes=effect.required_outcomes,
+        forbidden_outcomes=effect.forbidden_outcomes,
         relevant_facts=facts,
         max_sentences=int(target.get("max_sentences", 0) or 0),
         max_questions=int(target.get("max_questions", 0) or 0),
