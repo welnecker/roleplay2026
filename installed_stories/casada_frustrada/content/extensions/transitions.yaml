@@ -1,0 +1,84 @@
+format_version: 1
+package_id: roleplay2026.casada_frustrada
+patch_beats:
+  reencontro_fila_007:
+    intent_classifiers:
+      - intent: accept
+        patterns:
+          - '\b(?:não|nao)\s+(?:estou|tô|to)\s+com\s+pressa\b'
+          - '\b(?:estou|tô|to)\s+sem\s+pressa\b'
+          - '\bsem\s+pressa\b'
+      - intent: refuse
+        patterns:
+          - '\b(?:não|nao)\s+(?:posso|consigo|vou|quero|dá|da)\b'
+          - '\b(?:prefiro não|melhor não|não vai dar|não dá|não consigo|não quero)\b'
+      - intent: postpone
+        patterns:
+          - '\b(?:agora não|depois|mais tarde|outra hora|estou com pressa|tô com pressa|to com pressa)\b'
+      - intent: accept
+        patterns:
+          - '\b(?:sim|claro|beleza|com certeza|pode deixar|eu ajudo|vou ajudar|te ajudo|vamos|bora)\b'
+          - '\b(?:vou esperar|espero aqui|pode contar comigo)\b'
+      - intent: question
+        contains: "?"
+      - intent: unclear
+        default: true
+    transitions:
+      - id: help_accepted
+        priority: 100
+        when:
+          intent: accept
+        next: reencontro_fila_008
+        effects:
+          facts:
+            help_to_car: accepted
+            _scene_location: estacionamento_caminho
+      - id: help_refused
+        priority: 100
+        when:
+          intent: refuse
+        next: yard_help_refused_001
+        effects:
+          facts:
+            help_to_car: refused
+            _scene_location: supermercado_caixa
+        prompt: >-
+          O usuário recusou esperar. Demonstre frustração leve, respeite a decisão,
+          não insista e deixe espaço para uma última resposta antes da despedida final.
+      - id: help_question
+        priority: 80
+        when:
+          intent: question
+        stay: true
+        fallback: Claro... mas você consegue me esperar e ajudar até o carro?
+        effects:
+          facts:
+            _scene_location: supermercado_caixa
+        prompt: >-
+          Responda brevemente ao que o usuário perguntou e confirme, sem pressão,
+          se ele aceita esperar e ajudar. Não presuma aceite e não avance a cena.
+          Mensagem do usuário: {user_text}
+      - id: help_postponed
+        priority: 80
+        when:
+          intent: postpone
+        stay: true
+        fallback: Sem pressa... você consegue me esperar e ajudar até o carro?
+        effects:
+          facts:
+            _scene_location: supermercado_caixa
+        prompt: >-
+          Reconheça brevemente a pressa do usuário e confirme, sem pressão,
+          se ele ainda consegue esperar. Não presuma aceite e não avance a cena.
+      - id: help_unclear
+        priority: 0
+        when:
+          always: true
+        stay: true
+        fallback: Sem pressa... você consegue me esperar e ajudar até o carro?
+        effects:
+          facts:
+            _scene_location: supermercado_caixa
+        prompt: >-
+          Responda brevemente e confirme se o usuário aceita esperar.
+          Não presuma aceite e não avance a cena.
