@@ -9,8 +9,8 @@ _SEXUAL_CONTEXT_TERMS = (
 )
 _CONTEXTUAL_INSULT_TERMS = ("vadia", "vagabunda")
 _DIRECT_ABUSE_PATTERNS = (
-    "você é uma vadia", "voce e uma vadia", "sua vadia", "você é vagabunda",
-    "voce e vagabunda", "sua vagabunda",
+    "você é uma vadia", "voce e uma vadia", "você é vagabunda",
+    "voce e vagabunda",
 )
 
 
