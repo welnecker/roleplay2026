@@ -11,16 +11,14 @@ from services.editorial_progression import decide_editorial_progression_turn
 from services.editorial_runtime import EditorialState, editorial_opening_text
 
 
-def _single_package(root: Path):
+def _package(root: Path, package_id: str):
     packages, errors = discover_packages(root)
     assert errors == []
-    assert len(packages) == 1
-    return packages[0]
+    return next(item for item in packages if item.manifest.package_id == package_id)
 
 
-def _assert_package_runs(package_root: Path) -> None:
-    package = _single_package(package_root)
-    script = compile_editorial_package(package)
+def _assert_package_runs(root: Path, package_id: str) -> None:
+    script = compile_editorial_package(_package(root, package_id))
 
     opening = editorial_opening_text(script)
     assert opening.strip()
@@ -37,11 +35,14 @@ def _assert_package_runs(package_root: Path) -> None:
 
 
 def test_card_instalado_compila_e_executa_primeiro_turno() -> None:
-    _assert_package_runs(Path("installed_stories/casada_frustrada"))
+    _assert_package_runs(Path("installed_stories"), "casada_frustrada")
 
 
 def test_card_independente_compila_e_executa_primeiro_turno() -> None:
-    _assert_package_runs(Path("tests/fixtures/editorial_cards/encontro_no_cafe"))
+    _assert_package_runs(
+        Path("tests/fixtures/editorial_cards"),
+        "encontro_no_cafe",
+    )
 
 
 def test_entrypoint_reexecuta_runtime_ja_importado(monkeypatch) -> None:
