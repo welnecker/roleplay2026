@@ -33,6 +33,13 @@ class TransitionEffects:
 
 
 @dataclass(frozen=True, slots=True)
+class NarrativeEffect:
+    status: str = ""
+    required_outcomes: tuple[str, ...] = ()
+    forbidden_outcomes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class TransitionRule:
     transition_id: str
     condition: TransitionCondition
@@ -40,6 +47,7 @@ class TransitionRule:
     stay: bool = False
     priority: int = 0
     effects: TransitionEffects = field(default_factory=TransitionEffects)
+    narrative_effect: NarrativeEffect = field(default_factory=NarrativeEffect)
     prompt: str = ""
     fallback: str = ""
 
@@ -58,5 +66,6 @@ class TransitionDecision:
     target_beat_id: str
     stay: bool
     effects: TransitionEffects
+    narrative_effect: NarrativeEffect = field(default_factory=NarrativeEffect)
     prompt: str = ""
     fallback: str = ""
