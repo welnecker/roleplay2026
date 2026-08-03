@@ -39,6 +39,38 @@ class PackageCommerce(BaseModel):
         return clean
 
 
+class EditorialRuntimeConfig(BaseModel):
+    """Arquivos editoriais declarados pelo próprio pacote."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str = Field(min_length=1)
+    extensions: tuple[str, ...] = ()
+
+
+class PackageRuntime(BaseModel):
+    """Seleciona o runtime sem acoplar o aplicativo a uma história específica."""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: str = "simple"
+    editorial: EditorialRuntimeConfig | None = None
+
+    @field_validator("kind")
+    @classmethod
+    def validate_kind(cls, value: str) -> str:
+        clean = value.strip().lower()
+        if clean not in {"simple", "editorial"}:
+            raise ValueError("runtime.kind deve ser 'simple' ou 'editorial'")
+        return clean
+
+    def model_post_init(self, __context: object) -> None:
+        if self.kind == "editorial" and self.editorial is None:
+            raise ValueError("runtime editorial exige a configuração editorial")
+        if self.kind != "editorial" and self.editorial is not None:
+            raise ValueError("runtime.editorial só pode ser usado com kind='editorial'")
+
+
 class StoryPackageManifest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -47,6 +79,7 @@ class StoryPackageManifest(BaseModel):
     version: str = Field(min_length=1)
     author: PackageAuthor
     entrypoint: str = "story.yaml"
+    runtime: PackageRuntime = PackageRuntime()
     card: PackageCard
     commerce: PackageCommerce = PackageCommerce()
 
