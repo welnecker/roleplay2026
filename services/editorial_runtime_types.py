@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Contrato nominal dos tipos do runtime editorial.
 
-A implementação histórica ainda define os objetos concretos em
-``editorial_runtime_impl``. Este módulo concentra os nomes editoriais usados
-pelo código de produção durante a etapa final de migração.
+Todo o código de produção usa os nomes editoriais deste módulo. Os nomes
+históricos permanecem encapsulados em ``editorial_runtime_impl`` somente para
+preservar a suíte de regressão existente, sem contaminar os consumidores.
 """
 
 from services.editorial_runtime_impl import (

@@ -10,7 +10,8 @@ from services.editorial_contact_exchange import (
     decide_contact_exchange_turn,
     prepare_contact_exchange_script,
 )
-from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn, classify_user_message
+from services.editorial_runtime_impl import classify_user_message
+from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
 ALFREDINHO_CALL_VERSION = "1.0.3-alfredinho-open-call"
 
@@ -67,7 +68,7 @@ def apply_alfredinho_call_overrides(document: dict[str, Any]) -> dict[str, Any]:
     return document
 
 
-def prepare_alfredinho_call_script(script: PilotScript) -> PilotScript:
+def prepare_alfredinho_call_script(script: EditorialScript) -> EditorialScript:
     script = prepare_contact_exchange_script(script)
     call_beat = script.beats.get("retorno_casa_001")
     if call_beat:
@@ -117,10 +118,10 @@ def _is_call_end(text: str) -> bool:
 
 
 def decide_alfredinho_call_turn(
-    script: PilotScript,
-    state: PilotState,
+    script: EditorialScript,
+    state: EditorialState,
     user_text: str,
-) -> PilotTurn:
+) -> EditorialTurn:
     """Mantém a ligação aberta e separa seu encerramento da chegada em casa."""
 
     prepare_alfredinho_call_script(script)
@@ -128,13 +129,13 @@ def decide_alfredinho_call_turn(
 
     if current_id == "retorno_casa_001" and state.facts.get("alfredinho_call_closed") == "true":
         turn = decide_contact_exchange_turn(script, state, user_text)
-        updated = PilotState.from_dict(turn.state.to_dict())
+        updated = EditorialState.from_dict(turn.state.to_dict())
         updated.facts["_scene_location"] = "casa_de_mary"
         updated.facts["alfredinho_call_active"] = "false"
         return replace(turn, state=updated)
 
     if current_id == "retorno_casa_001":
-        updated = PilotState.from_dict(state.to_dict())
+        updated = EditorialState.from_dict(state.to_dict())
         updated.node_id = current_id
         updated.pending_next_beat_id = ""
         updated.interstitial_turns = 0
@@ -144,7 +145,7 @@ def decide_alfredinho_call_turn(
         if _is_call_end(user_text):
             updated.facts["alfredinho_call_closed"] = "true"
             fallback = "Pode deixar, amor. Já tô indo. Beijo."
-            return PilotTurn(
+            return EditorialTurn(
                 engagement=classify_user_message(user_text),
                 target_id=current_id,
                 visible_fallback=fallback,
@@ -160,7 +161,7 @@ def decide_alfredinho_call_turn(
         if _is_question_or_continuation(user_text):
             updated.facts["alfredinho_call_closed"] = "false"
             fallback = "Tô indo, amor. Tá tudo certo por aqui."
-            return PilotTurn(
+            return EditorialTurn(
                 engagement=classify_user_message(user_text),
                 target_id=current_id,
                 visible_fallback=fallback,
@@ -178,7 +179,7 @@ def decide_alfredinho_call_turn(
     if turn.target_id != "retorno_casa_001":
         return turn
 
-    updated = PilotState.from_dict(turn.state.to_dict())
+    updated = EditorialState.from_dict(turn.state.to_dict())
     updated.facts["_scene_location"] = "carro_em_deslocamento"
     updated.facts["alfredinho_call_active"] = "true"
     updated.facts["alfredinho_call_closed"] = "false"

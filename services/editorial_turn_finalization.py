@@ -4,20 +4,20 @@ from dataclasses import replace
 from typing import Any
 
 from services.narrative_context import build_narrative_context
-from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
+from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
 
-def _organic_policy(script: PilotScript) -> dict[str, Any]:
+def _organic_policy(script: EditorialScript) -> dict[str, Any]:
     policy = script.raw.get("organic_slack") or {}
     return policy if isinstance(policy, dict) else {}
 
 
-def _strict_canonical_policy(script: PilotScript) -> dict[str, Any]:
+def _strict_canonical_policy(script: EditorialScript) -> dict[str, Any]:
     policy = _organic_policy(script).get("strict_canonical") or {}
     return policy if isinstance(policy, dict) else {}
 
 
-def _is_strict_canonical_beat(script: PilotScript, beat_id: str) -> bool:
+def _is_strict_canonical_beat(script: EditorialScript, beat_id: str) -> bool:
     clean = str(beat_id or "").strip()
     policy = _strict_canonical_policy(script)
     beat_ids = {
@@ -33,7 +33,7 @@ def _is_strict_canonical_beat(script: PilotScript, beat_id: str) -> bool:
     return clean in beat_ids or any(clean.startswith(prefix) for prefix in prefixes)
 
 
-def _memory_ids(state: PilotState) -> list[str]:
+def _memory_ids(state: EditorialState) -> list[str]:
     return [
         item.strip()
         for item in str(state.facts.get("_active_memory_ids", "") or "").split(",")
@@ -41,7 +41,7 @@ def _memory_ids(state: PilotState) -> list[str]:
     ]
 
 
-def _memory_writes_for_target(script: PilotScript, target_id: str) -> list[str]:
+def _memory_writes_for_target(script: EditorialScript, target_id: str) -> list[str]:
     source = script.beats.get(target_id) or script.endings.get(target_id) or {}
     return [
         str(item).strip()
@@ -50,13 +50,16 @@ def _memory_writes_for_target(script: PilotScript, target_id: str) -> list[str]:
     ]
 
 
-def finalize_editorial_turn(script: PilotScript, turn: PilotTurn) -> PilotTurn:
+def finalize_editorial_turn(
+    script: EditorialScript,
+    turn: EditorialTurn,
+) -> EditorialTurn:
     """Aplica memória narrativa e continuidade canônica ao turno decidido."""
 
     previous_ids = _memory_ids(turn.state)
     context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
     writes = _memory_writes_for_target(script, turn.target_id)
-    updated = PilotState.from_dict(turn.state.to_dict())
+    updated = EditorialState.from_dict(turn.state.to_dict())
     updated.facts["_active_memory_ids"] = ",".join(
         dict.fromkeys([*previous_ids, *writes])
     )

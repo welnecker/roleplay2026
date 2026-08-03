@@ -9,12 +9,8 @@ from services.editorial_partner_call import (
     decide_alfredinho_call_turn,
     prepare_alfredinho_call_script,
 )
-from services.editorial_runtime_impl import (
-    PilotScript,
-    PilotState,
-    PilotTurn,
-    clean_model_response as base_clean_model_response,
-)
+from services.editorial_runtime_impl import clean_model_response as base_clean_model_response
+from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
 PRIVATE_THOUGHT_VERSION = "1.0.5-home-clean-handoff"
 _HOME_BEER_THOUGHT = "Vou entregar a cerveja e deixar o Alfredo se acomodar. Depois penso no Janio."
@@ -78,7 +74,7 @@ def apply_private_thought_overrides(document: dict[str, Any]) -> dict[str, Any]:
     return document
 
 
-def prepare_private_thought_script(script: PilotScript) -> PilotScript:
+def prepare_private_thought_script(script: EditorialScript) -> EditorialScript:
     script = prepare_alfredinho_call_script(script)
 
     home_beat = script.beats.get("retorno_casa_003")
@@ -111,16 +107,16 @@ def prepare_private_thought_script(script: PilotScript) -> PilotScript:
 
 
 def decide_private_thought_turn(
-    script: PilotScript,
-    state: PilotState,
+    script: EditorialScript,
+    state: EditorialState,
     user_text: str,
-) -> PilotTurn:
+) -> EditorialTurn:
     prepare_private_thought_script(script)
     current_id = state.node_id or script.first_beat_id
     turn = decide_alfredinho_call_turn(script, state, user_text)
 
     if turn.target_id == "retorno_casa_003":
-        updated = PilotState.from_dict(turn.state.to_dict())
+        updated = EditorialState.from_dict(turn.state.to_dict())
         updated.facts["_scene_location"] = "casa_de_mary"
         updated.facts["home_husband_interactions"] = "1"
         prompt = (
@@ -134,7 +130,7 @@ def decide_private_thought_turn(
         return replace(turn, visible_fallback=_HOME_FALLBACK, system_prompt=prompt, state=updated)
 
     if current_id == "retorno_casa_003" and turn.target_id == "mensagens_iniciais_001":
-        updated = PilotState.from_dict(turn.state.to_dict())
+        updated = EditorialState.from_dict(turn.state.to_dict())
         updated.facts["_scene_location"] = "mensagem_privada_janio"
         updated.facts["home_scene_closed"] = "true"
         updated.facts["home_husband_interactions"] = "1"
