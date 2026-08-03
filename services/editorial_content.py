@@ -2,38 +2,32 @@ from __future__ import annotations
 
 import json
 import re
-from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from packages.loader import discover_packages
+from packages.models import InstalledStoryPackage
 from persistence.editorial import GoogleSheetsEditorialRepository
 from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 import services.pilot_supermarket as pilot_supermarket_module
-from services.editorial_compiler import compile_editorial_document
-from services.narrative_context import validate_memory_references, validate_terminal_yards
+from services.editorial_package_loader import (
+    compile_editorial_package,
+    editorial_story_start,
+    load_editorial_document,
+)
 from services.pilot_supermarket import PilotScript
 from services.supermarket_script_v2 import (
     clean_supermarket_script_v2_response,
     decide_supermarket_script_v2_turn,
-    prepare_supermarket_script_v2,
 )
 
 
-PACKAGE_ID = "roleplay2026.casada_frustrada"
-PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "installed_stories" / "casada_frustrada"
-EDITORIAL_PATH = PACKAGE_ROOT / "supermarket_pilot.yaml"
-EXTENSION_PATHS = (
-    PACKAGE_ROOT / "supermarket_continuation.yaml",
-    PACKAGE_ROOT / "narrative_enhancements.yaml",
-    PACKAGE_ROOT / "full_story.yaml",
-    PACKAGE_ROOT / "full_story_fixes.yaml",
-    PACKAGE_ROOT / "personality_guardrails.yaml",
-)
+INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
 _EDITORIAL_REPOSITORY: GoogleSheetsEditorialRepository | None = None
-_EDITORIAL_READY = False
+_PUBLISHED_PACKAGES: set[str] = set()
 _FREE_TEXT_KEYS = {
     "introduction",
     "title",
@@ -71,127 +65,55 @@ def _protect_editorial_plain_scalars(text: str) -> str:
 
 
 def load_editorial_yaml_text(text: str) -> dict[str, Any]:
+    """Compatibilidade pública para testes e ferramentas editoriais."""
+
     raw = yaml.safe_load(_protect_editorial_plain_scalars(text))
     if not isinstance(raw, dict):
-        raise ValueError("Documento editorial YAML inválido.")
+        raise ValueError("Documento editorial YAML inválido")
     return raw
 
 
-def _iter_beats(document: dict[str, Any]):
-    for block in document.get("blocks", []) or []:
-        if not isinstance(block, dict):
-            continue
-        for beat in block.get("beats", []) or []:
-            if isinstance(beat, dict):
-                yield beat
+def _all_packages() -> tuple[InstalledStoryPackage, ...]:
+    packages, errors = discover_packages(INSTALLED_STORIES_ROOT)
+    if errors:
+        raise ValueError("; ".join(errors))
+    return tuple(packages)
 
 
-def _memory_entries(value: Any) -> list[dict[str, Any]]:
-    if isinstance(value, list):
-        return [deepcopy(item) for item in value if isinstance(item, dict)]
-    if isinstance(value, dict):
-        return [
-            {
-                "memory_id": str(memory_id),
-                "memory_text": str(definition.get("summary") or definition.get("memory_text") or ""),
-                "summary": str(definition.get("summary") or definition.get("memory_text") or ""),
-                "category": str(definition.get("category", "event") or "event"),
-                "importance": int(definition.get("importance", 5) or 5),
-                "source_beat_id": str(definition.get("source_beat_id", "")),
-            }
-            for memory_id, definition in value.items()
-            if isinstance(definition, dict)
-        ]
-    return []
+def editorial_packages() -> tuple[InstalledStoryPackage, ...]:
+    return tuple(
+        package
+        for package in _all_packages()
+        if package.manifest.runtime.kind == "editorial"
+    )
 
 
-def _append_unique_strings(target: dict[str, Any], key: str, values: Any) -> None:
-    if not isinstance(values, list):
-        raise ValueError(f"{key}.append deve ser uma lista.")
-    current = [str(item).strip() for item in target.get(key, []) or [] if str(item).strip()]
-    for item in values:
-        text = str(item).strip()
-        if text and text not in current:
-            current.append(text)
-    target[key] = current
+def find_editorial_package(package_id: str) -> InstalledStoryPackage | None:
+    clean = str(package_id or "").strip().lower()
+    return next(
+        (
+            package
+            for package in editorial_packages()
+            if package.manifest.package_id == clean
+        ),
+        None,
+    )
 
 
-def _merge_character_patch(merged: dict[str, Any], extension: dict[str, Any]) -> None:
-    patch = extension.get("character_patch")
-    if patch is None:
-        return
-    if not isinstance(patch, dict):
-        raise ValueError("character_patch deve ser um mapa.")
-
-    character = merged.setdefault("character", {})
-    if not isinstance(character, dict):
-        raise ValueError("character deve ser um mapa.")
-
-    for profile_key in ("physical_profile", "psychological_profile", "speech_style"):
-        profile_patch = patch.get(profile_key)
-        if profile_patch is None:
-            continue
-        if not isinstance(profile_patch, dict):
-            raise ValueError(f"character_patch.{profile_key} deve ser um mapa.")
-        _append_unique_strings(character, profile_key, profile_patch.get("append", []))
+def _default_editorial_package() -> InstalledStoryPackage:
+    packages = editorial_packages()
+    if len(packages) != 1:
+        raise ValueError(
+            "Era esperado exatamente um pacote editorial para a fachada legada; "
+            f"encontrados: {[item.manifest.package_id for item in packages]}"
+        )
+    return packages[0]
 
 
-def _merge_extension(document: dict[str, Any], extension: dict[str, Any]) -> dict[str, Any]:
-    merged = deepcopy(document)
-    beats_by_id = {
-        str(beat.get("beat_id", "")): beat
-        for beat in _iter_beats(merged)
-        if str(beat.get("beat_id", "")).strip()
-    }
-
-    for beat_id, patch in dict(extension.get("patch_beats") or {}).items():
-        target = beats_by_id.get(str(beat_id))
-        if target is None:
-            raise ValueError(f"Beat a atualizar não encontrado: {beat_id}")
-        if not isinstance(patch, dict):
-            raise ValueError(f"Patch inválido para o beat {beat_id}")
-        target.update(deepcopy(patch))
-
-    append_blocks = extension.get("append_blocks") or []
-    if not isinstance(append_blocks, list):
-        raise ValueError("append_blocks deve ser uma lista.")
-    merged.setdefault("blocks", []).extend(deepcopy(append_blocks))
-
-    organic_slack = extension.get("organic_slack")
-    if organic_slack is not None:
-        if not isinstance(organic_slack, dict):
-            raise ValueError("organic_slack deve ser um mapa.")
-        merged["organic_slack"] = deepcopy(organic_slack)
-
-    _merge_character_patch(merged, extension)
-
-    incoming_memories = _memory_entries(extension.get("memories"))
-    if incoming_memories:
-        existing_memories = _memory_entries(merged.get("memories"))
-        known_ids = {str(item.get("memory_id", "")) for item in existing_memories}
-        for definition in incoming_memories:
-            memory_id = str(definition.get("memory_id", ""))
-            if not memory_id:
-                raise ValueError("Memória sem memory_id.")
-            if memory_id in known_ids:
-                raise ValueError(f"Memória duplicada: {memory_id}")
-            known_ids.add(memory_id)
-            existing_memories.append(definition)
-        merged["memories"] = existing_memories
-
-    return merged
-
-
-def load_source_document() -> dict[str, Any]:
-    document = load_editorial_yaml_text(EDITORIAL_PATH.read_text(encoding="utf-8"))
-    for path in EXTENSION_PATHS:
-        if not path.is_file():
-            continue
-        extension = load_editorial_yaml_text(path.read_text(encoding="utf-8"))
-        document = _merge_extension(document, extension)
-    validate_memory_references(document)
-    validate_terminal_yards(document)
-    return document
+def load_source_document(
+    package: InstalledStoryPackage | None = None,
+) -> dict[str, Any]:
+    return load_editorial_document(package or _default_editorial_package())
 
 
 def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
@@ -200,7 +122,7 @@ def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
         return _EDITORIAL_REPOSITORY
     credentials = secrets.get("gcp_service_account")
     if not credentials:
-        raise ValueError("[gcp_service_account] não está configurado.")
+        raise ValueError("[gcp_service_account] não está configurado")
     ids = read_spreadsheet_ids(secrets)
     _EDITORIAL_REPOSITORY = GoogleSheetsEditorialRepository.from_service_account(
         credentials=dict(credentials),
@@ -209,38 +131,47 @@ def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
     return _EDITORIAL_REPOSITORY
 
 
-def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
-    """Espelha a mesma fonte executável em ROLEPLAY_EDITORIAL."""
-
-    global _EDITORIAL_READY
+def ensure_editorial_package(
+    secrets: Any,
+    package: InstalledStoryPackage,
+) -> GoogleSheetsEditorialRepository:
     repository = build_editorial_repository(secrets)
-    if _EDITORIAL_READY:
+    package_id = package.manifest.package_id
+    if package_id in _PUBLISHED_PACKAGES:
         return repository
     repository.ensure_schema()
-    publish_editorial_document(repository, load_source_document())
-    _EDITORIAL_READY = True
+    publish_editorial_document(repository, load_editorial_document(package))
+    _PUBLISHED_PACKAGES.add(package_id)
     return repository
 
 
+def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
+    """Fachada temporária para chamadas antigas durante a migração."""
+
+    return ensure_editorial_package(secrets, _default_editorial_package())
+
+
+def load_editorial_package(
+    secrets: Any,
+    package: InstalledStoryPackage,
+) -> PilotScript:
+    ensure_editorial_package(secrets, package)
+    return compile_editorial_package(package)
+
+
 def load_editorial_pilot(secrets: Any) -> PilotScript:
-    """Carrega a fonte única e adapta somente sua estrutura ao motor."""
+    """Fachada temporária; novos fluxos devem passar o pacote explicitamente."""
 
-    ensure_editorial_pilot(secrets)
-    compiled = compile_editorial_document(load_source_document())
-    return prepare_supermarket_script_v2(PilotScript(compiled))
+    package = _default_editorial_package()
+    return load_editorial_package(secrets, package)
 
 
-def load_editorial_story_start(secrets: Any, package_id: str) -> tuple[str, str, str] | None:
-    if package_id != PACKAGE_ID:
+def load_editorial_story_start(
+    secrets: Any,
+    package_id: str,
+) -> tuple[str, str, str] | None:
+    package = find_editorial_package(package_id)
+    if package is None:
         return None
-    ensure_editorial_pilot(secrets)
-    raw = load_source_document()
-    blocks = [item for item in raw.get("blocks", []) if isinstance(item, dict)]
-    if not blocks:
-        return None
-    first = min(blocks, key=lambda item: int(item.get("order", 0) or 0))
-    return (
-        str(raw.get("script_version", "")),
-        str(first.get("block_id", "")),
-        str(first.get("entry_beat_id", "")),
-    )
+    ensure_editorial_package(secrets, package)
+    return editorial_story_start(package)
