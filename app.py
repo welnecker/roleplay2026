@@ -278,7 +278,7 @@ def render_library(user: AuthenticatedUser) -> None:
             "[gcp_service_account] para habilitar contas e saves compartilhados."
         )
     else:
-        st.success("Contas, entitlements e saves compartilhados no Google Sheets estão ativos.")
+        st.success("Sistema carregado com sucesso!")
 
 
 def render_checkout(user: AuthenticatedUser) -> None:
