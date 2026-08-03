@@ -5,7 +5,7 @@ from services.organic_interaction import (
     extract_name_evidence,
     extract_user_facts,
 )
-from services.pilot_supermarket import PilotScript, PilotState, clean_model_response, decide_turn
+from services.editorial_runtime_impl import PilotScript, PilotState, clean_model_response, decide_turn
 
 
 def _script() -> PilotScript:

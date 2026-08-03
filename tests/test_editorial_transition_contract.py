@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from services.editorial_compiler import compile_editorial_document
-from services.pilot_supermarket import PilotScript, PilotState, decide_turn
+from services.editorial_runtime_impl import PilotScript, PilotState, decide_turn
 
 
 def _document() -> dict:

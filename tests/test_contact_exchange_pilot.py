@@ -6,7 +6,7 @@ from services.contact_exchange_pilot import (
     decide_contact_exchange_turn,
     prepare_contact_exchange_script,
 )
-from services.pilot_supermarket import PilotScript, PilotState
+from services.editorial_runtime_impl import PilotScript, PilotState
 
 
 def _script() -> PilotScript:

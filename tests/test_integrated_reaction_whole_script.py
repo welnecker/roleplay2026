@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from services.organic_interaction import detect_organic_signal
-from services.pilot_supermarket import PilotScript, PilotState
+from services.editorial_runtime_impl import PilotScript, PilotState
 from services.editorial_progression import decide_supermarket_script_v2_turn
 
 
