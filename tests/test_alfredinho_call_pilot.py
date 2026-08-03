@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from services.alfredinho_call_pilot import (
+from services.editorial_partner_call import (
     ALFREDINHO_CALL_VERSION,
     apply_alfredinho_call_overrides,
     decide_alfredinho_call_turn,
