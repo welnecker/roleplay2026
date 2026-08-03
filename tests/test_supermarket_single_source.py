@@ -2,36 +2,34 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import yaml
-
+from packages.loader import load_manifest
 from services.editorial_compiler import compile_editorial_document
-from services.pilot_supermarket import PilotScript
-from services.supermarket_script_v2 import (
-    automatic_followups_after,
-    prepare_supermarket_script_v2,
+from services.editorial_package_loader import load_editorial_document
+from services.editorial_progression import (
+    editorial_followups_after,
+    prepare_editorial_script,
 )
+from services.editorial_runtime import EditorialScript
 
 
-SOURCE = (
+PACKAGE_ROOT = (
     Path(__file__).resolve().parent.parent
     / "installed_stories"
     / "casada_frustrada"
-    / "supermarket_pilot.yaml"
 )
 
 
 def load_document() -> dict:
-    raw = yaml.safe_load(SOURCE.read_text(encoding="utf-8"))
-    assert isinstance(raw, dict)
-    return raw
+    package = load_manifest(PACKAGE_ROOT / "manifest.yaml")
+    return load_editorial_document(package)
 
 
-def load_script() -> PilotScript:
+def load_script() -> EditorialScript:
     compiled = compile_editorial_document(load_document())
-    return prepare_supermarket_script_v2(PilotScript(compiled))
+    return prepare_editorial_script(EditorialScript(compiled))
 
 
-def anchor(script: PilotScript, beat_id: str) -> str:
+def anchor(script: EditorialScript, beat_id: str) -> str:
     return str(script.beats[beat_id]["units"][0]["anchor"])
 
 
@@ -47,10 +45,10 @@ def test_plaza_antecede_confirmacao_e_despedida() -> None:
 
 def test_preparacao_nao_reescreve_beats() -> None:
     compiled = compile_editorial_document(load_document())
-    script = PilotScript(compiled)
+    script = EditorialScript(compiled)
     before = anchor(script, "encontro_acidental_004")
 
-    result = prepare_supermarket_script_v2(script)
+    result = prepare_editorial_script(script)
 
     assert result is script
     assert anchor(result, "encontro_acidental_004") == before
@@ -60,8 +58,8 @@ def test_preparacao_nao_reescreve_beats() -> None:
 def test_pontes_sao_lidas_do_roteiro() -> None:
     load_script()
 
-    queue_bridge = automatic_followups_after("encontro_acidental_006")
-    home_bridges = automatic_followups_after("reencontro_fila_016")
+    queue_bridge = editorial_followups_after("encontro_acidental_006")
+    home_bridges = editorial_followups_after("reencontro_fila_016")
 
     assert queue_bridge[0]["target_id"] == "reencontro_fila_001"
     assert len(home_bridges) == 3

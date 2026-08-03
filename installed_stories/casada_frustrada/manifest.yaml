@@ -8,13 +8,13 @@ entrypoint: story.yaml
 runtime:
   kind: editorial
   editorial:
-    source: supermarket_pilot.yaml
+    source: content/editorial.yaml
     extensions:
-      - supermarket_continuation.yaml
-      - narrative_enhancements.yaml
-      - full_story.yaml
-      - full_story_fixes.yaml
-      - personality_guardrails.yaml
+      - content/extensions/continuation.yaml
+      - content/extensions/narrative.yaml
+      - content/extensions/story.yaml
+      - content/extensions/fixes.yaml
+      - content/extensions/guardrails.yaml
 card:
   title: Casada frustrada
   subtitle: Mary tenta reconstruir a própria vida sem esconder o que deseja.

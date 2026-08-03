@@ -80,8 +80,35 @@ def test_manifesto_declara_runtime_editorial() -> None:
     runtime = package.manifest.runtime
     assert runtime.kind == "editorial"
     assert runtime.editorial is not None
-    assert runtime.editorial.source == "supermarket_pilot.yaml"
-    assert "full_story.yaml" in runtime.editorial.extensions
+    assert runtime.editorial.source == "content/editorial.yaml"
+    assert runtime.editorial.extensions == (
+        "content/extensions/continuation.yaml",
+        "content/extensions/narrative.yaml",
+        "content/extensions/story.yaml",
+        "content/extensions/fixes.yaml",
+        "content/extensions/guardrails.yaml",
+    )
+
+
+def test_card_canonico_possui_conteudo_autocontido() -> None:
+    root = Path(__file__).resolve().parent.parent
+    package_root = root / "installed_stories" / "casada_frustrada"
+    package = load_manifest(package_root / "manifest.yaml")
+    editorial = package.manifest.runtime.editorial
+
+    assert editorial is not None
+    declared_files = (editorial.source, *editorial.extensions)
+    assert all((package_root / relative_path).is_file() for relative_path in declared_files)
+
+    obsolete_files = (
+        "supermarket_pilot.yaml",
+        "supermarket_continuation.yaml",
+        "narrative_enhancements.yaml",
+        "full_story.yaml",
+        "full_story_fixes.yaml",
+        "personality_guardrails.yaml",
+    )
+    assert all(not (package_root / filename).exists() for filename in obsolete_files)
 
 
 def test_carregador_aplica_extensoes_declaradas_no_manifesto(tmp_path: Path) -> None:
