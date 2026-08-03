@@ -44,7 +44,7 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
 _VIOLATION_GUIDANCE = {
     "invented_unconfirmed_detail": (
         "Remova qualquer concretização de FATOS DESCONHECIDOS e todo detalhe que não conste em FATOS CONFIRMADOS. "
-        "Assuntos permitidos não autorizam criar localização, causa, peso, quantidade, roupa, risco, esforço ou urgência."
+        "Assuntos permitidos não autorizam criar localização, causa, peso, quantidade, roupa, risco, esforço, urgência."
     ),
     "contradicted_confirmed_fact": "Reescreva sem contradizer nenhum fato confirmado.",
     "failed_required_outcome": "Realize todos os resultados obrigatórios de modo direto e breve.",
