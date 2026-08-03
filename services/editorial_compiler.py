@@ -51,6 +51,9 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
             if next_beat_id and not legacy_transitions:
                 legacy_transitions = {"engaged": next_beat_id}
 
+            constraints = deepcopy(source.get("constraints") or {})
+            fact_scope = deepcopy(source.get("fact_scope") or constraints.get("fact_scope") or [])
+
             beats.append(
                 {
                     "beat_id": beat_id,
@@ -74,6 +77,8 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "max_sentences": int(source.get("max_sentences", 1) or 1),
                     "skip_when_facts": deepcopy(source.get("skip_when_facts") or {}),
                     "response_boundary": str(source.get("response_boundary", "") or ""),
+                    "fact_scope": fact_scope,
+                    "constraints": constraints,
                 }
             )
 

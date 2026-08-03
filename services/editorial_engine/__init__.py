@@ -1,4 +1,5 @@
 from services.editorial_engine.models import (
+    NarrativeEffect,
     TransitionCondition,
     TransitionDecision,
     TransitionEffects,
@@ -10,6 +11,7 @@ from services.editorial_engine.transitions import (
 )
 
 __all__ = [
+    "NarrativeEffect",
     "TransitionCondition",
     "TransitionDecision",
     "TransitionEffects",

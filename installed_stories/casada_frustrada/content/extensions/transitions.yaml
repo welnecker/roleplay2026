@@ -2,6 +2,12 @@ format_version: 1
 package_id: roleplay2026.casada_frustrada
 patch_beats:
   reencontro_fila_007:
+    fact_scope:
+      - Mary está no caixa do supermercado com suas compras
+      - há um carrinho de compras
+      - Mary quer ajuda para levar as compras até o carro
+      - a localização, o conteúdo e o peso das compras não estão confirmados
+      - roupas, calçados, esforço físico, risco e urgência não estão confirmados
     intent_classifiers:
       - intent: accept
         patterns:
@@ -33,6 +39,14 @@ patch_beats:
           facts:
             help_to_car: accepted
             _scene_location: estacionamento_caminho
+        narrative_effect:
+          status: decision_confirmed
+          required_outcomes:
+            - reconhecer o aceite
+            - iniciar somente o movimento do beat alvo
+          forbidden_outcomes:
+            - repetir o pedido de ajuda
+            - antecipar a chegada ao carro
       - id: help_refused
         priority: 100
         when:
@@ -42,43 +56,65 @@ patch_beats:
           facts:
             help_to_car: refused
             _scene_location: supermercado_caixa
-        prompt: >-
-          O usuário recusou esperar. Demonstre frustração leve, respeite a decisão,
-          não insista e deixe espaço para uma última resposta antes da despedida final.
+        narrative_effect:
+          status: decision_refused
+          required_outcomes:
+            - reconhecer a recusa
+            - respeitar a decisão sem insistir
+          forbidden_outcomes:
+            - avançar para o estacionamento
+            - tratar a recusa como aceite
       - id: help_question
         priority: 80
         when:
           intent: question
         stay: true
-        fallback: Claro... mas você consegue me esperar e ajudar até o carro?
         effects:
           facts:
             _scene_location: supermercado_caixa
-        prompt: >-
-          Responda brevemente ao que o usuário perguntou e confirme, sem pressão,
-          se ele aceita esperar e ajudar. Não presuma aceite e não avance a cena.
-          Mensagem do usuário: {user_text}
+        narrative_effect:
+          status: decision_pending
+          required_outcomes:
+            - responder brevemente à pergunta usando apenas fatos confirmados
+            - manter o pedido de ajuda aberto
+            - solicitar uma decisão explícita
+          forbidden_outcomes:
+            - inventar causa específica, quantidade, peso, conteúdo das compras, roupa, calçado, risco ou urgência
+            - presumir aceite
+            - avançar para o estacionamento
+            - encerrar o encontro
       - id: help_postponed
         priority: 80
         when:
           intent: postpone
         stay: true
-        fallback: Sem pressa... você consegue me esperar e ajudar até o carro?
         effects:
           facts:
             _scene_location: supermercado_caixa
-        prompt: >-
-          Reconheça brevemente a pressa do usuário e confirme, sem pressão,
-          se ele ainda consegue esperar. Não presuma aceite e não avance a cena.
+        narrative_effect:
+          status: decision_pending
+          required_outcomes:
+            - reconhecer o adiamento sem tratá-lo como recusa
+            - manter o pedido de ajuda aberto
+            - solicitar uma decisão explícita
+          forbidden_outcomes:
+            - encerrar o encontro
+            - desistir do pedido de ajuda
+            - avançar para o estacionamento
+            - presumir recusa definitiva
       - id: help_unclear
         priority: 0
         when:
           always: true
         stay: true
-        fallback: Sem pressa... você consegue me esperar e ajudar até o carro?
         effects:
           facts:
             _scene_location: supermercado_caixa
-        prompt: >-
-          Responda brevemente e confirme se o usuário aceita esperar.
-          Não presuma aceite e não avance a cena.
+        narrative_effect:
+          status: decision_pending
+          required_outcomes:
+            - pedir uma decisão explícita
+          forbidden_outcomes:
+            - presumir aceite
+            - presumir recusa
+            - avançar a cena
