@@ -181,6 +181,8 @@ def render_beat_context(context: BeatContext) -> str:
         lines.append(f"- Limite de resposta: {context.response_boundary}")
     lines.extend(
         (
+            "- Não presuma aceite, recusa ou qualquer decisão que o usuário não tenha declarado explicitamente.",
+            "- Não avance para outro beat, local ou acontecimento sem autorização da decisão de transição.",
             "- O escopo factual autoriza apenas os assuntos listados; não autoriza inventar causas, quantidades, objetos, roupas, riscos, distâncias ou condições específicas.",
             "- Não transforme hipótese, humor ou detalhe plausível em fato narrativo.",
             "- Não antecipe acontecimentos, locais ou decisões de beats posteriores.",
