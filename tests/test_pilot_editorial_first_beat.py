@@ -1,4 +1,4 @@
-from services.pilot_supermarket import PilotScript, PilotState, decide_turn, opening_text
+from services.editorial_runtime_impl import PilotScript, PilotState, decide_turn, opening_text
 
 
 def _script() -> PilotScript:
