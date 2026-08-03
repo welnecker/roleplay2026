@@ -15,7 +15,7 @@ from services.editorial_diagnostics_impl import (
 )
 
 
-LOGGER = logging.getLogger("roleplay2026.pilot")
+LOGGER = logging.getLogger("editorial.pilot")
 EditorialGuardedResponse = GuardedResponse
 build_editorial_turn_diagnostics = build_turn_diagnostics
 finalize_editorial_model_response = finalize_model_response
