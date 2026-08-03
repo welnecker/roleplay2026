@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 from services.editorial_compiler import compile_editorial_document
@@ -71,9 +72,40 @@ def test_linguagem_sexual_contextual_nao_e_hostilidade() -> None:
     assert classify_contextual_user_message("você é uma vadia") == "hostile"
 
 
+def _is_streamlit_call(node: ast.AST, method: str) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "st"
+        and node.func.attr == method
+    )
+
+
 def test_delta_generator_nao_e_renderizado_por_expressao_solteira() -> None:
     source = Path("pages/2_Piloto_Supermercado.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
 
-    assert "st.success(\"Cena concluída.\") if" not in source
-    assert "if pilot_state.run_status == \"completed\":" in source
+    success_in_ternary = any(
+        isinstance(node, ast.IfExp)
+        and any(_is_streamlit_call(child, "success") for child in ast.walk(node))
+        for node in ast.walk(tree)
+    )
+    completed_status_block = any(
+        isinstance(node, ast.If)
+        and isinstance(node.test, ast.Compare)
+        and any(
+            isinstance(child, ast.Attribute) and child.attr == "run_status"
+            for child in ast.walk(node.test)
+        )
+        and any(
+            isinstance(child, ast.Constant) and child.value == "completed"
+            for child in ast.walk(node.test)
+        )
+        and any(_is_streamlit_call(child, "success") for child in ast.walk(node))
+        for node in ast.walk(tree)
+    )
+
+    assert success_in_ternary is False
+    assert completed_status_block is True
     assert "if not is_organic_interstitial:" in source
