@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from services.editorial_beat_context import BeatContext
+from services.editorial_beat_context import BeatContext, render_beat_context
 from services.editorial_response_evaluator import (
     build_regeneration_prompt,
+    build_semantic_evaluation_prompt,
     evaluate_deterministic_response,
     merge_evaluations,
     parse_semantic_evaluation,
@@ -20,7 +21,11 @@ def _context(**overrides):
         "transition_status": "decision_pending",
         "required_outcomes": ("reconhecer o adiamento", "pedir decisão explícita"),
         "forbidden_outcomes": ("encerrar o encontro", "presumir recusa"),
-        "relevant_facts": {"help_to_car": "pending"},
+        "fact_scope": (
+            "Mary está no caixa com compras",
+            "roupas e esforço físico não estão confirmados",
+        ),
+        "confirmed_facts": {"scene_location": "supermercado_caixa"},
         "max_sentences": 3,
         "max_questions": 1,
         "response_boundary": "",
@@ -47,13 +52,43 @@ def test_validacao_deterministica_aplica_limites_do_beat() -> None:
     assert "max_questions_exceeded" in result.violations
 
 
-def test_avaliacao_semantica_exige_json_valido() -> None:
-    invalid = parse_semantic_evaluation("A resposta está boa.")
+def test_contexto_renderiza_escopo_e_fatos_confirmados() -> None:
+    rendered = render_beat_context(_context())
+
+    assert "Escopo factual permitido" in rendered
+    assert "roupas e esforço físico não estão confirmados" in rendered
+    assert "scene_location: supermercado_caixa" in rendered
+    assert "não autoriza inventar causas" in rendered
+
+
+def test_prompt_semantico_exige_rejeicao_de_detalhe_plausivel() -> None:
+    prompt = build_semantic_evaluation_prompt(_context())
+
+    assert "detalhe plausível" in prompt
+    assert "roupas, calçados" in prompt
+    assert "invented_unconfirmed_detail" in prompt
+    assert "um único objeto JSON" in prompt
+
+
+def test_avaliacao_semantica_exige_json_puro_e_valido() -> None:
+    prose = parse_semantic_evaluation("A resposta está boa.")
+    fenced = parse_semantic_evaluation('```json\n{"valid": true, "violations": []}\n```')
     valid = parse_semantic_evaluation('{"valid": true, "violations": []}')
 
-    assert invalid.valid is False
-    assert invalid.violations == ("semantic_evaluator_invalid_json",)
+    assert prose.valid is False
+    assert prose.violations == ("semantic_evaluator_invalid_json",)
+    assert fenced.valid is False
+    assert fenced.violations == ("semantic_evaluator_invalid_json",)
     assert valid.valid is True
+
+
+def test_avaliacao_semantica_rejeita_identificador_fora_do_contrato() -> None:
+    result = parse_semantic_evaluation(
+        '{"valid": false, "violations": ["qualquer_texto_livre"]}'
+    )
+
+    assert result.valid is False
+    assert result.violations == ("semantic_evaluator_invalid_violations",)
 
 
 def test_merge_mantem_runtime_soberano() -> None:
@@ -71,10 +106,10 @@ def test_merge_mantem_runtime_soberano() -> None:
 def test_regeneracao_recebe_motivos_objetivos() -> None:
     prompt = build_regeneration_prompt(
         base_prompt="Contrato base.",
-        violations=("failed_to_request_confirmation", "anticipated_future_beat"),
+        violations=("failed_to_request_explicit_decision", "anticipated_future_beat"),
     )
 
     assert "Contrato base." in prompt
-    assert "failed_to_request_confirmation" in prompt
+    assert "failed_to_request_explicit_decision" in prompt
     assert "anticipated_future_beat" in prompt
-    assert "sem comentar a avaliação" in prompt
+    assert "não acrescente fatos" in prompt
