@@ -14,6 +14,11 @@ from services.editorial_runtime import EditorialState, editorial_opening_text
 def _package(root: Path, package_id: str):
     packages, errors = discover_packages(root)
     assert errors == []
+    available_ids = {item.manifest.package_id for item in packages}
+    assert package_id in available_ids, (
+        f"Pacote {package_id!r} não encontrado em {root}. "
+        f"Disponíveis: {sorted(available_ids)}"
+    )
     return next(item for item in packages if item.manifest.package_id == package_id)
 
 
@@ -35,13 +40,16 @@ def _assert_package_runs(root: Path, package_id: str) -> None:
 
 
 def test_card_instalado_compila_e_executa_primeiro_turno() -> None:
-    _assert_package_runs(Path("installed_stories"), "casada_frustrada")
+    _assert_package_runs(
+        Path("installed_stories"),
+        "roleplay2026.casada_frustrada",
+    )
 
 
 def test_card_independente_compila_e_executa_primeiro_turno() -> None:
     _assert_package_runs(
         Path("tests/fixtures/editorial_cards"),
-        "encontro_no_cafe",
+        "example.encontro_no_cafe",
     )
 
 
