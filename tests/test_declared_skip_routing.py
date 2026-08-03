@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from services.pilot_supermarket import PilotScript, PilotState
-from services.supermarket_script_v2 import decide_supermarket_script_v2_turn
+from services.editorial_progression import decide_supermarket_script_v2_turn
 
 
 def _script(*, cycle: bool = False) -> PilotScript:
