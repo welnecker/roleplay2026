@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-"""Import legado temporário.
+"""Alias temporário para o módulo editorial concreto.
 
-A implementação foi movida para ``editorial_runtime_impl``. Este arquivo será
-excluído após a migração dos módulos narrativos e testes restantes.
+O objeto de módulo é substituído pelo runtime editorial real para que atribuições
+transitórias feitas por consumidores antigos afetem os globais usados pelas
+funções concretas. Este arquivo será removido após a migração dos imports.
 """
 
-from services.editorial_runtime_impl import *  # noqa: F401,F403
+import sys
+
+from services import editorial_runtime_impl as _editorial_runtime_impl
+
+
+sys.modules[__name__] = _editorial_runtime_impl
