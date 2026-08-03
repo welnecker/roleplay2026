@@ -12,7 +12,12 @@ from services.editorial_followups import (
     state_after_editorial_followup,
 )
 from services.editorial_message_policy import classify_contextual_editorial_message
+from services.editorial_organic_turns import organic_editorial_turn
 from services.editorial_response_policy import clean_editorial_progression_response
+from services.editorial_routing import (
+    routing_state_for_declared_skips,
+    state_with_extracted_facts,
+)
 from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
 
 
@@ -39,9 +44,9 @@ def decide_supermarket_script_v2_turn(
     """Decide transições comuns e decisões especiais declaradas pelo card."""
 
     original_facts = dict(state.facts)
-    working_state = _support._state_with_extracted_facts(state, user_text)
+    working_state = state_with_extracted_facts(state, user_text)
 
-    organic = _support._organic_slack_turn(script, working_state, user_text)
+    organic = organic_editorial_turn(script, working_state, user_text)
     if organic is not None:
         return _support._finalize_turn(script, organic)
 
@@ -58,7 +63,7 @@ def decide_supermarket_script_v2_turn(
         return _support._finalize_turn(script, replace(special, state=updated))
 
     engagement = classify_contextual_user_message(user_text)
-    routing_state = _support._routing_state_for_declared_skips(
+    routing_state = routing_state_for_declared_skips(
         script,
         working_state,
         engagement,
