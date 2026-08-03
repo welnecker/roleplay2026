@@ -20,8 +20,8 @@ from services.editorial_runtime import (
     clean_editorial_model_response,
     decide_editorial_turn,
 )
+from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
 from services.pilot_diagnostics import GuardedResponse
-from services.pilot_supermarket import PilotScript, PilotState, PilotTurn
 
 
 def test_tipos_editoriais_preservam_compatibilidade() -> None:

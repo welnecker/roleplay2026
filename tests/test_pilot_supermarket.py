@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.pilot_supermarket import (
+from services.editorial_runtime_impl import (
     PilotScript,
     PilotState,
     classify_user_message,
