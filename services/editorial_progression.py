@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-"""API genérica de preparação e progressão de roteiros editoriais."""
+"""API pública de preparação e progressão de roteiros editoriais."""
 
-from services.supermarket_script_v2 import (
+from services.editorial_progression_impl import (
     automatic_followups_after,
     classify_contextual_user_message,
     clean_supermarket_script_v2_response,
