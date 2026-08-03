@@ -201,7 +201,7 @@ def build_regeneration_prompt(
         f"{str(base_prompt or '').strip()}\n\n"
         "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
         "A resposta anterior foi rejeitada. Reconstrua a fala do zero, em forma mínima e natural.\n"
-        "Use somente os FATOS CONFIRMADOS e os resultados obrigatórios do contrato; não acrescente fatos, explicações, justificativas, humor concreto, imagens, objetos, roupas, riscos ou causas.\n"
+        "Use somente os fatos confirmados e os resultados obrigatórios do contrato; não acrescente fatos, explicações, justificativas, humor concreto, imagens, objetos, roupas, riscos ou causas.\n"
         "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS.\n"
         "Quando faltar um fato, formule de modo neutro em vez de completar a lacuna.\n"
         "Não comente a avaliação e não repita nenhum detalhe rejeitado.\n"
