@@ -20,6 +20,7 @@ def package_to_story_card(package: InstalledStoryPackage) -> StoryCard:
     manifest = package.manifest
     card = manifest.card
     commerce = manifest.commerce
+    profile = card.character_profile
     is_free = commerce.access == "free"
 
     return StoryCard(
@@ -34,6 +35,11 @@ def package_to_story_card(package: InstalledStoryPackage) -> StoryCard:
         chapter_label=card.chapter_label,
         cover_url=str(package.root / card.cover) if card.cover else "",
         is_tasting=is_free,
+        profile_name=profile.name if profile else card.title,
+        profile_identity=profile.identity if profile else card.description,
+        profile_personality=profile.personality if profile else "",
+        profile_intention=profile.intention if profile else "",
+        replay_requires_purchase=commerce.replay_policy == "new_purchase",
     )
 
 

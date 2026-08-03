@@ -12,6 +12,17 @@ class PackageAuthor(BaseModel):
     id: str | None = None
 
 
+class PackageCharacterProfile(BaseModel):
+    """Presentation metadata shown on the back of a story card."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = ""
+    identity: str = ""
+    personality: str = ""
+    intention: str = ""
+
+
 class PackageCard(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -21,6 +32,7 @@ class PackageCard(BaseModel):
     genres: tuple[str, ...] = ()
     chapter_label: str = ""
     cover: str = ""
+    character_profile: PackageCharacterProfile | None = None
 
 
 class PackageCommerce(BaseModel):
@@ -29,6 +41,7 @@ class PackageCommerce(BaseModel):
     access: str = "free"
     price_cents: int = 0
     currency: str = "BRL"
+    replay_policy: str = "reuse_access"
 
     @field_validator("access")
     @classmethod
@@ -36,6 +49,16 @@ class PackageCommerce(BaseModel):
         clean = value.strip().lower()
         if clean not in {"free", "paid"}:
             raise ValueError("access deve ser 'free' ou 'paid'")
+        return clean
+
+    @field_validator("replay_policy")
+    @classmethod
+    def validate_replay_policy(cls, value: str) -> str:
+        clean = value.strip().lower()
+        if clean not in {"reuse_access", "new_purchase"}:
+            raise ValueError(
+                "replay_policy deve ser 'reuse_access' ou 'new_purchase'"
+            )
         return clean
 
 

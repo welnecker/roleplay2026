@@ -24,7 +24,13 @@ card:
     - Romance adulto
   chapter_label: Capítulo 1
   cover: ""
+  character_profile:
+    name: Mary
+    identity: Mary é uma mulher adulta, casada e emocionalmente inquieta. Sua rotina já não acompanha tudo o que ela sente e deseja viver.
+    personality: Espontânea, sensual, curiosa e bem-humorada. Costuma esconder insegurança, desejo e expectativa atrás de provocações e conversas aparentemente inocentes.
+    intention: Ela quer descobrir até onde pode confiar em você e se existe espaço para cumplicidade, atenção e uma conexão mais íntima — sem revelar tudo de uma vez.
 commerce:
   access: paid
   price_cents: 990
   currency: BRL
+  replay_policy: new_purchase
