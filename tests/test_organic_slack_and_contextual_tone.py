@@ -5,22 +5,22 @@ from services.editorial_compiler import compile_editorial_document
 from services.editorial_content import load_source_document
 from services.editorial_runtime_impl import PilotScript, PilotState
 from services.editorial_progression import (
-    classify_contextual_user_message,
-    decide_supermarket_script_v2_turn,
-    prepare_supermarket_script_v2,
+    classify_contextual_editorial_message,
+    decide_editorial_progression_turn,
+    prepare_editorial_script,
 )
 
 
 def _script() -> PilotScript:
     document = load_source_document()
-    return prepare_supermarket_script_v2(PilotScript(compile_editorial_document(document)))
+    return prepare_editorial_script(PilotScript(compile_editorial_document(document)))
 
 
 def test_comentario_livre_nao_mistura_proxima_linha_do_roteiro() -> None:
     script = _script()
     state = PilotState(node_id="late_night_008", facts={"user_name": "Janio"})
 
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         script,
         state,
         "Tchau, Mary... você é louca...",
@@ -42,7 +42,7 @@ def test_turno_seguinte_retoma_o_beat_pendente() -> None:
         facts={"_organic_interstitial": "true"},
     )
 
-    turn = decide_supermarket_script_v2_turn(script, state, "Tá bom... até daqui a pouco.")
+    turn = decide_editorial_progression_turn(script, state, "Tá bom... até daqui a pouco.")
 
     assert turn.target_id == "morning_bridge_001"
     assert turn.state.pending_next_beat_id == ""
@@ -53,7 +53,7 @@ def test_pergunta_com_ressalva_recebe_resposta_organica_primeiro() -> None:
     script = _script()
     state = PilotState(node_id="late_night_004")
 
-    turn = decide_supermarket_script_v2_turn(
+    turn = decide_editorial_progression_turn(
         script,
         state,
         "Claro que eu quero, mas é perigoso... não quero morrer, né?",
@@ -66,10 +66,10 @@ def test_pergunta_com_ressalva_recebe_resposta_organica_primeiro() -> None:
 
 def test_linguagem_sexual_contextual_nao_e_hostilidade() -> None:
     assert (
-        classify_contextual_user_message("sim... ahhhh! você chupa igual uma vadia...")
+        classify_contextual_editorial_message("sim... ahhhh! você chupa igual uma vadia...")
         == "engaged"
     )
-    assert classify_contextual_user_message("você é uma vadia") == "hostile"
+    assert classify_contextual_editorial_message("você é uma vadia") == "hostile"
 
 
 def _is_streamlit_call(node: ast.AST, method: str) -> bool:
