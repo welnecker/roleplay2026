@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Any, Mapping
 
 from services.editorial_engine.models import NarrativeEffect, TransitionRule
@@ -19,8 +18,9 @@ class BeatContext:
     transition_status: str
     required_outcomes: tuple[str, ...]
     forbidden_outcomes: tuple[str, ...]
-    fact_scope: tuple[str, ...]
-    confirmed_facts: Mapping[str, str]
+    allowed_topics: tuple[str, ...]
+    confirmed_facts: tuple[str, ...]
+    unknown_facts: tuple[str, ...]
     max_sentences: int
     max_questions: int
     response_boundary: str
@@ -69,33 +69,48 @@ def _selected_narrative_effect(
     return NarrativeEffect()
 
 
-def _confirmed_facts(state: EditorialState) -> Mapping[str, str]:
-    facts: dict[str, str] = {}
-    for key, value in state.facts.items():
-        name = str(key).strip()
-        text = str(value).strip()
-        if not name or not text:
-            continue
-        if name == "_scene_location":
-            facts["scene_location"] = text
-        elif not name.startswith("_"):
-            facts[name] = text
-    return MappingProxyType(facts)
-
-
-def _fact_scope(source: Mapping[str, Any], target: Mapping[str, Any]) -> tuple[str, ...]:
+def _declared_tuple(
+    source: Mapping[str, Any],
+    target: Mapping[str, Any],
+    field: str,
+    *,
+    legacy_field: str = "",
+) -> tuple[str, ...]:
     target_constraints = target.get("constraints") or {}
     source_constraints = source.get("constraints") or {}
     if not isinstance(target_constraints, Mapping):
         target_constraints = {}
     if not isinstance(source_constraints, Mapping):
         source_constraints = {}
-    return (
-        _string_tuple(target.get("fact_scope"))
-        or _string_tuple(target_constraints.get("fact_scope"))
-        or _string_tuple(source.get("fact_scope"))
-        or _string_tuple(source_constraints.get("fact_scope"))
+
+    values = (
+        _string_tuple(target.get(field))
+        or _string_tuple(target_constraints.get(field))
+        or _string_tuple(source.get(field))
+        or _string_tuple(source_constraints.get(field))
     )
+    if values or not legacy_field:
+        return values
+    return (
+        _string_tuple(target.get(legacy_field))
+        or _string_tuple(target_constraints.get(legacy_field))
+        or _string_tuple(source.get(legacy_field))
+        or _string_tuple(source_constraints.get(legacy_field))
+    )
+
+
+def _state_facts(state: EditorialState) -> tuple[str, ...]:
+    facts: list[str] = []
+    for key, value in state.facts.items():
+        name = str(key).strip()
+        text = str(value).strip()
+        if not name or not text:
+            continue
+        if name == "_scene_location":
+            facts.append(f"local da cena: {text}")
+        elif not name.startswith("_"):
+            facts.append(f"{name}: {text}")
+    return tuple(facts)
 
 
 def build_beat_context(
@@ -103,11 +118,11 @@ def build_beat_context(
     previous_state: EditorialState,
     turn: EditorialTurn,
 ) -> BeatContext:
-    """Constrói o contrato narrativo universal do turno.
+    """Constrói um contrato factual sem misturar conhecimento e permissão.
 
-    O contexto separa fatos confirmados do escopo temático permitido. O modelo
-    pode formular naturalmente dentro desse espaço, mas não preencher lacunas
-    com detalhes concretos não declarados.
+    ``confirmed_facts`` contém somente afirmações que podem virar fatos na fala.
+    ``unknown_facts`` contém dimensões que não podem ser concretizadas.
+    ``allowed_topics`` limita o assunto, mas nunca autoriza preencher lacunas.
     """
 
     source_id = previous_state.node_id or script.first_beat_id
@@ -122,6 +137,7 @@ def build_beat_context(
         target_id=target_id,
     )
 
+    declared_confirmed = _declared_tuple(source, target, "confirmed_facts")
     return BeatContext(
         source_beat_id=source_id,
         target_beat_id=target_id,
@@ -132,8 +148,14 @@ def build_beat_context(
         transition_status=effect.status,
         required_outcomes=effect.required_outcomes,
         forbidden_outcomes=effect.forbidden_outcomes,
-        fact_scope=_fact_scope(source, target),
-        confirmed_facts=_confirmed_facts(turn.state),
+        allowed_topics=_declared_tuple(
+            source,
+            target,
+            "allowed_topics",
+            legacy_field="fact_scope",
+        ),
+        confirmed_facts=tuple(dict.fromkeys((*declared_confirmed, *_state_facts(turn.state)))),
+        unknown_facts=_declared_tuple(source, target, "unknown_facts"),
         max_sentences=int(target.get("max_sentences", 0) or 0),
         max_questions=int(target.get("max_questions", 0) or 0),
         response_boundary=str(target.get("response_boundary", "") or "").strip(),
@@ -162,17 +184,22 @@ def render_beat_context(context: BeatContext) -> str:
     if context.forbidden_outcomes:
         lines.append("- Resultados proibidos nesta resposta:")
         lines.extend(f"  - {item}" for item in context.forbidden_outcomes)
-    if context.fact_scope:
-        lines.append("- Escopo factual permitido:")
-        lines.extend(f"  - {item}" for item in context.fact_scope)
+
+    lines.append("- FATOS CONFIRMADOS — podem ser afirmados:")
     if context.confirmed_facts:
-        lines.append("- Fatos confirmados pelo estado:")
-        lines.extend(
-            f"  - {key}: {value}"
-            for key, value in sorted(context.confirmed_facts.items())
-        )
+        lines.extend(f"  - {item}" for item in context.confirmed_facts)
     else:
-        lines.append("- Fatos confirmados pelo estado: nenhum fato adicional.")
+        lines.append("  - nenhum fato adicional confirmado")
+
+    lines.append("- FATOS DESCONHECIDOS — não podem ser concretizados:")
+    if context.unknown_facts:
+        lines.extend(f"  - {item}" for item in context.unknown_facts)
+    else:
+        lines.append("  - nenhum declarado")
+
+    if context.allowed_topics:
+        lines.append("- ASSUNTOS PERMITIDOS — delimitam o tema, não criam fatos:")
+        lines.extend(f"  - {item}" for item in context.allowed_topics)
     if context.max_sentences:
         lines.append(f"- Máximo de frases: {context.max_sentences}")
     if context.max_questions:
@@ -181,9 +208,10 @@ def render_beat_context(context: BeatContext) -> str:
         lines.append(f"- Limite de resposta: {context.response_boundary}")
     lines.extend(
         (
+            "- Qualquer concretização de um FATO DESCONHECIDO é invenção factual e deve ser rejeitada.",
+            "- Um ASSUNTO PERMITIDO não autoriza criar causa, quantidade, objeto, roupa, risco, distância, localização ou condição específica.",
             "- Não presuma aceite, recusa ou qualquer decisão que o usuário não tenha declarado explicitamente.",
             "- Não avance para outro beat, local ou acontecimento sem autorização da decisão de transição.",
-            "- O escopo factual autoriza apenas os assuntos listados; não autoriza inventar causas, quantidades, objetos, roupas, riscos, distâncias ou condições específicas.",
             "- Não transforme hipótese, humor ou detalhe plausível em fato narrativo.",
             "- Não antecipe acontecimentos, locais ou decisões de beats posteriores.",
             "- A referência semântica orienta o sentido; não a repita mecanicamente.",
