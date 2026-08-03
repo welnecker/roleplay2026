@@ -4,15 +4,17 @@ from dataclasses import replace
 
 from services import editorial_progression_support as _support
 from services.editorial_declared_decisions import decide_declared_special_turn
+from services.editorial_message_policy import classify_contextual_editorial_message
+from services.editorial_response_policy import clean_editorial_progression_response
 from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
 
 
 render_automatic_followup_text = _support.render_automatic_followup_text
 prepare_supermarket_script_v2 = _support.prepare_supermarket_script_v2
-classify_contextual_user_message = _support.classify_contextual_user_message
+classify_contextual_user_message = classify_contextual_editorial_message
 automatic_followups_after = _support.automatic_followups_after
 state_after_automatic_followup = _support.state_after_automatic_followup
-clean_supermarket_script_v2_response = _support.clean_supermarket_script_v2_response
+clean_supermarket_script_v2_response = clean_editorial_progression_response
 
 
 def decide_supermarket_script_v2_turn(
