@@ -2,6 +2,12 @@ format_version: 1
 package_id: roleplay2026.casada_frustrada
 patch_beats:
   reencontro_fila_007:
+    fact_scope:
+      - Mary está no caixa do supermercado com suas compras
+      - há um carrinho de compras
+      - Mary quer ajuda para levar as compras até o carro
+      - a localização, o conteúdo e o peso das compras não estão confirmados
+      - roupas, calçados, esforço físico, risco e urgência não estão confirmados
     intent_classifiers:
       - intent: accept
         patterns:
@@ -73,7 +79,7 @@ patch_beats:
             - manter o pedido de ajuda aberto
             - solicitar uma decisão explícita
           forbidden_outcomes:
-            - inventar motivo, compras, risco ou localização do carro
+            - inventar causa específica, quantidade, peso, conteúdo das compras, roupa, calçado, risco ou urgência
             - presumir aceite
             - avançar para o estacionamento
             - encerrar o encontro
