@@ -4,13 +4,8 @@ from dataclasses import replace
 import re
 from typing import Any, Literal
 
-from services.editorial_runtime_impl import (
-    PilotScript,
-    PilotState,
-    PilotTurn,
-    classify_user_message,
-    decide_turn,
-)
+from services.editorial_runtime_impl import classify_user_message, decide_turn
+from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
 UserIntent = Literal["accept", "refuse", "postpone", "question", "unclear"]
 SUPERMARKET_PILOT_VERSION = "1.1.0-memory-yard"
@@ -89,7 +84,7 @@ def apply_supermarket_document_overrides(document: dict[str, Any]) -> dict[str, 
     return document
 
 
-def prepare_supermarket_script(script: PilotScript) -> PilotScript:
+def prepare_supermarket_script(script: EditorialScript) -> EditorialScript:
     farewell = script.beats.get("encontro_acidental_004")
     if farewell:
         farewell["objective"] = (
@@ -135,7 +130,7 @@ def classify_supermarket_intent(current_beat_id: str, text: str) -> UserIntent:
     return "accept"
 
 
-def _dialogue_anchor(script: PilotScript, beat_id: str) -> str:
+def _dialogue_anchor(script: EditorialScript, beat_id: str) -> str:
     beat = script.beats.get(beat_id) or {}
     for unit in beat.get("units", []) or []:
         if isinstance(unit, dict) and unit.get("kind") == "dialogue":
@@ -144,10 +139,10 @@ def _dialogue_anchor(script: PilotScript, beat_id: str) -> str:
 
 
 def decide_supermarket_turn(
-    script: PilotScript,
-    state: PilotState,
+    script: EditorialScript,
+    state: EditorialState,
     user_text: str,
-) -> PilotTurn:
+) -> EditorialTurn:
     """Decide o pedido de ajuda e encaminha recusas ao pátio, não ao fim abrupto."""
 
     prepare_supermarket_script(script)
@@ -159,7 +154,7 @@ def decide_supermarket_turn(
             target_id = "yard_help_refused_001"
             if target_id not in script.beats:
                 raise KeyError("Pátio de recusa não foi compilado: yard_help_refused_001")
-            updated = PilotState.from_dict(state.to_dict())
+            updated = EditorialState.from_dict(state.to_dict())
             updated.node_id = target_id
             updated.finished = False
             updated.run_status = "active"
@@ -169,7 +164,7 @@ def decide_supermarket_turn(
             updated.facts["_last_user_intent"] = intent
             updated.facts["_scene_location"] = "supermercado_caixa"
             updated.facts["help_to_car"] = "refused"
-            return PilotTurn(
+            return EditorialTurn(
                 engagement=classify_user_message(user_text),
                 target_id=target_id,
                 visible_fallback=_dialogue_anchor(script, target_id),
@@ -182,7 +177,7 @@ def decide_supermarket_turn(
             )
 
         if intent in {"question", "postpone", "unclear"}:
-            updated = PilotState.from_dict(state.to_dict())
+            updated = EditorialState.from_dict(state.to_dict())
             updated.node_id = current_id
             updated.pending_next_beat_id = ""
             updated.interstitial_turns = 0
@@ -193,7 +188,7 @@ def decide_supermarket_turn(
                 if intent == "question"
                 else "Sem pressa... você consegue me esperar e ajudar até o carro?"
             )
-            return PilotTurn(
+            return EditorialTurn(
                 engagement=classify_user_message(user_text),
                 target_id=current_id,
                 visible_fallback=fallback,
@@ -208,7 +203,7 @@ def decide_supermarket_turn(
             )
 
     turn = decide_turn(script, state, user_text)
-    updated = PilotState.from_dict(turn.state.to_dict())
+    updated = EditorialState.from_dict(turn.state.to_dict())
     updated.facts["_last_user_intent"] = intent
     updated.facts["_scene_location"] = _SUPERMARKET_LOCATIONS.get(
         turn.target_id,
