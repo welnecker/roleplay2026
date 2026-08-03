@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-import re
 from typing import Any
 
 import services.pilot_supermarket as pilot_supermarket_module
@@ -18,7 +17,7 @@ from services.pilot_supermarket import (
 from services.supermarket_intent_pilot import classify_supermarket_intent
 
 
-_AUTOMATIC_FOLLOWUPS: dict[str, tuple[dict[str, str], ...]] = {}
+_AUTOMATIC_FOLLOWUPS: dict[str, tuple[dict[str, Any], ...]] = {}
 _SEXUAL_CONTEXT_TERMS = (
     "chupa", "chupar", "fode", "foder", "goza", "gozar", "gostosa", "gostoso",
     "delícia", "delicia", "tesão", "tesao", "pau", "rola", "xoxota", "buceta",
@@ -28,11 +27,50 @@ _DIRECT_ABUSE_PATTERNS = (
     "você é uma vadia", "voce e uma vadia", "sua vadia", "você é vagabunda",
     "voce e vagabunda", "sua vagabunda",
 )
-_STRICT_MOTEL_BEAT = re.compile(r"^motel_\d+$")
 
 
-def _is_strict_motel_beat(beat_id: str) -> bool:
-    return bool(_STRICT_MOTEL_BEAT.fullmatch(str(beat_id or "").strip()))
+def _organic_policy(script: PilotScript) -> dict[str, Any]:
+    policy = script.raw.get("organic_slack") or {}
+    return policy if isinstance(policy, dict) else {}
+
+
+def _strict_canonical_policy(script: PilotScript) -> dict[str, Any]:
+    policy = _organic_policy(script).get("strict_canonical") or {}
+    return policy if isinstance(policy, dict) else {}
+
+
+def _is_strict_canonical_beat(script: PilotScript, beat_id: str) -> bool:
+    clean = str(beat_id or "").strip()
+    policy = _strict_canonical_policy(script)
+    beat_ids = {
+        str(item).strip()
+        for item in policy.get("beat_ids", []) or []
+        if str(item).strip()
+    }
+    prefixes = tuple(
+        str(item).strip()
+        for item in policy.get("beat_prefixes", []) or []
+        if str(item).strip()
+    )
+    return clean in beat_ids or any(clean.startswith(prefix) for prefix in prefixes)
+
+
+def _excluded_from_organic_slack(script: PilotScript, beat_id: str) -> bool:
+    excluded = {
+        str(item).strip()
+        for item in _organic_policy(script).get("excluded_beats", []) or []
+        if str(item).strip()
+    }
+    return str(beat_id or "").strip() in excluded
+
+
+def _character_name(script: PilotScript) -> str:
+    character = script.raw.get("character") or {}
+    if isinstance(character, dict):
+        name = str(character.get("name", "") or "").strip()
+        if name:
+            return name
+    return "A personagem"
 
 
 def _humanize_scene_location(value: str) -> str:
@@ -49,7 +87,7 @@ def _transition_metadata(item: dict[str, Any]) -> tuple[str, str]:
     return time_label, location_label
 
 
-def render_automatic_followup_text(followup: dict[str, str]) -> str:
+def render_automatic_followup_text(followup: dict[str, Any]) -> str:
     text = str(followup.get("text", "") or "").strip()
     heading = " — ".join(
         part for part in (
@@ -60,8 +98,35 @@ def render_automatic_followup_text(followup: dict[str, str]) -> str:
     return f"[{heading.upper()}]\n\n{text}" if heading else text
 
 
+def _declared_followup_state_updates(
+    script: PilotScript,
+    target_id: str,
+) -> dict[str, str]:
+    policy = _organic_policy(script).get("state_updates") or {}
+    if not isinstance(policy, dict):
+        return {}
+    rules = policy.get("automatic_followups") or []
+    if not isinstance(rules, list):
+        raise ValueError("state_updates.automatic_followups deve ser uma lista.")
+
+    updates: dict[str, str] = {}
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        exact = str(rule.get("target_id", "") or "").strip()
+        prefix = str(rule.get("target_prefix", "") or "").strip()
+        matches = (exact and target_id == exact) or (prefix and target_id.startswith(prefix))
+        if not matches:
+            continue
+        facts = rule.get("facts") or {}
+        if not isinstance(facts, dict):
+            raise ValueError("state_updates facts deve ser um mapa.")
+        updates.update({str(key): str(value) for key, value in facts.items()})
+    return updates
+
+
 def _register_automatic_followups(script: PilotScript) -> None:
-    registered: dict[str, tuple[dict[str, str], ...]] = {}
+    registered: dict[str, tuple[dict[str, Any], ...]] = {}
     for block in script.raw.get("blocks", []):
         if not isinstance(block, dict):
             continue
@@ -69,7 +134,7 @@ def _register_automatic_followups(script: PilotScript) -> None:
             if not isinstance(beat, dict):
                 continue
             beat_id = str(beat.get("beat_id", ""))
-            followups: list[dict[str, str]] = []
+            followups: list[dict[str, Any]] = []
             for item in beat.get("automatic_followups", []) or []:
                 if not isinstance(item, dict):
                     continue
@@ -78,12 +143,13 @@ def _register_automatic_followups(script: PilotScript) -> None:
                 if not target_id or not raw_text:
                     raise ValueError(f"Ponte automática inválida no beat {beat_id!r}.")
                 time_label, location_label = _transition_metadata(item)
-                followup = {
+                followup: dict[str, Any] = {
                     "target_id": target_id,
                     "text": raw_text,
                     "scene_location": str(item.get("scene_location", "")).strip(),
                     "transition_time": time_label,
                     "transition_location": location_label,
+                    "state_updates": _declared_followup_state_updates(script, target_id),
                 }
                 followup["text"] = render_automatic_followup_text(followup)
                 followups.append(followup)
@@ -132,18 +198,23 @@ def _finalize_turn(script: PilotScript, turn: PilotTurn) -> PilotTurn:
     updated.facts["_active_memory_ids"] = ",".join(dict.fromkeys([*previous_ids, *writes]))
     updated.facts["_pending_memory_writes"] = ",".join(writes)
 
-    strict_motel = _is_strict_motel_beat(turn.target_id)
+    strict = _is_strict_canonical_beat(script, turn.target_id)
+    strict_policy = _strict_canonical_policy(script)
+    state_fact = str(strict_policy.get("state_fact", "") or "").strip()
     updated.facts["_force_fixed_response"] = "false"
-    updated.facts["_strict_motel_canonical"] = "true" if strict_motel else "false"
+    if state_fact:
+        updated.facts[state_fact] = "true" if strict else "false"
 
     prompt = turn.system_prompt
-    if strict_motel:
+    if strict:
+        title = str(strict_policy.get("prompt_title", "") or "").strip()
+        title = title or "CONTINUIDADE CANÔNICA ESTRITA"
         prompt = (
-            f"{prompt}\n\nCONTINUIDADE ESTRITA DO MOTEL:\n"
+            f"{prompt}\n\n{title}:\n"
             "- Responda primeiro ao conteúdo específico do usuário em uma ou duas frases curtas e naturais.\n"
             "- Em seguida, entregue a linha canônica do movimento atual, preservando integralmente seu sentido e sua ação.\n"
             "- A reação e a linha canônica devem formar uma única fala contínua.\n"
-            "- Não antecipe nenhuma ação, posição, penetração, orgasmo, despedida ou acontecimento de beats posteriores.\n"
+            "- Não antecipe ações, mudanças de cena, encerramentos ou acontecimentos de beats posteriores.\n"
             "- Não acrescente nada depois da linha canônica.\n"
             "- Não abra uma nova pergunta além da que já existir na própria linha canônica."
         )
@@ -226,8 +297,6 @@ def _routing_state_for_declared_skips(
     routed.pending_next_beat_id = final_target
     routed.facts["_declared_skip_applied"] = ",".join(skipped)
 
-    # Itera sobre uma fotografia estável porque as marcações de reconhecimento
-    # são adicionadas ao mesmo dicionário durante este processamento.
     for fact_name, value in list(routed.facts.items()):
         if fact_name.startswith("_") or original_facts.get(fact_name) == value:
             continue
@@ -236,15 +305,14 @@ def _routing_state_for_declared_skips(
 
 
 def _organic_slack_enabled(script: PilotScript) -> bool:
-    raw = script.raw.get("organic_slack") or {}
-    return isinstance(raw, dict) and bool(raw.get("enabled", False))
+    return bool(_organic_policy(script).get("enabled", False))
 
 
 def _organic_slack_turn(script: PilotScript, state: PilotState, user_text: str) -> PilotTurn | None:
     if not _organic_slack_enabled(script) or state.pending_next_beat_id or state.interstitial_turns >= 1:
         return None
     current_id = state.node_id or script.first_beat_id
-    if current_id == "reencontro_fila_007" or _is_strict_motel_beat(current_id):
+    if _excluded_from_organic_slack(script, current_id) or _is_strict_canonical_beat(script, current_id):
         return None
     signal = detect_organic_signal(user_text, state.facts)
     if signal is None or signal.kind != "free_reaction":
@@ -262,7 +330,7 @@ def _organic_slack_turn(script: PilotScript, state: PilotState, user_text: str) 
     updated.pending_next_beat_id = next_id
     updated.interstitial_turns = 1
     prompt = (
-        "Você é Mary. Este é um TURNO ORGÂNICO INTERMEDIÁRIO.\n"
+        f"Você é {_character_name(script)}. Este é um TURNO ORGÂNICO INTERMEDIÁRIO.\n"
         "Responda somente ao que o usuário acabou de dizer, com liberdade emocional e continuidade.\n"
         "Permaneça no mesmo local, momento e eixo narrativo.\n"
         "Não execute, não cite, não parafraseie e não misture a próxima linha canônica.\n"
@@ -357,11 +425,11 @@ def decide_supermarket_script_v2_turn(
     return _finalize_turn(script, replace(turn, state=updated))
 
 
-def automatic_followups_after(target_id: str) -> tuple[dict[str, str], ...]:
+def automatic_followups_after(target_id: str) -> tuple[dict[str, Any], ...]:
     return _AUTOMATIC_FOLLOWUPS.get(str(target_id), ())
 
 
-def state_after_automatic_followup(state: PilotState, followup: dict[str, str]) -> PilotState:
+def state_after_automatic_followup(state: PilotState, followup: dict[str, Any]) -> PilotState:
     updated = PilotState.from_dict(state.to_dict())
     updated.node_id = str(followup["target_id"])
     updated.pending_next_beat_id = ""
@@ -370,11 +438,11 @@ def state_after_automatic_followup(state: PilotState, followup: dict[str, str]) 
     location = str(followup.get("scene_location", ""))
     if location:
         updated.facts["_scene_location"] = location
-    if updated.node_id.startswith("retorno_casa_"):
-        updated.facts["alfredinho_has_voice"] = "false"
-    if updated.node_id == "mensagens_iniciais_001":
-        updated.facts["active_interlocutor"] = "janio"
-        updated.facts["alfredinho_has_voice"] = "false"
+
+    state_updates = followup.get("state_updates") or {}
+    if not isinstance(state_updates, dict):
+        raise ValueError("state_updates da ponte automática deve ser um mapa.")
+    updated.facts.update({str(key): str(value) for key, value in state_updates.items()})
     return updated
 
 
