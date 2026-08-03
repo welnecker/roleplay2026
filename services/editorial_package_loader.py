@@ -10,9 +10,9 @@ import yaml
 
 from packages.models import InstalledStoryPackage
 from services.editorial_compiler import compile_editorial_document
+from services.editorial_progression import prepare_editorial_script
+from services.editorial_runtime import EditorialScript
 from services.narrative_context import validate_memory_references, validate_terminal_yards
-from services.pilot_supermarket import PilotScript
-from services.supermarket_script_v2 import prepare_supermarket_script_v2
 
 
 class EditorialPackageError(RuntimeError):
@@ -199,9 +199,9 @@ def load_editorial_document(package: InstalledStoryPackage) -> dict[str, Any]:
     return document
 
 
-def compile_editorial_package(package: InstalledStoryPackage) -> PilotScript:
+def compile_editorial_package(package: InstalledStoryPackage) -> EditorialScript:
     document = load_editorial_document(package)
-    return prepare_supermarket_script_v2(PilotScript(compile_editorial_document(document)))
+    return prepare_editorial_script(EditorialScript(compile_editorial_document(document)))
 
 
 def editorial_story_start(package: InstalledStoryPackage) -> tuple[str, str, str]:
