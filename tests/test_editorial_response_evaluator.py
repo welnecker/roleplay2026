@@ -81,6 +81,14 @@ def test_prompt_semantico_exige_auditoria_de_desconhecidos() -> None:
     assert "um único objeto JSON" in prompt
 
 
+def test_prompt_semantico_nao_confunde_ato_de_fala_com_novo_fato() -> None:
+    prompt = build_semantic_evaluation_prompt(_context())
+
+    assert "Pedidos, perguntas, saudações" in prompt
+    assert "não são por si só novos fatos narrativos" in prompt
+    assert "reformulou linguisticamente um FATO CONFIRMADO" in prompt
+
+
 def test_avaliacao_semantica_exige_json_puro_e_valido() -> None:
     prose = parse_semantic_evaluation("A resposta está boa.")
     fenced = parse_semantic_evaluation('```json\n{"valid": true, "violations": []}\n```')
@@ -123,5 +131,17 @@ def test_regeneracao_recebe_motivos_objetivos() -> None:
     assert "Contrato base." in prompt
     assert "failed_to_request_explicit_decision" in prompt
     assert "anticipated_future_beat" in prompt
-    assert "não acrescente fatos" in prompt
     assert "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS" in prompt
+
+
+def test_regeneracao_restringe_fatos_sem_proibir_fala_natural() -> None:
+    prompt = build_regeneration_prompt(
+        base_prompt="Contrato base.",
+        violations=("invented_unconfirmed_detail",),
+    )
+
+    assert "atos de fala exigidos pelo contrato" in prompt
+    assert "use exclusivamente proposições presentes em FATOS CONFIRMADOS" in prompt
+    assert "Pedidos, perguntas e cortesia são permitidos" in prompt
+    assert "não podem embutir novos fatos" in prompt
+    assert "não explique a lacuna" in prompt
