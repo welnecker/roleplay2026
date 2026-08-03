@@ -77,6 +77,8 @@ def _compile_declared_rule(raw: Any, index: int) -> TransitionRule:
                 field_name="effects.relationship",
             ),
         ),
+        prompt=str(raw.get("prompt", "") or "").strip(),
+        fallback=str(raw.get("fallback", "") or "").strip(),
     )
 
 
@@ -181,5 +183,7 @@ def evaluate_transition_rules(
             target_beat_id=current_beat_id if rule.stay else rule.next_beat_id,
             stay=rule.stay,
             effects=rule.effects,
+            prompt=rule.prompt,
+            fallback=rule.fallback,
         )
     return None

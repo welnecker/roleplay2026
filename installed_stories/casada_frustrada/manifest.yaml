@@ -15,6 +15,7 @@ runtime:
       - content/extensions/story.yaml
       - content/extensions/fixes.yaml
       - content/extensions/guardrails.yaml
+      - content/extensions/transitions.yaml
       - content/extensions/runtime.yaml
 card:
   title: Casada frustrada
