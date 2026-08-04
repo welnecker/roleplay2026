@@ -73,6 +73,44 @@ def test_confirmacao_da_quimica_executa_carencia_uma_unica_vez() -> None:
     assert turn.visible_fallback.casefold().count("carente") == 1
 
 
+def test_bloco_da_chamada_de_video_nao_cria_pontes_semanticas() -> None:
+    script = _script()
+
+    for number in range(1, 26):
+        beat_id = f"video_{number:03d}"
+        assert script.beats[beat_id]["response_boundary"] == "integrated_canonical"
+
+
+def test_confirmacao_do_enquadramento_executa_elogio_uma_unica_vez() -> None:
+    script = _script()
+    state = PilotState(
+        node_id="video_002",
+        interest=5,
+        desire=3,
+        patience=4,
+        facts={
+            "active_interlocutor": "janio",
+            "user_name": "Janio",
+            "first_video_call": "true",
+        },
+    )
+
+    turn = decide_editorial_progression_turn(
+        script,
+        state,
+        "Tô vendo você inteira... linda!",
+    )
+
+    assert turn.finished is False
+    assert turn.target_id == "video_003"
+    assert turn.state.node_id == "video_003"
+    assert turn.state.pending_next_beat_id == ""
+    assert turn.state.facts.get("_runtime_phase") != "bridge"
+    assert "PONTE NARRATIVA" not in turn.system_prompt
+    assert "gato" in turn.visible_fallback.casefold()
+    assert turn.visible_fallback.casefold().count("gato") == 1
+
+
 def test_continuacao_executavel_segue_ate_a_historia_completa() -> None:
     script = _script()
 
