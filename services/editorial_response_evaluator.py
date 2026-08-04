@@ -54,8 +54,8 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
 )
 _VIOLATION_GUIDANCE = {
     "invented_unconfirmed_detail": (
-        "Remova apenas o trecho realmente não autorizado, especialmente peso, quantidade, roupa, risco, esforço, urgência. "
-        "Preserve todo conteúdo respaldado pela linha canônica, pelos fatos confirmados ou pelos resultados obrigatórios."
+        "Não trate metáfora, flerte, humor, duplo sentido ou improviso plausível como fato novo. "
+        "Corrija apenas contradições, ações presumidas do usuário ou avanço indevido do roteiro."
     ),
     "contradicted_confirmed_fact": "Reescreva sem contradizer nenhum fato confirmado.",
     "failed_required_outcome": "Realize todos os resultados obrigatórios de modo direto e breve.",
@@ -67,7 +67,7 @@ _VIOLATION_GUIDANCE = {
     "failed_to_request_explicit_decision": "Ao final, peça uma decisão explícita sem pressão.",
     "treated_postpone_as_refusal": "Reconheça o adiamento sem convertê-lo em recusa.",
     "treated_question_as_acceptance": "Trate a pergunta como pedido de esclarecimento, não como aceite.",
-    "character_voice_broken": "Preserve a voz natural da personagem sem acrescentar fatos.",
+    "character_voice_broken": "Preserve a voz natural da personagem.",
     "max_sentences_exceeded": "Reduza a fala visível ao máximo de frases definido no contrato.",
     "max_questions_exceeded": (
         "Use no máximo uma pergunta total. Transforme comentários como 'hein?' em afirmações, "
@@ -105,20 +105,6 @@ def _normalized(value: str) -> str:
     return " ".join(re.findall(r"\w+", str(value or "").casefold(), flags=re.UNICODE))
 
 
-def _evidence_is_authorized(evidence: str, context: BeatContext) -> bool:
-    needle = _normalized(evidence)
-    if not needle:
-        return False
-    authorized = (
-        context.canonical_line,
-        context.objective,
-        context.dramatic_direction,
-        *context.confirmed_facts,
-        *context.required_outcomes,
-    )
-    return any(needle in _normalized(item) for item in authorized if str(item).strip())
-
-
 def _context_allows_violation(code: str, context: BeatContext | None) -> bool:
     if context is None:
         return True
@@ -127,6 +113,11 @@ def _context_allows_violation(code: str, context: BeatContext | None) -> bool:
     forbidden = " ".join(context.forbidden_outcomes).casefold()
     pending = context.transition_status == "decision_pending"
 
+    if code == "invented_unconfirmed_detail":
+        # Esta acusação ampla não participa mais da aprovação. O roteiro continua
+        # protegido por contradição factual, decisão presumida, resultado proibido
+        # e antecipação de beat, sem censurar linguagem figurada ou improviso vivo.
+        return False
     if code == "failed_to_answer_user_question":
         return context.user_intent == "question" or (
             "responder" in required and "pergunta" in required
@@ -197,18 +188,14 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
             "Você é um avaliador editorial estrito. Não reescreva a resposta.",
             "Avalie somente se a candidata obedece integralmente ao contrato narrativo.",
             "Faça uma auditoria factual: compare cada afirmação concreta da candidata com o conteúdo autorizado pelo contrato.",
-            "ORDEM DE PRECEDÊNCIA OBRIGATÓRIA:",
-            "1. Conteúdo respaldado pela REFERÊNCIA SEMÂNTICA, FATOS CONFIRMADOS, MOVIMENTO OBRIGATÓRIO ou RESULTADOS OBRIGATÓRIOS está autorizado.",
-            "2. FATOS DESCONHECIDOS proíbem apenas detalhes adicionais que não estejam autorizados no item 1.",
-            "3. Uma proibição genérica nunca anula uma autorização explícita do contrato.",
-            "Faça uma auditoria factual por trechos concretos, não por impressão geral.",
-            "Para cada violação, cite em evidence o menor trecho literal da candidata que demonstra o erro.",
-            "Não marque invented_unconfirmed_detail quando o trecho reproduzir ou parafrasear conteúdo explicitamente autorizado pela referência semântica.",
+            "Não rejeite metáfora, flerte, humor, duplo sentido, opinião, reação emocional ou improviso plausível apenas por não aparecer literalmente no roteiro.",
+            "A infração invented_unconfirmed_detail é informativa e não bloqueia a resposta.",
+            "Concentre a rejeição em contradição de fatos confirmados, ação ou decisão presumida do usuário, resultado proibido e antecipação de beat.",
+            "Para cada violação bloqueante, cite em evidence o menor trecho literal da candidata que demonstra o erro.",
             "Só marque failed_to_answer_user_question quando a intenção detectada for question ou quando responder à pergunta estiver nos resultados obrigatórios.",
             "Só marque presumed_user_decision ou closed_pending_route quando a transição estiver pendente.",
-            "Expressões como 'ali fora', 'no estacionamento', 'está pesado' ou 'por causa do salto' são invenções somente quando não estiverem autorizadas pelo contrato.",
             "Responda exclusivamente com um único objeto JSON válido, sem markdown e sem comentário:",
-            '{"valid": false, "violations": [{"code": "invented_unconfirmed_detail", "evidence": "trecho literal"}]}',
+            '{"valid": false, "violations": [{"code": "anticipated_future_beat", "evidence": "trecho literal"}]}',
             "Quando estiver válida, responda: {\"valid\": true, \"violations\": []}",
             f"Identificadores permitidos em code: {allowed}",
             render_beat_context(context),
@@ -279,15 +266,7 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
             violations.append("semantic_evaluator_invalid_violations")
             continue
         if not _context_allows_violation(code, context):
-            discarded.append({"code": code, "reason": "incompatible_with_context"})
-            continue
-        if (
-            code == "invented_unconfirmed_detail"
-            and evidence
-            and context is not None
-            and _evidence_is_authorized(evidence, context)
-        ):
-            discarded.append({"code": code, "reason": "explicitly_authorized", "evidence": evidence})
+            discarded.append({"code": code, "reason": "non_blocking_or_incompatible_with_context"})
             continue
         violations.append(code)
 
@@ -296,8 +275,6 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
     if declared_valid and unique:
         result = ResponseEvaluation(False, unique)
     elif not declared_valid and not unique:
-        # Todas as acusações foram incompatíveis com o contrato; a candidata não pode ser
-        # rejeitada apenas pela conclusão textual do avaliador.
         result = ResponseEvaluation(True, ())
     elif not declared_valid:
         result = ResponseEvaluation(False, unique)
@@ -360,10 +337,10 @@ def build_regeneration_prompt(
         "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
         "A resposta anterior foi rejeitada. Reconstrua a fala do zero, em forma mínima e natural.\n"
         "Use somente os fatos confirmados e os resultados obrigatórios do contrato; não acrescente fatos não autorizados.\n"
-        "Preserve tudo o que estiver explicitamente autorizado pelo contrato e remova somente os trechos realmente rejeitados.\n"
-        "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS que não esteja autorizada pela referência semântica ou pelos fatos confirmados.\n"
-        "Quando faltar um fato, formule de modo neutro em vez de completar a lacuna.\n"
-        "Não comente a avaliação e não repita, substitua por sinônimo ou desloque nenhum detalhe rejeitado.\n"
+        "Preserve metáforas, flerte, humor, duplo sentido e reações naturais que não contradigam o roteiro.\n"
+        "Remova somente contradições, ações ou decisões presumidas do usuário, resultados proibidos e antecipações de beat.\n"
+        "Quando faltar um fato necessário, formule de modo neutro em vez de completar a lacuna.\n"
+        "Não comente a avaliação e não repita nenhum detalhe realmente rejeitado.\n"
         f"{rejected_block}"
         "MOTIVOS OBJETIVOS DA REJEIÇÃO:\n"
         f"{reasons}\n"
