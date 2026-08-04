@@ -8,7 +8,12 @@ from services.editorial_interaction_context import (
     ResolvedInteractionContext,
     resolve_interaction_context,
 )
-from services.editorial_runtime_types import EditorialScript, EditorialState
+from services.editorial_runtime_types import (
+    EditorialScript,
+    EditorialState,
+    EditorialTurn,
+)
+from services.editorial_terminal_yard import state_for_target, terminal_yards
 
 ContextualRoute = Literal["continue", "terminal_yard", "immediate_ending"]
 
@@ -127,7 +132,6 @@ def parse_contextual_destination(
     except (TypeError, ValueError):
         confidence = 0.0
     confidence = max(0.0, min(1.0, confidence))
-    # Destinos terminais exigem confiança explícita. Na dúvida, preserva a run.
     if typed_route != "continue" and confidence < 0.70:
         return ContextualDestination(
             route="continue",
@@ -155,6 +159,22 @@ def state_with_contextual_destination(
     return updated
 
 
+def destination_from_state(state: EditorialState) -> ContextualDestination:
+    route = str(state.facts.get("_contextual_route", "continue") or "continue")
+    if route not in {"continue", "terminal_yard", "immediate_ending"}:
+        route = "continue"
+    try:
+        confidence = float(state.facts.get("_contextual_confidence", "0") or 0.0)
+    except ValueError:
+        confidence = 0.0
+    return ContextualDestination(
+        route=route,  # type: ignore[arg-type]
+        signal=str(state.facts.get("_contextual_signal", "") or ""),
+        reason=str(state.facts.get("_contextual_reason", "") or ""),
+        confidence=max(0.0, min(1.0, confidence)),
+    )
+
+
 def contextual_target(
     context: ResolvedInteractionContext,
     destination: ContextualDestination,
@@ -166,6 +186,108 @@ def contextual_target(
     return ""
 
 
+def _dialogue_data(beat: Mapping[str, Any]) -> tuple[str, str]:
+    for unit in beat.get("units", []) or []:
+        if isinstance(unit, Mapping) and str(unit.get("kind", "")) == "dialogue":
+            return (
+                str(unit.get("anchor") or unit.get("text") or "").strip(),
+                str(unit.get("instruction") or "").strip(),
+            )
+    return "", ""
+
+
+def _clear_destination_facts(state: EditorialState) -> None:
+    for key in (
+        "_contextual_route",
+        "_contextual_signal",
+        "_contextual_reason",
+        "_contextual_confidence",
+    ):
+        state.facts.pop(key, None)
+
+
+def decide_contextual_destination_turn(
+    script: EditorialScript,
+    state: EditorialState,
+    user_text: str,
+) -> EditorialTurn | None:
+    """Aplica somente destinos validados e declarados pelo card."""
+
+    destination = destination_from_state(state)
+    if destination.route == "continue":
+        return None
+    context = current_interaction_context(script, state)
+    target_id = contextual_target(context, destination)
+    if not target_id:
+        raise RuntimeError(
+            f"Rota contextual {destination.route!r} não possui destino declarado no contexto atual."
+        )
+
+    updated = EditorialState.from_dict(state.to_dict())
+    _clear_destination_facts(updated)
+    updated.pending_next_beat_id = ""
+    updated.interstitial_turns = 0
+
+    if destination.route == "immediate_ending":
+        ending = script.endings.get(target_id)
+        if ending is None:
+            raise RuntimeError(f"Encerramento contextual inexistente: {target_id!r}")
+        updated.node_id = target_id
+        updated.finished = True
+        updated.run_status = str(ending.get("run_status", "terminated") or "terminated")
+        updated.ending_code = str(ending.get("ending_code", target_id) or target_id)
+        updated = state_for_target(script, updated, target_id)
+        fallback = str((ending.get("visible_delivery") or {}).get("text", "") or "").strip()
+        prompt = (
+            "Você é a personagem do card. Encerre imediatamente a interação, sem convite para continuar.\n"
+            f"FALA DO USUÁRIO: {user_text}\n"
+            f"RUPTURA DETECTADA: {destination.signal}\n"
+            f"REFERÊNCIA DE VOZ: {fallback}"
+        )
+        return EditorialTurn(
+            engagement="hostile",
+            target_id=target_id,
+            visible_fallback=fallback,
+            system_prompt=prompt,
+            state=updated,
+            finished=True,
+            run_status=updated.run_status,
+            ending_code=updated.ending_code,
+        )
+
+    beat = script.beats.get(target_id)
+    if beat is None:
+        raise RuntimeError(f"Entrada de pátio contextual inexistente: {target_id!r}")
+    yard_id = str(beat.get("terminal_yard_id", "") or "").strip()
+    definition = terminal_yards(script).get(yard_id)
+    if not yard_id or not isinstance(definition, dict):
+        raise RuntimeError(f"Destino contextual não pertence a um pátio terminal: {target_id!r}")
+    if str(definition.get("entry_beat_id", "") or "") != target_id:
+        raise RuntimeError(
+            f"Destino contextual deve apontar para a entrada do pátio {yard_id!r}: {target_id!r}"
+        )
+
+    fallback, instruction = _dialogue_data(beat)
+    updated.node_id = target_id
+    updated = state_for_target(script, updated, target_id)
+    prompt = (
+        "Você é a personagem do card. A fala do usuário provocou uma ruptura terminal neste estágio da relação.\n"
+        "Inicie o pátio de encerramento. Não volte ao fluxo principal e não premie a ruptura com intimidade.\n"
+        f"FALA DO USUÁRIO: {user_text}\n"
+        f"RUPTURA DETECTADA: {destination.signal}\n"
+        f"MOVIMENTO DO PÁTIO: {beat.get('objective', '')}\n"
+        f"DIREÇÃO: {instruction}\n"
+        f"REFERÊNCIA DE VOZ: {fallback}"
+    )
+    return EditorialTurn(
+        engagement="engaged",
+        target_id=target_id,
+        visible_fallback=fallback,
+        system_prompt=prompt,
+        state=updated,
+    )
+
+
 __all__ = [
     "ContextualDestination",
     "ContextualRoute",
@@ -174,6 +296,8 @@ __all__ = [
     "contextual_classification_required",
     "contextual_target",
     "current_interaction_context",
+    "decide_contextual_destination_turn",
+    "destination_from_state",
     "parse_contextual_destination",
     "state_with_contextual_destination",
 ]
