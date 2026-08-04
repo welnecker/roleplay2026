@@ -12,6 +12,17 @@ _ACTIVE_SCRIPT: ContextVar[EditorialScript | None] = ContextVar(
 )
 
 
+def activate_editorial_followups(script: EditorialScript) -> EditorialScript:
+    """Vincula o roteiro ao contexto do turno atual.
+
+    O Streamlit pode devolver o roteiro pelo cache sem executar novamente a etapa
+    de preparação. Por isso, a ativação precisa ocorrer em cada decisão de turno.
+    """
+
+    _ACTIVE_SCRIPT.set(script)
+    return script
+
+
 def _runtime_policy(script: EditorialScript) -> dict[str, Any]:
     direct = script.raw.get("runtime_policy") or {}
     if isinstance(direct, dict) and direct:
@@ -103,8 +114,7 @@ def prepare_editorial_followups(script: EditorialScript) -> EditorialScript:
                 registered[beat_id] = tuple(followups)
 
     script.editorial_followups = registered
-    _ACTIVE_SCRIPT.set(script)
-    return script
+    return activate_editorial_followups(script)
 
 
 def editorial_followups_after(
@@ -112,11 +122,7 @@ def editorial_followups_after(
     *,
     script: EditorialScript | None = None,
 ) -> tuple[dict[str, Any], ...]:
-    """Retorna follow-ups do roteiro informado, sem depender do contexto do cache.
-
-    O fallback contextual permanece apenas para chamadas legadas e testes antigos.
-    O player deve sempre fornecer ``script`` explicitamente.
-    """
+    """Retorna follow-ups do roteiro informado ou ativado no turno atual."""
 
     resolved_script = script if script is not None else _ACTIVE_SCRIPT.get()
     if resolved_script is None:
@@ -136,6 +142,13 @@ def state_after_editorial_followup(
     updated.pending_next_beat_id = ""
     updated.interstitial_turns = 0
     updated.facts["_organic_interstitial"] = "false"
+    updated.facts["_runtime_phase"] = "canonical"
+    for key in (
+        "_bridge_origin_beat_id",
+        "_bridge_target_beat_id",
+        "_bridge_turn_count",
+    ):
+        updated.facts.pop(key, None)
     location = str(followup.get("scene_location", ""))
     if location:
         updated.facts["_scene_location"] = location
@@ -148,6 +161,7 @@ def state_after_editorial_followup(
 
 
 __all__ = [
+    "activate_editorial_followups",
     "editorial_followups_after",
     "prepare_editorial_followups",
     "render_editorial_followup_text",
