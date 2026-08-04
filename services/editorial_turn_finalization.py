@@ -9,13 +9,16 @@ from services.editorial_runtime_types import EditorialScript, EditorialState, Ed
 from services.editorial_terminal_yard import state_for_target
 
 
-def _organic_policy(script: EditorialScript) -> dict[str, Any]:
-    policy = script.raw.get("organic_slack") or {}
-    return policy if isinstance(policy, dict) else {}
+def _runtime_policy(script: EditorialScript) -> dict[str, Any]:
+    direct = script.raw.get("runtime_policy") or {}
+    if isinstance(direct, dict) and direct:
+        return direct
+    legacy = script.raw.get("organic_slack") or {}
+    return legacy if isinstance(legacy, dict) else {}
 
 
 def _strict_canonical_policy(script: EditorialScript) -> dict[str, Any]:
-    policy = _organic_policy(script).get("strict_canonical") or {}
+    policy = _runtime_policy(script).get("strict_canonical") or {}
     return policy if isinstance(policy, dict) else {}
 
 
