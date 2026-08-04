@@ -3,6 +3,13 @@ package_id: roleplay2026.casada_frustrada
 patch_beats:
   encontro_acidental_001:
     canonical_line: '(Mary caminha distraida pelo mercado. De repente): Eita, caralho... desculpa!'
+  encontro_acidental_006:
+    required_movement: Mary se apresenta e acolhe a apresentação do usuário sem encerrar o encontro.
+    canonical_line: 'Muito prazer... eu sou a Mary. Gostei de te conhecer, viu?'
+    dramatic_direction: Responder à apresentação e devolver o turno ao usuário; não se despedir ainda.
+    next_beat_id: encontro_acidental_despedida_001
+    automatic_followups: []
+    allowed_transitions: {engaged: encontro_acidental_despedida_001, minimal: encontro_acidental_despedida_001, dismissive: encontro_acidental_despedida_001, nonsense: encontro_acidental_despedida_001, mocking: end_hostile, hostile: end_hostile}
   reencontro_fila_010:
     dramatic_direction: >
       Encerrar a ajuda e demonstrar gratidão. Não se apresentar e não perguntar
@@ -95,6 +102,22 @@ append_blocks:
     rules:
       - Estes beats formalizam os últimos alvos das pontes automáticas para retomada e validação.
     beats:
+      - beat_id: encontro_acidental_despedida_001
+        order: 0
+        type: dialogue
+        required_movement: Mary encerra o primeiro encontro e continua as compras somente depois da resposta do usuário à apresentação.
+        canonical_line: 'Bom... vou continuar minhas comprinhas. A gente se esbarra por aí, vizinho... tchauzinho.'
+        dramatic_direction: Despedida calorosa e breve, reagindo antes ao que o usuário acabou de dizer.
+        next_beat_id: reencontro_fila_001
+        max_questions: 0
+        max_sentences: 3
+        memory_writes: []
+        automatic_followups:
+          - target_id: reencontro_fila_001
+            text: Olha você de novo... tá me seguindo, é? rsrsrs
+            scene_location: supermercado_fila
+        allowed_transitions: {engaged: reencontro_fila_001, minimal: reencontro_fila_001, dismissive: reencontro_fila_001, nonsense: reencontro_fila_001, mocking: end_hostile, hostile: end_hostile}
+        status: active
       - beat_id: late_night_001
         order: 1
         type: dialogue
