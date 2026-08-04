@@ -35,13 +35,6 @@ def _compiled_factual_contract(
     source: dict[str, Any],
     constraints: dict[str, Any],
 ) -> tuple[list[str], list[str], list[str]]:
-    """Produz um contrato factual para qualquer beat sem inventar conteúdo.
-
-    A derivação usa somente campos autorais já presentes no beat. Declarações
-    explícitas ampliam e especializam a base; nunca são descartadas pelos
-    padrões universais.
-    """
-
     required_movement = str(source.get("required_movement", "") or "").strip()
     canonical_line = str(source.get("canonical_line", "") or "").strip()
     dramatic_direction = str(source.get("dramatic_direction", "") or "").strip()
@@ -57,11 +50,7 @@ def _compiled_factual_contract(
         source.get("unknown_facts") or constraints.get("unknown_facts")
     )
 
-    derived_topics = [
-        text
-        for text in (required_movement, dramatic_direction)
-        if text
-    ]
+    derived_topics = [text for text in (required_movement, dramatic_direction) if text]
     derived_confirmed = []
     if required_movement:
         derived_confirmed.append(f"movimento autorizado neste beat: {required_movement}")
@@ -76,23 +65,68 @@ def _compiled_factual_contract(
     return allowed_topics, confirmed_facts, unknown_facts
 
 
+def _ordinary_targets(source: dict[str, Any]) -> set[str]:
+    transitions = dict(source.get("allowed_transitions") or {})
+    next_beat_id = str(source.get("next_beat_id", "") or "").strip()
+    if next_beat_id and not transitions:
+        transitions = {"engaged": next_beat_id}
+    return {
+        str(target).strip()
+        for kind, target in transitions.items()
+        if kind not in {"mocking", "hostile"} and str(target).strip()
+    }
+
+
 def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
-    """Converte o documento editorial em uma cena executável sem alterar o conteúdo."""
+    """Converte o documento editorial em grafo executável preservando seus blocos."""
 
     blocks = [deepcopy(item) for item in document.get("blocks", []) if isinstance(item, dict)]
     if not blocks:
         raise ValueError("O roteiro editorial não contém blocos.")
     blocks.sort(key=lambda item: int(item.get("order", 0) or 0))
 
+    ending_ids = {
+        str(source.get("beat_id", "") or "").strip()
+        for block in blocks
+        for source in block.get("beats", []) or []
+        if isinstance(source, dict) and str(source.get("type", "dialogue")) == "ending"
+    }
+
     beats: list[dict[str, Any]] = []
     endings: list[dict[str, Any]] = []
+    terminal_yards: dict[str, dict[str, Any]] = {}
     seen_ids: set[str] = set()
 
     for block in blocks:
-        for source in sorted(
+        block_id = str(block.get("block_id", "") or "").strip()
+        block_type = str(block.get("block_type", "canonical") or "canonical").strip()
+        ordered_sources = sorted(
             [item for item in block.get("beats", []) if isinstance(item, dict)],
             key=lambda item: int(item.get("order", 0) or 0),
-        ):
+        )
+        dialogue_sources = [
+            item for item in ordered_sources if str(item.get("type", "dialogue")) != "ending"
+        ]
+        dialogue_ids = [str(item.get("beat_id", "") or "").strip() for item in dialogue_sources]
+
+        if block_type == "terminal_yard":
+            yard_endings = sorted(
+                target
+                for source in dialogue_sources
+                for target in _ordinary_targets(source)
+                if target in ending_ids
+            )
+            terminal_yards[block_id] = {
+                "yard_id": block_id,
+                "entry_beat_id": str(block.get("entry_beat_id", "") or "").strip(),
+                "beat_ids": dialogue_ids,
+                "min_user_turns": int(block.get("min_user_turns", 0) or 0),
+                "max_user_turns": int(block.get("max_user_turns", 0) or 0),
+                "ending_ids": list(dict.fromkeys(yard_endings)),
+                "rules": [str(item) for item in block.get("rules", []) or []],
+            }
+
+        for position, source in enumerate(ordered_sources, start=1):
             beat_id = str(source.get("beat_id", "") or "").strip()
             if not beat_id or beat_id in seen_ids:
                 raise ValueError(f"beat_id ausente ou duplicado: {beat_id!r}")
@@ -111,6 +145,8 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                             "text": str(source.get("canonical_line", "")),
                         },
                         "memory_writes": [str(item) for item in source.get("memory_writes", [])],
+                        "block_id": block_id,
+                        "block_type": block_type,
                     }
                 )
                 continue
@@ -157,6 +193,13 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "unknown_facts": unknown_facts,
                     "factual_contract_mode": "explicit+derived",
                     "constraints": constraints,
+                    "block_id": block_id,
+                    "block_type": block_type,
+                    "position_in_block": position,
+                    "block_size": len(dialogue_sources),
+                    "terminal_yard_id": block_id if block_type == "terminal_yard" else "",
+                    "yard_min_user_turns": int(block.get("min_user_turns", 0) or 0),
+                    "yard_max_user_turns": int(block.get("max_user_turns", 0) or 0),
                 }
             )
 
@@ -174,5 +217,6 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
         "first_beat_id": first_beat_id,
         "beats": beats,
         "endings": endings,
+        "terminal_yards": terminal_yards,
     }
     return compiled
