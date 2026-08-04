@@ -9,6 +9,9 @@ _PHASE_KEY = "_runtime_phase"
 _BRIDGE_ORIGIN_KEY = "_bridge_origin_beat_id"
 _BRIDGE_TARGET_KEY = "_bridge_target_beat_id"
 _BRIDGE_TURNS_KEY = "_bridge_turn_count"
+_BRIDGE_FALLBACK = (
+    "Ela reage ao que você disse sem apressar o próximo passo, deixando espaço para você continuar."
+)
 
 
 def bridge_policy(script: EditorialScript) -> dict[str, Any]:
@@ -90,12 +93,7 @@ def _is_structural_destination(script: EditorialScript, target_id: str) -> bool:
 
 
 def _is_resolved_runtime_transition(turn: EditorialTurn) -> bool:
-    """Não cria uma etapa extra quando o runtime já resolveu o destino.
-
-    Decisões explícitas e saltos declarados por fatos não são conversa aberta:
-    inserir uma ponte nesses casos obrigaria o usuário a confirmar novamente uma
-    escolha já registrada ou atrasaria uma regra determinística do próprio card.
-    """
+    """Não cria uma etapa extra quando o runtime já resolveu o destino."""
 
     facts = turn.state.facts
     if str(facts.get("_last_user_explicit_decision", "") or "") == "true":
@@ -165,7 +163,7 @@ def create_bridge_turn(
     return replace(
         proposed_turn,
         target_id=origin_id,
-        visible_fallback=str(proposed_turn.visible_fallback or "").strip(),
+        visible_fallback=_BRIDGE_FALLBACK,
         system_prompt=prompt,
         state=updated,
         finished=False,

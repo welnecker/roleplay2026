@@ -4,13 +4,6 @@ organic_slack:
   enabled: true
   bridge_policy:
     mode: required
-    block_ids:
-      - encontro_acidental
-      - reencontro_fila
-    exclude_block_ids:
-      - yard_help_refused
-      - yard_invasive_approach
-      - motel
   excluded_beats:
     - reencontro_fila_007
   strict_canonical:

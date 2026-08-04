@@ -4,10 +4,7 @@ from services.editorial_compiler import compile_editorial_document
 from services.editorial_content import load_source_document
 from services.narrative_context import build_narrative_context, memory_catalog
 from services.editorial_runtime_impl import PilotScript, PilotState
-from services.editorial_progression import (
-    decide_editorial_progression_turn,
-    prepare_editorial_script,
-)
+from services.editorial_progression import decide_editorial_progression_turn, prepare_editorial_script
 
 
 def _script() -> PilotScript:
@@ -35,7 +32,7 @@ def test_ficha_e_memorias_entram_no_contexto_do_modelo() -> None:
     assert "condomínio Plaza" in context
 
 
-def test_beat_concluido_declara_memoria_pendente_e_prompt_recebe_passado() -> None:
+def test_beat_concluido_declara_memoria_e_prepara_proximo_beat_em_ponte() -> None:
     script = _script()
     state = PilotState(
         node_id="mensagens_iniciais_002",
@@ -47,9 +44,10 @@ def test_beat_concluido_declara_memoria_pendente_e_prompt_recebe_passado() -> No
 
     turn = decide_editorial_progression_turn(script, state, "Pode falar, Mary.")
 
-    assert turn.target_id == "mensagens_iniciais_003"
+    assert turn.target_id == "mensagens_iniciais_002"
+    assert turn.state.pending_next_beat_id == "mensagens_iniciais_003"
+    assert turn.state.facts["_runtime_phase"] == "bridge"
     assert "Mary e Janio se conheceram" in turn.system_prompt
-    assert "Mary iniciou uma conversa privada" in turn.system_prompt
     assert turn.state.facts["_pending_memory_writes"] == "mary_confessed_attraction"
     assert "mary_confessed_attraction" in turn.state.facts["_active_memory_ids"]
 
@@ -87,15 +85,17 @@ def test_aceite_no_caixa_nao_pula_o_movimento_do_carrinho() -> None:
     assert turn.state.facts["help_to_car"] == "accepted"
 
 
-def test_chamada_nao_encerra_e_avanca_para_a_madrugada() -> None:
+def test_chamada_nao_encerra_e_prepara_a_madrugada_em_ponte() -> None:
     script = _script()
     state = PilotState(node_id="video_025")
 
     turn = decide_editorial_progression_turn(script, state, "Boa noite, Mary.")
 
-    assert turn.target_id == "late_night_bridge_001"
+    assert turn.target_id == "video_025"
+    assert turn.state.pending_next_beat_id == "late_night_bridge_001"
+    assert turn.state.facts["_runtime_phase"] == "bridge"
     assert turn.finished is False
-    assert "duas da manhã" in turn.visible_fallback.casefold()
+    assert "duas da manhã" not in turn.visible_fallback.casefold()
 
 
 def test_historia_completa_chega_ao_motel_e_ao_patio_final() -> None:
