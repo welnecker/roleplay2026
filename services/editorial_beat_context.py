@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from services.editorial_engine.models import NarrativeEffect, TransitionRule
+from services.editorial_interaction_context import (
+    ResolvedInteractionContext,
+    resolve_interaction_context,
+)
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
 
@@ -24,6 +28,9 @@ class BeatContext:
     max_sentences: int
     max_questions: int
     response_boundary: str
+    interaction_context: ResolvedInteractionContext = field(
+        default_factory=ResolvedInteractionContext
+    )
 
 
 def _string_tuple(value: Any) -> tuple[str, ...]:
@@ -82,7 +89,6 @@ def _declared_tuple(
         target_constraints = {}
     if not isinstance(source_constraints, Mapping):
         source_constraints = {}
-
     values = (
         _string_tuple(target.get(field))
         or _string_tuple(target_constraints.get(field))
@@ -118,12 +124,7 @@ def build_beat_context(
     previous_state: EditorialState,
     turn: EditorialTurn,
 ) -> BeatContext:
-    """Constrói um contrato factual sem misturar conhecimento e permissão.
-
-    ``confirmed_facts`` contém somente afirmações que podem virar fatos na fala.
-    ``unknown_facts`` contém dimensões que não podem ser concretizadas.
-    ``allowed_topics`` limita o assunto, mas nunca autoriza preencher lacunas.
-    """
+    """Constrói contrato factual e relacional a partir de dados declarados."""
 
     source_id = previous_state.node_id or script.first_beat_id
     target_id = turn.target_id or source_id
@@ -131,13 +132,12 @@ def build_beat_context(
     target = script.beats.get(target_id) or source
     canonical_line, dramatic_direction = _dialogue_fields(target)
     user_intent = str(turn.state.facts.get("_last_user_intent", "") or "").strip()
-    effect = _selected_narrative_effect(
-        source,
-        user_intent=user_intent,
-        target_id=target_id,
-    )
-
+    effect = _selected_narrative_effect(source, user_intent=user_intent, target_id=target_id)
     declared_confirmed = _declared_tuple(source, target, "confirmed_facts")
+    interaction_context = resolve_interaction_context(
+        target.get("interaction_context") or source.get("interaction_context") or {},
+        turn.state.facts,
+    )
     return BeatContext(
         source_beat_id=source_id,
         target_beat_id=target_id,
@@ -148,17 +148,13 @@ def build_beat_context(
         transition_status=effect.status,
         required_outcomes=effect.required_outcomes,
         forbidden_outcomes=effect.forbidden_outcomes,
-        allowed_topics=_declared_tuple(
-            source,
-            target,
-            "allowed_topics",
-            legacy_field="fact_scope",
-        ),
+        allowed_topics=_declared_tuple(source, target, "allowed_topics", legacy_field="fact_scope"),
         confirmed_facts=tuple(dict.fromkeys((*declared_confirmed, *_state_facts(turn.state)))),
         unknown_facts=_declared_tuple(source, target, "unknown_facts"),
         max_sentences=int(target.get("max_sentences", 0) or 0),
         max_questions=int(target.get("max_questions", 0) or 0),
         response_boundary=str(target.get("response_boundary", "") or "").strip(),
+        interaction_context=interaction_context,
     )
 
 
@@ -185,18 +181,38 @@ def render_beat_context(context: BeatContext) -> str:
         lines.append("- Resultados proibidos nesta resposta:")
         lines.extend(f"  - {item}" for item in context.forbidden_outcomes)
 
+    relational = context.interaction_context
+    lines.extend(
+        (
+            "- CONTEXTO RELACIONAL EFETIVO:",
+            f"  - estágio da relação: {relational.relationship_stage}",
+            f"  - ambiente: {relational.setting}",
+            f"  - privacidade: {relational.privacy}",
+            f"  - nível de intimidade: {relational.intimacy_level}",
+            f"  - desejo de Mary revelado: {'sim' if relational.mary_disclosed_desire else 'não'}",
+            f"  - atração mútua confirmada: {'sim' if relational.mutual_attraction_confirmed else 'não'}",
+        )
+    )
+    if relational.allowed_interactions:
+        lines.append("  - interações compatíveis declaradas:")
+        lines.extend(f"    - {item}" for item in relational.allowed_interactions)
+    if relational.recoverable_tensions:
+        lines.append("  - tensões recuperáveis declaradas:")
+        lines.extend(f"    - {item}" for item in relational.recoverable_tensions)
+    if relational.terminal_violations:
+        lines.append("  - rupturas terminais declaradas para este contexto:")
+        lines.extend(f"    - {item}" for item in relational.terminal_violations)
+    if relational.immediate_endings:
+        lines.append("  - violações de encerramento imediato:")
+        lines.extend(f"    - {item}" for item in relational.immediate_endings)
+    if relational.applied_progressions:
+        lines.append("  - progressões ativadas por fatos confirmados:")
+        lines.extend(f"    - {item}" for item in relational.applied_progressions)
+
     lines.append("- FATOS CONFIRMADOS — podem ser afirmados:")
-    if context.confirmed_facts:
-        lines.extend(f"  - {item}" for item in context.confirmed_facts)
-    else:
-        lines.append("  - nenhum fato adicional confirmado")
-
+    lines.extend(f"  - {item}" for item in context.confirmed_facts) if context.confirmed_facts else lines.append("  - nenhum fato adicional confirmado")
     lines.append("- FATOS DESCONHECIDOS — não podem ser concretizados:")
-    if context.unknown_facts:
-        lines.extend(f"  - {item}" for item in context.unknown_facts)
-    else:
-        lines.append("  - nenhum declarado")
-
+    lines.extend(f"  - {item}" for item in context.unknown_facts) if context.unknown_facts else lines.append("  - nenhum declarado")
     if context.allowed_topics:
         lines.append("- ASSUNTOS PERMITIDOS — delimitam o tema, não criam fatos:")
         lines.extend(f"  - {item}" for item in context.allowed_topics)
@@ -208,11 +224,10 @@ def render_beat_context(context: BeatContext) -> str:
         lines.append(f"- Limite de resposta: {context.response_boundary}")
     lines.extend(
         (
-            "- Qualquer concretização de um FATO DESCONHECIDO é invenção factual e deve ser rejeitada.",
-            "- Um ASSUNTO PERMITIDO não autoriza criar causa, quantidade, objeto, roupa, risco, distância, localização ou condição específica.",
+            "- O contexto relacional descreve o estágio vigente; não presume consentimento nem decisão do usuário.",
+            "- Somente fatos declarados podem ativar progressões de intimidade ou abertura.",
             "- Não presuma aceite, recusa ou qualquer decisão que o usuário não tenha declarado explicitamente.",
             "- Não avance para outro beat, local ou acontecimento sem autorização da decisão de transição.",
-            "- Não transforme hipótese, humor ou detalhe plausível em fato narrativo.",
             "- Não antecipe acontecimentos, locais ou decisões de beats posteriores.",
             "- A referência semântica orienta o sentido; não a repita mecanicamente.",
         )
