@@ -18,7 +18,7 @@ _EDITORIAL_TO_SCENE_KEY = {
     "reencontro_fila_007": "fila_007",
 }
 
-_ORIGINAL_CAPTION_ATTR = "_roleplay_editorial_original_caption"
+_ORIGINAL_CHAT_INPUT_ATTR = "_roleplay_editorial_original_chat_input"
 
 
 def load_scene_image_map(package_root: Path) -> dict[str, dict[str, object]]:
@@ -72,7 +72,9 @@ def resolve_editorial_scene_image(
     return load_scene_image_map(package_root).get(scene_key)
 
 
-def _active_editorial_node_id(package_id: str) -> str:
+def active_editorial_node_id(package_id: str) -> str:
+    """Obtém o node_id já carregado na sessão do player editorial."""
+
     suffix = f":{package_id}:editorial_state"
     for key, value in st.session_state.items():
         if str(key).endswith(suffix):
@@ -80,71 +82,72 @@ def _active_editorial_node_id(package_id: str) -> str:
     return ""
 
 
-def _restore_caption() -> Callable[..., Any]:
-    original = getattr(st, _ORIGINAL_CAPTION_ATTR, None)
+def render_editorial_scene_image(package_id: str) -> bool:
+    """Renderiza a imagem do beat atual e informa se uma cena foi exibida."""
+
+    package = find_editorial_package(package_id)
+    if package is None:
+        return False
+
+    node_id = active_editorial_node_id(package_id)
+    if not node_id:
+        return False
+
+    image = resolve_editorial_scene_image(package.root, node_id)
+    if image is None:
+        return False
+
+    caption = str(image.get("caption", "")).strip()
+    alt = str(image.get("alt", "")).strip()
+    label = caption or alt or "Cena atual"
+    with st.expander(f"🖼️ {label}", expanded=bool(image.get("expanded", False))):
+        st.image(
+            str(image["path"]),
+            caption=caption or None,
+            use_container_width=True,
+        )
+    return True
+
+
+def _restore_chat_input() -> Callable[..., Any]:
+    original = getattr(st, _ORIGINAL_CHAT_INPUT_ATTR, None)
     if callable(original):
-        st.caption = original
-        delattr(st, _ORIGINAL_CAPTION_ATTR)
+        st.chat_input = original
+        delattr(st, _ORIGINAL_CHAT_INPUT_ATTR)
         return original
-    return st.caption
+    return st.chat_input
 
 
 def install_editorial_scene_image_hook() -> None:
-    """Renderiza a imagem atual após o subtítulo do player editorial.
+    """Exibe a cena imediatamente antes da caixa de resposta.
 
-    O runtime é executado no momento da importação. O hook é instalado antes
-    dessa importação e se remove sozinho após a segunda legenda do pacote:
-    a primeira pertence à barra lateral e a segunda à área principal.
+    `st.chat_input` só é chamado depois que o runtime carregou o estado editorial,
+    renderizou o cabeçalho e mostrou o histórico. Resolver a imagem nesse momento
+    elimina a corrida da implementação anterior, que tentava descobrir a segunda
+    chamada de `st.caption` antes de o estado estar garantidamente disponível.
     """
 
-    original_caption = _restore_caption()
+    original_chat_input = _restore_chat_input()
     package_id = str(st.session_state.get("selected_package_id", "") or "").strip()
     if not package_id:
         return
 
-    package = find_editorial_package(package_id)
-    if package is None:
-        return
+    def chat_input_with_scene(*args: object, **kwargs: object) -> Any:
+        _restore_chat_input()
+        try:
+            render_editorial_scene_image(package_id)
+        except Exception as exc:
+            st.warning(f"Não foi possível carregar a imagem desta cena: {exc}")
+        return original_chat_input(*args, **kwargs)
 
-    node_id = _active_editorial_node_id(package_id)
-    if not node_id:
-        return
-
-    image = resolve_editorial_scene_image(package.root, node_id)
-    if image is None:
-        return
-
-    expected_caption = package.manifest.card.subtitle or "História editorial"
-    matching_captions = 0
-
-    def caption_with_scene(body: object, *args: object, **kwargs: object) -> Any:
-        nonlocal matching_captions
-        result = original_caption(body, *args, **kwargs)
-        if str(body) != expected_caption:
-            return result
-
-        matching_captions += 1
-        if matching_captions != 2:
-            return result
-
-        _restore_caption()
-        caption = str(image.get("caption", "")).strip()
-        alt = str(image.get("alt", "")).strip()
-        label = caption or alt or "Cena atual"
-        with st.expander(f"🖼️ {label}", expanded=bool(image.get("expanded", False))):
-            st.image(
-                str(image["path"]),
-                caption=caption or None,
-                use_container_width=True,
-            )
-        return result
-
-    setattr(st, _ORIGINAL_CAPTION_ATTR, original_caption)
-    st.caption = caption_with_scene
+    setattr(st, _ORIGINAL_CHAT_INPUT_ATTR, original_chat_input)
+    st.chat_input = chat_input_with_scene
 
 
 __all__ = [
+    "active_editorial_node_id",
     "install_editorial_scene_image_hook",
     "load_scene_image_map",
+    "render_editorial_scene_image",
     "resolve_editorial_scene_image",
 ]
