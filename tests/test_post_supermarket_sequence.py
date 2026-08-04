@@ -77,13 +77,16 @@ def test_apresentacao_devolve_turno_antes_da_despedida() -> None:
     script = _script()
     presentation = script.beats["encontro_acidental_006"]
     farewell = script.beats["encontro_acidental_despedida_001"]
+    presentation_anchor = presentation["units"][0]["anchor"].casefold()
+    farewell_anchor = farewell["units"][0]["anchor"].casefold()
 
     assert presentation["on_user"]["engaged"] == "encontro_acidental_despedida_001"
     assert presentation.get("automatic_followups", []) == []
-    assert "tchau" not in presentation["canonical_line"].casefold()
-    assert "mary" in presentation["canonical_line"].casefold()
+    assert "tchau" not in presentation_anchor
+    assert "mary" in presentation_anchor
+    assert "tchau" in farewell_anchor
     assert farewell["on_user"]["engaged"] == "reencontro_fila_001"
-    assert "tchau" in farewell["canonical_line"].casefold()
+    assert farewell["automatic_followups"][0]["target_id"] == "reencontro_fila_001"
 
 
 def test_bloco_da_chamada_de_video_nao_cria_pontes_semanticas() -> None:
