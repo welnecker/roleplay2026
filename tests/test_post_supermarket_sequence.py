@@ -73,6 +73,19 @@ def test_confirmacao_da_quimica_executa_carencia_uma_unica_vez() -> None:
     assert turn.visible_fallback.casefold().count("carente") == 1
 
 
+def test_apresentacao_devolve_turno_antes_da_despedida() -> None:
+    script = _script()
+    presentation = script.beats["encontro_acidental_006"]
+    farewell = script.beats["encontro_acidental_despedida_001"]
+
+    assert presentation["on_user"]["engaged"] == "encontro_acidental_despedida_001"
+    assert presentation.get("automatic_followups", []) == []
+    assert "tchau" not in presentation["canonical_line"].casefold()
+    assert "mary" in presentation["canonical_line"].casefold()
+    assert farewell["on_user"]["engaged"] == "reencontro_fila_001"
+    assert "tchau" in farewell["canonical_line"].casefold()
+
+
 def test_bloco_da_chamada_de_video_nao_cria_pontes_semanticas() -> None:
     script = _script()
 
