@@ -54,8 +54,8 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
 )
 _VIOLATION_GUIDANCE = {
     "invented_unconfirmed_detail": (
-        "Remova apenas o trecho realmente não autorizado. Preserve todo conteúdo respaldado pela linha canônica, "
-        "pelos fatos confirmados ou pelos resultados obrigatórios."
+        "Remova apenas o trecho realmente não autorizado, especialmente peso, quantidade, roupa, risco, esforço, urgência. "
+        "Preserve todo conteúdo respaldado pela linha canônica, pelos fatos confirmados ou pelos resultados obrigatórios."
     ),
     "contradicted_confirmed_fact": "Reescreva sem contradizer nenhum fato confirmado.",
     "failed_required_outcome": "Realize todos os resultados obrigatórios de modo direto e breve.",
