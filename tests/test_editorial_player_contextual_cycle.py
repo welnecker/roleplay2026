@@ -3,65 +3,79 @@ from __future__ import annotations
 import json
 
 from services import editorial_player_contextual_cycle as cycle
-from services.editorial_bridge import bridge_enabled_for_beat
+from services.editorial_bridge import bridge_enabled_for_beat, bridge_policy
 from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
 
 
-def _script(package_id: str = "roleplay2026.casada_frustrada") -> PilotScript:
-    return PilotScript(
-        {
-            "package_id": package_id,
-            "character": {"name": "Mary"},
-            "engagement_policy": {"categories": {}},
-            "scene": {
-                "first_beat_id": "encontro_001",
-                "terminal_yards": {},
-                "beats": [
-                    {
-                        "beat_id": "encontro_001",
-                        "block_id": "encontro_acidental",
-                        "units": [],
-                        "on_user": {"engaged": "encontro_002"},
-                        "interaction_context": {
-                            "relationship_stage": "strangers",
-                            "setting": "supermarket",
-                            "privacy": "public",
-                            "intimacy_level": 0,
-                            "allowed_interactions": ["light_flirting"],
-                        },
+def _script(*, with_policy: bool = True) -> PilotScript:
+    raw = {
+        "package_id": "example.generic_card",
+        "character": {"name": "Mary"},
+        "engagement_policy": {"categories": {}},
+        "scene": {
+            "first_beat_id": "encontro_001",
+            "terminal_yards": {},
+            "beats": [
+                {
+                    "beat_id": "encontro_001",
+                    "block_id": "encontro_acidental",
+                    "units": [],
+                    "on_user": {"engaged": "encontro_002"},
+                    "interaction_context": {
+                        "relationship_stage": "strangers",
+                        "setting": "supermarket",
+                        "privacy": "public",
+                        "intimacy_level": 0,
+                        "allowed_interactions": ["light_flirting"],
                     },
-                    {
-                        "beat_id": "encontro_002",
-                        "block_id": "encontro_acidental",
-                        "units": [],
-                        "on_user": {},
-                    },
-                    {
-                        "beat_id": "motel_001",
-                        "block_id": "motel",
-                        "units": [],
-                        "on_user": {},
-                    },
-                ],
-                "endings": [],
-            },
+                },
+                {
+                    "beat_id": "encontro_002",
+                    "block_id": "encontro_acidental",
+                    "units": [],
+                    "on_user": {},
+                },
+                {
+                    "beat_id": "motel_001",
+                    "block_id": "motel",
+                    "units": [],
+                    "on_user": {},
+                },
+            ],
+            "endings": [],
+        },
+    }
+    if with_policy:
+        raw["organic_slack"] = {
+            "bridge_policy": {
+                "mode": "required",
+                "block_ids": ["encontro_acidental", "reencontro_fila"],
+                "exclude_block_ids": ["motel"],
+            }
         }
-    )
+    return PilotScript(raw)
 
 
-def test_rollout_ativa_somente_blocos_iniciais_da_casada_frustrada() -> None:
+def test_politica_declarada_ativa_somente_blocos_selecionados() -> None:
     script = _script()
-    cycle.apply_bridge_rollout(script)
 
+    assert bridge_policy(script)["mode"] == "required"
     assert bridge_enabled_for_beat(script, "encontro_001") is True
     assert bridge_enabled_for_beat(script, "motel_001") is False
 
 
-def test_outro_card_nao_recebe_rollout_implicito() -> None:
-    script = _script("example.outro_card")
-    cycle.apply_bridge_rollout(script)
+def test_card_sem_politica_permanece_no_comportamento_legado() -> None:
+    script = _script(with_policy=False)
 
-    assert script.raw.get("bridge_policy") is None
+    assert bridge_policy(script) == {}
+    assert bridge_enabled_for_beat(script, "encontro_001") is False
+
+
+def test_politica_top_level_tem_precedencia_sobre_conteiner_historico() -> None:
+    script = _script()
+    script.raw["bridge_policy"] = {"mode": "disabled"}
+
+    assert bridge_policy(script) == {"mode": "disabled"}
     assert bridge_enabled_for_beat(script, "encontro_001") is False
 
 
