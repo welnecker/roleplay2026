@@ -12,6 +12,8 @@ _CONTEXT_SCALAR_FIELDS = (
     "intimacy_level",
     "mary_disclosed_desire",
     "mutual_attraction_confirmed",
+    "terminal_yard_target",
+    "immediate_ending_target",
 )
 _CONTEXT_LIST_FIELDS = (
     "allowed_interactions",
@@ -29,6 +31,8 @@ class ResolvedInteractionContext:
     intimacy_level: int = 0
     mary_disclosed_desire: bool = False
     mutual_attraction_confirmed: bool = False
+    terminal_yard_target: str = ""
+    immediate_ending_target: str = ""
     allowed_interactions: tuple[str, ...] = ()
     recoverable_tensions: tuple[str, ...] = ()
     terminal_violations: tuple[str, ...] = ()
@@ -89,6 +93,13 @@ def merge_interaction_context(*levels: Any) -> dict[str, Any]:
 
 
 def validate_interaction_context(value: Any, *, location: str = "interaction_context") -> None:
+    """Valida a declaração isolada sem exigir destinos herdáveis.
+
+    As categorias de ruptura podem ser declaradas em um nível e o destino em outro.
+    A ausência de destino não torna o vocabulário contextual inválido; apenas impede
+    que uma classificação terminal seja executada até existir um alvo efetivo.
+    """
+
     context = _as_mapping(value, field=location)
     if not context:
         return
@@ -102,6 +113,9 @@ def validate_interaction_context(value: Any, *, location: str = "interaction_con
     for field in _CONTEXT_LIST_FIELDS:
         if field in context:
             _strings(context[field], field=f"{location}.{field}")
+    for field in ("terminal_yard_target", "immediate_ending_target"):
+        if field in context and not isinstance(context[field], str):
+            raise ValueError(f"{location}.{field} deve ser texto")
     progression = context.get("progression") or []
     if not isinstance(progression, list):
         raise ValueError(f"{location}.progression deve ser uma lista")
@@ -166,10 +180,20 @@ def resolve_interaction_context(
             resolved.get("mutual_attraction_confirmed", False),
             field="mutual_attraction_confirmed",
         ),
-        allowed_interactions=tuple(_strings(resolved.get("allowed_interactions"), field="allowed_interactions")),
-        recoverable_tensions=tuple(_strings(resolved.get("recoverable_tensions"), field="recoverable_tensions")),
-        terminal_violations=tuple(_strings(resolved.get("terminal_violations"), field="terminal_violations")),
-        immediate_endings=tuple(_strings(resolved.get("immediate_endings"), field="immediate_endings")),
+        terminal_yard_target=str(resolved.get("terminal_yard_target", "") or "").strip(),
+        immediate_ending_target=str(resolved.get("immediate_ending_target", "") or "").strip(),
+        allowed_interactions=tuple(
+            _strings(resolved.get("allowed_interactions"), field="allowed_interactions")
+        ),
+        recoverable_tensions=tuple(
+            _strings(resolved.get("recoverable_tensions"), field="recoverable_tensions")
+        ),
+        terminal_violations=tuple(
+            _strings(resolved.get("terminal_violations"), field="terminal_violations")
+        ),
+        immediate_endings=tuple(
+            _strings(resolved.get("immediate_endings"), field="immediate_endings")
+        ),
         applied_progressions=tuple(applied),
     )
 
