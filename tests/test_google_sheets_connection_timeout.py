@@ -16,6 +16,7 @@ def _secrets() -> _Secrets:
         gcp_service_account={"project_id": "test"},
         ROLEPLAY_RUNTIME_SPREADSHEET_ID="runtime-sheet",
         ROLEPLAY_ACCOUNTS_BILLING_SPREADSHEET_ID="accounts-sheet",
+        ROLEPLAY_EDITORIAL_SPREADSHEET_ID="editorial-sheet",
     )
 
 
