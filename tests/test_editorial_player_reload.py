@@ -67,3 +67,31 @@ def test_recarrega_instancia_atualmente_registrada(monkeypatch) -> None:
 
     assert seen == [current]
     assert result is reloaded
+
+
+def test_reimporta_quando_modulo_some_durante_reload(monkeypatch) -> None:
+    registered = ModuleType(editorial_player._RUNTIME_MODULE)
+    imported = ModuleType(editorial_player._RUNTIME_MODULE)
+    monkeypatch.setitem(sys.modules, editorial_player._RUNTIME_MODULE, registered)
+    monkeypatch.setattr(
+        editorial_player,
+        "refresh_loaded_editorial_script_cache",
+        lambda _loaded: None,
+    )
+
+    def reload(_module: ModuleType) -> ModuleType:
+        sys.modules.pop(editorial_player._RUNTIME_MODULE, None)
+        raise ImportError(
+            f"module {editorial_player._RUNTIME_MODULE!r} not in sys.modules"
+        )
+
+    monkeypatch.setattr(editorial_player.importlib, "reload", reload)
+    monkeypatch.setattr(
+        editorial_player.importlib,
+        "import_module",
+        lambda name: imported,
+    )
+
+    result = editorial_player._load_or_reload_runtime()
+
+    assert result is imported
