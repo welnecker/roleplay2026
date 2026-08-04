@@ -92,13 +92,23 @@ def _is_structural_destination(script: EditorialScript, target_id: str) -> bool:
     return bool(str(target.get("terminal_yard_id", "") or "").strip())
 
 
-def _is_resolved_runtime_transition(turn: EditorialTurn) -> bool:
-    """Não cria uma etapa extra quando o runtime já resolveu o destino."""
+def _is_resolved_runtime_transition(
+    previous_state: EditorialState,
+    turn: EditorialTurn,
+) -> bool:
+    """Reconhece apenas resoluções produzidas no beat do turno atual."""
 
+    origin = str(previous_state.node_id or "").strip()
     facts = turn.state.facts
-    if str(facts.get("_last_user_explicit_decision", "") or "") == "true":
+
+    explicit = str(facts.get("_last_user_explicit_decision", "") or "") == "true"
+    explicit_origin = str(facts.get("_last_user_intent_beat_id", "") or "").strip()
+    if explicit and explicit_origin == origin:
         return True
-    return bool(str(facts.get("_declared_skip_applied", "") or "").strip())
+
+    skipped = bool(str(facts.get("_declared_skip_applied", "") or "").strip())
+    skip_origin = str(facts.get("_declared_skip_origin_beat_id", "") or "").strip()
+    return skipped and skip_origin == origin
 
 
 def should_create_bridge(
@@ -112,7 +122,7 @@ def should_create_bridge(
         return False
     if bridge_active(previous_state) or turn.finished:
         return False
-    if _is_resolved_runtime_transition(turn):
+    if _is_resolved_runtime_transition(previous_state, turn):
         return False
     if not target or target == origin or target not in script.beats:
         return False
