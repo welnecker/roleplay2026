@@ -53,6 +53,13 @@ def state_for_target(
         updated.facts.pop(_YARD_TURNS_KEY, None)
         return updated
 
+    # Uma ponte entrega uma fala intermediária no beat de origem. Finalizar essa
+    # fala não pode apagar a fase antes que o usuário responda novamente.
+    if str(updated.facts.get(_PHASE_KEY, "") or "") == "bridge":
+        updated.facts.pop(_ACTIVE_YARD_KEY, None)
+        updated.facts.pop(_YARD_TURNS_KEY, None)
+        return updated
+
     updated.facts[_PHASE_KEY] = "canonical"
     updated.facts.pop(_ACTIVE_YARD_KEY, None)
     updated.facts.pop(_YARD_TURNS_KEY, None)
@@ -94,8 +101,6 @@ def decide_terminal_yard_turn(
 
     working = EditorialState.from_dict(state.to_dict())
     working.pending_next_beat_id = ""
-    # O motor histórico oferece folga orgânica. Dentro de pátio terminal ela é
-    # desativada para que perguntas, fatos ou mudanças de ideia não sequestram a saída.
     working.interstitial_turns = max(2, working.interstitial_turns)
     turn = base_decide(script, working, user_text)
 
