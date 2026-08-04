@@ -141,6 +141,36 @@ def test_camisa_retirada_executa_reacao_de_desejo_sem_ponte() -> None:
     assert turn.visible_fallback.casefold().count("delícia") == 1
 
 
+def test_calca_retirada_executa_reacao_ao_volume_sem_ponte() -> None:
+    script = _script()
+    state = PilotState(
+        node_id="video_011",
+        interest=5,
+        desire=3,
+        patience=4,
+        facts={
+            "active_interlocutor": "janio",
+            "user_name": "Janio",
+            "first_video_call": "true",
+        },
+    )
+
+    turn = decide_editorial_progression_turn(
+        script,
+        state,
+        "Pronto... satisfeita?",
+    )
+
+    assert turn.finished is False
+    assert turn.target_id == "video_012"
+    assert turn.state.node_id == "video_012"
+    assert turn.state.pending_next_beat_id == ""
+    assert turn.state.facts.get("_runtime_phase") != "bridge"
+    assert "PONTE NARRATIVA" not in turn.system_prompt
+    assert "volume" in turn.visible_fallback.casefold()
+    assert turn.visible_fallback.casefold().count("volume") == 1
+
+
 def test_continuacao_executavel_segue_ate_a_historia_completa() -> None:
     script = _script()
 
