@@ -32,7 +32,7 @@ def test_ficha_e_memorias_entram_no_contexto_do_modelo() -> None:
     assert "condomínio Plaza" in context
 
 
-def test_memoria_futura_so_e_aplicada_quando_ponte_libera_o_beat() -> None:
+def test_memoria_do_beat_integrado_e_aplicada_no_mesmo_turno() -> None:
     script = _script()
     state = PilotState(
         node_id="mensagens_iniciais_002",
@@ -42,26 +42,16 @@ def test_memoria_futura_so_e_aplicada_quando_ponte_libera_o_beat() -> None:
         },
     )
 
-    bridge_turn = decide_editorial_progression_turn(script, state, "Pode falar, Mary.")
+    turn = decide_editorial_progression_turn(script, state, "Pode falar, Mary.")
 
-    assert bridge_turn.target_id == "mensagens_iniciais_002"
-    assert bridge_turn.state.pending_next_beat_id == "mensagens_iniciais_003"
-    assert bridge_turn.state.facts["_runtime_phase"] == "bridge"
-    assert "Mary e Janio se conheceram" in bridge_turn.system_prompt
-    assert bridge_turn.state.facts["_pending_memory_writes"] == ""
-    assert "mary_confessed_attraction" not in bridge_turn.state.facts["_active_memory_ids"]
-
-    released_turn = decide_editorial_progression_turn(
-        script,
-        bridge_turn.state,
-        "Pode continuar.",
-    )
-
-    assert released_turn.target_id == "mensagens_iniciais_003"
-    assert released_turn.state.pending_next_beat_id == ""
-    assert released_turn.state.facts["_runtime_phase"] == "canonical"
-    assert released_turn.state.facts["_pending_memory_writes"] == "mary_confessed_attraction"
-    assert released_turn.state.facts["_active_memory_ids"].split(",").count(
+    assert turn.target_id == "mensagens_iniciais_003"
+    assert turn.state.node_id == "mensagens_iniciais_003"
+    assert turn.state.pending_next_beat_id == ""
+    assert turn.state.facts.get("_runtime_phase") != "bridge"
+    assert "PONTE NARRATIVA" not in turn.system_prompt
+    assert "Mary e Janio se conheceram" in turn.system_prompt
+    assert turn.state.facts["_pending_memory_writes"] == "mary_confessed_attraction"
+    assert turn.state.facts["_active_memory_ids"].split(",").count(
         "mary_confessed_attraction"
     ) == 1
 

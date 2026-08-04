@@ -47,24 +47,24 @@ def _active_memories(state: EditorialState) -> tuple[str, ...]:
 
 def test_estado_de_ponte_sobrevive_serializacao_e_libera_o_mesmo_alvo() -> None:
     script = _script()
-    previous = EditorialState(node_id="mensagens_iniciais_002")
+    previous = EditorialState(node_id="late_night_004")
     bridge = create_bridge_turn(
         script,
         previous,
-        _turn("mensagens_iniciais_003"),
+        _turn("late_night_005"),
         "Pode falar, Mary.",
     )
 
     restored = EditorialState.from_dict(bridge.state.to_dict())
 
     assert bridge_active(restored) is True
-    assert restored.node_id == "mensagens_iniciais_002"
-    assert restored.pending_next_beat_id == "mensagens_iniciais_003"
+    assert restored.node_id == "late_night_004"
+    assert restored.pending_next_beat_id == "late_night_005"
 
     released = release_bridge_state(script, restored)
 
     assert bridge_active(released) is False
-    assert released.pending_next_beat_id == "mensagens_iniciais_003"
+    assert released.pending_next_beat_id == "late_night_005"
     assert released.facts["_runtime_phase"] == "canonical"
 
 
