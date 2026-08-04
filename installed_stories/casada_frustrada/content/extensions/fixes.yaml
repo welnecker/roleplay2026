@@ -1,7 +1,5 @@
 format_version: 1
 package_id: roleplay2026.casada_frustrada
-organic_slack:
-  enabled: true
 patch_beats:
   reencontro_fila_013:
     skip_when_facts:
