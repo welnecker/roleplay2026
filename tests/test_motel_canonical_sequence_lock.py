@@ -55,11 +55,11 @@ def test_motel_usa_ponte_estrutural_sem_folga_organica() -> None:
     assert turn.state.facts["_strict_motel_canonical"] == "true"
 
 
-def test_fora_do_motel_tambem_usa_ponte_global() -> None:
+def test_fora_do_motel_tambem_usa_ponte_global_quando_alvo_nao_e_integrado() -> None:
     turn = decide_editorial_progression_turn(
-        _script(), EditorialState(node_id="video_007"), "sim, continua"
+        _script(), EditorialState(node_id="late_night_004"), "sim, continua"
     )
 
-    _assert_bridge(turn, origin="video_007", target="video_008")
+    _assert_bridge(turn, origin="late_night_004", target="late_night_005")
     assert turn.state.facts["_force_fixed_response"] == "false"
     assert turn.state.facts["_strict_motel_canonical"] == "false"
