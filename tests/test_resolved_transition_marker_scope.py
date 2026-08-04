@@ -55,7 +55,7 @@ def _turn(target_id: str, facts: dict[str, str]) -> EditorialTurn:
     )
 
 
-def test_decisao_explicita_do_beat_atual_ev ita_ponte_redundante() -> None:
+def test_decisao_explicita_do_beat_atual_evitar_ponte_redundante() -> None:
     script = _script()
     previous = EditorialState(node_id="beat_1")
     turn = _turn(
