@@ -2,8 +2,9 @@ import json
 
 from services.editorial_contextual_orchestration import (
     classify_contextual_destination_for_turn,
+    decide_contextual_editorial_turn,
 )
-from services.editorial_runtime_impl import PilotScript, PilotState
+from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
 
 
 def _script(*, contextual: bool = True) -> PilotScript:
@@ -115,3 +116,37 @@ def test_saida_invalida_preserva_continuidade() -> None:
     assert destination.route == "continue"
     assert destination.reason == "invalid_classifier_output"
     assert updated.facts["_contextual_route"] == "continue"
+
+
+def test_decisao_recebe_estado_ja_classificado() -> None:
+    received: list[PilotState] = []
+
+    def decide(script: PilotScript, state: PilotState, user_text: str) -> PilotTurn:
+        received.append(state)
+        return PilotTurn(
+            engagement="engaged",
+            target_id="yard_001",
+            visible_fallback="Não fala assim comigo.",
+            system_prompt="encerrar",
+            state=state,
+        )
+
+    turn, destination = decide_contextual_editorial_turn(
+        _script(),
+        PilotState(node_id="beat_001"),
+        "Quero transar com você agora.",
+        classifier_call=lambda prompt, request: json.dumps(
+            {
+                "route": "terminal_yard",
+                "signal": "explicit_sexual_proposition_before_mutual_intimacy",
+                "reason": "ruptura",
+                "confidence": 0.99,
+            }
+        ),
+        decide_turn=decide,
+    )
+
+    assert destination.route == "terminal_yard"
+    assert len(received) == 1
+    assert received[0].facts["_contextual_route"] == "terminal_yard"
+    assert turn.target_id == "yard_001"
