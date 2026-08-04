@@ -46,8 +46,37 @@ memories:
 patch_beats:
   encontro_acidental_001:
     memory_writes: [met_at_supermarket]
+    interaction_context: &supermarket_first_contact
+      relationship_stage: strangers
+      setting: supermarket
+      privacy: public
+      intimacy_level: 0
+      mary_disclosed_desire: false
+      mutual_attraction_confirmed: false
+      allowed_interactions:
+        - apology_or_reassurance
+        - respectful_compliment
+        - light_flirting
+        - situational_humor
+      recoverable_tensions:
+        - premature_romantic_advance_without_pressure
+      terminal_violations:
+        - explicit_sexual_proposition_before_mutual_intimacy
+        - sexual_humiliation_directed_at_character
+      immediate_endings:
+        - coercion_or_threat
+        - refusal_disregarded_with_intimidation
+      terminal_yard_target: yard_invasive_approach_001
+      immediate_ending_target: end_hostile
+  encontro_acidental_002:
+    interaction_context: *supermarket_first_contact
+  encontro_acidental_003:
+    interaction_context: *supermarket_first_contact
+  encontro_acidental_004:
+    interaction_context: *supermarket_first_contact
   encontro_acidental_005:
     memory_writes: [discovered_neighbors]
+    interaction_context: *supermarket_first_contact
   reencontro_fila_008:
     memory_writes: [helped_with_groceries]
   reencontro_fila_015:
@@ -139,6 +168,41 @@ append_blocks:
         allowed_transitions: {engaged: end_chapter_one, minimal: end_chapter_one, dismissive: end_chapter_one, nonsense: end_chapter_one, mocking: end_hostile, hostile: end_hostile}
         status: active
 
+  - block_id: yard_invasive_approach
+    block_type: terminal_yard
+    order: 92
+    title: Pátio após abordagem sexual invasiva no primeiro encontro
+    entry_beat_id: yard_invasive_approach_001
+    min_user_turns: 2
+    max_user_turns: 2
+    rules:
+      - Mary não transforma a invasão em flerte ou curiosidade secreta.
+      - A carência futura de Mary não justifica receptividade neste primeiro encontro.
+      - O pátio não retorna ao roteiro principal.
+    beats:
+      - beat_id: yard_invasive_approach_001
+        order: 1
+        type: dialogue
+        required_movement: Mary rejeita claramente a abordagem invasiva, estabelece distância e abre somente espaço para a despedida.
+        canonical_line: Que isso? Você nem me conhece. Não fala assim comigo.
+        next_beat_id: yard_invasive_approach_002
+        max_questions: 1
+        max_sentences: 2
+        memory_writes: []
+        allowed_transitions: {engaged: yard_invasive_approach_002, minimal: yard_invasive_approach_002, dismissive: yard_invasive_approach_002, nonsense: yard_invasive_approach_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: yard_invasive_approach_002
+        order: 2
+        type: dialogue
+        required_movement: Mary encerra o contato sem reabrir negociação íntima, mesmo diante de recuo ou mudança de ideia.
+        canonical_line: Melhor cada um seguir seu caminho. Tchau.
+        next_beat_id: end_invasive_approach
+        max_questions: 0
+        max_sentences: 2
+        memory_writes: []
+        allowed_transitions: {engaged: end_invasive_approach, minimal: end_invasive_approach, dismissive: end_invasive_approach, nonsense: end_invasive_approach, mocking: end_hostile, hostile: end_hostile}
+        status: active
+
   - block_id: narrative_endings
     order: 99
     title: Encerramentos narrativos
@@ -168,4 +232,16 @@ append_blocks:
         memory_writes: []
         allowed_transitions: {}
         ending: {run_status: completed, ending_code: chapter_one_complete}
+        status: active
+      - beat_id: end_invasive_approach
+        order: 3
+        type: ending
+        required_movement: Encerrar definitivamente o primeiro encontro após abordagem invasiva.
+        canonical_line: Não quero continuar essa conversa.
+        next_beat_id: ''
+        max_questions: 0
+        max_sentences: 1
+        memory_writes: []
+        allowed_transitions: {}
+        ending: {run_status: terminated, ending_code: invasive_first_contact}
         status: active
