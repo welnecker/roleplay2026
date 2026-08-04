@@ -4,6 +4,10 @@ from copy import deepcopy
 from typing import Any, Iterable
 
 from services.editorial_engine import compile_transition_rules
+from services.editorial_interaction_context import (
+    merge_interaction_context,
+    validate_interaction_context,
+)
 
 
 _DEFAULT_UNKNOWN_FACTS = (
@@ -38,31 +42,21 @@ def _compiled_factual_contract(
     required_movement = str(source.get("required_movement", "") or "").strip()
     canonical_line = str(source.get("canonical_line", "") or "").strip()
     dramatic_direction = str(source.get("dramatic_direction", "") or "").strip()
-
     legacy_scope = _string_items(source.get("fact_scope") or constraints.get("fact_scope"))
-    explicit_topics = _string_items(
-        source.get("allowed_topics") or constraints.get("allowed_topics")
-    )
-    explicit_confirmed = _string_items(
-        source.get("confirmed_facts") or constraints.get("confirmed_facts")
-    )
-    explicit_unknown = _string_items(
-        source.get("unknown_facts") or constraints.get("unknown_facts")
-    )
-
+    explicit_topics = _string_items(source.get("allowed_topics") or constraints.get("allowed_topics"))
+    explicit_confirmed = _string_items(source.get("confirmed_facts") or constraints.get("confirmed_facts"))
+    explicit_unknown = _string_items(source.get("unknown_facts") or constraints.get("unknown_facts"))
     derived_topics = [text for text in (required_movement, dramatic_direction) if text]
     derived_confirmed = []
     if required_movement:
         derived_confirmed.append(f"movimento autorizado neste beat: {required_movement}")
     if canonical_line:
-        derived_confirmed.append(
-            f"conteúdo semântico autorizado pela linha canônica: {canonical_line}"
-        )
-
-    allowed_topics = _unique((*explicit_topics, *legacy_scope, *derived_topics))
-    confirmed_facts = _unique((*explicit_confirmed, *derived_confirmed))
-    unknown_facts = _unique((*explicit_unknown, *_DEFAULT_UNKNOWN_FACTS))
-    return allowed_topics, confirmed_facts, unknown_facts
+        derived_confirmed.append(f"conteúdo semântico autorizado pela linha canônica: {canonical_line}")
+    return (
+        _unique((*explicit_topics, *legacy_scope, *derived_topics)),
+        _unique((*explicit_confirmed, *derived_confirmed)),
+        _unique((*explicit_unknown, *_DEFAULT_UNKNOWN_FACTS)),
+    )
 
 
 def _ordinary_targets(source: dict[str, Any]) -> set[str]:
@@ -78,8 +72,10 @@ def _ordinary_targets(source: dict[str, Any]) -> set[str]:
 
 
 def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
-    """Converte o documento editorial em grafo executável preservando seus blocos."""
+    """Converte o documento em grafo executável preservando blocos e contexto."""
 
+    root_interaction_context = deepcopy(document.get("interaction_context") or {})
+    validate_interaction_context(root_interaction_context, location="interaction_context do card")
     blocks = [deepcopy(item) for item in document.get("blocks", []) if isinstance(item, dict)]
     if not blocks:
         raise ValueError("O roteiro editorial não contém blocos.")
@@ -91,7 +87,6 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
         for source in block.get("beats", []) or []
         if isinstance(source, dict) and str(source.get("type", "dialogue")) == "ending"
     }
-
     beats: list[dict[str, Any]] = []
     endings: list[dict[str, Any]] = []
     terminal_yards: dict[str, dict[str, Any]] = {}
@@ -100,13 +95,21 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
     for block in blocks:
         block_id = str(block.get("block_id", "") or "").strip()
         block_type = str(block.get("block_type", "canonical") or "canonical").strip()
+        block_declared_context = deepcopy(block.get("interaction_context") or {})
+        validate_interaction_context(
+            block_declared_context,
+            location=f"interaction_context do bloco {block_id}",
+        )
+        block_interaction_context = merge_interaction_context(
+            root_interaction_context,
+            block_declared_context,
+        )
+        block["compiled_interaction_context"] = deepcopy(block_interaction_context)
         ordered_sources = sorted(
             [item for item in block.get("beats", []) if isinstance(item, dict)],
             key=lambda item: int(item.get("order", 0) or 0),
         )
-        dialogue_sources = [
-            item for item in ordered_sources if str(item.get("type", "dialogue")) != "ending"
-        ]
+        dialogue_sources = [item for item in ordered_sources if str(item.get("type", "dialogue")) != "ending"]
         dialogue_ids = [str(item.get("beat_id", "") or "").strip() for item in dialogue_sources]
 
         if block_type == "terminal_yard":
@@ -131,6 +134,15 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
             if not beat_id or beat_id in seen_ids:
                 raise ValueError(f"beat_id ausente ou duplicado: {beat_id!r}")
             seen_ids.add(beat_id)
+            beat_declared_context = deepcopy(source.get("interaction_context") or {})
+            validate_interaction_context(
+                beat_declared_context,
+                location=f"interaction_context do beat {beat_id}",
+            )
+            effective_interaction_context = merge_interaction_context(
+                block_interaction_context,
+                beat_declared_context,
+            )
 
             if str(source.get("type", "dialogue")) == "ending":
                 ending_data = dict(source.get("ending") or {})
@@ -147,6 +159,7 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                         "memory_writes": [str(item) for item in source.get("memory_writes", [])],
                         "block_id": block_id,
                         "block_type": block_type,
+                        "interaction_context": effective_interaction_context,
                     }
                 )
                 continue
@@ -156,12 +169,8 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
             next_beat_id = str(source.get("next_beat_id", "") or "").strip()
             if next_beat_id and not legacy_transitions:
                 legacy_transitions = {"engaged": next_beat_id}
-
             constraints = deepcopy(source.get("constraints") or {})
-            allowed_topics, confirmed_facts, unknown_facts = _compiled_factual_contract(
-                source,
-                constraints,
-            )
+            allowed_topics, confirmed_facts, unknown_facts = _compiled_factual_contract(source, constraints)
             fact_scope = deepcopy(source.get("fact_scope") or constraints.get("fact_scope") or [])
 
             beats.append(
@@ -200,6 +209,7 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "terminal_yard_id": block_id if block_type == "terminal_yard" else "",
                     "yard_min_user_turns": int(block.get("min_user_turns", 0) or 0),
                     "yard_max_user_turns": int(block.get("max_user_turns", 0) or 0),
+                    "interaction_context": effective_interaction_context,
                 }
             )
 
@@ -207,7 +217,6 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
     first_beat_id = str(first_block.get("entry_beat_id", "") or "").strip()
     if first_beat_id not in {item["beat_id"] for item in beats}:
         raise ValueError(f"Primeiro beat inexistente: {first_beat_id!r}")
-
     compiled = deepcopy(document)
     compiled["blocks"] = blocks
     compiled["scene"] = {
