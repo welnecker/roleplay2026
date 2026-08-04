@@ -5,6 +5,7 @@ from services.editorial_content import load_source_document
 from services.editorial_runtime_impl import PilotScript, PilotState
 from services.editorial_progression import (
     decide_editorial_progression_turn,
+    editorial_followups_after,
     prepare_editorial_script,
 )
 
@@ -79,6 +80,10 @@ def test_apresentacao_devolve_turno_antes_da_despedida() -> None:
     farewell = script.beats["encontro_acidental_despedida_001"]
     presentation_anchor = presentation["units"][0]["anchor"].casefold()
     farewell_anchor = farewell["units"][0]["anchor"].casefold()
+    farewell_followups = editorial_followups_after(
+        "encontro_acidental_despedida_001",
+        script=script,
+    )
 
     assert presentation["on_user"]["engaged"] == "encontro_acidental_despedida_001"
     assert presentation.get("automatic_followups", []) == []
@@ -86,7 +91,7 @@ def test_apresentacao_devolve_turno_antes_da_despedida() -> None:
     assert "mary" in presentation_anchor
     assert "tchau" in farewell_anchor
     assert farewell["on_user"]["engaged"] == "reencontro_fila_001"
-    assert farewell["automatic_followups"][0]["target_id"] == "reencontro_fila_001"
+    assert farewell_followups[0]["target_id"] == "reencontro_fila_001"
 
 
 def test_bloco_da_chamada_de_video_nao_cria_pontes_semanticas() -> None:
