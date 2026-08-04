@@ -1,6 +1,8 @@
 format_version: 1
 package_id: roleplay2026.casada_frustrada
 patch_beats:
+  encontro_acidental_001:
+    canonical_line: '(Mary caminha distraida pelo mercado. De repente): Eita, caralho... desculpa!'
   reencontro_fila_010:
     dramatic_direction: >
       Encerrar a ajuda e demonstrar gratidão. Não se apresentar e não perguntar
