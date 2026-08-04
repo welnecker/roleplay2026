@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+# Mantém o módulo legado carregado para consumidores antigos e para o contrato
+# público existente. O player editorial, porém, não usa mais seus regex para
+# apagar a resposta antes da avaliação semântica.
+from services.editorial_runtime_impl import clean_model_response as _legacy_clean_model_response
+
 
 _TECHNICAL_MARKERS = (
     "<END_RUN",
