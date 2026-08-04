@@ -46,10 +46,11 @@ def _beat(beat_id: str, line: str, target: str) -> dict[str, object]:
     }
 
 
-def _script() -> PilotScript:
+def _script(*, bridge_enabled: bool = True) -> PilotScript:
     raw = {
         "character": {"name": "Lia"},
         "engagement_policy": {"categories": {}},
+        "bridge_policy": {"mode": "required" if bridge_enabled else "disabled"},
         "scene": {
             "scene_id": "main",
             "location": "cafeteria",
@@ -65,6 +66,17 @@ def _script() -> PilotScript:
         },
     }
     return PilotScript(raw)
+
+
+def test_card_sem_politica_preserva_avanco_direto() -> None:
+    turn = decide_editorial_progression_turn(
+        _script(bridge_enabled=False),
+        PilotState(),
+        "Gostei do seu sorriso.",
+    )
+
+    assert turn.target_id == "beat_002"
+    assert not bridge_active(turn.state)
 
 
 def test_primeira_resposta_cria_uma_ponte_sem_avancar_o_beat() -> None:
