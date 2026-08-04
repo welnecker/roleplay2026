@@ -1,6 +1,13 @@
 format_version: 1
 package_id: roleplay2026.casada_frustrada
 patch_beats:
+  reencontro_fila_010:
+    dramatic_direction: >
+      Encerrar a ajuda e demonstrar gratidão. Não se apresentar e não perguntar
+      o nome do usuário neste beat.
+  reencontro_fila_011:
+    skip_when_facts:
+      user_name: reencontro_fila_012
   reencontro_fila_013:
     skip_when_facts:
       user_phone: reencontro_fila_014
