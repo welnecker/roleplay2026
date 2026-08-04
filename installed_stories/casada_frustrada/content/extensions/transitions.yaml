@@ -1,12 +1,22 @@
 format_version: 1
 package_id: roleplay2026.casada_frustrada
 patch_beats:
+  reencontro_fila_006:
+    automatic_followups: []
+    dramatic_direction: Encerrar este movimento e devolver obrigatoriamente o turno ao usuário. Não avançar o tempo nem iniciar o pedido de ajuda.
   reencontro_fila_007:
+    required_movement: Após a resposta do usuário, passam-se alguns minutos; Mary conclui o caixa e pede que ele espere e ajude até o carro.
+    canonical_line: |-
+      [MINUTOS DEPOIS — SUPERMERCADO CAIXA]
+
+      Passou rapidinho pelo caixa, hein? Chegou minha vez. Dá pra você me esperar? Vou precisar de uma mãozinha até o carro.
+    dramatic_direction: A passagem temporal ocorre somente depois de uma resposta do usuário ao beat anterior. Aguardar aceite ou recusa explícita ao pedido.
     allowed_topics:
       - o atendimento no caixa
       - o pedido para esperar
       - a ajuda com as compras até o carro
     confirmed_facts:
+      - alguns minutos se passaram desde que Mary avisou que era a vez do usuário no caixa
       - Mary está no caixa do supermercado
       - Mary está com compras e um carrinho de compras
       - Mary quer que o usuário espere e ajude a levar as compras até o carro
