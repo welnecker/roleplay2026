@@ -17,6 +17,7 @@ PACKAGE_ROOT = (
     / "installed_stories"
     / "casada_frustrada"
 )
+FAREWELL_BEAT_ID = "encontro_acidental_despedida_001"
 
 
 def load_document() -> dict:
@@ -33,14 +34,16 @@ def anchor(script: EditorialScript, beat_id: str) -> str:
     return str(script.beats[beat_id]["units"][0]["anchor"])
 
 
-def test_plaza_antecede_confirmacao_e_despedida() -> None:
+def test_plaza_antecede_confirmacao_apresentacao_e_despedida() -> None:
     script = load_script()
 
     assert "mora no Plaza" in anchor(script, "encontro_acidental_004")
     assert script.beats["encontro_acidental_004"]["on_user"]["engaged"] == "encontro_acidental_005"
     assert "Somos vizinhos" in anchor(script, "encontro_acidental_005")
     assert script.beats["encontro_acidental_005"]["on_user"]["engaged"] == "encontro_acidental_006"
-    assert "tchauzinho" in anchor(script, "encontro_acidental_006").lower()
+    assert "eu sou a Mary" in anchor(script, "encontro_acidental_006")
+    assert script.beats["encontro_acidental_006"]["on_user"]["engaged"] == FAREWELL_BEAT_ID
+    assert "tchauzinho" in anchor(script, FAREWELL_BEAT_ID).lower()
 
 
 def test_preparacao_nao_reescreve_beats() -> None:
@@ -58,7 +61,7 @@ def test_preparacao_nao_reescreve_beats() -> None:
 def test_pontes_sao_lidas_do_roteiro() -> None:
     load_script()
 
-    queue_bridge = editorial_followups_after("encontro_acidental_006")
+    queue_bridge = editorial_followups_after(FAREWELL_BEAT_ID)
     home_bridges = editorial_followups_after("reencontro_fila_016")
 
     assert queue_bridge[0]["target_id"] == "reencontro_fila_001"
