@@ -4,6 +4,14 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
+class SceneImage:
+    file: str
+    caption: str = ""
+    alt: str = ""
+    expanded: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Movement:
     order: int
     route: str
@@ -14,6 +22,7 @@ class Movement:
     requires: str = ""
     scene: str = ""
     condition: str = ""
+    scene_image: SceneImage | None = None
 
 
 @dataclass(frozen=True, slots=True)
