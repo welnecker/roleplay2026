@@ -19,12 +19,10 @@ def _script():
 
 
 def test_politica_nao_limita_ponte_a_blocos_iniciais() -> None:
-    script = _script()
-
-    assert bridge_policy(script) == {"mode": "required"}
+    assert bridge_policy(_script()) == {"mode": "required"}
 
 
-def test_todos_os_blocos_canonicos_do_card_aceitam_ponte() -> None:
+def test_todos_os_beats_canonicos_do_card_aceitam_ponte() -> None:
     script = _script()
     canonical_beats = {
         beat_id: beat
@@ -33,11 +31,9 @@ def test_todos_os_blocos_canonicos_do_card_aceitam_ponte() -> None:
     }
 
     assert canonical_beats
-    assert {str(beat.get("block_id", "")) for beat in canonical_beats.values()} >= {
-        "encontro_acidental",
-        "reencontro_fila",
-        "motel",
-    }
+    assert "encontro_acidental_001" in canonical_beats
+    assert "reencontro_fila_001" in canonical_beats
+    assert "motel_001" in canonical_beats
     assert all(bridge_enabled_for_beat(script, beat_id) for beat_id in canonical_beats)
 
 
