@@ -68,11 +68,6 @@ _VIOLATION_GUIDANCE = {
     "treated_postpone_as_refusal": "Reconheça o adiamento sem convertê-lo em recusa.",
     "treated_question_as_acceptance": "Trate a pergunta como pedido de esclarecimento, não como aceite.",
     "character_voice_broken": "Preserve a voz natural da personagem.",
-    "max_sentences_exceeded": "Reduza a fala visível ao máximo de frases definido no contrato.",
-    "max_questions_exceeded": (
-        "Use no máximo uma pergunta total. Transforme comentários como 'hein?' em afirmações, "
-        "mantendo apenas a pergunta que solicita a decisão explícita."
-    ),
 }
 
 
@@ -114,9 +109,6 @@ def _context_allows_violation(code: str, context: BeatContext | None) -> bool:
     pending = context.transition_status == "decision_pending"
 
     if code == "invented_unconfirmed_detail":
-        # Esta acusação ampla não participa mais da aprovação. O roteiro continua
-        # protegido por contradição factual, decisão presumida, resultado proibido
-        # e antecipação de beat, sem censurar linguagem figurada ou improviso vivo.
         return False
     if code == "failed_to_answer_user_question":
         return context.user_intent == "question" or (
@@ -165,10 +157,11 @@ def evaluate_deterministic_response(
         violations.append("malformed_thought_block")
 
     visible = _visible_dialogue(text)
+    style_advisories: list[str] = []
     if context.max_sentences and _sentence_count(visible) > context.max_sentences:
-        violations.append("max_sentences_exceeded")
+        style_advisories.append("max_sentences_exceeded")
     if context.max_questions and visible.count("?") > context.max_questions:
-        violations.append("max_questions_exceeded")
+        style_advisories.append("max_questions_exceeded")
 
     result = ResponseEvaluation(not violations, tuple(violations))
     _log_evaluation(
@@ -176,6 +169,7 @@ def evaluate_deterministic_response(
         candidate=text,
         valid=result.valid,
         violations=result.violations,
+        style_advisories=style_advisories,
     )
     return result
 
@@ -190,6 +184,7 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
             "Faça uma auditoria factual: compare cada afirmação concreta da candidata com o conteúdo autorizado pelo contrato.",
             "Não rejeite metáfora, flerte, humor, duplo sentido, opinião, reação emocional ou improviso plausível apenas por não aparecer literalmente no roteiro.",
             "A infração invented_unconfirmed_detail é informativa e não bloqueia a resposta.",
+            "Limites de frases e perguntas são orientação de estilo, não motivo autônomo para rejeição.",
             "Concentre a rejeição em contradição de fatos confirmados, ação ou decisão presumida do usuário, resultado proibido e antecipação de beat.",
             "Para cada violação bloqueante, cite em evidence o menor trecho literal da candidata que demonstra o erro.",
             "Só marque failed_to_answer_user_question quando a intenção detectada for question ou quando responder à pergunta estiver nos resultados obrigatórios.",
@@ -256,7 +251,6 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
                 violations.append("semantic_evaluator_invalid_violations")
                 continue
         else:
-            # Compatibilidade com respostas do formato anterior.
             code = str(item).strip()
             evidence = ""
 
