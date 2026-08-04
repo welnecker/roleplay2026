@@ -13,6 +13,8 @@ patch_beats:
       user_phone: reencontro_fila_014
   reencontro_fila_015:
     response_boundary: integrated_canonical
+  mensagens_iniciais_002:
+    response_boundary: integrated_canonical
   yard_motel_farewell_004:
     response_boundary: integrated_canonical
 append_blocks:
