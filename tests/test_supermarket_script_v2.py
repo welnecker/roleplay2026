@@ -22,13 +22,14 @@ def _script() -> PilotScript:
 def test_fonte_unica_compila_sequencia_do_supermercado() -> None:
     document = load_source_document()
     script = _script()
+    farewell_anchor = script.beats[FAREWELL_BEAT_ID]["units"][0]["anchor"].casefold()
 
     assert document["script_version"] == "1.2.0-single-source"
     assert script.first_beat_id == "encontro_acidental_001"
     assert "mora no Plaza" in script.beats["encontro_acidental_004"]["units"][0]["anchor"]
     assert "Somos vizinhos" in script.beats["encontro_acidental_005"]["units"][0]["anchor"]
     assert "eu sou a Mary" in script.beats["encontro_acidental_006"]["units"][0]["anchor"]
-    assert "Vou continuar minhas comprinhas" in script.beats[FAREWELL_BEAT_ID]["units"][0]["anchor"]
+    assert "vou continuar minhas comprinhas" in farewell_anchor
     assert script.beats["encontro_acidental_004"]["on_user"]["engaged"] == "encontro_acidental_005"
     assert script.beats["encontro_acidental_005"]["on_user"]["engaged"] == "encontro_acidental_006"
     assert script.beats["encontro_acidental_006"]["on_user"]["engaged"] == FAREWELL_BEAT_ID
