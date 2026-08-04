@@ -6,6 +6,7 @@ from services import editorial_runtime_impl as runtime_impl
 from services.editorial_bridge import (
     bridge_active,
     bridge_enabled_for_beat,
+    bridge_policy,
     create_bridge_turn,
     release_bridge_state,
 )
@@ -45,7 +46,11 @@ def prepare_editorial_script(script: EditorialScript) -> EditorialScript:
 
 def _finalize(script: EditorialScript, turn: EditorialTurn, *, organic: bool = False) -> EditorialTurn:
     updated = EditorialState.from_dict(turn.state.to_dict())
-    updated.facts["_organic_interstitial"] = "true" if organic else "false"
+    if bridge_policy(script):
+        updated.facts.pop("_organic_interstitial", None)
+        updated.interstitial_turns = 0
+    else:
+        updated.facts["_organic_interstitial"] = "true" if organic else "false"
     return finalize_editorial_turn(script, replace(turn, state=updated))
 
 

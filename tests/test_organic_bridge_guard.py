@@ -21,7 +21,7 @@ def test_ponte_estrutural_mantem_destino_para_turno_posterior() -> None:
     )
 
     assert turn.state.facts["_runtime_phase"] == "bridge"
-    assert turn.state.facts["_organic_interstitial"] == "false"
+    assert "_organic_interstitial" not in turn.state.facts
     assert turn.target_id == "late_night_008"
     assert turn.state.pending_next_beat_id == "morning_bridge_001"
     assert editorial_followups_after(turn.target_id) == ()

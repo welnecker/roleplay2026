@@ -23,6 +23,6 @@ def test_fala_sexual_contextual_nao_encerra_historia() -> None:
     assert turn.state.node_id == "motel_006"
     assert turn.state.pending_next_beat_id == "motel_007"
     assert turn.state.facts["_runtime_phase"] == "bridge"
-    assert turn.state.facts["_organic_interstitial"] == "false"
+    assert "_organic_interstitial" not in turn.state.facts
     assert turn.state.facts["_force_fixed_response"] == "false"
     assert turn.state.facts["_strict_motel_canonical"] == "true"

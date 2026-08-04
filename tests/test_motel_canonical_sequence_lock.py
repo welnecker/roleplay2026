@@ -18,7 +18,7 @@ def _assert_bridge(turn, *, origin: str, target: str) -> None:
     assert turn.state.pending_next_beat_id == target
     assert turn.state.facts["_runtime_phase"] == "bridge"
     assert turn.state.facts["_bridge_target_beat_id"] == target
-    assert turn.state.facts["_organic_interstitial"] == "false"
+    assert "_organic_interstitial" not in turn.state.facts
     assert "FASE ESTRUTURAL: PONTE NARRATIVA" in turn.system_prompt
 
 
