@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from services.editorial_engine.models import NarrativeEffect, TransitionRule
@@ -28,7 +28,9 @@ class BeatContext:
     max_sentences: int
     max_questions: int
     response_boundary: str
-    interaction_context: ResolvedInteractionContext
+    interaction_context: ResolvedInteractionContext = field(
+        default_factory=ResolvedInteractionContext
+    )
 
 
 def _string_tuple(value: Any) -> tuple[str, ...]:
