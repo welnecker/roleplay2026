@@ -12,8 +12,15 @@ _BRIDGE_TURNS_KEY = "_bridge_turn_count"
 
 
 def bridge_policy(script: EditorialScript) -> dict[str, Any]:
-    raw = script.raw.get("bridge_policy") or {}
-    return raw if isinstance(raw, dict) else {}
+    direct = script.raw.get("bridge_policy") or {}
+    if isinstance(direct, dict) and direct:
+        return direct
+
+    runtime_policy = script.raw.get("organic_slack") or {}
+    if not isinstance(runtime_policy, dict):
+        return {}
+    nested = runtime_policy.get("bridge_policy") or {}
+    return nested if isinstance(nested, dict) else {}
 
 
 def bridge_enabled_for_beat(script: EditorialScript, beat_id: str) -> bool:
@@ -82,6 +89,20 @@ def _is_structural_destination(script: EditorialScript, target_id: str) -> bool:
     return bool(str(target.get("terminal_yard_id", "") or "").strip())
 
 
+def _is_resolved_runtime_transition(turn: EditorialTurn) -> bool:
+    """Não cria uma etapa extra quando o runtime já resolveu o destino.
+
+    Decisões explícitas e saltos declarados por fatos não são conversa aberta:
+    inserir uma ponte nesses casos obrigaria o usuário a confirmar novamente uma
+    escolha já registrada ou atrasaria uma regra determinística do próprio card.
+    """
+
+    facts = turn.state.facts
+    if str(facts.get("_last_user_explicit_decision", "") or "") == "true":
+        return True
+    return bool(str(facts.get("_declared_skip_applied", "") or "").strip())
+
+
 def should_create_bridge(
     script: EditorialScript,
     previous_state: EditorialState,
@@ -92,6 +113,8 @@ def should_create_bridge(
     if not bridge_enabled_for_beat(script, origin):
         return False
     if bridge_active(previous_state) or turn.finished:
+        return False
+    if _is_resolved_runtime_transition(turn):
         return False
     if not target or target == origin or target not in script.beats:
         return False

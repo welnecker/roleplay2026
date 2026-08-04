@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
-
 import streamlit as st
 
 from roleplay.openrouter import OpenRouterError, generate_response
@@ -14,33 +11,6 @@ from services.editorial_runtime_types import EditorialScript, EditorialState, Ed
 MODEL_DEFAULT = "google/gemini-3-flash-preview"
 _ORIGINAL_DECIDE = editorial_runtime.decide_editorial_turn
 _INSTALLED = False
-
-
-def _package_id(script: EditorialScript) -> str:
-    return str(script.raw.get("package_id", "") or "").strip()
-
-
-def apply_bridge_rollout(script: EditorialScript) -> None:
-    """Aplica a migração declarada enquanto os cards ainda não trazem bridge_policy.
-
-    O registro é deliberadamente pequeno e removível. Cards não registrados mantêm
-    integralmente o comportamento legado.
-    """
-
-    rollouts: dict[str, dict[str, Any]] = {
-        "roleplay2026.casada_frustrada": {
-            "mode": "required",
-            "block_ids": ["encontro_acidental", "reencontro_fila"],
-            "exclude_block_ids": [
-                "yard_help_refused",
-                "yard_invasive_approach",
-                "motel",
-            ],
-        }
-    }
-    policy = rollouts.get(_package_id(script))
-    if policy is not None and not script.raw.get("bridge_policy"):
-        script.raw["bridge_policy"] = dict(policy)
 
 
 def _classifier_call(system_prompt: str, request: str) -> str:
@@ -68,7 +38,6 @@ def decide_player_editorial_turn(
     state: EditorialState,
     user_text: str,
 ) -> EditorialTurn:
-    apply_bridge_rollout(script)
     turn, destination = decide_contextual_editorial_turn(
         script,
         state,
@@ -93,7 +62,6 @@ def install_contextual_player_cycle() -> None:
 
 
 __all__ = [
-    "apply_bridge_rollout",
     "decide_player_editorial_turn",
     "install_contextual_player_cycle",
 ]
