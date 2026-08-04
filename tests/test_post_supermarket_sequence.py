@@ -35,6 +35,44 @@ def test_opa_apos_primeira_mensagem_executa_beat_integrado_sem_ponte() -> None:
     assert "não consegui esperar" in turn.visible_fallback.casefold()
 
 
+def test_bloco_inicial_de_mensagens_nao_cria_pontes_semanticas() -> None:
+    script = _script()
+
+    for number in range(2, 11):
+        beat_id = f"mensagens_iniciais_{number:03d}"
+        assert script.beats[beat_id]["response_boundary"] == "integrated_canonical"
+
+
+def test_confirmacao_da_quimica_executa_carencia_uma_unica_vez() -> None:
+    script = _script()
+    state = PilotState(
+        node_id="mensagens_iniciais_007",
+        interest=5,
+        desire=3,
+        patience=4,
+        facts={
+            "active_interlocutor": "janio",
+            "user_name": "Janio",
+            "mary_confessed_attraction": "true",
+        },
+    )
+
+    turn = decide_editorial_progression_turn(
+        script,
+        state,
+        "Rolou, e isso me assusta. Como você vai administrar isso?",
+    )
+
+    assert turn.finished is False
+    assert turn.target_id == "mensagens_iniciais_008"
+    assert turn.state.node_id == "mensagens_iniciais_008"
+    assert turn.state.pending_next_beat_id == ""
+    assert turn.state.facts.get("_runtime_phase") != "bridge"
+    assert "PONTE NARRATIVA" not in turn.system_prompt
+    assert "carente" in turn.visible_fallback.casefold()
+    assert turn.visible_fallback.casefold().count("carente") == 1
+
+
 def test_continuacao_executavel_segue_ate_a_historia_completa() -> None:
     script = _script()
 
