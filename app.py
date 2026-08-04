@@ -322,6 +322,37 @@ def load_package_engine(package_id: str) -> tuple[InstalledStoryPackage, StoryEn
     return package, StoryEngine(engine_story)
 
 
+def render_scene_image(
+    *,
+    package: InstalledStoryPackage,
+    image_data: object,
+) -> None:
+    if not isinstance(image_data, dict):
+        return
+
+    relative_file = str(image_data.get("file", "")).strip()
+    if not relative_file:
+        return
+
+    package_root = package.root.resolve()
+    image_path = (package_root / relative_file).resolve()
+    try:
+        image_path.relative_to(package_root)
+    except ValueError:
+        st.warning("A imagem desta cena possui um caminho inválido.")
+        return
+
+    if not image_path.is_file():
+        st.caption(f"Imagem da cena não encontrada: {relative_file}")
+        return
+
+    caption = str(image_data.get("caption", "")).strip()
+    label = caption or "Ver cena"
+    expanded = bool(image_data.get("expanded", False))
+    with st.expander(f"🖼️ {label}", expanded=expanded):
+        st.image(str(image_path), caption=caption or None, use_container_width=True)
+
+
 def ensure_runtime_loaded(
     *,
     package: InstalledStoryPackage,
@@ -398,6 +429,8 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
 
     for message in messages:
         with st.chat_message(str(message["role"])):
+            if message.get("role") == "assistant":
+                render_scene_image(package=package, image_data=message.get("scene_image"))
             st.markdown(str(message["content"]))
             if message.get("screenplay_order") is not None:
                 st.caption(f"Roteiro: ordem {message['screenplay_order']}")
@@ -445,6 +478,13 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         "screenplay_beat": movement.beat,
         "screenplay_fallback": used_fallback or bool(generation_error),
     }
+    if movement.scene_image is not None:
+        assistant_metadata["scene_image"] = {
+            "file": movement.scene_image.file,
+            "caption": movement.scene_image.caption,
+            "alt": movement.scene_image.alt,
+            "expanded": movement.scene_image.expanded,
+        }
 
     repository, _error = runtime_repository()
     if repository is not None and context is not None:
