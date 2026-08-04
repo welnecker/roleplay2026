@@ -3,7 +3,13 @@ from services.editorial_progression_impl import decide_editorial_progression_tur
 from services.editorial_runtime_impl import PilotScript, PilotState
 
 
-def _beat(beat_id: str, line: str, target: str) -> dict[str, object]:
+def _beat(
+    beat_id: str,
+    line: str,
+    target: str,
+    *,
+    response_boundary: str = "",
+) -> dict[str, object]:
     return {
         "beat_id": beat_id,
         "objective": f"movimento de {beat_id}",
@@ -30,7 +36,7 @@ def _beat(beat_id: str, line: str, target: str) -> dict[str, object]:
         "max_questions": 1,
         "max_sentences": 3,
         "skip_when_facts": {},
-        "response_boundary": "",
+        "response_boundary": response_boundary,
         "allowed_topics": [],
         "confirmed_facts": [],
         "unknown_facts": [],
@@ -46,7 +52,11 @@ def _beat(beat_id: str, line: str, target: str) -> dict[str, object]:
     }
 
 
-def _script(*, bridge_enabled: bool = True) -> PilotScript:
+def _script(
+    *,
+    bridge_enabled: bool = True,
+    integrated_target: bool = False,
+) -> PilotScript:
     raw = {
         "character": {"name": "Lia"},
         "engagement_policy": {"categories": {}},
@@ -59,7 +69,14 @@ def _script(*, bridge_enabled: bool = True) -> PilotScript:
             "terminal_yards": {},
             "beats": [
                 _beat("beat_001", "Oi.", "beat_002"),
-                _beat("beat_002", "Você vem sempre aqui?", "beat_003"),
+                _beat(
+                    "beat_002",
+                    "Você vem sempre aqui?",
+                    "beat_003",
+                    response_boundary=(
+                        "integrated_canonical" if integrated_target else ""
+                    ),
+                ),
                 _beat("beat_003", "Posso sentar?", "beat_003"),
             ],
             "endings": [],
@@ -97,6 +114,21 @@ def test_primeira_resposta_cria_uma_ponte_sem_avancar_o_beat() -> None:
     assert "PONTE NARRATIVA" in turn.system_prompt
     assert "Você vem sempre aqui?" in turn.system_prompt
     assert "LINHA FUTURA PROIBIDA" in turn.system_prompt
+
+
+def test_beat_integrado_responde_e_avanca_sem_ponte_intermediaria() -> None:
+    turn = decide_editorial_progression_turn(
+        _script(integrated_target=True),
+        PilotState(),
+        "Estava pensando em você.",
+    )
+
+    assert turn.target_id == "beat_002"
+    assert turn.state.node_id == "beat_002"
+    assert turn.state.pending_next_beat_id == ""
+    assert not bridge_active(turn.state)
+    assert "PONTE NARRATIVA" not in turn.system_prompt
+    assert "Você vem sempre aqui?" in turn.system_prompt
 
 
 def test_resposta_seguinte_libera_exatamente_o_beat_pendente() -> None:
