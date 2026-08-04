@@ -32,7 +32,7 @@ def test_ficha_e_memorias_entram_no_contexto_do_modelo() -> None:
     assert "condomínio Plaza" in context
 
 
-def test_beat_concluido_declara_memoria_e_prepara_proximo_beat_em_ponte() -> None:
+def test_memoria_futura_so_e_aplicada_quando_ponte_libera_o_beat() -> None:
     script = _script()
     state = PilotState(
         node_id="mensagens_iniciais_002",
@@ -42,14 +42,28 @@ def test_beat_concluido_declara_memoria_e_prepara_proximo_beat_em_ponte() -> Non
         },
     )
 
-    turn = decide_editorial_progression_turn(script, state, "Pode falar, Mary.")
+    bridge_turn = decide_editorial_progression_turn(script, state, "Pode falar, Mary.")
 
-    assert turn.target_id == "mensagens_iniciais_002"
-    assert turn.state.pending_next_beat_id == "mensagens_iniciais_003"
-    assert turn.state.facts["_runtime_phase"] == "bridge"
-    assert "Mary e Janio se conheceram" in turn.system_prompt
-    assert turn.state.facts["_pending_memory_writes"] == "mary_confessed_attraction"
-    assert "mary_confessed_attraction" in turn.state.facts["_active_memory_ids"]
+    assert bridge_turn.target_id == "mensagens_iniciais_002"
+    assert bridge_turn.state.pending_next_beat_id == "mensagens_iniciais_003"
+    assert bridge_turn.state.facts["_runtime_phase"] == "bridge"
+    assert "Mary e Janio se conheceram" in bridge_turn.system_prompt
+    assert bridge_turn.state.facts["_pending_memory_writes"] == ""
+    assert "mary_confessed_attraction" not in bridge_turn.state.facts["_active_memory_ids"]
+
+    released_turn = decide_editorial_progression_turn(
+        script,
+        bridge_turn.state,
+        "Pode continuar.",
+    )
+
+    assert released_turn.target_id == "mensagens_iniciais_003"
+    assert released_turn.state.pending_next_beat_id == ""
+    assert released_turn.state.facts["_runtime_phase"] == "canonical"
+    assert released_turn.state.facts["_pending_memory_writes"] == "mary_confessed_attraction"
+    assert released_turn.state.facts["_active_memory_ids"].split(",").count(
+        "mary_confessed_attraction"
+    ) == 1
 
 
 def test_recusa_no_caixa_entra_no_patio_sem_encerrar_abruptamente() -> None:

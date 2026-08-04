@@ -8,18 +8,33 @@ import sys
 
 from services.editorial_diagnostics_impl import (
     GuardedResponse,
-    build_turn_diagnostics,
+    build_turn_diagnostics as _build_turn_diagnostics,
     finalize_model_response,
     log_exception as _log_exception,
     log_turn,
 )
+from services.editorial_runtime_phase import runtime_phase_metadata
 
 
 LOGGER = logging.getLogger("editorial.pilot")
 EditorialGuardedResponse = GuardedResponse
-build_editorial_turn_diagnostics = build_turn_diagnostics
 finalize_editorial_model_response = finalize_model_response
 log_editorial_turn = log_turn
+
+
+def build_editorial_turn_diagnostics(**kwargs: object) -> dict[str, object]:
+    """Acrescenta metadados da máquina estrutural ao diagnóstico legado."""
+
+    diagnostics = _build_turn_diagnostics(**kwargs)
+    turn = kwargs.get("turn")
+    resulting_state = getattr(turn, "state", None)
+    diagnostics.update(runtime_phase_metadata(resulting_state))
+    diagnostics["diagnostic_version"] = 4
+    if diagnostics.get("runtime_phase") == "bridge":
+        diagnostics["transition_reason"] = "structural_bridge"
+    elif diagnostics.get("runtime_phase") == "terminal_yard":
+        diagnostics["transition_reason"] = "terminal_yard"
+    return diagnostics
 
 
 def log_editorial_exception(stage: str, exc: BaseException, **context: object) -> None:
