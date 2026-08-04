@@ -5,6 +5,7 @@ from dataclasses import replace
 from services import editorial_runtime_impl as runtime_impl
 from services.editorial_bridge import (
     bridge_active,
+    bridge_enabled_for_beat,
     create_bridge_turn,
     release_bridge_state,
 )
@@ -18,6 +19,7 @@ from services.editorial_followups import (
     state_after_editorial_followup,
 )
 from services.editorial_message_policy import classify_contextual_editorial_message
+from services.editorial_organic_turns import organic_editorial_turn
 from services.editorial_response_policy import clean_editorial_progression_response
 from services.editorial_routing import (
     routing_state_for_declared_skips,
@@ -41,9 +43,9 @@ def prepare_editorial_script(script: EditorialScript) -> EditorialScript:
     return script
 
 
-def _finalize(script: EditorialScript, turn: EditorialTurn) -> EditorialTurn:
+def _finalize(script: EditorialScript, turn: EditorialTurn, *, organic: bool = False) -> EditorialTurn:
     updated = EditorialState.from_dict(turn.state.to_dict())
-    updated.facts["_organic_interstitial"] = "false"
+    updated.facts["_organic_interstitial"] = "true" if organic else "false"
     return finalize_editorial_turn(script, replace(turn, state=updated))
 
 
@@ -68,11 +70,15 @@ def decide_editorial_progression_turn(
     state: EditorialState,
     user_text: str,
 ) -> EditorialTurn:
-    """Decide pátio, destino contextual, ponte e progressão canônica."""
+    """Decide pátio, destino contextual, ponte opt-in e progressão canônica."""
 
     original_state = EditorialState.from_dict(state.to_dict())
     original_facts = dict(state.facts)
     releasing_bridge = bridge_active(state)
+    bridge_enabled = bridge_enabled_for_beat(
+        script,
+        state.node_id or script.first_beat_id,
+    )
     base_state = release_bridge_state(script, state) if releasing_bridge else state
     working_state = state_with_extracted_facts(base_state, user_text)
 
@@ -90,6 +96,14 @@ def decide_editorial_progression_turn(
     if contextual is not None:
         return _finalize(script, contextual)
 
+    # Cards ainda não migrados mantêm integralmente a folga orgânica antiga.
+    # Na ponte estrutural opt-in, ela é substituída pela nova fase para não haver
+    # duas máquinas intermediárias concorrentes.
+    if not bridge_enabled and not releasing_bridge:
+        organic = organic_editorial_turn(script, working_state, user_text)
+        if organic is not None:
+            return _finalize(script, organic, organic=True)
+
     declared = decide_declared_transition_turn(
         script,
         working_state,
@@ -103,7 +117,7 @@ def decide_editorial_progression_turn(
             original_state,
             declared,
             user_text,
-            bridge_allowed=not releasing_bridge,
+            bridge_allowed=bridge_enabled and not releasing_bridge,
         )
 
     special = decide_declared_special_turn(
@@ -119,7 +133,7 @@ def decide_editorial_progression_turn(
             original_state,
             special,
             user_text,
-            bridge_allowed=not releasing_bridge,
+            bridge_allowed=bridge_enabled and not releasing_bridge,
         )
 
     engagement = classify_contextual_editorial_message(user_text)
@@ -135,5 +149,5 @@ def decide_editorial_progression_turn(
         original_state,
         turn,
         user_text,
-        bridge_allowed=not releasing_bridge,
+        bridge_allowed=bridge_enabled and not releasing_bridge,
     )
