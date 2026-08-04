@@ -78,6 +78,7 @@ def routing_state_for_declared_skips(
     *,
     original_facts: dict[str, str],
 ) -> EditorialState:
+    current_id = state.node_id or script.first_beat_id
     initial_target = state.pending_next_beat_id or normal_editorial_target(
         script, state, engagement
     )
@@ -90,6 +91,7 @@ def routing_state_for_declared_skips(
     routed = EditorialState.from_dict(state.to_dict())
     routed.pending_next_beat_id = final_target
     routed.facts["_declared_skip_applied"] = ",".join(skipped)
+    routed.facts["_declared_skip_origin_beat_id"] = current_id
 
     for fact_name, value in list(routed.facts.items()):
         if fact_name.startswith("_") or original_facts.get(fact_name) == value:
