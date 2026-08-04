@@ -179,19 +179,19 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
     allowed = ", ".join(sorted(_ALLOWED_SEMANTIC_VIOLATIONS))
     return "\n".join(
         (
-            "Você é um avaliador editorial estrito. Não reescreva a resposta.",
-            "Avalie somente se a candidata obedece integralmente ao contrato narrativo.",
+            "Você é um avaliador editorial consultivo. Não reescreva a resposta.",
+            "Aponte riscos sem assumir autoridade para bloquear ou regenerar a fala.",
             "Faça uma auditoria factual: compare cada afirmação concreta da candidata com o conteúdo autorizado pelo contrato.",
             "Não rejeite metáfora, flerte, humor, duplo sentido, opinião, reação emocional ou improviso plausível apenas por não aparecer literalmente no roteiro.",
             "A infração invented_unconfirmed_detail é informativa e não bloqueia a resposta.",
             "Limites de frases e perguntas são orientação de estilo, não motivo autônomo para rejeição.",
-            "Concentre a rejeição em contradição de fatos confirmados, ação ou decisão presumida do usuário, resultado proibido e antecipação de beat.",
-            "Para cada violação bloqueante, cite em evidence o menor trecho literal da candidata que demonstra o erro.",
+            "Concentre os apontamentos em contradição de fatos confirmados, ação ou decisão presumida do usuário, resultado proibido e antecipação de beat.",
+            "Para cada risco, cite em evidence o menor trecho literal da candidata que demonstra o problema.",
             "Só marque failed_to_answer_user_question quando a intenção detectada for question ou quando responder à pergunta estiver nos resultados obrigatórios.",
             "Só marque presumed_user_decision ou closed_pending_route quando a transição estiver pendente.",
             "Responda exclusivamente com um único objeto JSON válido, sem markdown e sem comentário:",
             '{"valid": false, "violations": [{"code": "anticipated_future_beat", "evidence": "trecho literal"}]}',
-            "Quando estiver válida, responda: {\"valid\": true, \"violations\": []}",
+            "Quando não identificar riscos, responda: {\"valid\": true, \"violations\": []}",
             f"Identificadores permitidos em code: {allowed}",
             render_beat_context(context),
         )
@@ -286,21 +286,41 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
 
 
 def merge_evaluations(*evaluations: ResponseEvaluation) -> ResponseEvaluation:
-    violations = tuple(
+    """Mantém o determinístico soberano e registra os demais como consultivos.
+
+    O primeiro resultado deve ser sempre o avaliador determinístico. Avaliações
+    posteriores podem apontar riscos para diagnóstico, mas não rejeitam nem
+    regeneram uma resposta por interpretação subjetiva isolada.
+    """
+
+    if not evaluations:
+        result = ResponseEvaluation(True, ())
+        _log_evaluation(
+            "combined_result",
+            valid=result.valid,
+            violations=result.violations,
+            semantic_advisories=(),
+        )
+        return result
+
+    authoritative = evaluations[0]
+    advisories = tuple(
         dict.fromkeys(
             violation
-            for evaluation in evaluations
+            for evaluation in evaluations[1:]
             for violation in evaluation.violations
         )
     )
     result = ResponseEvaluation(
-        all(evaluation.valid for evaluation in evaluations) and not violations,
-        violations,
+        authoritative.valid and not authoritative.violations,
+        authoritative.violations,
     )
     _log_evaluation(
         "combined_result",
         valid=result.valid,
         violations=result.violations,
+        semantic_advisories=advisories,
+        semantic_authority="consultive",
     )
     return result
 
