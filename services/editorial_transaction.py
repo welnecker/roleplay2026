@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from services.editorial_beat_context import BeatContext, build_beat_context
+from services.editorial_phase_contract import adapt_context_for_runtime_phase
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
 
@@ -27,7 +28,10 @@ def prepare_pending_editorial_turn(
     previous_state: EditorialState,
     turn: EditorialTurn,
 ) -> PendingEditorialTurn:
-    context = build_beat_context(script, previous_state, turn)
+    context = adapt_context_for_runtime_phase(
+        build_beat_context(script, previous_state, turn),
+        turn.state,
+    )
     return PendingEditorialTurn(
         previous_state=EditorialState.from_dict(previous_state.to_dict()),
         proposed_state=EditorialState.from_dict(turn.state.to_dict()),

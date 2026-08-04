@@ -11,10 +11,11 @@ from services.editorial_contextual_destination import (
     parse_contextual_destination,
     state_with_contextual_destination,
 )
-from services.editorial_runtime_types import EditorialScript, EditorialState
+from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
 
 ClassifierCall = Callable[[str, str], str]
+TurnDecisionCall = Callable[[EditorialScript, EditorialState, str], EditorialTurn]
 
 
 def classify_contextual_destination_for_turn(
@@ -43,4 +44,29 @@ def classify_contextual_destination_for_turn(
     return state_with_contextual_destination(state, destination), destination
 
 
-__all__ = ["ClassifierCall", "classify_contextual_destination_for_turn"]
+def decide_contextual_editorial_turn(
+    script: EditorialScript,
+    state: EditorialState,
+    user_text: str,
+    *,
+    classifier_call: ClassifierCall,
+    decide_turn: TurnDecisionCall,
+) -> tuple[EditorialTurn, ContextualDestination]:
+    """Executa classificação e roteamento como uma única operação pré-geração."""
+
+    classified_state, destination = classify_contextual_destination_for_turn(
+        script,
+        state,
+        user_text,
+        classifier_call=classifier_call,
+    )
+    turn = decide_turn(script, classified_state, user_text)
+    return turn, destination
+
+
+__all__ = [
+    "ClassifierCall",
+    "TurnDecisionCall",
+    "classify_contextual_destination_for_turn",
+    "decide_contextual_editorial_turn",
+]
