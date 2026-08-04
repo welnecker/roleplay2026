@@ -46,15 +46,14 @@ def test_validacao_deterministica_rejeita_resposta_vazia() -> None:
     assert result.violations == ("empty_response",)
 
 
-def test_validacao_deterministica_aplica_limites_do_beat() -> None:
+def test_limites_de_estilo_nao_bloqueiam_resposta_narrativamente_valida() -> None:
     result = evaluate_deterministic_response(
         "Primeira. Segunda? Terceira? Quarta.",
         _context(max_sentences=3, max_questions=1),
     )
 
-    assert result.valid is False
-    assert "max_sentences_exceeded" in result.violations
-    assert "max_questions_exceeded" in result.violations
+    assert result.valid is True
+    assert result.violations == ()
 
 
 def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
@@ -68,16 +67,14 @@ def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
     assert "não podem ser concretizados" in rendered
 
 
-def test_prompt_semantico_exige_auditoria_de_desconhecidos() -> None:
+def test_prompt_semantico_preserva_linguagem_viva_e_travas_estruturais() -> None:
     prompt = build_semantic_evaluation_prompt(_context())
 
     assert "compare cada afirmação concreta" in prompt
-    assert "FATOS DESCONHECIDOS" in prompt
-    assert "ali fora" in prompt
-    assert "no estacionamento" in prompt
-    assert "está pesado" in prompt
-    assert "por causa do salto" in prompt
-    assert "invented_unconfirmed_detail" in prompt
+    assert "metáfora, flerte, humor, duplo sentido" in prompt
+    assert "invented_unconfirmed_detail é informativa" in prompt
+    assert "Limites de frases e perguntas são orientação de estilo" in prompt
+    assert "contradição de fatos confirmados" in prompt
     assert "um único objeto JSON" in prompt
 
 
@@ -124,4 +121,4 @@ def test_regeneracao_recebe_motivos_objetivos() -> None:
     assert "failed_to_request_explicit_decision" in prompt
     assert "anticipated_future_beat" in prompt
     assert "não acrescente fatos" in prompt
-    assert "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS" in prompt
+    assert "Preserve metáforas, flerte, humor, duplo sentido" in prompt

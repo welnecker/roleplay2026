@@ -51,7 +51,7 @@ def test_nao_inventa_pergunta_quando_intencao_e_aceite() -> None:
     assert result.violations == ()
 
 
-def test_referencia_semantica_tem_precedencia_sobre_proibicao_generica() -> None:
+def test_referencia_semantica_nao_e_bloqueada_por_acusacao_factual_ampla() -> None:
     context = _context()
     candidate = "Olha o tamanho desse carrinho perto do seu! Você dá conta de empurrar?"
     _prepare(candidate, context)
@@ -66,29 +66,44 @@ def test_referencia_semantica_tem_precedencia_sobre_proibicao_generica() -> None
     assert result.violations == ()
 
 
-def test_detalhe_realmente_nao_autorizado_continua_rejeitado() -> None:
+def test_detalhe_nao_confirmado_nao_bloqueia_sem_contradicao_ou_antecipacao() -> None:
     context = _context()
-    candidate = "Me encontra na saída principal em cinco minutos."
+    candidate = "O carrinho parece uma mudança inteira, mas vamos nessa."
     _prepare(candidate, context)
 
     result = parse_semantic_evaluation(
         '{"valid": false, "violations": '
         '[{"code": "invented_unconfirmed_detail", '
-        '"evidence": "saída principal em cinco minutos"}]}'
+        '"evidence": "parece uma mudança inteira"}]}'
+    )
+
+    assert result.valid is True
+    assert result.violations == ()
+
+
+def test_antecipacao_de_beat_continua_bloqueada() -> None:
+    context = _context()
+    candidate = "Quando chegarmos ao carro, eu já vou embora."
+    _prepare(candidate, context)
+
+    result = parse_semantic_evaluation(
+        '{"valid": false, "violations": '
+        '[{"code": "anticipated_future_beat", '
+        '"evidence": "Quando chegarmos ao carro"}]}'
     )
 
     assert result.valid is False
-    assert result.violations == ("invented_unconfirmed_detail",)
+    assert result.violations == ("anticipated_future_beat",)
 
 
-def test_acusacao_precisa_apontar_trecho_da_candidata() -> None:
+def test_acusacao_bloqueante_precisa_apontar_trecho_da_candidata() -> None:
     context = _context()
     candidate = "Prontinho! Você dá conta de empurrar?"
     _prepare(candidate, context)
 
     result = parse_semantic_evaluation(
         '{"valid": false, "violations": '
-        '[{"code": "invented_unconfirmed_detail", "evidence": "salto alto"}]}'
+        '[{"code": "anticipated_future_beat", "evidence": "chegamos ao carro"}]}'
     )
 
     assert result.valid is False
