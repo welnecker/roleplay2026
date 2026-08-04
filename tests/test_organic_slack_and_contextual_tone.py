@@ -28,28 +28,33 @@ def test_comentario_livre_nao_mistura_proxima_linha_do_roteiro() -> None:
 
     assert turn.target_id == "late_night_008"
     assert turn.state.pending_next_beat_id == "morning_bridge_001"
-    assert turn.state.facts["_organic_interstitial"] == "true"
-    assert "não misture a próxima linha canônica" in turn.system_prompt.casefold()
+    assert turn.state.facts["_runtime_phase"] == "bridge"
+    assert turn.state.facts["_organic_interstitial"] == "false"
+    assert "LINHA FUTURA PROIBIDA" in turn.system_prompt
     assert "já amanheceu" not in turn.visible_fallback.casefold()
 
 
-def test_turno_seguinte_retoma_o_beat_pendente() -> None:
+def test_turno_seguinte_retoma_o_beat_pendente_da_ponte() -> None:
     script = _script()
-    state = PilotState(
-        node_id="late_night_008",
-        pending_next_beat_id="morning_bridge_001",
-        interstitial_turns=1,
-        facts={"_organic_interstitial": "true"},
+    first = decide_editorial_progression_turn(
+        script,
+        PilotState(node_id="late_night_008"),
+        "Tchau, Mary... você é louca...",
     )
 
-    turn = decide_editorial_progression_turn(script, state, "Tá bom... até daqui a pouco.")
+    turn = decide_editorial_progression_turn(
+        script,
+        first.state,
+        "Tá bom... até daqui a pouco.",
+    )
 
     assert turn.target_id == "morning_bridge_001"
     assert turn.state.pending_next_beat_id == ""
+    assert turn.state.facts["_runtime_phase"] == "canonical"
     assert turn.state.facts["_organic_interstitial"] == "false"
 
 
-def test_pergunta_com_ressalva_recebe_resposta_organica_primeiro() -> None:
+def test_pergunta_com_ressalva_recebe_ponte_sem_vazar_proxima_fala() -> None:
     script = _script()
     state = PilotState(node_id="late_night_004")
 
@@ -61,6 +66,7 @@ def test_pergunta_com_ressalva_recebe_resposta_organica_primeiro() -> None:
 
     assert turn.target_id == "late_night_004"
     assert turn.state.pending_next_beat_id == "late_night_005"
+    assert turn.state.facts["_runtime_phase"] == "bridge"
     assert "Sabe aquele motel" not in turn.visible_fallback
 
 
