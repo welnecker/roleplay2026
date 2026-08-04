@@ -12,8 +12,15 @@ _BRIDGE_TURNS_KEY = "_bridge_turn_count"
 
 
 def bridge_policy(script: EditorialScript) -> dict[str, Any]:
-    raw = script.raw.get("bridge_policy") or {}
-    return raw if isinstance(raw, dict) else {}
+    direct = script.raw.get("bridge_policy") or {}
+    if isinstance(direct, dict) and direct:
+        return direct
+
+    runtime_policy = script.raw.get("organic_slack") or {}
+    if not isinstance(runtime_policy, dict):
+        return {}
+    nested = runtime_policy.get("bridge_policy") or {}
+    return nested if isinstance(nested, dict) else {}
 
 
 def bridge_enabled_for_beat(script: EditorialScript, beat_id: str) -> bool:
