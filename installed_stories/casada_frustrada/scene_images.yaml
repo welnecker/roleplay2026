@@ -1,0 +1,23 @@
+encontro_001:
+  file: assets/scenes/supermercado/reencontro_fila_001__01__mary-reencontra-janio.jpg
+  caption: Mary reencontra Janio no supermercado.
+  alt: Mary e Janio se reconhecendo em um corredor do supermercado.
+  expanded: false
+
+fila_005:
+  file: assets/scenes/supermercado/reencontro_fila_005__01__mary-e-janio-na-fila-do-caixa.jpg
+  caption: Mary e Janio conversam na fila do caixa.
+  alt: Mary e Janio lado a lado com seus carrinhos na fila do supermercado.
+  expanded: false
+
+fila_006:
+  file: assets/scenes/supermercado/reencontro_fila_006__01__mary-indica-a-vez-de-janio.jpg
+  caption: Mary avisa que chegou a vez de Janio no caixa.
+  alt: Mary aponta o caixa enquanto Janio se prepara para passar as compras.
+  expanded: false
+
+fila_007:
+  file: assets/scenes/supermercado/reencontro_fila_007__01__mary-pede-para-janio-esperar.jpg
+  caption: Mary pede para Janio esperá-la depois do caixa.
+  alt: Mary com suas compras pedindo para Janio esperar e ajudá-la até o carro.
+  expanded: false

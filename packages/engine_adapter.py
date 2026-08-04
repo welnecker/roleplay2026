@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from packages.story_content import StoryDefinition as PackageStoryDefinition
-from roleplay.models import Movement, StoryDefinition
+from roleplay.models import Movement, SceneImage, StoryDefinition
 
 
 class StoryEngineAdapterError(ValueError):
@@ -24,6 +24,14 @@ def adapt_story_definition(source: PackageStoryDefinition) -> StoryDefinition:
                         f"movement order must be globally unique: {item.order}"
                     )
                 seen_orders.add(item.order)
+                scene_image = None
+                if item.scene_image is not None:
+                    scene_image = SceneImage(
+                        file=item.scene_image.file,
+                        caption=item.scene_image.caption,
+                        alt=item.scene_image.alt,
+                        expanded=item.scene_image.expanded,
+                    )
                 movements.append(
                     Movement(
                         order=item.order,
@@ -34,6 +42,7 @@ def adapt_story_definition(source: PackageStoryDefinition) -> StoryDefinition:
                         thought=item.thought,
                         requires=item.requires,
                         scene=item.scene,
+                        scene_image=scene_image,
                     )
                 )
 
