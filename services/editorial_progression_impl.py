@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from services import editorial_runtime_impl as runtime_impl
+from services.editorial_contextual_destination import decide_contextual_destination_turn
 from services.editorial_declared_decisions import decide_declared_special_turn
 from services.editorial_declared_transitions import decide_declared_transition_turn
 from services.editorial_followups import (
@@ -61,6 +62,10 @@ def decide_editorial_progression_turn(
     )
     if yard_turn is not None:
         return _finalize_declared(script, yard_turn)
+
+    contextual = decide_contextual_destination_turn(script, working_state, user_text)
+    if contextual is not None:
+        return _finalize_declared(script, contextual)
 
     organic = organic_editorial_turn(script, working_state, user_text)
     if organic is not None:
