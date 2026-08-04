@@ -8,7 +8,7 @@ from services.editorial_progression import (
 )
 
 
-def test_folga_organica_mantem_ponte_para_turno_posterior() -> None:
+def test_ponte_estrutural_mantem_destino_para_turno_posterior() -> None:
     script = prepare_editorial_script(
         PilotScript(compile_editorial_document(load_source_document()))
     )
@@ -20,7 +20,8 @@ def test_folga_organica_mantem_ponte_para_turno_posterior() -> None:
         "Tchau, Mary... você é completamente louca.",
     )
 
-    assert turn.state.facts["_organic_interstitial"] == "true"
+    assert turn.state.facts["_organic_interstitial"] == "false"
+    assert turn.state.facts["_runtime_phase"] == "bridge"
     assert turn.target_id == "late_night_008"
     assert turn.state.pending_next_beat_id == "morning_bridge_001"
     assert editorial_followups_after(turn.target_id) == ()
