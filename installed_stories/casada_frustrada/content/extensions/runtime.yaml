@@ -1,11 +1,8 @@
 format_version: 1
 package_id: roleplay2026.casada_frustrada
-organic_slack:
-  enabled: true
-  bridge_policy:
-    mode: required
-  excluded_beats:
-    - reencontro_fila_007
+bridge_policy:
+  mode: required
+runtime_policy:
   strict_canonical:
     beat_prefixes:
       - motel_
