@@ -14,6 +14,7 @@ from services.editorial_contextual_destination import decide_contextual_destinat
 from services.editorial_declared_decisions import decide_declared_special_turn
 from services.editorial_declared_transitions import decide_declared_transition_turn
 from services.editorial_followups import (
+    activate_editorial_followups,
     editorial_followups_after,
     prepare_editorial_followups,
     render_editorial_followup_text,
@@ -77,6 +78,7 @@ def decide_editorial_progression_turn(
 ) -> EditorialTurn:
     """Decide pátio, destino contextual, ponte opt-in e progressão canônica."""
 
+    activate_editorial_followups(script)
     original_state = EditorialState.from_dict(state.to_dict())
     original_facts = dict(state.facts)
     releasing_bridge = bridge_active(state)
