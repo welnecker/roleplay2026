@@ -31,6 +31,56 @@ patch_beats:
     response_boundary: integrated_canonical
   mensagens_iniciais_010:
     response_boundary: integrated_canonical
+  video_001:
+    response_boundary: integrated_canonical
+  video_002:
+    response_boundary: integrated_canonical
+  video_003:
+    response_boundary: integrated_canonical
+  video_004:
+    response_boundary: integrated_canonical
+  video_005:
+    response_boundary: integrated_canonical
+  video_006:
+    response_boundary: integrated_canonical
+  video_007:
+    response_boundary: integrated_canonical
+  video_008:
+    response_boundary: integrated_canonical
+  video_009:
+    response_boundary: integrated_canonical
+  video_010:
+    response_boundary: integrated_canonical
+  video_011:
+    response_boundary: integrated_canonical
+  video_012:
+    response_boundary: integrated_canonical
+  video_013:
+    response_boundary: integrated_canonical
+  video_014:
+    response_boundary: integrated_canonical
+  video_015:
+    response_boundary: integrated_canonical
+  video_016:
+    response_boundary: integrated_canonical
+  video_017:
+    response_boundary: integrated_canonical
+  video_018:
+    response_boundary: integrated_canonical
+  video_019:
+    response_boundary: integrated_canonical
+  video_020:
+    response_boundary: integrated_canonical
+  video_021:
+    response_boundary: integrated_canonical
+  video_022:
+    response_boundary: integrated_canonical
+  video_023:
+    response_boundary: integrated_canonical
+  video_024:
+    response_boundary: integrated_canonical
+  video_025:
+    response_boundary: integrated_canonical
   yard_motel_farewell_004:
     response_boundary: integrated_canonical
 append_blocks:

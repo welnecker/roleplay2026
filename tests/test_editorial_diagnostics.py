@@ -65,7 +65,7 @@ def test_validador_preserva_pensamento_reacao_e_anexa_beat_quando_modelo_o_omite
     assert result.response.endswith(fallback)
     assert "outra pergunta" not in result.response
     assert result.used_fallback is False
-    assert result.guard_reason == "reaction_preserved_fallback_appended"
+    assert result.guard_reason == "integrated_canonical_boundary"
 
 
 def test_motel_preserva_pensamento_e_termina_no_beat_canonico() -> None:
