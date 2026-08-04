@@ -93,6 +93,13 @@ def merge_interaction_context(*levels: Any) -> dict[str, Any]:
 
 
 def validate_interaction_context(value: Any, *, location: str = "interaction_context") -> None:
+    """Valida a declaração isolada sem exigir destinos herdáveis.
+
+    As categorias de ruptura podem ser declaradas em um nível e o destino em outro.
+    A ausência de destino não torna o vocabulário contextual inválido; apenas impede
+    que uma classificação terminal seja executada até existir um alvo efetivo.
+    """
+
     context = _as_mapping(value, field=location)
     if not context:
         return
@@ -109,14 +116,6 @@ def validate_interaction_context(value: Any, *, location: str = "interaction_con
     for field in ("terminal_yard_target", "immediate_ending_target"):
         if field in context and not isinstance(context[field], str):
             raise ValueError(f"{location}.{field} deve ser texto")
-    if context.get("terminal_violations") and not str(context.get("terminal_yard_target", "")).strip():
-        raise ValueError(
-            f"{location}.terminal_yard_target é obrigatório quando terminal_violations é declarado"
-        )
-    if context.get("immediate_endings") and not str(context.get("immediate_ending_target", "")).strip():
-        raise ValueError(
-            f"{location}.immediate_ending_target é obrigatório quando immediate_endings é declarado"
-        )
     progression = context.get("progression") or []
     if not isinstance(progression, list):
         raise ValueError(f"{location}.progression deve ser uma lista")
