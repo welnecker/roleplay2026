@@ -12,6 +12,30 @@ class StoryContentError(RuntimeError):
     """Raised when a story entrypoint cannot be loaded safely."""
 
 
+class SceneImageDefinition(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    file: str = Field(min_length=1)
+    caption: str = ""
+    alt: str = ""
+    expanded: bool = False
+
+    @field_validator("file", "caption", "alt")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("file")
+    @classmethod
+    def validate_relative_file(cls, value: str) -> str:
+        path = Path(value)
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError("scene image file must be a safe relative path")
+        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
+            raise ValueError("scene image file must use jpg, jpeg, png or webp")
+        return value
+
+
 class MovementDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -19,6 +43,7 @@ class MovementDefinition(BaseModel):
     content: str = Field(min_length=1)
     thought: str = ""
     scene: str = ""
+    scene_image: SceneImageDefinition | None = None
     requires: Literal["", "answer", "plaza_confirmation", "consent", "name", "phone", "call_permission"] = ""
 
     @field_validator("content", "thought", "scene")
@@ -93,6 +118,59 @@ class LoadedStoryContent:
     source: Path
 
 
+def _inject_scene_images(raw: dict[str, Any], *, source: Path) -> None:
+    sidecar = source.with_name("scene_images.yaml")
+    if not sidecar.is_file():
+        return
+
+    try:
+        scene_images = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise StoryContentError(f"Cannot read scene image map {sidecar}: {exc}") from exc
+
+    if not isinstance(scene_images, dict):
+        raise StoryContentError(f"Scene image map must contain a YAML object: {sidecar}")
+
+    package_root = source.parent.resolve()
+    declared_beats: set[str] = set()
+    for route in raw.get("routes", []):
+        if not isinstance(route, dict):
+            continue
+        for beat in route.get("beats", []):
+            if not isinstance(beat, dict):
+                continue
+            beat_id = str(beat.get("id", "")).strip()
+            declared_beats.add(beat_id)
+            image_data = scene_images.get(beat_id)
+            if image_data is None:
+                continue
+            movements = beat.get("movements")
+            if not isinstance(movements, list) or not movements:
+                raise StoryContentError(f"Beat {beat_id} cannot receive a scene image without movements")
+            if len(movements) != 1:
+                raise StoryContentError(
+                    f"Beat {beat_id} has multiple movements; declare scene_image inline instead"
+                )
+            movements[0]["scene_image"] = image_data
+
+    unknown = sorted(set(scene_images) - declared_beats)
+    if unknown:
+        raise StoryContentError(f"Scene image map references unknown beats: {', '.join(unknown)}")
+
+    for beat_id, image_data in scene_images.items():
+        try:
+            parsed = SceneImageDefinition.model_validate(image_data)
+        except ValidationError as exc:
+            raise StoryContentError(f"Invalid scene image for {beat_id}: {exc}") from exc
+        asset_path = (package_root / parsed.file).resolve()
+        try:
+            asset_path.relative_to(package_root)
+        except ValueError as exc:
+            raise StoryContentError(f"Scene image escapes package root for {beat_id}") from exc
+        if not asset_path.is_file():
+            raise StoryContentError(f"Scene image not found for {beat_id}: {parsed.file}")
+
+
 def load_story_content(entrypoint: Path) -> LoadedStoryContent:
     source = entrypoint.resolve()
     if not source.is_file():
@@ -105,6 +183,8 @@ def load_story_content(entrypoint: Path) -> LoadedStoryContent:
 
     if not isinstance(raw, dict):
         raise StoryContentError(f"Story entrypoint must contain a YAML object: {source}")
+
+    _inject_scene_images(raw, source=source)
 
     try:
         definition = StoryDefinition.model_validate(raw)
