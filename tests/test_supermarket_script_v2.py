@@ -66,15 +66,18 @@ def test_despedida_dispara_tres_pontes_sem_turno_do_usuario() -> None:
     assert followups[2]["text"].rstrip().endswith("Oi?")
 
 
-def test_primeira_despedida_e_caixa_usam_pontes_declaradas_no_yaml() -> None:
-    _script()
+def test_primeira_despedida_usa_ponte_mas_caixa_devolve_turno_ao_usuario() -> None:
+    script = _script()
     first_reencounter = editorial_followups_after("encontro_acidental_006")
     checkout = editorial_followups_after("reencontro_fila_006")
 
     assert first_reencounter[0]["target_id"] == "reencontro_fila_001"
     assert "tá me seguindo" in first_reencounter[0]["text"]
-    assert checkout[0]["target_id"] == "reencontro_fila_007"
-    assert "me esperar" in checkout[0]["text"]
+    assert checkout == ()
+    assert script.beats["reencontro_fila_006"]["on_user"]["engaged"] == "reencontro_fila_007"
+    checkout_line = script.beats["reencontro_fila_007"]["units"][0]["anchor"]
+    assert checkout_line.startswith("[MINUTOS DEPOIS — SUPERMERCADO CAIXA]")
+    assert "me esperar" in checkout_line
 
 
 def test_estado_final_libera_usuario_somente_em_janio() -> None:
