@@ -16,23 +16,15 @@ def _script():
     return compile_editorial_package(package)
 
 
-def test_card_real_carrega_politica_sem_registro_por_package_id() -> None:
-    script = _script()
-
-    assert bridge_policy(script) == {
-        "mode": "required",
-        "block_ids": ["encontro_acidental", "reencontro_fila"],
-        "exclude_block_ids": [
-            "yard_help_refused",
-            "yard_invasive_approach",
-            "motel",
-        ],
-    }
+def test_card_real_carrega_politica_global_sem_registro_por_package_id() -> None:
+    assert bridge_policy(_script()) == {"mode": "required"}
 
 
-def test_card_real_ativa_supermercado_e_exclui_motel() -> None:
+def test_card_real_ativa_supermercado_mensagens_video_e_motel() -> None:
     script = _script()
 
     assert bridge_enabled_for_beat(script, "encontro_acidental_001") is True
     assert bridge_enabled_for_beat(script, "reencontro_fila_001") is True
-    assert bridge_enabled_for_beat(script, "motel_001") is False
+    assert bridge_enabled_for_beat(script, "mensagens_iniciais_001") is True
+    assert bridge_enabled_for_beat(script, "video_001") is True
+    assert bridge_enabled_for_beat(script, "motel_001") is True
