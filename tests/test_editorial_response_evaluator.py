@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from services.editorial_beat_context import BeatContext, render_beat_context
 from services.editorial_response_evaluator import (
+    ResponseEvaluation,
     build_regeneration_prompt,
     build_semantic_evaluation_prompt,
     evaluate_deterministic_response,
@@ -67,14 +68,15 @@ def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
     assert "não podem ser concretizados" in rendered
 
 
-def test_prompt_semantico_preserva_linguagem_viva_e_travas_estruturais() -> None:
+def test_prompt_semantico_declara_papel_consultivo() -> None:
     prompt = build_semantic_evaluation_prompt(_context())
 
+    assert "avaliador editorial consultivo" in prompt
+    assert "sem assumir autoridade para bloquear" in prompt
     assert "compare cada afirmação concreta" in prompt
     assert "metáfora, flerte, humor, duplo sentido" in prompt
     assert "invented_unconfirmed_detail é informativa" in prompt
     assert "Limites de frases e perguntas são orientação de estilo" in prompt
-    assert "contradição de fatos confirmados" in prompt
     assert "um único objeto JSON" in prompt
 
 
@@ -99,7 +101,7 @@ def test_avaliacao_semantica_rejeita_identificador_fora_do_contrato() -> None:
     assert result.violations == ("semantic_evaluator_invalid_violations",)
 
 
-def test_merge_mantem_runtime_soberano() -> None:
+def test_merge_mantem_deterministico_soberano() -> None:
     deterministic = evaluate_deterministic_response("Tudo bem. Você pode me confirmar?", _context())
     semantic = parse_semantic_evaluation(
         '{"valid": false, "violations": ["treated_postpone_as_refusal"]}'
@@ -107,8 +109,28 @@ def test_merge_mantem_runtime_soberano() -> None:
 
     merged = merge_evaluations(deterministic, semantic)
 
+    assert merged.valid is True
+    assert merged.violations == ()
+
+
+def test_merge_nao_esconde_violacao_deterministica() -> None:
+    deterministic = ResponseEvaluation(False, ("technical_marker_exposed",))
+    semantic = ResponseEvaluation(True, ())
+
+    merged = merge_evaluations(deterministic, semantic)
+
     assert merged.valid is False
-    assert "treated_postpone_as_refusal" in merged.violations
+    assert merged.violations == ("technical_marker_exposed",)
+
+
+def test_rejeicao_semantica_subjetiva_nao_dispara_regeneracao() -> None:
+    deterministic = ResponseEvaluation(True, ())
+    semantic = ResponseEvaluation(False, ("failed_required_outcome",))
+
+    merged = merge_evaluations(deterministic, semantic)
+
+    assert merged.valid is True
+    assert merged.violations == ()
 
 
 def test_regeneracao_recebe_motivos_objetivos() -> None:
