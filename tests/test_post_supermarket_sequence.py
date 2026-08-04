@@ -14,7 +14,7 @@ def _script() -> PilotScript:
     return prepare_editorial_script(PilotScript(compile_editorial_document(document)))
 
 
-def test_opa_apos_primeira_mensagem_avanca_sem_encerrar() -> None:
+def test_opa_apos_primeira_mensagem_prepara_proximo_beat_sem_encerrar() -> None:
     script = _script()
     state = PilotState(
         node_id="mensagens_iniciais_001",
@@ -27,9 +27,11 @@ def test_opa_apos_primeira_mensagem_avanca_sem_encerrar() -> None:
     turn = decide_editorial_progression_turn(script, state, "Opa...")
 
     assert turn.finished is False
-    assert turn.target_id == "mensagens_iniciais_002"
-    assert "não consegui esperar" in turn.visible_fallback
-    assert turn.state.node_id == "mensagens_iniciais_002"
+    assert turn.target_id == "mensagens_iniciais_001"
+    assert turn.state.node_id == "mensagens_iniciais_001"
+    assert turn.state.pending_next_beat_id == "mensagens_iniciais_002"
+    assert turn.state.facts["_runtime_phase"] == "bridge"
+    assert "não consegui esperar" not in turn.visible_fallback
 
 
 def test_continuacao_executavel_segue_ate_a_historia_completa() -> None:
