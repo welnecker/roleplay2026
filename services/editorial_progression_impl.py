@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import replace
 
 from services import editorial_runtime_impl as runtime_impl
+from services.editorial_bridge import (
+    bridge_active,
+    create_bridge_turn,
+    release_bridge_state,
+)
 from services.editorial_contextual_destination import decide_contextual_destination_turn
 from services.editorial_declared_decisions import decide_declared_special_turn
 from services.editorial_declared_transitions import decide_declared_transition_turn
@@ -13,7 +18,6 @@ from services.editorial_followups import (
     state_after_editorial_followup,
 )
 from services.editorial_message_policy import classify_contextual_editorial_message
-from services.editorial_organic_turns import organic_editorial_turn
 from services.editorial_response_policy import clean_editorial_progression_response
 from services.editorial_routing import (
     routing_state_for_declared_skips,
@@ -30,17 +34,33 @@ from services.editorial_turn_finalization import finalize_editorial_turn
 
 
 def prepare_editorial_script(script: EditorialScript) -> EditorialScript:
-    """Prepara políticas e pontes pertencentes ao próprio roteiro editorial."""
+    """Prepara políticas e estruturas pertencentes ao próprio roteiro editorial."""
 
     prepare_editorial_followups(script)
     runtime_impl.classify_user_message = classify_contextual_editorial_message
     return script
 
 
-def _finalize_declared(script: EditorialScript, turn: EditorialTurn) -> EditorialTurn:
+def _finalize(script: EditorialScript, turn: EditorialTurn) -> EditorialTurn:
     updated = EditorialState.from_dict(turn.state.to_dict())
     updated.facts["_organic_interstitial"] = "false"
     return finalize_editorial_turn(script, replace(turn, state=updated))
+
+
+def _bridge_or_finalize(
+    script: EditorialScript,
+    previous_state: EditorialState,
+    turn: EditorialTurn,
+    user_text: str,
+    *,
+    bridge_allowed: bool,
+) -> EditorialTurn:
+    prepared = (
+        create_bridge_turn(script, previous_state, turn, user_text)
+        if bridge_allowed
+        else turn
+    )
+    return _finalize(script, prepared)
 
 
 def decide_editorial_progression_turn(
@@ -48,10 +68,13 @@ def decide_editorial_progression_turn(
     state: EditorialState,
     user_text: str,
 ) -> EditorialTurn:
-    """Decide transições comuns e decisões declaradas pelo card."""
+    """Decide pátio, destino contextual, ponte e progressão canônica."""
 
+    original_state = EditorialState.from_dict(state.to_dict())
     original_facts = dict(state.facts)
-    working_state = state_with_extracted_facts(state, user_text)
+    releasing_bridge = bridge_active(state)
+    base_state = release_bridge_state(script, state) if releasing_bridge else state
+    working_state = state_with_extracted_facts(base_state, user_text)
 
     yard_turn = decide_terminal_yard_turn(
         script,
@@ -61,15 +84,11 @@ def decide_editorial_progression_turn(
         classify_message=classify_contextual_editorial_message,
     )
     if yard_turn is not None:
-        return _finalize_declared(script, yard_turn)
+        return _finalize(script, yard_turn)
 
     contextual = decide_contextual_destination_turn(script, working_state, user_text)
     if contextual is not None:
-        return _finalize_declared(script, contextual)
-
-    organic = organic_editorial_turn(script, working_state, user_text)
-    if organic is not None:
-        return finalize_editorial_turn(script, organic)
+        return _finalize(script, contextual)
 
     declared = decide_declared_transition_turn(
         script,
@@ -79,7 +98,13 @@ def decide_editorial_progression_turn(
         classify_message=classify_contextual_editorial_message,
     )
     if declared is not None:
-        return _finalize_declared(script, declared)
+        return _bridge_or_finalize(
+            script,
+            original_state,
+            declared,
+            user_text,
+            bridge_allowed=not releasing_bridge,
+        )
 
     special = decide_declared_special_turn(
         script,
@@ -89,7 +114,13 @@ def decide_editorial_progression_turn(
         classify_message=classify_contextual_editorial_message,
     )
     if special is not None:
-        return _finalize_declared(script, special)
+        return _bridge_or_finalize(
+            script,
+            original_state,
+            special,
+            user_text,
+            bridge_allowed=not releasing_bridge,
+        )
 
     engagement = classify_contextual_editorial_message(user_text)
     routing_state = routing_state_for_declared_skips(
@@ -99,6 +130,10 @@ def decide_editorial_progression_turn(
         original_facts=original_facts,
     )
     turn = base_decide_turn(script, routing_state, user_text)
-    updated = EditorialState.from_dict(turn.state.to_dict())
-    updated.facts["_organic_interstitial"] = "false"
-    return finalize_editorial_turn(script, replace(turn, state=updated))
+    return _bridge_or_finalize(
+        script,
+        original_state,
+        turn,
+        user_text,
+        bridge_allowed=not releasing_bridge,
+    )
