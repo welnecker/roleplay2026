@@ -118,7 +118,12 @@ def _apply_effects(state: EditorialState, decision) -> EditorialState:
     return updated
 
 
-def _record_intent(state: EditorialState, resolution: IntentResolution) -> None:
+def _record_intent(
+    state: EditorialState,
+    resolution: IntentResolution,
+    *,
+    current_beat_id: str,
+) -> None:
     state.facts["_last_user_intent"] = resolution.intent
     state.facts["_last_user_intent_source"] = resolution.source
     state.facts["_last_user_intent_confidence"] = f"{resolution.confidence:.3f}"
@@ -126,6 +131,7 @@ def _record_intent(state: EditorialState, resolution: IntentResolution) -> None:
     state.facts["_last_user_explicit_decision"] = (
         "true" if resolution.explicit_decision else "false"
     )
+    state.facts["_last_user_intent_beat_id"] = str(current_beat_id or "").strip()
 
 
 def decide_declared_transition_turn(
@@ -170,7 +176,7 @@ def decide_declared_transition_turn(
     if not decision.stay and decision.target_beat_id == legacy_target:
         turn = base_decide(script, state, user_text)
         updated = _apply_effects(turn.state, decision)
-        _record_intent(updated, resolution)
+        _record_intent(updated, resolution, current_beat_id=current_id)
         return EditorialTurn(
             engagement=turn.engagement,
             target_id=turn.target_id,
@@ -189,7 +195,7 @@ def decide_declared_transition_turn(
     updated.node_id = target_id
     updated.pending_next_beat_id = ""
     updated.interstitial_turns = 0
-    _record_intent(updated, resolution)
+    _record_intent(updated, resolution, current_beat_id=current_id)
 
     fallback = _render(decision.fallback, intent=intent, user_text=user_text, current_id=current_id)
     if not fallback:
