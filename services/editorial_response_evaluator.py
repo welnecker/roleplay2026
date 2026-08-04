@@ -196,6 +196,7 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
         (
             "Você é um avaliador editorial estrito. Não reescreva a resposta.",
             "Avalie somente se a candidata obedece integralmente ao contrato narrativo.",
+            "Faça uma auditoria factual: compare cada afirmação concreta da candidata com o conteúdo autorizado pelo contrato.",
             "ORDEM DE PRECEDÊNCIA OBRIGATÓRIA:",
             "1. Conteúdo respaldado pela REFERÊNCIA SEMÂNTICA, FATOS CONFIRMADOS, MOVIMENTO OBRIGATÓRIO ou RESULTADOS OBRIGATÓRIOS está autorizado.",
             "2. FATOS DESCONHECIDOS proíbem apenas detalhes adicionais que não estejam autorizados no item 1.",
@@ -358,6 +359,7 @@ def build_regeneration_prompt(
         f"{str(base_prompt or '').strip()}\n\n"
         "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
         "A resposta anterior foi rejeitada. Reconstrua a fala do zero, em forma mínima e natural.\n"
+        "Use somente os fatos confirmados e os resultados obrigatórios do contrato; não acrescente fatos não autorizados.\n"
         "Preserve tudo o que estiver explicitamente autorizado pelo contrato e remova somente os trechos realmente rejeitados.\n"
         "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS que não esteja autorizada pela referência semântica ou pelos fatos confirmados.\n"
         "Quando faltar um fato, formule de modo neutro em vez de completar a lacuna.\n"
