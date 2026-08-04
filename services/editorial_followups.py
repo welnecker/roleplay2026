@@ -12,9 +12,12 @@ _ACTIVE_SCRIPT: ContextVar[EditorialScript | None] = ContextVar(
 )
 
 
-def _organic_policy(script: EditorialScript) -> dict[str, Any]:
-    policy = script.raw.get("organic_slack") or {}
-    return policy if isinstance(policy, dict) else {}
+def _runtime_policy(script: EditorialScript) -> dict[str, Any]:
+    direct = script.raw.get("runtime_policy") or {}
+    if isinstance(direct, dict) and direct:
+        return direct
+    legacy = script.raw.get("organic_slack") or {}
+    return legacy if isinstance(legacy, dict) else {}
 
 
 def _humanize_scene_location(value: str) -> str:
@@ -45,7 +48,7 @@ def render_editorial_followup_text(followup: dict[str, Any]) -> str:
 
 
 def _declared_state_updates(script: EditorialScript, target_id: str) -> dict[str, str]:
-    state_updates = _organic_policy(script).get("state_updates") or {}
+    state_updates = _runtime_policy(script).get("state_updates") or {}
     if not isinstance(state_updates, dict):
         return {}
     rules = state_updates.get("automatic_followups") or []

@@ -129,6 +129,19 @@ def _merge_character_patch(merged: dict[str, Any], extension: dict[str, Any]) ->
         _append_unique_strings(character, profile_key, profile_patch.get("append", []))
 
 
+def _replace_declared_policy(
+    merged: dict[str, Any],
+    extension: dict[str, Any],
+    key: str,
+) -> None:
+    value = extension.get(key)
+    if value is None:
+        return
+    if not isinstance(value, dict):
+        raise EditorialPackageError(f"{key} deve ser um mapa")
+    merged[key] = deepcopy(value)
+
+
 def merge_editorial_extension(document: dict[str, Any], extension: dict[str, Any]) -> dict[str, Any]:
     merged = deepcopy(document)
     beats_by_id = {
@@ -155,6 +168,9 @@ def merge_editorial_extension(document: dict[str, Any], extension: dict[str, Any
         if not isinstance(organic_slack, dict):
             raise EditorialPackageError("organic_slack deve ser um mapa")
         merged["organic_slack"] = deepcopy(organic_slack)
+
+    _replace_declared_policy(merged, extension, "bridge_policy")
+    _replace_declared_policy(merged, extension, "runtime_policy")
 
     _merge_character_patch(merged, extension)
 
