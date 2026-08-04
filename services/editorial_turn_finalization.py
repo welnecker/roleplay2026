@@ -6,6 +6,7 @@ from typing import Any
 from services.editorial_beat_context import build_beat_context, render_beat_context
 from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
+from services.editorial_terminal_yard import state_for_target
 
 
 def _organic_policy(script: EditorialScript) -> dict[str, Any]:
@@ -55,7 +56,7 @@ def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória, BeatContext universal e continuidade canônica ao turno."""
+    """Aplica memória, fase estrutural, BeatContext e continuidade canônica."""
 
     previous_ids = _memory_ids(turn.state)
     narrative_context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
@@ -63,6 +64,7 @@ def finalize_editorial_turn(
     updated = EditorialState.from_dict(turn.state.to_dict())
     updated.facts["_active_memory_ids"] = ",".join(dict.fromkeys([*previous_ids, *writes]))
     updated.facts["_pending_memory_writes"] = ",".join(writes)
+    updated = state_for_target(script, updated, turn.target_id)
 
     strict = _is_strict_canonical_beat(script, turn.target_id)
     strict_policy = _strict_canonical_policy(script)
