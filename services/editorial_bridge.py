@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Mapping
+from typing import Any, Mapping
 
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 
@@ -9,6 +9,50 @@ _PHASE_KEY = "_runtime_phase"
 _BRIDGE_ORIGIN_KEY = "_bridge_origin_beat_id"
 _BRIDGE_TARGET_KEY = "_bridge_target_beat_id"
 _BRIDGE_TURNS_KEY = "_bridge_turn_count"
+
+
+def bridge_policy(script: EditorialScript) -> dict[str, Any]:
+    raw = script.raw.get("bridge_policy") or {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def bridge_enabled_for_beat(script: EditorialScript, beat_id: str) -> bool:
+    """Ativa a ponte somente onde o card declarou a nova máquina de estados."""
+
+    policy = bridge_policy(script)
+    if str(policy.get("mode", "disabled") or "disabled").strip() != "required":
+        return False
+
+    clean = str(beat_id or "").strip()
+    beat = script.beats.get(clean) or {}
+    block_id = str(beat.get("block_id", "") or "").strip()
+
+    excluded_beats = {
+        str(item).strip()
+        for item in policy.get("exclude_beat_ids", []) or []
+        if str(item).strip()
+    }
+    excluded_blocks = {
+        str(item).strip()
+        for item in policy.get("exclude_block_ids", []) or []
+        if str(item).strip()
+    }
+    if clean in excluded_beats or block_id in excluded_blocks:
+        return False
+
+    beat_ids = {
+        str(item).strip()
+        for item in policy.get("beat_ids", []) or []
+        if str(item).strip()
+    }
+    block_ids = {
+        str(item).strip()
+        for item in policy.get("block_ids", []) or []
+        if str(item).strip()
+    }
+    if beat_ids or block_ids:
+        return clean in beat_ids or block_id in block_ids
+    return True
 
 
 def bridge_active(state: EditorialState) -> bool:
@@ -45,6 +89,8 @@ def should_create_bridge(
 ) -> bool:
     origin = previous_state.node_id or script.first_beat_id
     target = str(turn.target_id or "").strip()
+    if not bridge_enabled_for_beat(script, origin):
+        return False
     if bridge_active(previous_state) or turn.finished:
         return False
     if not target or target == origin or target not in script.beats:
@@ -96,7 +142,7 @@ def create_bridge_turn(
     return replace(
         proposed_turn,
         target_id=origin_id,
-        visible_fallback="",
+        visible_fallback=str(proposed_turn.visible_fallback or "").strip(),
         system_prompt=prompt,
         state=updated,
         finished=False,
@@ -124,6 +170,8 @@ def release_bridge_state(script: EditorialScript, state: EditorialState) -> Edit
 
 __all__ = [
     "bridge_active",
+    "bridge_enabled_for_beat",
+    "bridge_policy",
     "bridge_target_id",
     "create_bridge_turn",
     "release_bridge_state",
