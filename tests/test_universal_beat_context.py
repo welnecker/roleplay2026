@@ -44,6 +44,60 @@ def test_compilador_preserva_contrato_factual_estruturado() -> None:
     assert "o conteúdo, a quantidade e o peso das compras" in beat["unknown_facts"]
 
 
+def test_todos_os_beats_recebem_contrato_factual_derivado() -> None:
+    script = _card_script()
+
+    assert script.beats
+    for beat_id, beat in script.beats.items():
+        assert beat["factual_contract_mode"] == "explicit+derived", beat_id
+        assert beat["allowed_topics"], beat_id
+        assert beat["confirmed_facts"], beat_id
+        assert beat["unknown_facts"], beat_id
+        assert any(
+            item.startswith("conteúdo semântico autorizado pela linha canônica:")
+            for item in beat["confirmed_facts"]
+        ), beat_id
+        assert (
+            "ações, decisões, falas, pensamentos e intenções do usuário que não tenham sido declarados"
+            in beat["unknown_facts"]
+        ), beat_id
+        assert (
+            "acontecimentos, decisões ou resultados pertencentes a beats futuros"
+            in beat["unknown_facts"]
+        ), beat_id
+
+
+def test_contrato_explicito_especializa_sem_perder_regras_universais() -> None:
+    script = _card_script()
+    beat = script.beats["reencontro_fila_007"]
+
+    assert "Mary está no caixa do supermercado" in beat["confirmed_facts"]
+    assert "o lugar exato onde o usuário deve esperar" in beat["unknown_facts"]
+    assert (
+        "localização exata, distância ou deslocamento que não tenham sido declarados"
+        in beat["unknown_facts"]
+    )
+    assert any(
+        item.startswith("movimento autorizado neste beat:")
+        for item in beat["confirmed_facts"]
+    )
+
+
+def test_beat_sem_patch_explicito_renderiza_base_factual_completa() -> None:
+    script = _card_script()
+    previous = EditorialState(node_id="encontro_acidental_001")
+    turn = decide_editorial_turn(script, previous, "Tudo bem, não me machuquei.")
+
+    context = build_beat_context(script, previous, turn)
+    rendered = render_beat_context(context)
+
+    assert context.confirmed_facts
+    assert context.unknown_facts
+    assert context.allowed_topics
+    assert "conteúdo semântico autorizado pela linha canônica" in rendered
+    assert "ações, decisões, falas, pensamentos e intenções do usuário" in rendered
+
+
 def test_adiamento_declara_resultados_sem_prompt_artesanal() -> None:
     script = _card_script()
     previous = EditorialState(node_id="reencontro_fila_007")
