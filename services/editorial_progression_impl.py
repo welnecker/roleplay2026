@@ -24,6 +24,7 @@ from services.editorial_runtime_types import (
     EditorialState,
     EditorialTurn,
 )
+from services.editorial_terminal_yard import decide_terminal_yard_turn
 from services.editorial_turn_finalization import finalize_editorial_turn
 
 
@@ -50,6 +51,16 @@ def decide_editorial_progression_turn(
 
     original_facts = dict(state.facts)
     working_state = state_with_extracted_facts(state, user_text)
+
+    yard_turn = decide_terminal_yard_turn(
+        script,
+        working_state,
+        user_text,
+        base_decide=base_decide_turn,
+        classify_message=classify_contextual_editorial_message,
+    )
+    if yard_turn is not None:
+        return _finalize_declared(script, yard_turn)
 
     organic = organic_editorial_turn(script, working_state, user_text)
     if organic is not None:
