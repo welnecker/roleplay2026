@@ -6,7 +6,7 @@ from services.editorial_diagnostics import log_editorial_exception
 from services.editorial_response_evaluator import build_regeneration_prompt
 
 
-def test_regeneracao_traduz_invented_detail_em_instrucao_factual() -> None:
+def test_regeneracao_preserva_linguagem_viva_e_corrige_apenas_quebras_reais() -> None:
     prompt = build_regeneration_prompt(
         base_prompt="Fatos confirmados: compras e carro.",
         violations=("invented_unconfirmed_detail",),
@@ -14,8 +14,9 @@ def test_regeneracao_traduz_invented_detail_em_instrucao_factual() -> None:
 
     assert "Reconstrua a fala do zero" in prompt
     assert "Use somente os fatos confirmados" in prompt
-    assert "peso, quantidade, roupa, risco, esforço, urgência" in prompt
-    assert "Quando faltar um fato, formule de modo neutro" in prompt
+    assert "Preserve metáforas, flerte, humor, duplo sentido" in prompt
+    assert "ações ou decisões presumidas do usuário" in prompt
+    assert "Quando faltar um fato necessário, formule de modo neutro" in prompt
 
 
 def test_rejeicao_sintetica_nao_emite_none_type(caplog) -> None:
