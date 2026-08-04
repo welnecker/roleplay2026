@@ -15,6 +15,10 @@ _LAST_EVALUATED_CANDIDATE: ContextVar[str] = ContextVar(
     "editorial_last_evaluated_candidate",
     default="",
 )
+_LAST_EVALUATION_CONTEXT: ContextVar[BeatContext | None] = ContextVar(
+    "editorial_last_evaluation_context",
+    default=None,
+)
 _TECHNICAL_MARKERS = (
     "<end_run",
     "end_run",
@@ -50,8 +54,8 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
 )
 _VIOLATION_GUIDANCE = {
     "invented_unconfirmed_detail": (
-        "Remova qualquer concretização de FATOS DESCONHECIDOS e todo detalhe que não conste em FATOS CONFIRMADOS. "
-        "Assuntos permitidos não autorizam criar localização, causa, peso, quantidade, roupa, risco, esforço, urgência."
+        "Remova apenas o trecho realmente não autorizado. Preserve todo conteúdo respaldado pela linha canônica, "
+        "pelos fatos confirmados ou pelos resultados obrigatórios."
     ),
     "contradicted_confirmed_fact": "Reescreva sem contradizer nenhum fato confirmado.",
     "failed_required_outcome": "Realize todos os resultados obrigatórios de modo direto e breve.",
@@ -95,6 +99,49 @@ def _sentence_count(text: str) -> int:
         return 0
     chunks = re.split(r"(?<=[.!?])(?:\s+|$)", body)
     return sum(1 for chunk in chunks if chunk.strip())
+
+
+def _normalized(value: str) -> str:
+    return " ".join(re.findall(r"\w+", str(value or "").casefold(), flags=re.UNICODE))
+
+
+def _evidence_is_authorized(evidence: str, context: BeatContext) -> bool:
+    needle = _normalized(evidence)
+    if not needle:
+        return False
+    authorized = (
+        context.canonical_line,
+        context.objective,
+        context.dramatic_direction,
+        *context.confirmed_facts,
+        *context.required_outcomes,
+    )
+    return any(needle in _normalized(item) for item in authorized if str(item).strip())
+
+
+def _context_allows_violation(code: str, context: BeatContext | None) -> bool:
+    if context is None:
+        return True
+
+    required = " ".join(context.required_outcomes).casefold()
+    forbidden = " ".join(context.forbidden_outcomes).casefold()
+    pending = context.transition_status == "decision_pending"
+
+    if code == "failed_to_answer_user_question":
+        return context.user_intent == "question" or (
+            "responder" in required and "pergunta" in required
+        )
+    if code == "failed_to_request_explicit_decision":
+        return "decisão explícita" in required or "decisao explicita" in required
+    if code == "treated_question_as_acceptance":
+        return context.user_intent == "question"
+    if code == "treated_postpone_as_refusal":
+        return context.user_intent == "postpone"
+    if code == "closed_pending_route":
+        return pending
+    if code == "presumed_user_decision":
+        return pending or "presumir aceite" in forbidden or "presumir recusa" in forbidden
+    return True
 
 
 def evaluate_deterministic_response(
@@ -143,20 +190,26 @@ def evaluate_deterministic_response(
 
 
 def build_semantic_evaluation_prompt(context: BeatContext) -> str:
+    _LAST_EVALUATION_CONTEXT.set(context)
     allowed = ", ".join(sorted(_ALLOWED_SEMANTIC_VIOLATIONS))
     return "\n".join(
         (
             "Você é um avaliador editorial estrito. Não reescreva a resposta.",
             "Avalie somente se a candidata obedece integralmente ao contrato narrativo.",
-            "Faça uma auditoria factual: compare cada afirmação concreta da candidata com FATOS CONFIRMADOS.",
-            "Se uma afirmação concretizar qualquer dimensão listada em FATOS DESCONHECIDOS, marque invented_unconfirmed_detail.",
-            "ASSUNTOS PERMITIDOS delimitam o tema, mas nunca transformam informação ausente em fato.",
-            "Expressões como 'ali fora', 'no estacionamento', 'está pesado' ou 'por causa do salto' são invenções quando localização, peso ou calçado estiverem desconhecidos.",
-            "Um detalhe plausível, engraçado, breve ou coerente continua sendo invenção quando não está confirmado.",
-            "Rejeite também qualquer resposta que presuma a decisão do usuário, encerre uma rota pendente, antecipe o beat seguinte ou deixe de cumprir um resultado obrigatório.",
+            "ORDEM DE PRECEDÊNCIA OBRIGATÓRIA:",
+            "1. Conteúdo respaldado pela REFERÊNCIA SEMÂNTICA, FATOS CONFIRMADOS, MOVIMENTO OBRIGATÓRIO ou RESULTADOS OBRIGATÓRIOS está autorizado.",
+            "2. FATOS DESCONHECIDOS proíbem apenas detalhes adicionais que não estejam autorizados no item 1.",
+            "3. Uma proibição genérica nunca anula uma autorização explícita do contrato.",
+            "Faça uma auditoria factual por trechos concretos, não por impressão geral.",
+            "Para cada violação, cite em evidence o menor trecho literal da candidata que demonstra o erro.",
+            "Não marque invented_unconfirmed_detail quando o trecho reproduzir ou parafrasear conteúdo explicitamente autorizado pela referência semântica.",
+            "Só marque failed_to_answer_user_question quando a intenção detectada for question ou quando responder à pergunta estiver nos resultados obrigatórios.",
+            "Só marque presumed_user_decision ou closed_pending_route quando a transição estiver pendente.",
+            "Expressões como 'ali fora', 'no estacionamento', 'está pesado' ou 'por causa do salto' são invenções somente quando não estiverem autorizadas pelo contrato.",
             "Responda exclusivamente com um único objeto JSON válido, sem markdown e sem comentário:",
-            '{"valid": true, "violations": []}',
-            f"Identificadores permitidos em violations: {allowed}",
+            '{"valid": false, "violations": [{"code": "invented_unconfirmed_detail", "evidence": "trecho literal"}]}',
+            "Quando estiver válida, responda: {\"valid\": true, \"violations\": []}",
+            f"Identificadores permitidos em code: {allowed}",
             render_beat_context(context),
         )
     )
@@ -177,6 +230,8 @@ def build_semantic_evaluation_request(
 
 def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
     text = str(raw or "").strip()
+    context = _LAST_EVALUATION_CONTEXT.get()
+    candidate = _LAST_EVALUATED_CANDIDATE.get()
     try:
         payload: Any = json.loads(text)
     except (TypeError, ValueError, json.JSONDecodeError):
@@ -201,27 +256,59 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
         return result
 
     violations: list[str] = []
+    discarded: list[dict[str, str]] = []
     for item in raw_violations:
-        value = str(item).strip()
-        if not value:
+        if isinstance(item, dict):
+            code = str(item.get("code", "") or "").strip()
+            evidence = str(item.get("evidence", "") or "").strip()
+            if not code or not evidence:
+                violations.append("semantic_evaluator_invalid_violations")
+                continue
+            if _normalized(evidence) not in _normalized(candidate):
+                violations.append("semantic_evaluator_invalid_violations")
+                continue
+        else:
+            # Compatibilidade com respostas do formato anterior.
+            code = str(item).strip()
+            evidence = ""
+
+        if not code:
             continue
-        violations.append(
-            value if value in _ALLOWED_SEMANTIC_VIOLATIONS else "semantic_evaluator_invalid_violations"
-        )
+        if code not in _ALLOWED_SEMANTIC_VIOLATIONS:
+            violations.append("semantic_evaluator_invalid_violations")
+            continue
+        if not _context_allows_violation(code, context):
+            discarded.append({"code": code, "reason": "incompatible_with_context"})
+            continue
+        if (
+            code == "invented_unconfirmed_detail"
+            and evidence
+            and context is not None
+            and _evidence_is_authorized(evidence, context)
+        ):
+            discarded.append({"code": code, "reason": "explicitly_authorized", "evidence": evidence})
+            continue
+        violations.append(code)
 
     unique = tuple(dict.fromkeys(violations))
-    valid = payload["valid"] is True
-    if not valid and not unique:
-        unique = ("semantic_rejection_without_reason",)
-    if valid and unique:
+    declared_valid = payload["valid"] is True
+    if declared_valid and unique:
+        result = ResponseEvaluation(False, unique)
+    elif not declared_valid and not unique:
+        # Todas as acusações foram incompatíveis com o contrato; a candidata não pode ser
+        # rejeitada apenas pela conclusão textual do avaliador.
+        result = ResponseEvaluation(True, ())
+    elif not declared_valid:
         result = ResponseEvaluation(False, unique)
     else:
-        result = ResponseEvaluation(valid, unique)
+        result = ResponseEvaluation(True, ())
+
     _log_evaluation(
         "semantic_result",
         raw=text,
         valid=result.valid,
         violations=result.violations,
+        discarded=discarded,
     )
     return result
 
@@ -271,8 +358,8 @@ def build_regeneration_prompt(
         f"{str(base_prompt or '').strip()}\n\n"
         "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
         "A resposta anterior foi rejeitada. Reconstrua a fala do zero, em forma mínima e natural.\n"
-        "Use somente os fatos confirmados e os resultados obrigatórios do contrato; não acrescente fatos, explicações, justificativas, humor concreto, imagens, objetos, roupas, riscos ou causas.\n"
-        "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS.\n"
+        "Preserve tudo o que estiver explicitamente autorizado pelo contrato e remova somente os trechos realmente rejeitados.\n"
+        "Não concretize nenhuma dimensão listada em FATOS DESCONHECIDOS que não esteja autorizada pela referência semântica ou pelos fatos confirmados.\n"
         "Quando faltar um fato, formule de modo neutro em vez de completar a lacuna.\n"
         "Não comente a avaliação e não repita, substitua por sinônimo ou desloque nenhum detalhe rejeitado.\n"
         f"{rejected_block}"
