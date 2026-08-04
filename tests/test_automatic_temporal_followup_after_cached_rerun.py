@@ -15,6 +15,9 @@ from services.editorial_progression import (
 from services.editorial_runtime_impl import PilotScript, PilotState
 
 
+FAREWELL_BEAT_ID = "encontro_acidental_despedida_001"
+
+
 def _script() -> PilotScript:
     return prepare_editorial_script(
         PilotScript(compile_editorial_document(load_source_document()))
@@ -27,14 +30,14 @@ def test_rerun_reativa_followup_temporal_do_roteiro_em_cache() -> None:
     def execute_in_new_context():
         turn = decide_editorial_progression_turn(
             script,
-            PilotState(node_id="encontro_acidental_006"),
+            PilotState(node_id=FAREWELL_BEAT_ID),
             "Tchau...",
         )
         return turn, editorial_followups_after(turn.target_id)
 
     turn, followups = Context().run(execute_in_new_context)
 
-    assert turn.target_id == "encontro_acidental_006"
+    assert turn.target_id == FAREWELL_BEAT_ID
     assert turn.state.facts["_runtime_phase"] == "bridge"
     assert turn.state.pending_next_beat_id == "reencontro_fila_001"
     assert len(followups) == 1
@@ -50,7 +53,7 @@ def test_followup_temporal_consume_a_ponte_sem_nova_fala_do_usuario() -> None:
     script = _script()
     turn = decide_editorial_progression_turn(
         script,
-        PilotState(node_id="encontro_acidental_006"),
+        PilotState(node_id=FAREWELL_BEAT_ID),
         "Tchau...",
     )
     followup = editorial_followups_after(turn.target_id, script=script)[0]
