@@ -92,6 +92,21 @@ def _is_structural_destination(script: EditorialScript, target_id: str) -> bool:
     return bool(str(target.get("terminal_yard_id", "") or "").strip())
 
 
+def _requires_integrated_canonical_response(
+    script: EditorialScript,
+    target_id: str,
+) -> bool:
+    """Indica que o próximo beat deve reagir e avançar na mesma resposta.
+
+    Esses beats não podem receber uma ponte intermediária: a ponte consumiria
+    parte do seu objetivo semântico e o runtime o repetiria no turno seguinte.
+    """
+
+    target = script.beats.get(str(target_id or "").strip()) or {}
+    boundary = str(target.get("response_boundary", "") or "").strip()
+    return boundary == "integrated_canonical"
+
+
 def _is_resolved_runtime_transition(
     previous_state: EditorialState,
     turn: EditorialTurn,
@@ -125,6 +140,8 @@ def should_create_bridge(
     if _is_resolved_runtime_transition(previous_state, turn):
         return False
     if not target or target == origin or target not in script.beats:
+        return False
+    if _requires_integrated_canonical_response(script, target):
         return False
     return not _is_structural_destination(script, target)
 
