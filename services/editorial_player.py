@@ -31,7 +31,16 @@ def _load_or_reload_runtime() -> ModuleType:
     if registered is None:
         return importlib.import_module(_RUNTIME_MODULE)
 
-    return importlib.reload(registered)
+    try:
+        return importlib.reload(registered)
+    except ImportError:
+        # O Streamlit pode remover ou substituir o módulo entre a leitura acima
+        # e a verificação interna feita por importlib.reload(). Nesse caso, não
+        # tente recarregar a referência obsoleta: importe o registro atual.
+        current = sys.modules.get(_RUNTIME_MODULE)
+        if current is None or current is not registered:
+            return importlib.import_module(_RUNTIME_MODULE)
+        raise
 
 
 def run_editorial_player() -> None:
