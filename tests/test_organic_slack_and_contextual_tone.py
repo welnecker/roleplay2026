@@ -29,7 +29,7 @@ def test_comentario_livre_nao_mistura_proxima_linha_do_roteiro() -> None:
     assert turn.target_id == "late_night_008"
     assert turn.state.pending_next_beat_id == "morning_bridge_001"
     assert turn.state.facts["_runtime_phase"] == "bridge"
-    assert turn.state.facts["_organic_interstitial"] == "false"
+    assert "_organic_interstitial" not in turn.state.facts
     assert "linha futura proibida" in turn.system_prompt.casefold()
     assert "já amanheceu" not in turn.visible_fallback.casefold()
 
@@ -54,7 +54,7 @@ def test_turno_seguinte_libera_o_beat_pendente_da_ponte() -> None:
     assert turn.target_id == "morning_bridge_001"
     assert turn.state.pending_next_beat_id == ""
     assert turn.state.facts["_runtime_phase"] == "canonical"
-    assert turn.state.facts["_organic_interstitial"] == "false"
+    assert "_organic_interstitial" not in turn.state.facts
 
 
 def test_pergunta_com_ressalva_recebe_ponte_antes_do_proximo_beat() -> None:
