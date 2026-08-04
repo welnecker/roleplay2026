@@ -107,11 +107,21 @@ def prepare_editorial_followups(script: EditorialScript) -> EditorialScript:
     return script
 
 
-def editorial_followups_after(target_id: str) -> tuple[dict[str, Any], ...]:
-    script = _ACTIVE_SCRIPT.get()
-    if script is None:
+def editorial_followups_after(
+    target_id: str,
+    *,
+    script: EditorialScript | None = None,
+) -> tuple[dict[str, Any], ...]:
+    """Retorna follow-ups do roteiro informado, sem depender do contexto do cache.
+
+    O fallback contextual permanece apenas para chamadas legadas e testes antigos.
+    O player deve sempre fornecer ``script`` explicitamente.
+    """
+
+    resolved_script = script if script is not None else _ACTIVE_SCRIPT.get()
+    if resolved_script is None:
         return ()
-    registered = getattr(script, "editorial_followups", {})
+    registered = getattr(resolved_script, "editorial_followups", {})
     if not isinstance(registered, dict):
         return ()
     return registered.get(str(target_id), ())
