@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from types import ModuleType
 
 from services.editorial_script_cache import refresh_loaded_editorial_script_cache
 
@@ -9,15 +10,29 @@ from services.editorial_script_cache import refresh_loaded_editorial_script_cach
 _RUNTIME_MODULE = "services.editorial_player_runtime"
 
 
-def run_editorial_player() -> None:
-    """Executa o player editorial em toda nova execução do Streamlit."""
+def _load_or_reload_runtime() -> ModuleType:
+    """Carrega o runtime ou recarrega somente a instância ainda registrada."""
 
     loaded = sys.modules.get(_RUNTIME_MODULE)
     if loaded is None:
-        importlib.import_module(_RUNTIME_MODULE)
-        return
+        return importlib.import_module(_RUNTIME_MODULE)
+
     refresh_loaded_editorial_script_cache(loaded)
-    importlib.reload(loaded)
+
+    # O refresh pode invalidar/remover o módulo durante o hot reload do Streamlit.
+    # Releia o registro oficial antes de chamar importlib.reload; uma referência
+    # antiga não pode ser recarregada depois de sair de sys.modules.
+    registered = sys.modules.get(_RUNTIME_MODULE)
+    if registered is None:
+        return importlib.import_module(_RUNTIME_MODULE)
+
+    return importlib.reload(registered)
+
+
+def run_editorial_player() -> None:
+    """Executa o player editorial em toda nova execução do Streamlit."""
+
+    _load_or_reload_runtime()
 
 
 __all__ = ["run_editorial_player"]
