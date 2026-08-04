@@ -9,6 +9,9 @@ from services.editorial_progression import (
 )
 
 
+FAREWELL_BEAT_ID = "encontro_acidental_despedida_001"
+
+
 def _load() -> None:
     raw = load_source_document()
     script = PilotScript(compile_editorial_document(raw))
@@ -17,7 +20,7 @@ def _load() -> None:
 
 def test_reencontro_exibe_passagem_de_tempo_e_local() -> None:
     _load()
-    bridge = editorial_followups_after("encontro_acidental_006")[0]
+    bridge = editorial_followups_after(FAREWELL_BEAT_ID)[0]
 
     assert bridge["text"].startswith("[ALGUM TEMPO DEPOIS — SUPERMERCADO FILA]")
     assert "Olha você de novo" in bridge["text"]
