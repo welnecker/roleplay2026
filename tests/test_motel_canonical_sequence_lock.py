@@ -23,7 +23,7 @@ def _assert_bridge(turn, *, origin: str, target: str) -> None:
 
 
 def test_card_declara_prefixo_de_continuidade_canonica() -> None:
-    policy = _script().raw["organic_slack"]["strict_canonical"]
+    policy = _script().raw["runtime_policy"]["strict_canonical"]
 
     assert policy["beat_prefixes"] == ["motel_"]
     assert policy["state_fact"] == "_strict_motel_canonical"
