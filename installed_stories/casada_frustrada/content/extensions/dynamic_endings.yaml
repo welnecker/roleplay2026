@@ -1,0 +1,107 @@
+format_version: 1
+package_id: roleplay2026.casada_frustrada
+
+# Encerramentos contextuais do primeiro contato.
+# A intensidade sexual consensual do motel não herda este contrato: ela pertence
+# a outro estágio relacional, privado e com intimidade já estabelecida.
+patch_beats:
+  encontro_acidental_001:
+    interaction_context: &dynamic_first_contact
+      relationship_stage: strangers
+      setting: supermarket
+      privacy: public
+      intimacy_level: 0
+      mary_disclosed_desire: false
+      mutual_attraction_confirmed: false
+      allowed_interactions:
+        - apology_or_reassurance
+        - respectful_compliment
+        - light_flirting
+        - situational_humor
+        - ordinary_disagreement
+        - brief_topic_digression
+      recoverable_tensions:
+        - premature_romantic_advance_without_pressure
+        - isolated_rudeness_without_exit_request
+        - awkward_or_vexatious_subject_without_humiliation
+        - isolated_topic_derailment
+      terminal_violations:
+        - explicit_or_vehement_rejection_of_continuation
+        - sexual_harassment_in_incompatible_context
+        - humiliating_or_ridiculing_exposure
+        - vexatious_subject_used_to_degrade_character
+        - drastic_or_repeated_topic_derailment_breaking_the_scene
+      immediate_endings:
+        - coercion_or_threat
+        - gratuitous_violence_or_credible_threat
+        - refusal_disregarded_with_intimidation
+        - repeated_explicit_order_to_leave_or_stop
+      terminal_yard_target: yard_dynamic_rupture_001
+      immediate_ending_target: end_hostile
+  encontro_acidental_002:
+    interaction_context: *dynamic_first_contact
+  encontro_acidental_003:
+    interaction_context: *dynamic_first_contact
+  encontro_acidental_004:
+    interaction_context: *dynamic_first_contact
+  encontro_acidental_005:
+    interaction_context: *dynamic_first_contact
+
+append_blocks:
+  - block_id: yard_dynamic_rupture
+    block_type: terminal_yard
+    order: 93
+    title: Pátio dinâmico de ruptura da interação
+    entry_beat_id: yard_dynamic_rupture_001
+    min_user_turns: 1
+    max_user_turns: 2
+    rules:
+      - O motivo real da ruptura vem do sinal e da justificativa contextual classificados.
+      - Mary abandona o objetivo do fluxo principal e não retorna ao beat pendente.
+      - Mary respeita recusas veementes e pedidos claros de afastamento sem insistir.
+      - Mary não transforma hostilidade, humilhação ou importunação em atração secreta.
+      - A resposta deve ser proporcional: firme para abuso, breve para recusa e perplexa para fuga drástica do assunto.
+      - Não abrir perguntas, flerte, negociação íntima ou gancho para recuperar a interação.
+      - Intensidade sexual consensual em contexto íntimo não constitui ruptura por si só.
+    beats:
+      - beat_id: yard_dynamic_rupture_001
+        order: 1
+        type: dialogue
+        required_movement: Mary reage especificamente à causa da ruptura, reconhece o limite ou estabelece o próprio e interrompe o objetivo narrativo anterior.
+        canonical_line: Tudo bem. Não vou insistir nem continuar essa conversa.
+        next_beat_id: yard_dynamic_rupture_002
+        max_questions: 0
+        max_sentences: 2
+        memory_writes: []
+        allowed_transitions: {engaged: yard_dynamic_rupture_002, minimal: yard_dynamic_rupture_002, dismissive: yard_dynamic_rupture_002, nonsense: yard_dynamic_rupture_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: yard_dynamic_rupture_002
+        order: 2
+        type: dialogue
+        required_movement: Mary responde somente ao tom final necessário e encerra sem reabrir o vínculo ou o roteiro principal.
+        canonical_line: Certo. Cada um segue seu caminho. Passar bem.
+        next_beat_id: end_dynamic_rupture
+        max_questions: 0
+        max_sentences: 2
+        memory_writes: []
+        allowed_transitions: {engaged: end_dynamic_rupture, minimal: end_dynamic_rupture, dismissive: end_dynamic_rupture, nonsense: end_dynamic_rupture, mocking: end_hostile, hostile: end_hostile}
+        status: active
+
+  - block_id: dynamic_rupture_ending
+    order: 98
+    title: Encerramento dinâmico por inviabilidade da interação
+    entry_beat_id: end_dynamic_rupture
+    rules: []
+    beats:
+      - beat_id: end_dynamic_rupture
+        order: 1
+        type: ending
+        required_movement: Encerrar tecnicamente após a despedida proporcional à ruptura contextual.
+        canonical_line: A interação terminou.
+        next_beat_id: ''
+        max_questions: 0
+        max_sentences: 1
+        memory_writes: []
+        allowed_transitions: {}
+        ending: {run_status: terminated, ending_code: contextual_interaction_broken}
+        status: active
