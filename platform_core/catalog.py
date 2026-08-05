@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import mimetypes
 from pathlib import Path
+from urllib.parse import urlparse
 
 from packages.loader import discover_packages
 from packages.models import InstalledStoryPackage
@@ -14,6 +17,34 @@ def _format_brl(price_cents: int) -> str:
     value = price_cents / 100
     formatted = f"{value:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
     return f"R$ {formatted}"
+
+
+def _cover_url(package_root: Path, cover: str) -> str:
+    """Converte uma capa local do pacote em URL utilizável pelo navegador."""
+    value = str(cover or "").strip()
+    if not value:
+        return ""
+
+    parsed = urlparse(value)
+    if parsed.scheme in {"http", "https", "data"}:
+        return value
+
+    root = package_root.resolve()
+    target = (root / value).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError:
+        return ""
+
+    if not target.is_file():
+        return ""
+
+    mime_type, _ = mimetypes.guess_type(target.name)
+    if not mime_type or not mime_type.startswith("image/"):
+        return ""
+
+    encoded = base64.b64encode(target.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
 
 
 def package_to_story_card(package: InstalledStoryPackage) -> StoryCard:
@@ -33,7 +64,7 @@ def package_to_story_card(package: InstalledStoryPackage) -> StoryCard:
         progress_status=ProgressStatus.NOT_STARTED,
         price_label="" if is_free else _format_brl(commerce.price_cents),
         chapter_label=card.chapter_label,
-        cover_url=str(package.root / card.cover) if card.cover else "",
+        cover_url=_cover_url(package.root, card.cover),
         is_tasting=is_free,
         profile_name=profile.name if profile else card.title,
         profile_identity=profile.identity if profile else card.description,
