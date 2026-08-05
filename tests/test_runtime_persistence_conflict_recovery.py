@@ -59,6 +59,24 @@ class _FakeRuns:
         )
         return self.current
 
+    def _from_row(self, row: dict[str, object]) -> StoryRun:
+        return StoryRun(
+            run_id=str(row.get("run_id", "")),
+            credit_id=str(row.get("credit_id", "")),
+            user_id=str(row.get("user_id", "")),
+            package_id=str(row.get("package_id", "")),
+            script_version=str(row.get("script_version", "")),
+            current_block_id=str(row.get("current_block_id", "")),
+            current_beat_id=str(row.get("current_beat_id", "")),
+            status=str(row.get("status", "active")),  # type: ignore[arg-type]
+            ending_code=str(row.get("ending_code", "")),
+            state_version=int(row.get("state_version", 1) or 1),
+            permanent_memory_ids=[],
+            started_at=str(row.get("started_at", "")),
+            ended_at=str(row.get("ended_at", "")),
+            updated_at=str(row.get("updated_at", "")),
+        )
+
 
 class _FakeRunTable:
     def __init__(self, current: StoryRun) -> None:
@@ -126,7 +144,7 @@ def test_update_run_progress_aceita_conflito_ja_resolvido() -> None:
         beat_id="late_night_003",
     )
 
-    assert updated is current
+    assert updated == current
     assert runs.calls == [(92, "late_night", "late_night_003")]
 
 
