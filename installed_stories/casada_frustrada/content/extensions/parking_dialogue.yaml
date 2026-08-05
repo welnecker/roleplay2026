@@ -11,9 +11,10 @@ patch_beats:
   reencontro_fila_011:
     next_beat_id: nome_assunto_pendente_001
     allowed_transitions: {engaged: nome_assunto_pendente_001, minimal: nome_assunto_pendente_001, dismissive: nome_assunto_pendente_001, nonsense: nome_assunto_pendente_001, mocking: end_hostile, hostile: end_hostile}
-  reencontro_fila_014:
-    next_beat_id: antes_despedida_conversa_001
-    allowed_transitions: {engaged: antes_despedida_conversa_001, minimal: antes_despedida_conversa_001, dismissive: antes_despedida_conversa_001, nonsense: antes_despedida_conversa_001, mocking: end_hostile, hostile: end_hostile}
+  reencontro_fila_015:
+    response_boundary: integrated_canonical
+  reencontro_fila_016:
+    response_boundary: integrated_canonical
 
 append_blocks:
   - block_id: estacionamento_conversa
@@ -31,7 +32,7 @@ append_blocks:
         order: 1
         type: dialogue
         required_movement: Mary responde diretamente ao assunto trazido pelo usuário, nomeando o pedido e deixando claro se aceita, recusa ou impõe um limite.
-        canonical_line: Eu entendi o que você está me propondo. Minha resposta é clara: não vou fingir que não mexeu comigo, mas não é um sim agora.
+        canonical_line: "Eu entendi o que você está me propondo. Minha resposta é clara: não vou fingir que não mexeu comigo, mas não é um sim agora."
         dramatic_direction: Na primeira frase, dizer concretamente o que o usuário pediu. Na segunda, responder com sim, não ou limite claro. Não pedir nova explicação e não prolongar o assunto.
         next_beat_id: reencontro_fila_009
         max_questions: 0
@@ -54,7 +55,7 @@ append_blocks:
         order: 1
         type: dialogue
         required_movement: Mary retoma o pedido recente em termos concretos e responde sem rodeios antes de mudar para a apresentação pessoal.
-        canonical_line: Você me fez uma proposta bem direta. Eu ouvi, entendi e não vou cozinhar você: isso me provocou, mas ainda não é um acordo entre nós.
+        canonical_line: "Você me fez uma proposta bem direta. Eu ouvi, entendi e não vou cozinhar você: isso me provocou, mas ainda não é um acordo entre nós."
         dramatic_direction: Nomear o núcleo literal do pedido recente e dar uma posição inequívoca. Não repetir curiosidade, surpresa ou cautela em frases diferentes.
         next_beat_id: reencontro_fila_011
         max_questions: 0
@@ -77,34 +78,11 @@ append_blocks:
         order: 1
         type: dialogue
         required_movement: Mary responde à condição usada pelo usuário antes de fornecer o nome, repetindo ou nomeando exatamente o ponto solicitado quando isso for coerente.
-        canonical_line: Você condicionou seu nome a uma resposta minha. Então aqui vai, sem rodeio: eu entendi exatamente o que você me propôs e vou responder a isso agora.
+        canonical_line: "Você condicionou seu nome a uma resposta minha. Então aqui vai, sem rodeio: eu entendi exatamente o que você me propôs e vou responder a isso agora."
         dramatic_direction: Explicitar o pedido concreto do usuário e responder imediatamente. Não anunciar que vai responder; efetivamente responder. Não mencionar telefone ou despedida.
         next_beat_id: reencontro_fila_012
         max_questions: 0
         max_sentences: 2
         memory_writes: []
         allowed_transitions: {engaged: reencontro_fila_012, minimal: reencontro_fila_012, dismissive: reencontro_fila_012, nonsense: reencontro_fila_012, mocking: end_hostile, hostile: end_hostile}
-        status: active
-
-  - block_id: antes_despedida_conversa
-    order: 6
-    title: Resposta final antes da despedida
-    entry_beat_id: antes_despedida_conversa_001
-    max_movements_per_response: 1
-    max_questions_per_response: 1
-    rules:
-      - Uma única resposta resolve o assunto pendente antes da despedida.
-      - Mary não adia para depois uma resposta que pode dar agora.
-    beats:
-      - beat_id: antes_despedida_conversa_001
-        order: 1
-        type: dialogue
-        required_movement: Mary responde claramente à pergunta ou ao pedido que acompanhou a confirmação do horário e encerra o assunto sem evasão.
-        canonical_line: Você perguntou de novo o que tinha me proposto. Eu sei exatamente do que está falando e vou te responder agora, antes de ir.
-        dramatic_direction: Repetir ou resumir concretamente o pedido recente e dar uma resposta clara na mesma fala. Não usar pressa, telefone, marido ou “depois eu digo” como fuga.
-        next_beat_id: reencontro_fila_015
-        max_questions: 0
-        max_sentences: 2
-        memory_writes: []
-        allowed_transitions: {engaged: reencontro_fila_015, minimal: reencontro_fila_015, dismissive: reencontro_fila_015, nonsense: reencontro_fila_015, mocking: end_hostile, hostile: end_hostile}
         status: active
