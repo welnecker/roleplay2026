@@ -1,0 +1,186 @@
+format_version: 1
+package_id: roleplay2026.casada_frustrada
+
+patch_beats:
+  reencontro_fila_008:
+    next_beat_id: estacionamento_conversa_001
+    allowed_transitions:
+      engaged: estacionamento_conversa_001
+      minimal: estacionamento_conversa_001
+      dismissive: estacionamento_conversa_001
+      nonsense: estacionamento_conversa_001
+      mocking: end_hostile
+      hostile: end_hostile
+  reencontro_fila_010:
+    next_beat_id: porta_malas_conversa_001
+    allowed_transitions:
+      engaged: porta_malas_conversa_001
+      minimal: porta_malas_conversa_001
+      dismissive: porta_malas_conversa_001
+      nonsense: porta_malas_conversa_001
+      mocking: end_hostile
+      hostile: end_hostile
+  reencontro_fila_011:
+    next_beat_id: nome_assunto_pendente_001
+    allowed_transitions:
+      engaged: nome_assunto_pendente_001
+      minimal: nome_assunto_pendente_001
+      dismissive: nome_assunto_pendente_001
+      nonsense: nome_assunto_pendente_001
+      mocking: end_hostile
+      hostile: end_hostile
+  reencontro_fila_014:
+    next_beat_id: antes_despedida_conversa_001
+    allowed_transitions:
+      engaged: antes_despedida_conversa_001
+      minimal: antes_despedida_conversa_001
+      dismissive: antes_despedida_conversa_001
+      nonsense: antes_despedida_conversa_001
+      mocking: end_hostile
+      hostile: end_hostile
+
+append_blocks:
+  - block_id: estacionamento_conversa
+    order: 3
+    title: Conversa no caminho até o carro
+    entry_beat_id: estacionamento_conversa_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Mary responde primeiro ao assunto trazido pelo usuário.
+      - O deslocamento serve de pano de fundo e não encerra a conversa.
+      - Não indicar o carro nem chegar ao porta-malas antes do último beat deste bloco.
+    beats:
+      - beat_id: estacionamento_conversa_001
+        order: 1
+        type: dialogue
+        required_movement: Mary acolhe a vontade do usuário de conversar e abre espaço para ele dizer o que deseja durante o caminho.
+        canonical_line: Então fala... agora você me deixou curiosa. O que queria conversar comigo?
+        dramatic_direction: Responder ao conteúdo recente antes de perguntar; não indicar o carro ainda.
+        next_beat_id: estacionamento_conversa_002
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: estacionamento_conversa_002, minimal: estacionamento_conversa_002, dismissive: estacionamento_conversa_002, nonsense: estacionamento_conversa_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: estacionamento_conversa_002
+        order: 2
+        type: dialogue
+        required_movement: Mary reage de verdade ao assunto revelado pelo usuário e sustenta a conversa enquanto seguem até o carro.
+        canonical_line: Pode continuar... estou te ouvindo. Ainda temos um pouco de caminho até o carro.
+        dramatic_direction: Priorizar a reação ao usuário; não substituir o assunto por logística nem antecipar o porta-malas.
+        next_beat_id: reencontro_fila_009
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: reencontro_fila_009, minimal: reencontro_fila_009, dismissive: reencontro_fila_009, nonsense: reencontro_fila_009, mocking: end_hostile, hostile: end_hostile}
+        status: active
+
+  - block_id: porta_malas_conversa
+    order: 4
+    title: Conversa ao lado do porta-malas
+    entry_beat_id: porta_malas_conversa_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Mary responde ao assunto ainda aberto antes de mudar para apresentação pessoal.
+      - A conversa pode sustentar provocação, curiosidade, recuo ou limite sem repetir mecanicamente a fala do usuário.
+      - Não pedir o nome do usuário antes do segundo beat deste bloco terminar.
+    beats:
+      - beat_id: porta_malas_conversa_001
+        order: 1
+        type: dialogue
+        required_movement: Mary confirma que entendeu o que o usuário quis dizer e reage ao tom dele sem mudar imediatamente de assunto.
+        canonical_line: Eu entendi muito bem o que você quis dizer... só não achei que você fosse ter coragem de falar assim comigo tão cedo.
+        dramatic_direction: Responder diretamente ao conteúdo recente; manter espaço para o usuário insistir, explicar ou recuar.
+        next_beat_id: porta_malas_conversa_002
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: porta_malas_conversa_002, minimal: porta_malas_conversa_002, dismissive: porta_malas_conversa_002, nonsense: porta_malas_conversa_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: porta_malas_conversa_002
+        order: 2
+        type: dialogue
+        required_movement: Mary sustenta a reação por mais um turno e encerra organicamente o assunto antes de iniciar a apresentação pessoal.
+        canonical_line: Você é insistente, hein? Eu ouvi, entendi e não vou fingir que passou despercebido.
+        dramatic_direction: Reagir ao usuário e concluir o assunto sem pedir o nome ainda; não antecipar telefone ou despedida.
+        next_beat_id: reencontro_fila_011
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: reencontro_fila_011, minimal: reencontro_fila_011, dismissive: reencontro_fila_011, nonsense: reencontro_fila_011, mocking: end_hostile, hostile: end_hostile}
+        status: active
+
+  - block_id: nome_assunto_pendente
+    order: 5
+    title: Resposta antes de retomar o nome
+    entry_beat_id: nome_assunto_pendente_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Mary responde primeiro a qualquer pergunta, condição ou pedido ainda pendente do usuário.
+      - Mary pode corresponder, repetir, esclarecer, provocar ou estabelecer limite conforme sua personalidade e o contexto.
+      - Não inventar evasão apenas para alcançar o próximo beat.
+      - Não preparar o pedido seguinte antes de o assunto pendente receber resposta suficiente.
+    beats:
+      - beat_id: nome_assunto_pendente_001
+        order: 1
+        type: dialogue
+        required_movement: Mary responde diretamente ao questionamento ou condição usada pelo usuário antes de fornecer o nome.
+        canonical_line: Tá... eu ouvi e entendi. Antes de mudar de assunto, vou te responder direito.
+        dramatic_direction: Responder ao conteúdo literal do usuário; quando coerente, repetir ou nomear o que ele pediu. Não desviar para nome, telefone ou despedida.
+        next_beat_id: nome_assunto_pendente_002
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: nome_assunto_pendente_002, minimal: nome_assunto_pendente_002, dismissive: nome_assunto_pendente_002, nonsense: nome_assunto_pendente_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: nome_assunto_pendente_002
+        order: 2
+        type: dialogue
+        required_movement: Mary sustenta a resposta caso o usuário questione, peça confirmação ou condicione novamente o nome.
+        canonical_line: Não esqueci do que você disse... pode terminar esse assunto comigo antes da gente seguir.
+        dramatic_direction: Manter continuidade com as últimas falas; responder novamente se houver pergunta concreta. Só depois retomar o roteiro.
+        next_beat_id: reencontro_fila_012
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: reencontro_fila_012, minimal: reencontro_fila_012, dismissive: reencontro_fila_012, nonsense: reencontro_fila_012, mocking: end_hostile, hostile: end_hostile}
+        status: active
+
+  - block_id: antes_despedida_conversa
+    order: 6
+    title: Questionamentos antes da despedida
+    entry_beat_id: antes_despedida_conversa_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Aceitar horário ou trocar contato não apaga uma pergunta feita na mesma fala.
+      - Mary responde ao assunto pendente antes de iniciar a despedida.
+      - Não usar pressa, telefone ou marido como evasão automática.
+    beats:
+      - beat_id: antes_despedida_conversa_001
+        order: 1
+        type: dialogue
+        required_movement: Mary responde claramente à pergunta ou ao pedido que acompanhou a confirmação do horário.
+        canonical_line: Eu lembro, sim... e não vou fingir que essa pergunta não foi feita.
+        dramatic_direction: Responder ao questionamento recente antes de falar em ir embora; preservar o assunto de poucas interações atrás.
+        next_beat_id: antes_despedida_conversa_002
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: antes_despedida_conversa_002, minimal: antes_despedida_conversa_002, dismissive: antes_despedida_conversa_002, nonsense: antes_despedida_conversa_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: antes_despedida_conversa_002
+        order: 2
+        type: dialogue
+        required_movement: Mary permite uma última réplica sobre o assunto e responde sem perder continuidade.
+        canonical_line: Pode falar... eu ainda estou aqui e não mudei de assunto.
+        dramatic_direction: Responder à réplica antes de conduzir organicamente para a despedida.
+        next_beat_id: reencontro_fila_015
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: reencontro_fila_015, minimal: reencontro_fila_015, dismissive: reencontro_fila_015, nonsense: reencontro_fila_015, mocking: end_hostile, hostile: end_hostile}
+        status: active
