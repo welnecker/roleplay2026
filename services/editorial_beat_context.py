@@ -54,6 +54,33 @@ def _dialogue_fields(beat: Mapping[str, Any]) -> tuple[str, str]:
     return "", ""
 
 
+def _fact_is_true(facts: Mapping[str, Any], name: str) -> bool:
+    return bool(str(facts.get(str(name), "") or "").strip())
+
+
+def _selected_fact_variant(
+    beat: Mapping[str, Any],
+    facts: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    constraints = beat.get("constraints") or {}
+    if not isinstance(constraints, Mapping):
+        constraints = {}
+    variants = beat.get("fact_variants") or constraints.get("fact_variants") or ()
+    if not isinstance(variants, (list, tuple)):
+        return {}
+    for variant in variants:
+        if not isinstance(variant, Mapping):
+            continue
+        required = _string_tuple(variant.get("when_all_facts"))
+        absent = _string_tuple(variant.get("when_no_facts"))
+        if required and not all(_fact_is_true(facts, name) for name in required):
+            continue
+        if absent and any(_fact_is_true(facts, name) for name in absent):
+            continue
+        return variant
+    return {}
+
+
 def _selected_narrative_effect(
     source: Mapping[str, Any],
     *,
@@ -131,6 +158,14 @@ def build_beat_context(
     source = script.beats.get(source_id) or {}
     target = script.beats.get(target_id) or source
     canonical_line, dramatic_direction = _dialogue_fields(target)
+    objective = str(target.get("objective") or source.get("objective") or "").strip()
+    variant = _selected_fact_variant(target, turn.state.facts)
+    if variant:
+        objective = str(variant.get("required_movement") or objective).strip()
+        canonical_line = str(variant.get("canonical_line") or canonical_line).strip()
+        dramatic_direction = str(
+            variant.get("dramatic_direction") or dramatic_direction
+        ).strip()
     user_intent = str(turn.state.facts.get("_last_user_intent", "") or "").strip()
     effect = _selected_narrative_effect(source, user_intent=user_intent, target_id=target_id)
     declared_confirmed = _declared_tuple(source, target, "confirmed_facts")
@@ -141,7 +176,7 @@ def build_beat_context(
     return BeatContext(
         source_beat_id=source_id,
         target_beat_id=target_id,
-        objective=str(target.get("objective") or source.get("objective") or "").strip(),
+        objective=objective,
         canonical_line=canonical_line,
         dramatic_direction=dramatic_direction,
         user_intent=user_intent,

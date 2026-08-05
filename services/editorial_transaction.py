@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from services.editorial_beat_context import BeatContext, build_beat_context
 from services.editorial_phase_contract import adapt_context_for_runtime_phase
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
+from services.organic_interaction import extract_assistant_facts
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,9 +49,11 @@ def commit_editorial_turn(
     approved = str(response or "").strip()
     if not approved:
         raise ValueError("Uma resposta vazia não pode ser commitada.")
+    committed_state = EditorialState.from_dict(pending.proposed_state.to_dict())
+    committed_state.facts = extract_assistant_facts(approved, committed_state.facts)
     return CommittedEditorialTurn(
         response=approved,
-        state=EditorialState.from_dict(pending.proposed_state.to_dict()),
+        state=committed_state,
         turn=pending.turn,
     )
 

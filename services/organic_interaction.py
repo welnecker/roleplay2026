@@ -36,8 +36,19 @@ _EXPLICIT_NAME_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
 )
 _PRESENTATION_CLAUSE_PATTERN = re.compile(
-    rf"(?:^|(?<=[.!?;])\s+)(?:eu\s+)?sou\s+(?:(?:o|a)\s+)?(?P<name>{_NAME_TOKEN})(?=$|\s*[,!.?;])",
+    rf"(?:^|(?<=[.!?,;])\s+)(?:eu\s+)?sou\s+(?:(?:o|a)\s+)?(?P<name>{_NAME_TOKEN})(?=$|\s*[,!.?;])",
     re.IGNORECASE,
+)
+_MARY_PRESENTATION_PATTERNS = (
+    re.compile(r"\beu\s+sou\s+(?:a\s+)?mary\b", re.IGNORECASE),
+    re.compile(r"\bmeu\s+nome\s+[ée]\s+mary\b", re.IGNORECASE),
+    re.compile(r"\bme\s+chamo\s+mary\b", re.IGNORECASE),
+    re.compile(r"\bpode\s+me\s+chamar\s+de\s+mary\b", re.IGNORECASE),
+    re.compile(r"\beu\s+nem\s+me\s+apresentei\s*[:,-]?\s*mary\b", re.IGNORECASE),
+)
+_THOUGHT_BLOCK_PATTERN = re.compile(
+    r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
+    re.IGNORECASE | re.DOTALL,
 )
 _PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?55[\s.-]?)?(?:\(?\d{2}\)?[\s.-]?)?\d(?:[\s.-]?\d){7,10}(?!\d)")
 _EXCLUSIVE_REACTION_PATTERNS = (
@@ -52,6 +63,15 @@ _INTEGRATED_REACTION_PATTERNS = (
     re.compile(r"\b(?:corpo|quadril|bunda|seios?|peitos?|xoxota|buceta|pau|rola)\b", re.IGNORECASE),
 )
 _INVALID_NAMES = frozenset({"homem", "mulher", "cara", "gata", "princesa"})
+
+
+def _derive_introduction_facts(facts: dict[str, str]) -> None:
+    mary_known = bool(str(facts.get("mary_introduced_herself", "") or "").strip())
+    user_known = bool(str(facts.get("user_introduced_himself", "") or "").strip())
+    if mary_known and user_known:
+        facts["mutual_introduction_completed"] = "true"
+    else:
+        facts.pop("mutual_introduction_completed", None)
 
 
 def extract_user_facts(
@@ -74,8 +94,28 @@ def extract_user_facts(
         current_name = str(facts.get("user_name", "") or "").strip()
         if not current_name or evidence.confidence == "explicit" or current_name.casefold() == evidence.value.casefold():
             facts["user_name"] = evidence.value
+            facts["user_introduced_himself"] = "true"
             facts["_user_name_source"] = evidence.source
+    elif str(facts.get("user_name", "") or "").strip():
+        facts["user_introduced_himself"] = "true"
 
+    _derive_introduction_facts(facts)
+    return facts
+
+
+def extract_assistant_facts(
+    assistant_text: str,
+    known_facts: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Registra atos semânticos realizados na fala aprovada da personagem."""
+
+    facts = dict(known_facts or {})
+    spoken_text = _THOUGHT_BLOCK_PATTERN.sub(" ", str(assistant_text or ""))
+    spoken_text = " ".join(spoken_text.strip().split())
+    if any(pattern.search(spoken_text) for pattern in _MARY_PRESENTATION_PATTERNS):
+        facts["mary_name"] = "Mary"
+        facts["mary_introduced_herself"] = "true"
+    _derive_introduction_facts(facts)
     return facts
 
 
@@ -97,10 +137,10 @@ def detect_organic_signal(user_text: str, known_facts: dict[str, str] | None = N
             facts=facts,
             instruction=(
                 f"Reconheça claramente que o nome do usuário é {evidence.value}. "
-                "Use o nome na resposta e, se ele perguntou o seu nome, diga que você se chama Mary. "
+                "Use o nome na resposta. Só diga que você se chama Mary se esse fato ainda não estiver registrado. "
                 "Responda ao tom de vizinhança ou brincadeira antes de retomar o roteiro."
             ),
-            fallback=f"{evidence.value}... prazer. Agora não esqueço mais, rsrsrs. Eu sou a Mary.",
+            fallback=f"{evidence.value}... prazer. Agora não esqueço mais, rsrsrs.",
         )
 
     known_name = str(facts.get("user_name", "")).strip()
