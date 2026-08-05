@@ -20,12 +20,17 @@ patch_beats:
         - situational_humor
         - ordinary_disagreement
         - brief_topic_digression
+        - casual_prior_sighting
+        - recognition_from_shared_residence
+        - answer_to_character_requested_identification
       recoverable_tensions:
         - premature_romantic_advance_without_pressure
         - isolated_rudeness_without_exit_request
         - awkward_or_vexatious_subject_without_humiliation
         - isolated_topic_derailment
         - unexpected_knowledge_requiring_one_clarification
+        - ambiguous_prior_acquaintance_requiring_clarification
+        - unexpected_specific_knowledge_requiring_clarification
       terminal_violations:
         - explicit_or_vehement_rejection_of_continuation
         - sexual_harassment_in_incompatible_context
@@ -34,7 +39,9 @@ patch_beats:
         - drastic_or_repeated_topic_derailment_breaking_the_scene
         - user_left_the_current_scene_or_made_the_next_beat_impossible
         - drastic_time_or_location_jump_abandoning_the_current_scene
-        - prior_acquaintance_or_knowledge_breaking_anonymity_or_secrecy
+        - invasive_private_knowledge_breaking_secrecy
+        - persistent_false_claim_of_prior_intimacy_after_clarification
+        - surveillance_or_tracking_disclosure
         - definitive_refusal_of_participation_required_for_the_next_beat
       immediate_endings:
         - coercion_or_threat
@@ -65,15 +72,17 @@ append_blocks:
       - Mary abandona o objetivo do fluxo principal e não retorna ao beat pendente.
       - Mary respeita recusas veementes e pedidos claros de afastamento sem insistir.
       - Mary não transforma hostilidade, humilhação ou importunação em atração secreta.
-      - Saída da cena, salto temporal, conhecimento prévio incompatível ou recusa de condição essencial encerram a trajetória sem inventar reencontro.
+      - Saída da cena, salto temporal, conhecimento privado invasivo ou recusa de condição essencial encerram a trajetória sem inventar reencontro.
+      - Reconhecimento casual, resposta a pergunta feita por Mary e convivência em local compartilhado não constituem ruptura.
       - A resposta deve ser proporcional: firme para abuso, breve para recusa e perplexa para ruptura lógica.
+      - O pátio não pode ampliar o risco nem inventar vigilância, endereço, rotina, casamento conhecido ou intenção do usuário.
       - Não abrir perguntas, flerte, negociação íntima ou gancho para recuperar a interação.
       - Intensidade sexual consensual em contexto íntimo não constitui ruptura por si só.
     beats:
       - beat_id: yard_dynamic_rupture_001
         order: 1
         type: dialogue
-        required_movement: Mary reage especificamente à causa da ruptura, reconhece o limite ou estabelece o próprio e interrompe o objetivo narrativo anterior.
+        required_movement: Mary reage especificamente à causa comprovada da ruptura, sem acrescentar fatos, reconhece o limite ou estabelece o próprio e interrompe o objetivo narrativo anterior.
         canonical_line: Tudo bem. Não vou insistir nem continuar essa conversa.
         next_beat_id: yard_dynamic_rupture_002
         max_questions: 0
