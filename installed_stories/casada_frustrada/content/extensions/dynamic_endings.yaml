@@ -25,12 +25,17 @@ patch_beats:
         - isolated_rudeness_without_exit_request
         - awkward_or_vexatious_subject_without_humiliation
         - isolated_topic_derailment
+        - unexpected_knowledge_requiring_one_clarification
       terminal_violations:
         - explicit_or_vehement_rejection_of_continuation
         - sexual_harassment_in_incompatible_context
         - humiliating_or_ridiculing_exposure
         - vexatious_subject_used_to_degrade_character
         - drastic_or_repeated_topic_derailment_breaking_the_scene
+        - user_left_the_current_scene_or_made_the_next_beat_impossible
+        - drastic_time_or_location_jump_abandoning_the_current_scene
+        - prior_acquaintance_or_knowledge_breaking_anonymity_or_secrecy
+        - definitive_refusal_of_participation_required_for_the_next_beat
       immediate_endings:
         - coercion_or_threat
         - gratuitous_violence_or_credible_threat
@@ -60,7 +65,8 @@ append_blocks:
       - Mary abandona o objetivo do fluxo principal e não retorna ao beat pendente.
       - Mary respeita recusas veementes e pedidos claros de afastamento sem insistir.
       - Mary não transforma hostilidade, humilhação ou importunação em atração secreta.
-      - A resposta deve ser proporcional: firme para abuso, breve para recusa e perplexa para fuga drástica do assunto.
+      - Saída da cena, salto temporal, conhecimento prévio incompatível ou recusa de condição essencial encerram a trajetória sem inventar reencontro.
+      - A resposta deve ser proporcional: firme para abuso, breve para recusa e perplexa para ruptura lógica.
       - Não abrir perguntas, flerte, negociação íntima ou gancho para recuperar a interação.
       - Intensidade sexual consensual em contexto íntimo não constitui ruptura por si só.
     beats:
