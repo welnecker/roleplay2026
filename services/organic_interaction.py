@@ -36,7 +36,7 @@ _EXPLICIT_NAME_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
 )
 _PRESENTATION_CLAUSE_PATTERN = re.compile(
-    rf"(?:^|(?<=[.!?;])\s+)(?:eu\s+)?sou\s+(?:(?:o|a)\s+)?(?P<name>{_NAME_TOKEN})(?=$|\s*[,!.?;])",
+    rf"(?:^|(?<=[.!?,;])\s+)(?:eu\s+)?sou\s+(?:(?:o|a)\s+)?(?P<name>{_NAME_TOKEN})(?=$|\s*[,!.?;])",
     re.IGNORECASE,
 )
 _MARY_PRESENTATION_PATTERNS = (
