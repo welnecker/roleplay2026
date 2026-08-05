@@ -15,3 +15,13 @@ def test_login_green_remains_scoped_and_available() -> None:
 
     assert "--rp-login-green:var(--rp-brand-green)" in source
     assert 'input[aria-label="E-mail"]' in source
+
+
+def test_interaction_screen_uses_requested_gray_to_green_gradient() -> None:
+    source = Path("ui_theme.py").read_text(encoding="utf-8")
+
+    assert "--rp-interaction-gray:#939393" in source
+    assert '[data-testid="stAppViewContainer"]:has(.dialogue-message)' in source
+    assert "linear-gradient(155deg,var(--rp-interaction-gray)" in source
+    assert "var(--rp-brand-green) 100%" in source
+    assert ':has(.dialogue-message) [data-testid="stChatInput"]' in source
