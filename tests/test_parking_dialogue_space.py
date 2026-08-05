@@ -68,20 +68,15 @@ def test_folga_do_nome_exige_resposta_efetiva() -> None:
     assert beat["max_sentences"] == 2
 
 
-def test_confirmacao_do_horario_tem_uma_resposta_antes_da_despedida() -> None:
+def test_confirmacao_do_horario_avanca_diretamente_para_despedida() -> None:
     script = _script()
 
-    assert script.beats["reencontro_fila_014"]["on_user"]["engaged"] == "antes_despedida_conversa_001"
-    assert script.beats["antes_despedida_conversa_001"]["on_user"]["engaged"] == "reencontro_fila_015"
-    assert "antes_despedida_conversa_002" not in script.beats
+    assert script.beats["reencontro_fila_014"]["on_user"]["engaged"] == "reencontro_fila_015"
+    assert "antes_despedida_conversa_001" not in script.beats
 
 
-def test_resposta_final_nao_adia_o_assunto_para_depois() -> None:
+def test_despedidas_finais_sao_indivisiveis() -> None:
     script = _script()
-    beat = script.beats["antes_despedida_conversa_001"]
-    instruction = beat["units"][0]["instruction"].casefold()
 
-    assert "resposta clara na mesma fala" in instruction
-    assert "depois eu digo" in instruction
-    assert beat["max_questions"] == 0
-    assert beat["max_sentences"] == 2
+    assert script.beats["reencontro_fila_015"]["response_boundary"] == "integrated_canonical"
+    assert script.beats["reencontro_fila_016"]["response_boundary"] == "integrated_canonical"
