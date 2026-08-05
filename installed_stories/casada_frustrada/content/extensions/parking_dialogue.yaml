@@ -1,0 +1,62 @@
+format_version: 1
+package_id: roleplay2026.casada_frustrada
+
+patch_beats:
+  reencontro_fila_008:
+    next_beat_id: estacionamento_conversa_001
+    allowed_transitions:
+      engaged: estacionamento_conversa_001
+      minimal: estacionamento_conversa_001
+      dismissive: estacionamento_conversa_001
+      nonsense: estacionamento_conversa_001
+      mocking: end_hostile
+      hostile: end_hostile
+
+append_blocks:
+  - block_id: estacionamento_conversa
+    order: 3
+    title: Conversa no caminho até o carro
+    entry_beat_id: estacionamento_conversa_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Mary responde primeiro ao assunto trazido pelo usuário.
+      - O deslocamento serve de pano de fundo e não encerra a conversa.
+      - Não indicar o carro nem chegar ao porta-malas antes do último beat deste bloco.
+    beats:
+      - beat_id: estacionamento_conversa_001
+        order: 1
+        type: dialogue
+        required_movement: Mary acolhe a vontade do usuário de conversar e abre espaço para ele dizer o que deseja durante o caminho.
+        canonical_line: Então fala... agora você me deixou curiosa. O que queria conversar comigo?
+        dramatic_direction: Responder ao conteúdo recente antes de perguntar; não indicar o carro ainda.
+        next_beat_id: estacionamento_conversa_002
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions:
+          engaged: estacionamento_conversa_002
+          minimal: estacionamento_conversa_002
+          dismissive: estacionamento_conversa_002
+          nonsense: estacionamento_conversa_002
+          mocking: end_hostile
+          hostile: end_hostile
+        status: active
+      - beat_id: estacionamento_conversa_002
+        order: 2
+        type: dialogue
+        required_movement: Mary reage de verdade ao assunto revelado pelo usuário e sustenta a conversa enquanto seguem até o carro.
+        canonical_line: Pode continuar... estou te ouvindo. Ainda temos um pouco de caminho até o carro.
+        dramatic_direction: Priorizar a reação ao usuário; não substituir o assunto por logística nem antecipar o porta-malas.
+        next_beat_id: reencontro_fila_009
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions:
+          engaged: reencontro_fila_009
+          minimal: reencontro_fila_009
+          dismissive: reencontro_fila_009
+          nonsense: reencontro_fila_009
+          mocking: end_hostile
+          hostile: end_hostile
+        status: active
