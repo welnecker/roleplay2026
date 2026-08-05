@@ -88,6 +88,7 @@ def test_manifesto_declara_runtime_editorial() -> None:
         "content/extensions/fixes.yaml",
         "content/extensions/guardrails.yaml",
         "content/extensions/transitions.yaml",
+        "content/extensions/parking_dialogue.yaml",
         "content/extensions/runtime.yaml",
     )
 
