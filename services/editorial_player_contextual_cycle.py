@@ -20,24 +20,9 @@ _ORIGINAL_DECIDE = decide_editorial_progression_turn
 _INSTALLED = False
 
 
-def _secret_value(name: str, default: str = "") -> str:
-    """Lê configuração do Streamlit sem tornar testes/CLI dependentes de secrets.toml.
-
-    O motor editorial é uma API de domínio e pode ser chamado fora do processo
-    Streamlit. Ausência do arquivo de segredos significa apenas que a classificação
-    remota não está disponível; a progressão normal permanece ativa.
-    """
-
-    try:
-        value = st.secrets.get(name, default)
-    except Exception:
-        return default
-    return str(value or default).strip()
-
-
 def _classifier_call(system_prompt: str, request: str) -> str:
-    api_key = _secret_value("OPENROUTER_API_KEY")
-    model = _secret_value("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT
+    api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
+    model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
     if not api_key:
         return "{}"
     try:
