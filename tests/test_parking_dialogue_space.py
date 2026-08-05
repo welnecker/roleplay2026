@@ -71,7 +71,7 @@ def test_folga_do_nome_exige_resposta_antes_de_mudar_de_assunto() -> None:
 
     assert "responder direito" in first["units"][0]["anchor"].casefold()
     assert "não esqueci" in second["units"][0]["anchor"].casefold()
-    assert "repetir ou nomear" in first["dramatic_direction"].casefold()
+    assert "repetir ou nomear" in first["units"][0]["instruction"].casefold()
     assert "telefone" not in first["units"][0]["anchor"].casefold()
 
 
