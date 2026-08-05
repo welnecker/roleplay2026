@@ -9,8 +9,12 @@ _PHASE_KEY = "_runtime_phase"
 _BRIDGE_ORIGIN_KEY = "_bridge_origin_beat_id"
 _BRIDGE_TARGET_KEY = "_bridge_target_beat_id"
 _BRIDGE_TURNS_KEY = "_bridge_turn_count"
+_BRIDGE_ORIGIN_OBJECTIVE_KEY = "_bridge_origin_objective"
+_BRIDGE_ORIGIN_CANONICAL_KEY = "_bridge_origin_canonical"
+_BRIDGE_TARGET_OBJECTIVE_KEY = "_bridge_target_objective"
+_BRIDGE_TARGET_CANONICAL_KEY = "_bridge_target_canonical"
 _BRIDGE_FALLBACK = (
-    "Ela reage ao que você disse sem apressar o próximo passo, deixando espaço para você continuar."
+    "Ela reage ao que você disse sem repetir o que acabou de acontecer nem antecipar o próximo passo."
 )
 
 
@@ -85,6 +89,16 @@ def _dialogue_data(beat: Mapping[str, object]) -> tuple[str, str]:
     return "", ""
 
 
+def _beat_semantics(beat: Mapping[str, object]) -> tuple[str, str, str]:
+    canonical, direction = _dialogue_data(beat)
+    objective = str(
+        beat.get("objective")
+        or beat.get("required_movement")
+        or ""
+    ).strip()
+    return objective, canonical, direction
+
+
 def _is_structural_destination(script: EditorialScript, target_id: str) -> bool:
     if target_id in script.endings:
         return True
@@ -98,8 +112,8 @@ def _requires_integrated_canonical_response(
 ) -> bool:
     """Indica que o próximo beat deve reagir e avançar na mesma resposta.
 
-    Esses beats não podem receber uma ponte intermediária: a ponte consumiria
-    parte do seu objetivo semântico e o runtime o repetiria no turno seguinte.
+    Beats conclusivos ou semanticamente indivisíveis não recebem ponte: uma
+    resposta intermediária consumiria parte do objetivo e provocaria repetição.
     """
 
     target = script.beats.get(str(target_id or "").strip()) or {}
@@ -159,8 +173,11 @@ def create_bridge_turn(
     if not should_create_bridge(script, previous_state, proposed_turn):
         return proposed_turn
 
+    origin = script.beats.get(origin_id) or {}
     target = script.beats.get(target_id) or {}
-    canonical_line, dramatic_direction = _dialogue_data(target)
+    origin_objective, origin_canonical, _origin_direction = _beat_semantics(origin)
+    target_objective, target_canonical, target_direction = _beat_semantics(target)
+
     updated = EditorialState.from_dict(proposed_turn.state.to_dict())
     updated.node_id = origin_id
     updated.pending_next_beat_id = target_id
@@ -169,22 +186,31 @@ def create_bridge_turn(
     updated.facts[_BRIDGE_ORIGIN_KEY] = origin_id
     updated.facts[_BRIDGE_TARGET_KEY] = target_id
     updated.facts[_BRIDGE_TURNS_KEY] = "1"
+    updated.facts[_BRIDGE_ORIGIN_OBJECTIVE_KEY] = origin_objective
+    updated.facts[_BRIDGE_ORIGIN_CANONICAL_KEY] = origin_canonical
+    updated.facts[_BRIDGE_TARGET_OBJECTIVE_KEY] = target_objective
+    updated.facts[_BRIDGE_TARGET_CANONICAL_KEY] = target_canonical
     updated.facts["_organic_interstitial"] = "false"
 
     prompt = "\n".join(
         (
             "FASE ESTRUTURAL: PONTE NARRATIVA.",
             "Responda genuinamente à fala mais recente do usuário na voz da personagem.",
-            "A resposta deve parecer uma continuação natural da conversa, não uma fala de roteiro.",
-            "Crie um gancho causal ou temático que prepare o próximo movimento, sem executá-lo.",
-            "Não repita a linha canônica seguinte, não antecipe sua ação e não avance o local da cena.",
+            "A ponte deve acrescentar reação nova; não é uma segunda versão do beat anterior nem uma prévia do seguinte.",
+            "Não repita, reformule, confirme novamente ou prolongue o movimento já concluído no beat de origem.",
+            "Não execute, anuncie, pergunte, negocie ou combine nenhum elemento decisório pertencente ao beat de destino.",
+            "Quando o usuário já tiver fornecido algo necessário ao destino, apenas reconheça brevemente esse fato; não realize o restante do destino.",
+            "Não crie assunto pendente, nova promessa, nova pergunta ou novo obstáculo apenas para produzir mais um turno.",
             "Não presuma ação, aceite, recusa, desejo ou decisão que o usuário não declarou.",
-            "Termine deixando espaço real para outra resposta do usuário.",
+            "Termine deixando espaço real para outra resposta somente quando houver conteúdo genuíno ainda aberto.",
             f"FALA ATUAL DO USUÁRIO: {str(user_text or '').strip()}",
             f"BEAT DE ORIGEM: {origin_id}",
-            f"OBJETIVO FUTURO A PREPARAR, SEM REALIZAR: {str(target.get('objective', '') or '').strip()}",
-            f"DIREÇÃO FUTURA, APENAS COMO CONTEXTO: {dramatic_direction}",
-            f"LINHA FUTURA PROIBIDA NESTA RESPOSTA: {canonical_line}",
+            f"MOVIMENTO DE ORIGEM JÁ CONCLUÍDO — PROIBIDO REPETIR: {origin_objective}",
+            f"LINHA DE ORIGEM JÁ CONSUMIDA — PROIBIDO PARAFRASEAR: {origin_canonical}",
+            f"BEAT DE DESTINO: {target_id}",
+            f"OBJETIVO FUTURO RESERVADO AO DESTINO — PROIBIDO EXECUTAR: {target_objective}",
+            f"DIREÇÃO FUTURA, APENAS COMO CONTEXTO: {target_direction}",
+            f"LINHA FUTURA PROIBIDA NESTA RESPOSTA: {target_canonical}",
         )
     )
     return replace(
@@ -211,7 +237,15 @@ def release_bridge_state(script: EditorialScript, state: EditorialState) -> Edit
     updated = EditorialState.from_dict(state.to_dict())
     updated.pending_next_beat_id = target_id
     updated.facts[_PHASE_KEY] = "canonical"
-    for key in (_BRIDGE_ORIGIN_KEY, _BRIDGE_TARGET_KEY, _BRIDGE_TURNS_KEY):
+    for key in (
+        _BRIDGE_ORIGIN_KEY,
+        _BRIDGE_TARGET_KEY,
+        _BRIDGE_TURNS_KEY,
+        _BRIDGE_ORIGIN_OBJECTIVE_KEY,
+        _BRIDGE_ORIGIN_CANONICAL_KEY,
+        _BRIDGE_TARGET_OBJECTIVE_KEY,
+        _BRIDGE_TARGET_CANONICAL_KEY,
+    ):
         updated.facts.pop(key, None)
     return updated
 
