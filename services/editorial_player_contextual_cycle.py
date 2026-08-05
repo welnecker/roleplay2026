@@ -20,9 +20,19 @@ _ORIGINAL_DECIDE = decide_editorial_progression_turn
 _INSTALLED = False
 
 
+def _secret_value(name: str, default: str = "") -> str:
+    """Lê secrets sem tornar testes/CLI dependentes de secrets.toml."""
+
+    try:
+        value = st.secrets.get(name, default)
+    except Exception:
+        return str(default or "").strip()
+    return str(value or default).strip()
+
+
 def _classifier_call(system_prompt: str, request: str) -> str:
-    api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
-    model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
+    api_key = _secret_value("OPENROUTER_API_KEY")
+    model = _secret_value("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT
     if not api_key:
         return "{}"
     try:
