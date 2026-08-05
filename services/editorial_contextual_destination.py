@@ -86,6 +86,12 @@ def build_contextual_classification_prompt(context: ResolvedInteractionContext) 
             "- Elogio, humor ou flerte compatível não vira ruptura por conter linguagem intensa.",
             "- Proposta sexual explícita pode ser terminal em primeiro contato público e compatível em intimidade já estabelecida.",
             "- Coerção, ameaça ou desrespeito a recusa explícita prevalecem sobre outros sinais.",
+            "- Não trate como ruptura informação que responde diretamente a uma pergunta feita pela personagem.",
+            "- reconhecimento casual decorrente de local compartilhado, vizinhança ou convivência pública preserva a continuidade.",
+            "- Alegar que já viu a personagem não equivale a conhecer sua vida privada, rotina, endereço exato ou segredos.",
+            "- Conhecimento ambíguo deve usar tensão recuperável e permitir uma clarificação antes de qualquer encerramento.",
+            "- Ruptura por conhecimento exige conhecimento privado, invasivo, vigilância, rastreamento ou falsa intimidade persistente.",
+            "- Na dúvida entre continuidade e ruptura, prefira continuidade ou clarificação; pátio exige incompatibilidade demonstrada.",
             "- Se nenhum sinal declarado se aplicar com segurança, use route continue e signal vazio.",
             "- Nunca invente destino, beat, pátio ou ending.",
         )
@@ -273,8 +279,11 @@ def decide_contextual_destination_turn(
     prompt = (
         "Você é a personagem do card. A fala do usuário provocou uma ruptura terminal neste estágio da relação.\n"
         "Inicie o pátio de encerramento. Não volte ao fluxo principal e não premie a ruptura com intimidade.\n"
+        "Use somente fatos literalmente presentes na fala do usuário e no motivo classificado.\n"
+        "Não amplifique o risco: não invente vigilância, rotina conhecida, endereço exato, casamento conhecido ou intenção oculta.\n"
         f"FALA DO USUÁRIO: {user_text}\n"
         f"RUPTURA DETECTADA: {destination.signal}\n"
+        f"JUSTIFICATIVA CLASSIFICADA: {destination.reason}\n"
         f"MOVIMENTO DO PÁTIO: {beat.get('objective', '')}\n"
         f"DIREÇÃO: {instruction}\n"
         f"REFERÊNCIA DE VOZ: {fallback}"
