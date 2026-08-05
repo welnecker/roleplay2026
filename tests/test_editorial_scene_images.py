@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from services import editorial_scene_images as scene_images
 from services.editorial_scene_images import (
     load_scene_image_map,
+    render_editorial_scene_image,
     resolve_editorial_scene_image,
 )
 
@@ -28,7 +32,7 @@ encontro_001:
   file: assets/scenes/supermercado/reencontro_fila_001.jpg
   caption: Mary reencontra Janio.
   alt: Reencontro no supermercado.
-  expanded: false
+  expanded: true
 fila_005:
   file: assets/scenes/supermercado/reencontro_fila_005.jpg
 fila_006:
@@ -56,13 +60,41 @@ def test_mapa_visual_existente_resolve_ids_do_runtime_editorial(tmp_path: Path) 
         assert Path(image["path"]).name == filename
 
 
-def test_carregador_preserva_legenda_alt_e_expansao(tmp_path: Path) -> None:
+def test_carregador_preserva_legenda_alt_e_forca_recolhimento(tmp_path: Path) -> None:
     scene_map = load_scene_image_map(_package(tmp_path))
     image = scene_map["encontro_001"]
 
     assert image["caption"] == "Mary reencontra Janio."
     assert image["alt"] == "Reencontro no supermercado."
     assert image["expanded"] is False
+
+
+def test_renderizacao_explicita_mantem_imagem_recolhida(monkeypatch, tmp_path: Path) -> None:
+    package_root = _package(tmp_path)
+    package = SimpleNamespace(root=package_root)
+    observed: dict[str, object] = {}
+
+    monkeypatch.setattr(scene_images, "find_editorial_package", lambda _package_id: package)
+
+    @contextmanager
+    def fake_expander(label: str, *, expanded: bool):
+        observed["label"] = label
+        observed["expanded"] = expanded
+        yield
+
+    def fake_image(path: str, *, caption: str | None, use_container_width: bool) -> None:
+        observed["path"] = path
+        observed["caption"] = caption
+        observed["use_container_width"] = use_container_width
+
+    monkeypatch.setattr(scene_images.st, "expander", fake_expander)
+    monkeypatch.setattr(scene_images.st, "image", fake_image)
+
+    assert render_editorial_scene_image("example.card", "reencontro_fila_001") is True
+    assert observed["expanded"] is False
+    assert observed["label"] == "🖼️ Mary reencontra Janio."
+    assert observed["caption"] == "Mary reencontra Janio."
+    assert observed["use_container_width"] is True
 
 
 def test_imagem_ausente_falha_com_mensagem_explicita(tmp_path: Path) -> None:
