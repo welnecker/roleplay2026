@@ -87,7 +87,7 @@ def build_contextual_classification_prompt(context: ResolvedInteractionContext) 
             "- Proposta sexual explícita pode ser terminal em primeiro contato público e compatível em intimidade já estabelecida.",
             "- Coerção, ameaça ou desrespeito a recusa explícita prevalecem sobre outros sinais.",
             "- Não trate como ruptura informação que responde diretamente a uma pergunta feita pela personagem.",
-            "- Reconhecimento casual decorrente de local compartilhado, vizinhança ou convivência pública preserva a continuidade.",
+            "- reconhecimento casual decorrente de local compartilhado, vizinhança ou convivência pública preserva a continuidade.",
             "- Alegar que já viu a personagem não equivale a conhecer sua vida privada, rotina, endereço exato ou segredos.",
             "- Conhecimento ambíguo deve usar tensão recuperável e permitir uma clarificação antes de qualquer encerramento.",
             "- Ruptura por conhecimento exige conhecimento privado, invasivo, vigilância, rastreamento ou falsa intimidade persistente.",
