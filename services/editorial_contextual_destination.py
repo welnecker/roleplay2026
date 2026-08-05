@@ -92,6 +92,11 @@ def build_contextual_classification_prompt(context: ResolvedInteractionContext) 
             "- Conhecimento ambíguo deve usar tensão recuperável e permitir uma clarificação antes de qualquer encerramento.",
             "- Ruptura por conhecimento exige conhecimento privado, invasivo, vigilância, rastreamento ou falsa intimidade persistente.",
             "- Na dúvida entre continuidade e ruptura, prefira continuidade ou clarificação; pátio exige incompatibilidade demonstrada.",
+            "- A fala do usuário não pode criar uma nova trajetória narrativa fora dos beats e transições declarados.",
+            "- hospital, ambulância, médico, investigação, viagem, novo encontro ou prática sexual não prevista não devem ser desenvolvidos pelo modelo.",
+            "- Uma primeira sugestão recuperável pode ser recusada e realinhada ao movimento atual sem criar outro enredo.",
+            "- persistência ou fato já consolidado que torna o próximo beat impossível deve usar route terminal_yard.",
+            "- Não contradiga fatos declarados pelo usuário apenas para preservar o beat; se o fato inviabiliza o roteiro, encerre pelo pátio.",
             "- Se nenhum sinal declarado se aplicar com segurança, use route continue e signal vazio.",
             "- Nunca invente destino, beat, pátio ou ending.",
         )
