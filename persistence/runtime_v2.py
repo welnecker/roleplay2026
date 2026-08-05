@@ -8,6 +8,7 @@ import gspread
 from gspread import Spreadsheet
 
 from narrative_v2.models import StoryRun
+from narrative_v2.repository import RuntimeConflictError
 from persistence.models import new_id, utc_now_iso
 from persistence.v2_google_sheets import (
     GoogleSheetsNarrativeInteractionRepository,
@@ -55,6 +56,13 @@ class GoogleSheetsV2RuntimeRepository:
 
     def get_active_run(self, *, user_id: str, package_id: str) -> StoryRun | None:
         return self.runs.get_active_run(user_id=user_id, package_id=package_id)
+
+    def get_run(self, *, run_id: str) -> StoryRun | None:
+        found = self.runs.runs.find("run_id", run_id)
+        if found is None:
+            return None
+        _row_number, row = found
+        return self.runs._from_row(row)
 
     def _was_false_message_ending(self, run: StoryRun) -> bool:
         if run.status != "terminated" or run.ending_code != "mary_lost_interest":
@@ -159,6 +167,23 @@ class GoogleSheetsV2RuntimeRepository:
         )
         return session
 
+    def _existing_interaction(
+        self,
+        *,
+        run_id: str,
+        sequence: int,
+        role: str,
+    ) -> dict[str, Any] | None:
+        for row in self.interactions.table.records():
+            if str(row.get("run_id", "")).strip() != run_id:
+                continue
+            if int(row.get("sequence", 0) or 0) != int(sequence):
+                continue
+            if str(row.get("role", "")).strip() != role:
+                continue
+            return row
+        return None
+
     def append_interaction(
         self,
         *,
@@ -174,6 +199,20 @@ class GoogleSheetsV2RuntimeRepository:
         speaker_id: str = "",
         metadata: dict[str, Any] | None = None,
     ) -> None:
+        existing = self._existing_interaction(
+            run_id=run_id,
+            sequence=sequence,
+            role=role,
+        )
+        if existing is not None:
+            existing_content = str(existing.get("content", "") or "")
+            if existing_content != str(content or ""):
+                raise RuntimeConflictError(
+                    f"Interação concorrente incompatível na run {run_id}, "
+                    f"sequência={sequence}, role={role}."
+                )
+            return
+
         self.interactions.append_interaction(
             run_id=run_id,
             session_id=session_id,
@@ -281,6 +320,24 @@ class GoogleSheetsV2RuntimeRepository:
         block_id: str,
         beat_id: str,
     ) -> StoryRun:
-        run.current_block_id = block_id or run.current_block_id
-        run.current_beat_id = beat_id or run.current_beat_id
-        return self.runs.update_run(run=run, expected_version=run.state_version)
+        desired_block_id = block_id or run.current_block_id
+        desired_beat_id = beat_id or run.current_beat_id
+        run.current_block_id = desired_block_id
+        run.current_beat_id = desired_beat_id
+        try:
+            return self.runs.update_run(run=run, expected_version=run.state_version)
+        except RuntimeConflictError:
+            current = self.get_run(run_id=run.run_id)
+            if current is None:
+                raise
+            if (
+                current.current_block_id == desired_block_id
+                and current.current_beat_id == desired_beat_id
+            ):
+                return current
+            current.current_block_id = desired_block_id
+            current.current_beat_id = desired_beat_id
+            return self.runs.update_run(
+                run=current,
+                expected_version=current.state_version,
+            )
