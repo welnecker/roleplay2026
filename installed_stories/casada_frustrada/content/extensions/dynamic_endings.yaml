@@ -53,7 +53,7 @@ append_blocks:
     order: 93
     title: Pátio dinâmico de ruptura da interação
     entry_beat_id: yard_dynamic_rupture_001
-    min_user_turns: 1
+    min_user_turns: 2
     max_user_turns: 2
     rules:
       - O motivo real da ruptura vem do sinal e da justificativa contextual classificados.
