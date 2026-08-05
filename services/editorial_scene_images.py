@@ -57,7 +57,6 @@ def load_scene_image_map(package_root: Path) -> dict[str, dict[str, object]]:
             "path": image_path,
             "caption": str(value.get("caption", "")).strip(),
             "alt": str(value.get("alt", "")).strip(),
-            "expanded": bool(value.get("expanded", False)),
         }
     return result
 
@@ -83,7 +82,7 @@ def active_editorial_node_id(package_id: str) -> str:
 
 
 def render_editorial_scene_image(package_id: str) -> bool:
-    """Renderiza a imagem do beat atual e informa se uma cena foi exibida."""
+    """Renderiza a imagem do beat atual retraída por padrão."""
 
     package = find_editorial_package(package_id)
     if package is None:
@@ -100,7 +99,10 @@ def render_editorial_scene_image(package_id: str) -> bool:
     caption = str(image.get("caption", "")).strip()
     alt = str(image.get("alt", "")).strip()
     label = caption or alt or "Cena atual"
-    with st.expander(f"🖼️ {label}", expanded=bool(image.get("expanded", False))):
+
+    # Imagens são apoio visual, não parte obrigatória do fluxo conversacional.
+    # Mantê-las retraídas evita que empurrem o diálogo e a caixa de resposta para baixo.
+    with st.expander(f"🖼️ {label}", expanded=False):
         st.image(
             str(image["path"]),
             caption=caption or None,
