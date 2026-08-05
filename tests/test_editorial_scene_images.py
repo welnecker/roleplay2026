@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from services import editorial_scene_images as scene_images
 from services.editorial_scene_images import (
     load_scene_image_map,
     resolve_editorial_scene_image,
@@ -75,3 +76,30 @@ def test_imagem_ausente_falha_com_mensagem_explicita(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="Imagem não encontrada"):
         load_scene_image_map(package)
+
+
+def test_hook_delega_ao_chat_input_original_sem_substitui_lo_durante_a_chamada(monkeypatch) -> None:
+    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def original(*args: object, **kwargs: object) -> str:
+        calls.append((args, kwargs))
+        return "mensagem enviada"
+
+    monkeypatch.delattr(scene_images.st, scene_images._ORIGINAL_CHAT_INPUT_ATTR, raising=False)
+    monkeypatch.setattr(scene_images.st, "chat_input", original)
+    monkeypatch.setattr(
+        scene_images.st,
+        "session_state",
+        {"selected_package_id": "example.card"},
+    )
+    monkeypatch.setattr(scene_images, "render_editorial_scene_image", lambda package_id: True)
+
+    scene_images.install_editorial_scene_image_hook()
+    wrapped = scene_images.st.chat_input
+
+    result = wrapped("Responda", key="prompt")
+
+    assert result == "mensagem enviada"
+    assert calls == [(('Responda',), {"key": "prompt"})]
+    assert scene_images.st.chat_input is wrapped
+    assert getattr(scene_images.st, scene_images._ORIGINAL_CHAT_INPUT_ATTR) is original
