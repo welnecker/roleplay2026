@@ -40,6 +40,7 @@ from services.editorial_runtime import (
     decide_editorial_turn,
     editorial_opening_text,
 )
+from services.editorial_scene_images import render_editorial_scene_image
 from services.editorial_transaction import (
     commit_editorial_turn,
     prepare_pending_editorial_turn,
@@ -240,6 +241,21 @@ def render_message(role: str, content: str) -> None:
     st.markdown(render_dialogue_html(role, content), unsafe_allow_html=True)
 
 
+def render_current_scene(state: EditorialState) -> None:
+    """Renderiza apoio visual sem interferir no input ou no motor narrativo."""
+
+    try:
+        render_editorial_scene_image(PACKAGE_ID, state.node_id)
+    except Exception as exc:
+        log_editorial_exception(
+            "render_editorial_scene_image",
+            exc,
+            package_id=PACKAGE_ID,
+            node_id=state.node_id,
+        )
+        st.caption("A imagem desta cena não pôde ser carregada.")
+
+
 def advance_story_state(state: StoryState, *, finished: bool = False) -> StoryState:
     updated = state.copy()
     updated.step_index += 1
@@ -342,6 +358,7 @@ if editorial_state.finished or story_state.finished:
         return_to_library()
     st.stop()
 
+render_current_scene(editorial_state)
 user_text = st.chat_input("Responda")
 if not user_text:
     st.stop()
