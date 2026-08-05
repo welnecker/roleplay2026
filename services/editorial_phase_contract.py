@@ -11,6 +11,10 @@ def runtime_phase(state: EditorialState) -> str:
     return phase if phase in {"canonical", "bridge", "terminal_yard", "finished"} else "canonical"
 
 
+def _fact(state: EditorialState, key: str) -> str:
+    return str(state.facts.get(key, "") or "").strip()
+
+
 def adapt_context_for_runtime_phase(
     context: BeatContext,
     state: EditorialState,
@@ -19,30 +23,39 @@ def adapt_context_for_runtime_phase(
 
     phase = runtime_phase(state)
     if phase == "bridge":
-        target = str(state.facts.get("_bridge_target_beat_id", "") or "").strip()
+        target = _fact(state, "_bridge_target_beat_id")
+        origin_objective = _fact(state, "_bridge_origin_objective")
+        origin_canonical = _fact(state, "_bridge_origin_canonical")
+        target_objective = _fact(state, "_bridge_target_objective")
+        target_canonical = _fact(state, "_bridge_target_canonical")
         return replace(
             context,
             transition_status="bridge_pending",
             required_outcomes=(
                 "responder genuinamente ao conteúdo mais recente do usuário",
-                "manter a voz e a reação emocional da personagem",
-                "criar um gancho causal ou temático para o próximo movimento",
-                "deixar espaço real para uma nova resposta do usuário",
+                "acrescentar uma reação nova que não replique o beat de origem",
+                "preservar integralmente para o beat de destino suas decisões, perguntas, combinações e revelações",
+                "não criar pendência artificial apenas para prolongar a conversa",
             ),
             forbidden_outcomes=(
-                "executar o próximo beat",
-                "repetir ou parafrasear a linha canônica futura",
+                f"repetir ou parafrasear o movimento de origem já concluído: {origin_objective}",
+                f"repetir ou parafrasear a linha de origem já consumida: {origin_canonical}",
+                f"executar total ou parcialmente o objetivo reservado ao destino: {target_objective}",
+                f"repetir ou parafrasear a linha canônica futura: {target_canonical}",
+                "reconfirmar informação que já foi confirmada no turno imediatamente anterior",
+                "criar nova pergunta, promessa, dúvida ou obstáculo sem pendência real trazida pelo usuário",
                 "presumir ação, aceite, recusa, desejo ou decisão do usuário",
                 "avançar local, tempo ou acontecimento futuro",
             ),
             response_boundary=(
-                "Ponte narrativa: permaneça no beat de origem e apenas prepare "
-                f"o alvo pendente {target or 'declarado pelo runtime'}."
+                "Ponte narrativa semanticamente vazada é inválida: permaneça entre o movimento "
+                "já consumido da origem e o movimento ainda reservado ao destino "
+                f"{target or 'declarado pelo runtime'}."
             ),
         )
 
     if phase == "terminal_yard":
-        yard_id = str(state.facts.get("_active_yard_id", "") or "").strip()
+        yard_id = _fact(state, "_active_yard_id")
         return replace(
             context,
             transition_status="terminal_yard_active",
