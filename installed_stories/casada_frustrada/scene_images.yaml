@@ -21,3 +21,45 @@ fila_007:
   caption: Mary pede para Janio esperá-la depois do caixa.
   alt: Mary com suas compras pedindo para Janio esperar e ajudá-la até o carro.
   expanded: false
+
+encontro_acidental_001:
+  file: assets/scenes/supermercado/encontro_acidental_001.jpg
+  caption: Mary esbarra no usuário no corredor do supermercado.
+  alt: Mary surpresa após encostar o carrinho no usuário em um corredor do supermercado.
+  expanded: true
+
+encontro_acidental_002:
+  file: assets/scenes/supermercado/encontro_acidental_002.jpg
+  caption: Mary verifica se o usuário se machucou.
+  alt: Mary demonstra preocupação logo depois do esbarrão no supermercado.
+  expanded: true
+
+encontro_acidental_003:
+  file: assets/scenes/supermercado/encontro_acidental_003.jpg
+  caption: Mary se mostra aliviada ao perceber que está tudo bem.
+  alt: Mary conversa aliviada com o usuário entre os corredores do supermercado.
+  expanded: true
+
+encontro_acidental_004:
+  file: assets/scenes/supermercado/encontro_acidental_004.jpg
+  caption: Mary tenta reconhecer o usuário como morador do Plaza.
+  alt: Mary observa o usuário com curiosidade enquanto pergunta sobre o condomínio Plaza.
+  expanded: true
+
+encontro_acidental_005:
+  file: assets/scenes/supermercado/encontro_acidental_005.jpg
+  caption: Mary descobre que os dois podem ser vizinhos.
+  alt: Mary reage com simpatia à descoberta de que o usuário também mora no Plaza.
+  expanded: true
+
+encontro_acidental_006:
+  file: assets/scenes/supermercado/encontro_acidental_006.jpg
+  caption: Mary se apresenta ao usuário.
+  alt: Mary sorri e diz seu nome durante o primeiro encontro no supermercado.
+  expanded: true
+
+encontro_acidental_despedida_001:
+  file: assets/scenes/supermercado/encontro_acidental_despedida_001.jpg
+  caption: Mary se despede e continua suas compras.
+  alt: Mary se afastando com o carrinho depois de se despedir do usuário.
+  expanded: true
