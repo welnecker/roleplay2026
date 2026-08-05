@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+"""Integração do classificador contextual com o player editorial.
+
+O nome do módulo é mantido por compatibilidade, mas a instalação não faz monkey
+patch. Ela registra a dependência no motor oficial de turnos.
+"""
+
 import streamlit as st
 
 from roleplay.openrouter import OpenRouterError, generate_response
-from services import editorial_runtime
 from services.editorial_contextual_orchestration import decide_contextual_editorial_turn
+from services.editorial_progression import decide_editorial_progression_turn
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
+from services.editorial_turn_engine import configure_editorial_turn_classifier
 
 
 MODEL_DEFAULT = "google/gemini-3-flash-preview"
-_ORIGINAL_DECIDE = editorial_runtime.decide_editorial_turn
+_ORIGINAL_DECIDE = decide_editorial_progression_turn
 _INSTALLED = False
 
 
@@ -27,9 +34,7 @@ def _classifier_call(system_prompt: str, request: str) -> str:
             user_text=request,
         )
     except OpenRouterError:
-        # Falha do classificador não deve encerrar ou corromper a run. O parser
-        # converte esta saída em continue; a geração principal mantém seu próprio
-        # tratamento operacional de erro.
+        # Falha operacional do classificador preserva a progressão normal.
         return "{}"
 
 
@@ -38,6 +43,8 @@ def decide_player_editorial_turn(
     state: EditorialState,
     user_text: str,
 ) -> EditorialTurn:
+    """Compatibilidade para chamadas diretas antigas e testes isolados."""
+
     turn, destination = decide_contextual_editorial_turn(
         script,
         state,
@@ -45,7 +52,6 @@ def decide_player_editorial_turn(
         classifier_call=_classifier_call,
         decide_turn=_ORIGINAL_DECIDE,
     )
-    # Diagnóstico serializável: acompanha o turno até o logger e a persistência.
     turn.state.facts["_contextual_route"] = destination.route
     turn.state.facts["_contextual_signal"] = destination.signal
     turn.state.facts["_contextual_reason"] = destination.reason
@@ -54,10 +60,10 @@ def decide_player_editorial_turn(
 
 
 def install_contextual_player_cycle() -> None:
+    """Registra o classificador no motor oficial sem substituir o runtime."""
+
     global _INSTALLED
-    if _INSTALLED:
-        return
-    editorial_runtime.decide_editorial_turn = decide_player_editorial_turn
+    configure_editorial_turn_classifier(_classifier_call)
     _INSTALLED = True
 
 
