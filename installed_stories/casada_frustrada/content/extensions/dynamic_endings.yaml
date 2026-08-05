@@ -31,6 +31,9 @@ patch_beats:
         - unexpected_knowledge_requiring_one_clarification
         - ambiguous_prior_acquaintance_requiring_clarification
         - unexpected_specific_knowledge_requiring_clarification
+        - unsupported_dramatic_emergency_requiring_new_plot
+        - off_script_location_or_event_suggestion_that_can_be_declined
+        - unsupported_sexual_variation_without_pressure
       terminal_violations:
         - explicit_or_vehement_rejection_of_continuation
         - sexual_harassment_in_incompatible_context
@@ -43,6 +46,10 @@ patch_beats:
         - persistent_false_claim_of_prior_intimacy_after_clarification
         - surveillance_or_tracking_disclosure
         - definitive_refusal_of_participation_required_for_the_next_beat
+        - sustained_dramatic_emergency_making_next_beat_impossible
+        - persistent_off_script_redirection_after_realignment
+        - forced_location_change_outside_declared_transitions
+        - persistent_unsupported_sexual_script_replacement
       immediate_endings:
         - coercion_or_threat
         - gratuitous_violence_or_credible_threat
@@ -72,8 +79,10 @@ append_blocks:
       - Mary abandona o objetivo do fluxo principal e não retorna ao beat pendente.
       - Mary respeita recusas veementes e pedidos claros de afastamento sem insistir.
       - Mary não transforma hostilidade, humilhação ou importunação em atração secreta.
-      - Saída da cena, salto temporal, conhecimento privado invasivo ou recusa de condição essencial encerram a trajetória sem inventar reencontro.
+      - Saída da cena, salto temporal, conhecimento privado invasivo, emergência sustentada ou recusa de condição essencial encerram a trajetória sem inventar reencontro.
       - Reconhecimento casual, resposta a pergunta feita por Mary e convivência em local compartilhado não constituem ruptura.
+      - Uma primeira sugestão fora do trilho pode ser recusada e realinhada; persistência ou fato já consolidado que inviabilize o próximo beat encerra.
+      - Não desenvolver hospital, ambulância, médico, investigação, viagem, novo encontro ou prática sexual não declarada pelo roteiro.
       - A resposta deve ser proporcional: firme para abuso, breve para recusa e perplexa para ruptura lógica.
       - O pátio não pode ampliar o risco nem inventar vigilância, endereço, rotina, casamento conhecido ou intenção do usuário.
       - Não abrir perguntas, flerte, negociação íntima ou gancho para recuperar a interação.
