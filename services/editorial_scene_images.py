@@ -57,6 +57,10 @@ def load_scene_image_map(package_root: Path) -> dict[str, dict[str, object]]:
             "path": image_path,
             "caption": str(value.get("caption", "")).strip(),
             "alt": str(value.get("alt", "")).strip(),
+            # Mantém o contrato público do carregador, mas normaliza todas as
+            # imagens como retraídas. Metadados antigos com expanded: true não
+            # podem mais alterar a prioridade visual da conversa.
+            "expanded": False,
         }
     return result
 
