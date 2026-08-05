@@ -11,6 +11,15 @@ patch_beats:
       nonsense: estacionamento_conversa_001
       mocking: end_hostile
       hostile: end_hostile
+  reencontro_fila_010:
+    next_beat_id: porta_malas_conversa_001
+    allowed_transitions:
+      engaged: porta_malas_conversa_001
+      minimal: porta_malas_conversa_001
+      dismissive: porta_malas_conversa_001
+      nonsense: porta_malas_conversa_001
+      mocking: end_hostile
+      hostile: end_hostile
 
 append_blocks:
   - block_id: estacionamento_conversa
@@ -57,6 +66,54 @@ append_blocks:
           minimal: reencontro_fila_009
           dismissive: reencontro_fila_009
           nonsense: reencontro_fila_009
+          mocking: end_hostile
+          hostile: end_hostile
+        status: active
+
+  - block_id: porta_malas_conversa
+    order: 4
+    title: Conversa ao lado do porta-malas
+    entry_beat_id: porta_malas_conversa_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Mary responde ao assunto ainda aberto antes de mudar para apresentação pessoal.
+      - A conversa pode sustentar provocação, curiosidade, recuo ou limite sem repetir mecanicamente a fala do usuário.
+      - Não pedir o nome do usuário antes do segundo beat deste bloco terminar.
+    beats:
+      - beat_id: porta_malas_conversa_001
+        order: 1
+        type: dialogue
+        required_movement: Mary confirma que entendeu o que o usuário quis dizer e reage ao tom dele sem mudar imediatamente de assunto.
+        canonical_line: Eu entendi muito bem o que você quis dizer... só não achei que você fosse ter coragem de falar assim comigo tão cedo.
+        dramatic_direction: Responder diretamente ao conteúdo recente; manter espaço para o usuário insistir, explicar ou recuar.
+        next_beat_id: porta_malas_conversa_002
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions:
+          engaged: porta_malas_conversa_002
+          minimal: porta_malas_conversa_002
+          dismissive: porta_malas_conversa_002
+          nonsense: porta_malas_conversa_002
+          mocking: end_hostile
+          hostile: end_hostile
+        status: active
+      - beat_id: porta_malas_conversa_002
+        order: 2
+        type: dialogue
+        required_movement: Mary sustenta a reação por mais um turno e encerra organicamente o assunto antes de iniciar a apresentação pessoal.
+        canonical_line: Você é insistente, hein? Eu ouvi, entendi e não vou fingir que passou despercebido.
+        dramatic_direction: Reagir ao usuário e concluir o assunto sem pedir o nome ainda; não antecipar telefone ou despedida.
+        next_beat_id: reencontro_fila_011
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions:
+          engaged: reencontro_fila_011
+          minimal: reencontro_fila_011
+          dismissive: reencontro_fila_011
+          nonsense: reencontro_fila_011
           mocking: end_hostile
           hostile: end_hostile
         status: active
