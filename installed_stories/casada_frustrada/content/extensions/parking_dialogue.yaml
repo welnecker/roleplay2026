@@ -20,6 +20,24 @@ patch_beats:
       nonsense: porta_malas_conversa_001
       mocking: end_hostile
       hostile: end_hostile
+  reencontro_fila_011:
+    next_beat_id: nome_assunto_pendente_001
+    allowed_transitions:
+      engaged: nome_assunto_pendente_001
+      minimal: nome_assunto_pendente_001
+      dismissive: nome_assunto_pendente_001
+      nonsense: nome_assunto_pendente_001
+      mocking: end_hostile
+      hostile: end_hostile
+  reencontro_fila_014:
+    next_beat_id: antes_despedida_conversa_001
+    allowed_transitions:
+      engaged: antes_despedida_conversa_001
+      minimal: antes_despedida_conversa_001
+      dismissive: antes_despedida_conversa_001
+      nonsense: antes_despedida_conversa_001
+      mocking: end_hostile
+      hostile: end_hostile
 
 append_blocks:
   - block_id: estacionamento_conversa
@@ -43,13 +61,7 @@ append_blocks:
         max_questions: 1
         max_sentences: 3
         memory_writes: []
-        allowed_transitions:
-          engaged: estacionamento_conversa_002
-          minimal: estacionamento_conversa_002
-          dismissive: estacionamento_conversa_002
-          nonsense: estacionamento_conversa_002
-          mocking: end_hostile
-          hostile: end_hostile
+        allowed_transitions: {engaged: estacionamento_conversa_002, minimal: estacionamento_conversa_002, dismissive: estacionamento_conversa_002, nonsense: estacionamento_conversa_002, mocking: end_hostile, hostile: end_hostile}
         status: active
       - beat_id: estacionamento_conversa_002
         order: 2
@@ -61,13 +73,7 @@ append_blocks:
         max_questions: 1
         max_sentences: 3
         memory_writes: []
-        allowed_transitions:
-          engaged: reencontro_fila_009
-          minimal: reencontro_fila_009
-          dismissive: reencontro_fila_009
-          nonsense: reencontro_fila_009
-          mocking: end_hostile
-          hostile: end_hostile
+        allowed_transitions: {engaged: reencontro_fila_009, minimal: reencontro_fila_009, dismissive: reencontro_fila_009, nonsense: reencontro_fila_009, mocking: end_hostile, hostile: end_hostile}
         status: active
 
   - block_id: porta_malas_conversa
@@ -91,13 +97,7 @@ append_blocks:
         max_questions: 1
         max_sentences: 3
         memory_writes: []
-        allowed_transitions:
-          engaged: porta_malas_conversa_002
-          minimal: porta_malas_conversa_002
-          dismissive: porta_malas_conversa_002
-          nonsense: porta_malas_conversa_002
-          mocking: end_hostile
-          hostile: end_hostile
+        allowed_transitions: {engaged: porta_malas_conversa_002, minimal: porta_malas_conversa_002, dismissive: porta_malas_conversa_002, nonsense: porta_malas_conversa_002, mocking: end_hostile, hostile: end_hostile}
         status: active
       - beat_id: porta_malas_conversa_002
         order: 2
@@ -109,11 +109,78 @@ append_blocks:
         max_questions: 1
         max_sentences: 3
         memory_writes: []
-        allowed_transitions:
-          engaged: reencontro_fila_011
-          minimal: reencontro_fila_011
-          dismissive: reencontro_fila_011
-          nonsense: reencontro_fila_011
-          mocking: end_hostile
-          hostile: end_hostile
+        allowed_transitions: {engaged: reencontro_fila_011, minimal: reencontro_fila_011, dismissive: reencontro_fila_011, nonsense: reencontro_fila_011, mocking: end_hostile, hostile: end_hostile}
+        status: active
+
+  - block_id: nome_assunto_pendente
+    order: 5
+    title: Resposta antes de retomar o nome
+    entry_beat_id: nome_assunto_pendente_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Mary responde primeiro a qualquer pergunta, condição ou pedido ainda pendente do usuário.
+      - Mary pode corresponder, repetir, esclarecer, provocar ou estabelecer limite conforme sua personalidade e o contexto.
+      - Não inventar evasão apenas para alcançar o próximo beat.
+      - Não preparar o pedido seguinte antes de o assunto pendente receber resposta suficiente.
+    beats:
+      - beat_id: nome_assunto_pendente_001
+        order: 1
+        type: dialogue
+        required_movement: Mary responde diretamente ao questionamento ou condição usada pelo usuário antes de fornecer o nome.
+        canonical_line: Tá... eu ouvi e entendi. Antes de mudar de assunto, vou te responder direito.
+        dramatic_direction: Responder ao conteúdo literal do usuário; quando coerente, repetir ou nomear o que ele pediu. Não desviar para nome, telefone ou despedida.
+        next_beat_id: nome_assunto_pendente_002
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: nome_assunto_pendente_002, minimal: nome_assunto_pendente_002, dismissive: nome_assunto_pendente_002, nonsense: nome_assunto_pendente_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: nome_assunto_pendente_002
+        order: 2
+        type: dialogue
+        required_movement: Mary sustenta a resposta caso o usuário questione, peça confirmação ou condicione novamente o nome.
+        canonical_line: Não esqueci do que você disse... pode terminar esse assunto comigo antes da gente seguir.
+        dramatic_direction: Manter continuidade com as últimas falas; responder novamente se houver pergunta concreta. Só depois retomar o roteiro.
+        next_beat_id: reencontro_fila_012
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: reencontro_fila_012, minimal: reencontro_fila_012, dismissive: reencontro_fila_012, nonsense: reencontro_fila_012, mocking: end_hostile, hostile: end_hostile}
+        status: active
+
+  - block_id: antes_despedida_conversa
+    order: 6
+    title: Questionamentos antes da despedida
+    entry_beat_id: antes_despedida_conversa_001
+    max_movements_per_response: 1
+    max_questions_per_response: 1
+    rules:
+      - Aceitar horário ou trocar contato não apaga uma pergunta feita na mesma fala.
+      - Mary responde ao assunto pendente antes de iniciar a despedida.
+      - Não usar pressa, telefone ou marido como evasão automática.
+    beats:
+      - beat_id: antes_despedida_conversa_001
+        order: 1
+        type: dialogue
+        required_movement: Mary responde claramente à pergunta ou ao pedido que acompanhou a confirmação do horário.
+        canonical_line: Eu lembro, sim... e não vou fingir que essa pergunta não foi feita.
+        dramatic_direction: Responder ao questionamento recente antes de falar em ir embora; preservar o assunto de poucas interações atrás.
+        next_beat_id: antes_despedida_conversa_002
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: antes_despedida_conversa_002, minimal: antes_despedida_conversa_002, dismissive: antes_despedida_conversa_002, nonsense: antes_despedida_conversa_002, mocking: end_hostile, hostile: end_hostile}
+        status: active
+      - beat_id: antes_despedida_conversa_002
+        order: 2
+        type: dialogue
+        required_movement: Mary permite uma última réplica sobre o assunto e responde sem perder continuidade.
+        canonical_line: Pode falar... eu ainda estou aqui e não mudei de assunto.
+        dramatic_direction: Responder à réplica antes de conduzir organicamente para a despedida.
+        next_beat_id: reencontro_fila_015
+        max_questions: 1
+        max_sentences: 3
+        memory_writes: []
+        allowed_transitions: {engaged: reencontro_fila_015, minimal: reencontro_fila_015, dismissive: reencontro_fila_015, nonsense: reencontro_fila_015, mocking: end_hostile, hostile: end_hostile}
         status: active
