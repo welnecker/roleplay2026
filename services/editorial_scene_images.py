@@ -57,9 +57,7 @@ def load_scene_image_map(package_root: Path) -> dict[str, dict[str, object]]:
             "path": image_path,
             "caption": str(value.get("caption", "")).strip(),
             "alt": str(value.get("alt", "")).strip(),
-            # Compatibilidade com sidecars e consumidores antigos. A interface
-            # ignora pedidos de expansão automática e mantém a imagem retraída.
-            "expanded": False,
+            "expanded": bool(value.get("expanded", False)),
         }
     return result
 
@@ -85,7 +83,7 @@ def active_editorial_node_id(package_id: str) -> str:
 
 
 def render_editorial_scene_image(package_id: str) -> bool:
-    """Renderiza a imagem do beat atual retraída por padrão."""
+    """Renderiza a imagem do beat atual e informa se uma cena foi exibida."""
 
     package = find_editorial_package(package_id)
     if package is None:
@@ -102,10 +100,7 @@ def render_editorial_scene_image(package_id: str) -> bool:
     caption = str(image.get("caption", "")).strip()
     alt = str(image.get("alt", "")).strip()
     label = caption or alt or "Cena atual"
-
-    # Imagens são apoio visual, não parte obrigatória do fluxo conversacional.
-    # Mantê-las retraídas evita que empurrem o diálogo e a caixa de resposta para baixo.
-    with st.expander(f"🖼️ {label}", expanded=False):
+    with st.expander(f"🖼️ {label}", expanded=bool(image.get("expanded", False))):
         st.image(
             str(image["path"]),
             caption=caption or None,
@@ -114,40 +109,38 @@ def render_editorial_scene_image(package_id: str) -> bool:
     return True
 
 
-def _original_chat_input() -> Callable[..., Any]:
-    """Retorna uma referência estável ao widget original do Streamlit."""
-
+def _restore_chat_input() -> Callable[..., Any]:
     original = getattr(st, _ORIGINAL_CHAT_INPUT_ATTR, None)
     if callable(original):
+        st.chat_input = original
+        delattr(st, _ORIGINAL_CHAT_INPUT_ATTR)
         return original
-
-    current = st.chat_input
-    setattr(st, _ORIGINAL_CHAT_INPUT_ATTR, current)
-    return current
+    return st.chat_input
 
 
 def install_editorial_scene_image_hook() -> None:
-    """Exibe a cena antes da caixa de resposta sem alterar o widget durante a chamada.
+    """Exibe a cena imediatamente antes da caixa de resposta.
 
-    O hook anterior restaurava ``st.chat_input`` dentro do próprio wrapper. Essa
-    mutação durante a construção do widget podia tornar a entrada inoperante em
-    reruns e hot reloads. Agora a referência original permanece estável e o wrapper
-    somente renderiza a imagem e delega a chamada.
+    `st.chat_input` só é chamado depois que o runtime carregou o estado editorial,
+    renderizou o cabeçalho e mostrou o histórico. Resolver a imagem nesse momento
+    elimina a corrida da implementação anterior, que tentava descobrir a segunda
+    chamada de `st.caption` antes de o estado estar garantidamente disponível.
     """
 
-    original_chat_input = _original_chat_input()
+    original_chat_input = _restore_chat_input()
     package_id = str(st.session_state.get("selected_package_id", "") or "").strip()
     if not package_id:
-        st.chat_input = original_chat_input
         return
 
     def chat_input_with_scene(*args: object, **kwargs: object) -> Any:
+        _restore_chat_input()
         try:
             render_editorial_scene_image(package_id)
         except Exception as exc:
             st.warning(f"Não foi possível carregar a imagem desta cena: {exc}")
         return original_chat_input(*args, **kwargs)
 
+    setattr(st, _ORIGINAL_CHAT_INPUT_ATTR, original_chat_input)
     st.chat_input = chat_input_with_scene
 
 

@@ -5,6 +5,7 @@ import sys
 from types import ModuleType
 
 from services.editorial_player_contextual_cycle import install_contextual_player_cycle
+from services.editorial_scene_images import install_editorial_scene_image_hook
 from services.editorial_script_cache import refresh_loaded_editorial_script_cache
 
 
@@ -14,10 +15,10 @@ _RUNTIME_MODULE = "services.editorial_player_runtime"
 def _load_or_reload_runtime() -> ModuleType:
     """Carrega o runtime ou recarrega somente a instância ainda registrada."""
 
-    # O classificador contextual é registrado antes da primeira importação ou
-    # de qualquer hot reload do módulo executável. A camada visual não altera
-    # mais widgets globais durante o bootstrap do app.
+    # As substituições precisam estar instaladas antes da primeira importação
+    # ou de qualquer hot reload do módulo executável.
     install_contextual_player_cycle()
+    install_editorial_scene_image_hook()
 
     loaded = sys.modules.get(_RUNTIME_MODULE)
     if loaded is None:
