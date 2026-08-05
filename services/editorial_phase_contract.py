@@ -38,6 +38,7 @@ def adapt_context_for_runtime_phase(
                 "não criar pendência artificial apenas para prolongar a conversa",
             ),
             forbidden_outcomes=(
+                "executar o próximo beat total ou parcialmente",
                 f"repetir ou parafrasear o movimento de origem já concluído: {origin_objective}",
                 f"repetir ou parafrasear a linha de origem já consumida: {origin_canonical}",
                 f"executar total ou parcialmente o objetivo reservado ao destino: {target_objective}",
