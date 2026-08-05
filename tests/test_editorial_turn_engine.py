@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from services import editorial_player_contextual_cycle as player_cycle
 from services import editorial_runtime
 from services import editorial_turn_engine as engine
-from services import editorial_player_contextual_cycle as player_cycle
 from services.editorial_contextual_destination import ContextualDestination
 from services.editorial_player_contextual_cycle import install_contextual_player_cycle
 from services.editorial_runtime_impl import PilotScript, PilotState, PilotTurn
@@ -90,16 +90,18 @@ def test_player_registra_classificador_sem_substituir_runtime() -> None:
     assert editorial_runtime.decide_editorial_turn is engine.decide_editorial_turn
 
 
-def test_classificador_sem_secrets_preserva_progressao(monkeypatch) -> None:
+def test_classificador_sem_secrets_preserva_progressao_local(monkeypatch) -> None:
     class MissingSecrets:
-        def get(self, name, default=""):
+        def get(self, name: str, default: str = "") -> str:
             raise RuntimeError("secrets.toml ausente")
 
     monkeypatch.setattr(player_cycle.st, "secrets", MissingSecrets())
     monkeypatch.setattr(
         player_cycle,
         "generate_response",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("não deve chamar OpenRouter")),
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("OpenRouter não deve ser chamado sem chave")
+        ),
     )
 
     assert player_cycle._classifier_call("prompt", "request") == "{}"

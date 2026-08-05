@@ -21,17 +21,12 @@ _INSTALLED = False
 
 
 def _secret_value(name: str, default: str = "") -> str:
-    """Lê configuração do Streamlit sem tornar testes/CLI dependentes de secrets.toml.
-
-    O motor editorial é uma API de domínio e pode ser chamado fora do processo
-    Streamlit. Ausência do arquivo de segredos significa apenas que a classificação
-    remota não está disponível; a progressão normal permanece ativa.
-    """
+    """Lê secrets sem tornar testes/CLI dependentes de secrets.toml."""
 
     try:
         value = st.secrets.get(name, default)
     except Exception:
-        return default
+        return str(default or "").strip()
     return str(value or default).strip()
 
 
