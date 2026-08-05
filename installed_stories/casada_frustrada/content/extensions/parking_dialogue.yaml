@@ -11,9 +11,6 @@ patch_beats:
   reencontro_fila_011:
     next_beat_id: nome_assunto_pendente_001
     allowed_transitions: {engaged: nome_assunto_pendente_001, minimal: nome_assunto_pendente_001, dismissive: nome_assunto_pendente_001, nonsense: nome_assunto_pendente_001, mocking: end_hostile, hostile: end_hostile}
-  reencontro_fila_014:
-    next_beat_id: reencontro_fila_015
-    allowed_transitions: {engaged: reencontro_fila_015, minimal: reencontro_fila_015, dismissive: reencontro_fila_015, nonsense: reencontro_fila_015, mocking: end_hostile, hostile: end_hostile}
   reencontro_fila_015:
     response_boundary: integrated_canonical
   reencontro_fila_016:
