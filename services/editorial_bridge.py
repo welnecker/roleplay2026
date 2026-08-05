@@ -14,7 +14,7 @@ _BRIDGE_ORIGIN_CANONICAL_KEY = "_bridge_origin_canonical"
 _BRIDGE_TARGET_OBJECTIVE_KEY = "_bridge_target_objective"
 _BRIDGE_TARGET_CANONICAL_KEY = "_bridge_target_canonical"
 _BRIDGE_FALLBACK = (
-    "Ela reage ao que você disse sem repetir o que acabou de acontecer nem antecipar o próximo passo."
+    "Ela reage ao que você disse sem apressar o próximo passo, sem repetir o que acabou de acontecer nem antecipar o destino."
 )
 
 
