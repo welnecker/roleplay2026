@@ -4,11 +4,25 @@ patch_beats:
   encontro_acidental_001:
     canonical_line: '(Mary caminha distraida pelo mercado. De repente): Eita, caralho... desculpa!'
   encontro_acidental_006:
-    required_movement: Mary se apresenta e acolhe a apresentação do usuário sem encerrar o encontro.
-    canonical_line: 'Muito prazer... eu sou a Mary. Gostei de te conhecer, viu?'
-    dramatic_direction: Responder à apresentação e devolver o turno ao usuário; não se despedir ainda.
+    required_movement: Garantir que Mary e o usuário tenham trocado seus nomes e acolher somente a parte ainda pendente da apresentação.
+    canonical_line: 'Muito prazer... eu sou a Mary. E você, como se chama?'
+    dramatic_direction: Não repetir um nome já apresentado. Cumprir somente a parte pendente e não encerrar o encontro.
     next_beat_id: encontro_acidental_despedida_001
     automatic_followups: []
+    skip_when_facts:
+      mutual_introduction_completed: encontro_acidental_despedida_001
+    constraints:
+      fact_variants:
+        - when_all_facts: [mary_introduced_herself]
+          when_no_facts: [user_introduced_himself]
+          required_movement: Mary acolhe a conversa e pede somente o nome do usuário, pois já se apresentou antes.
+          canonical_line: 'E você? Ainda nem me disse seu nome.'
+          dramatic_direction: Não dizer novamente que se chama Mary; pedir o nome do usuário de forma natural.
+        - when_all_facts: [user_introduced_himself]
+          when_no_facts: [mary_introduced_herself]
+          required_movement: Mary acolhe o nome já informado pelo usuário e apresenta somente o próprio nome.
+          canonical_line: 'Prazer em saber seu nome. Eu sou a Mary.'
+          dramatic_direction: Usar o nome confirmado do usuário se soar natural e não pedir novamente como ele se chama.
     allowed_transitions: {engaged: encontro_acidental_despedida_001, minimal: encontro_acidental_despedida_001, dismissive: encontro_acidental_despedida_001, nonsense: encontro_acidental_despedida_001, mocking: end_hostile, hostile: end_hostile}
   reencontro_fila_010:
     dramatic_direction: >
