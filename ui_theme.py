@@ -12,6 +12,7 @@ CARD_CSS = """
     --rp-text: #f7f2ff;
     --rp-muted: #bbb1c8;
     --rp-purple-soft: #d9bdff;
+    --rp-login-green: #0c2e2d;
 }
 html, body, [data-testid="stAppViewContainer"] {
     background:
@@ -19,6 +20,13 @@ html, body, [data-testid="stAppViewContainer"] {
         radial-gradient(circle at 12% 82%, rgba(74, 35, 112, .16), transparent 38%),
         linear-gradient(145deg, var(--rp-bg-0) 0%, var(--rp-bg-1) 52%, var(--rp-bg-2) 100%);
     color: var(--rp-text);
+}
+[data-testid="stAppViewContainer"]:has([data-testid="stForm"] input[aria-label="E-mail"]) {
+    background: var(--rp-login-green);
+}
+[data-testid="stAppViewContainer"]:has([data-testid="stForm"] input[aria-label="E-mail"]) [data-testid="stForm"] {
+    background: rgba(8, 35, 34, .78);
+    border-color: rgba(236, 229, 210, .18);
 }
 [data-testid="stHeader"] { background: transparent; }
 [data-testid="stSidebar"] {
