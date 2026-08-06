@@ -32,23 +32,30 @@ def _policy(document: Mapping[str, Any]) -> dict[str, Any]:
     return dict(nested) if isinstance(nested, dict) else {}
 
 
+def _apply_deltas(state: Any, deltas: Mapping[str, Any]) -> Any:
+    for dimension_id, raw_delta in deltas.items():
+        dimension_id = str(dimension_id).strip()
+        if not dimension_id or not hasattr(state, dimension_id):
+            continue
+        current = getattr(state, dimension_id)
+        if isinstance(current, bool) or not isinstance(current, int):
+            continue
+        try:
+            delta = int(raw_delta or 0)
+        except (TypeError, ValueError):
+            continue
+        setattr(state, dimension_id, _bounded(current + delta))
+    return state
+
+
 def apply_psychological_deltas(
     state: Any,
     category: Mapping[str, Any] | None,
 ) -> Any:
-    """Aplica deltas declarativos às dimensões existentes do estado.
-
-    Cards podem usar ``state_deltas`` para qualquer dimensão numérica já
-    exposta pelo estado. Os campos legados ``desire_delta`` e
-    ``patience_delta`` continuam aceitos para preservar compatibilidade.
-    """
+    """Aplica deltas declarativos e preserva o contrato legado do runtime."""
 
     policy = dict(category or {})
-    deltas = {
-        str(key).strip(): int(value or 0)
-        for key, value in dict(policy.get("state_deltas") or {}).items()
-        if str(key).strip()
-    }
+    deltas = dict(policy.get("state_deltas") or {})
     legacy = {
         "desire": int(policy.get("desire_delta", 0) or 0),
         "patience": int(policy.get("patience_delta", 0) or 0),
@@ -56,14 +63,32 @@ def apply_psychological_deltas(
     for key, value in legacy.items():
         if key not in deltas and value:
             deltas[key] = value
+    return _apply_deltas(state, deltas)
 
-    for dimension_id, delta in deltas.items():
-        if not hasattr(state, dimension_id):
-            continue
-        current = getattr(state, dimension_id)
-        if isinstance(current, bool) or not isinstance(current, int):
-            continue
-        setattr(state, dimension_id, _bounded(current + delta))
+
+def apply_card_psychological_deltas(
+    document: Mapping[str, Any],
+    state: Any,
+    engagement: str,
+) -> Any:
+    """Evolui o estado conforme regras pertencentes ao card.
+
+    A aplicação é idempotente por turno editorial para evitar que pontes ou
+    finalizações repetidas alterem a psicologia mais de uma vez.
+    """
+
+    policy = _policy(document)
+    declared = policy.get("engagement_deltas") or {}
+    if not isinstance(declared, dict):
+        return state
+    turn_key = str(state.facts.get("_psychological_delta_turn", "") or "")
+    fingerprint = f"{state.node_id}:{len(state.recent_engagement)}:{engagement}"
+    if turn_key == fingerprint:
+        return state
+    deltas = declared.get(str(engagement)) or {}
+    if isinstance(deltas, dict):
+        _apply_deltas(state, deltas)
+    state.facts["_psychological_delta_turn"] = fingerprint
     return state
 
 
@@ -141,6 +166,7 @@ def render_psychological_state(document: Mapping[str, Any], state: Any) -> str:
 
 __all__ = [
     "PsychologicalDimension",
+    "apply_card_psychological_deltas",
     "apply_psychological_deltas",
     "psychological_dimensions",
     "render_psychological_state",
