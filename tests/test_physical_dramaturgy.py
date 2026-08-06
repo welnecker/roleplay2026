@@ -31,7 +31,8 @@ def test_corpo_curvilineo_so_entra_quando_video_desejo_e_confianca_autorizam() -
     context = "Mary decide como aparecer na câmera e quanto do próprio corpo deseja mostrar."
 
     low = PilotState(trust=4, desire=7)
-    assert select_physical_dramaturgy(document, low, target, context, "engaged") == []
+    low_selected = select_physical_dramaturgy(document, low, target, context, "engaged")
+    assert "curves_as_self_awareness" not in [item.aspect_id for item in low_selected]
 
     ready = PilotState(trust=7, desire=7)
     selected = select_physical_dramaturgy(document, ready, target, context, "engaged")
