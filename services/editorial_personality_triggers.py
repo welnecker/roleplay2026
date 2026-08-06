@@ -33,8 +33,20 @@ def _items(value: Any) -> tuple[str, ...]:
     return ()
 
 
+def _normalized_pattern(pattern: str) -> str:
+    """Aceita regex declarada diretamente em Python ou serializada por YAML/JSON.
+
+    Alguns produtores entregam ``\\b`` já desserializado como dois caracteres de
+    barra antes de ``b``. Nesse caso, normalizamos apenas barras duplicadas, sem
+    aplicar ``unicode_escape`` ao texto inteiro e sem corromper acentos.
+    """
+
+    return str(pattern).replace("\\\\", "\\")
+
+
 def _matches_text(text: str, patterns: Any) -> bool:
-    for pattern in _items(patterns):
+    for declared_pattern in _items(patterns):
+        pattern = _normalized_pattern(declared_pattern)
         try:
             if re.search(pattern, text, flags=re.IGNORECASE):
                 return True
