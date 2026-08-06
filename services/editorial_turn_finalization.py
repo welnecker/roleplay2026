@@ -8,6 +8,11 @@ from services.editorial_longitudinal_patterns import (
     render_behavior_patterns,
     update_behavior_patterns,
 )
+from services.editorial_memory_lifecycle import (
+    eligible_memory_ids,
+    render_memory_lifecycle_guidance,
+    update_memory_lifecycle,
+)
 from services.editorial_memory_recall import (
     render_memory_recall_guidance,
     select_contextual_memories,
@@ -131,7 +136,7 @@ def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória, psicologia, padrões, corpo, personalidade, impressões, fatos e continuidade."""
+    """Aplica memória, ciclo de vida, psicologia, padrões, corpo e continuidade."""
 
     available_ids = _memory_ids(script, turn.state)
     writes = _memory_writes_for_target(script, turn.target_id)
@@ -144,7 +149,13 @@ def finalize_editorial_turn(
 
     context_text = _turn_context(script, turn)
     mandatory_ids = _mandatory_context_memory_ids(script, turn.state, active_ids, writes)
-    optional_pool = [memory_id for memory_id in active_ids if memory_id not in mandatory_ids]
+    eligible_ids = eligible_memory_ids(
+        script.raw,
+        active_ids,
+        updated.facts,
+        forced_ids=mandatory_ids,
+    )
+    optional_pool = [memory_id for memory_id in eligible_ids if memory_id not in mandatory_ids]
     recalled_ids, recalled_facts = select_contextual_memories(
         script.raw,
         optional_pool,
@@ -152,7 +163,25 @@ def finalize_editorial_turn(
         context_text,
     )
     updated.facts = recalled_facts
-    context_memory_ids = list(dict.fromkeys([*mandatory_ids, *recalled_ids]))
+
+    lifecycle_fingerprint = (
+        f"{turn.target_id}:{len(updated.recent_engagement)}:{turn.engagement}:"
+        f"{','.join(writes)}:{','.join(recalled_ids)}"
+    )
+    updated, lifecycle_states = update_memory_lifecycle(
+        script.raw,
+        updated,
+        active_ids,
+        written_ids=writes,
+        recalled_ids=recalled_ids,
+        fingerprint=lifecycle_fingerprint,
+    )
+    context_memory_ids = eligible_memory_ids(
+        script.raw,
+        list(dict.fromkeys([*mandatory_ids, *recalled_ids])),
+        updated.facts,
+        forced_ids=[*mandatory_ids, *writes, *recalled_ids],
+    )
     narrative_context = build_narrative_context(script.raw, context_memory_ids, updated.facts)
 
     updated, impressions = update_subjective_impressions(
@@ -209,6 +238,7 @@ def finalize_editorial_turn(
     personality_context = render_personality_triggers(personality)
     user_facts_context = render_confirmed_user_facts(updated.facts)
     recall_guidance = render_memory_recall_guidance(recalled_ids)
+    lifecycle_guidance = render_memory_lifecycle_guidance(lifecycle_states)
     resolved_guard = render_resolved_topic_guard(script, updated)
     prompt_parts = [
         narrative_context,
@@ -219,6 +249,7 @@ def finalize_editorial_turn(
         personality_context,
         user_facts_context,
         recall_guidance,
+        lifecycle_guidance,
         render_beat_context(beat_context),
         turn.system_prompt,
         resolved_guard,
