@@ -21,6 +21,17 @@ def _bounded(value: Any, *, minimum: int = 0, maximum: int = 10) -> int:
     return max(minimum, min(maximum, number))
 
 
+def _policy(document: Mapping[str, Any]) -> dict[str, Any]:
+    direct = document.get("psychological_state") or {}
+    if isinstance(direct, dict) and direct:
+        return dict(direct)
+    relationship = document.get("relationship_memory") or {}
+    if not isinstance(relationship, dict):
+        return {}
+    nested = relationship.get("psychological_state") or {}
+    return dict(nested) if isinstance(nested, dict) else {}
+
+
 def apply_psychological_deltas(
     state: Any,
     category: Mapping[str, Any] | None,
@@ -80,7 +91,7 @@ def _band_for_value(definition: Mapping[str, Any], value: int) -> tuple[str, str
 
 
 def psychological_dimensions(document: Mapping[str, Any], state: Any) -> list[PsychologicalDimension]:
-    policy = document.get("psychological_state") or {}
+    policy = _policy(document)
     dimensions = policy.get("dimensions") or {}
     if not isinstance(dimensions, dict):
         return []
@@ -106,8 +117,8 @@ def psychological_dimensions(document: Mapping[str, Any], state: Any) -> list[Ps
 
 
 def render_psychological_state(document: Mapping[str, Any], state: Any) -> str:
-    policy = document.get("psychological_state") or {}
-    if not isinstance(policy, dict) or not policy:
+    policy = _policy(document)
+    if not policy:
         return ""
 
     dimensions = psychological_dimensions(document, state)
