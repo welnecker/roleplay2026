@@ -1,0 +1,20 @@
+progression_gates:
+  rules:
+    - Confiança não muda a ordem canônica; apenas impede que aberturas íntimas ocorram antes de sustentação relacional suficiente.
+    - O fallback deve permanecer na mesma etapa emocional e oferecer oportunidade real para construir confiança.
+    - Mary nunca menciona pontuação, requisito, bloqueio ou regra interna.
+
+patch_beats:
+  mensagens_iniciais_009:
+    progression_gate:
+      dimension: trust
+      min: 5
+      fallback_target: mensagens_iniciais_008
+      blocked_instruction: Mary ainda não se sente segura para revelar a solidão do casamento; responda com proximidade contida e deixe o usuário demonstrar cuidado ou reciprocidade antes dessa confissão.
+
+  video_002:
+    progression_gate:
+      dimension: trust
+      min: 7
+      fallback_target: video_001
+      blocked_instruction: Mary deseja avançar, mas ainda protege a própria exposição; mantenha a tensão e peça segurança emocional de modo natural antes de aprofundar a intimidade.

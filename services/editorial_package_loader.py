@@ -20,13 +20,9 @@ class EditorialPackageError(RuntimeError):
 
 
 _FREE_TEXT_KEYS = {
-    "introduction",
-    "title",
-    "required_movement",
-    "canonical_line",
-    "dramatic_direction",
-    "text",
-    "summary",
+    "introduction", "title", "required_movement", "canonical_line",
+    "dramatic_direction", "text", "summary", "premise", "awakening",
+    "character_view_of_user",
 }
 _FREE_TEXT_PATTERN = re.compile(
     r"^(?P<indent>\s*)(?P<key>" + "|".join(sorted(_FREE_TEXT_KEYS)) + r"):\s*(?P<value>.*)$"
@@ -74,29 +70,27 @@ def load_editorial_yaml(path: Path) -> dict[str, Any]:
 
 def _iter_beats(document: dict[str, Any]):
     for block in document.get("blocks", []) or []:
-        if not isinstance(block, dict):
-            continue
-        for beat in block.get("beats", []) or []:
-            if isinstance(beat, dict):
-                yield beat
+        if isinstance(block, dict):
+            for beat in block.get("beats", []) or []:
+                if isinstance(beat, dict):
+                    yield beat
 
 
 def _memory_entries(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, list):
         return [deepcopy(item) for item in value if isinstance(item, dict)]
     if isinstance(value, dict):
-        return [
-            {
-                "memory_id": str(memory_id),
-                "memory_text": str(definition.get("summary") or definition.get("memory_text") or ""),
-                "summary": str(definition.get("summary") or definition.get("memory_text") or ""),
-                "category": str(definition.get("category", "event") or "event"),
-                "importance": int(definition.get("importance", 5) or 5),
-                "source_beat_id": str(definition.get("source_beat_id", "")),
-            }
-            for memory_id, definition in value.items()
-            if isinstance(definition, dict)
-        ]
+        entries: list[dict[str, Any]] = []
+        for memory_id, definition in value.items():
+            if not isinstance(definition, dict):
+                continue
+            entry = deepcopy(definition)
+            entry["memory_id"] = str(memory_id)
+            summary = str(entry.get("summary") or entry.get("memory_text") or "")
+            entry["summary"] = summary
+            entry["memory_text"] = summary
+            entries.append(entry)
+        return entries
     return []
 
 
@@ -129,11 +123,7 @@ def _merge_character_patch(merged: dict[str, Any], extension: dict[str, Any]) ->
         _append_unique_strings(character, profile_key, profile_patch.get("append", []))
 
 
-def _replace_declared_policy(
-    merged: dict[str, Any],
-    extension: dict[str, Any],
-    key: str,
-) -> None:
+def _replace_declared_policy(merged: dict[str, Any], extension: dict[str, Any], key: str) -> None:
     value = extension.get(key)
     if value is None:
         return
@@ -169,8 +159,12 @@ def merge_editorial_extension(document: dict[str, Any], extension: dict[str, Any
             raise EditorialPackageError("organic_slack deve ser um mapa")
         merged["organic_slack"] = deepcopy(organic_slack)
 
-    _replace_declared_policy(merged, extension, "bridge_policy")
-    _replace_declared_policy(merged, extension, "runtime_policy")
+    for policy_key in (
+        "bridge_policy", "runtime_policy", "relationship_memory",
+        "user_fact_schema", "subjective_impressions", "behavior_patterns",
+        "physical_dramaturgy",
+    ):
+        _replace_declared_policy(merged, extension, policy_key)
 
     _merge_character_patch(merged, extension)
 
