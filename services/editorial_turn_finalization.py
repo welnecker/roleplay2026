@@ -17,8 +17,11 @@ from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.editorial_terminal_yard import state_for_target
 
-_USER_LINE = re.compile(r"^FALA ATUAL DO USUÁRIO:\s*(.+)$", re.MULTILINE)
-_RESPONSE_LINE = re.compile(r"^RESPOSTA DO USUÁRIO:\s*(.+)$", re.MULTILINE)
+_USER_TEXT_BLOCK = re.compile(
+    r"^(?:FALA ATUAL DO USUÁRIO|RESPOSTA DO USUÁRIO):[ \t]*(.*?)"
+    r"(?=\n[A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇ0-9 _—-]{2,}:|\Z)",
+    flags=re.MULTILINE | re.DOTALL,
+)
 
 
 def _runtime_policy(script: EditorialScript) -> dict[str, Any]:
@@ -52,12 +55,8 @@ def _memory_writes_for_target(script: EditorialScript, target_id: str) -> list[s
 
 
 def _current_user_text(prompt: str) -> str:
-    value = str(prompt or "")
-    for pattern in (_USER_LINE, _RESPONSE_LINE):
-        match = pattern.search(value)
-        if match:
-            return match.group(1).strip()
-    return ""
+    match = _USER_TEXT_BLOCK.search(str(prompt or ""))
+    return match.group(1).strip() if match else ""
 
 
 def finalize_editorial_turn(script: EditorialScript, turn: EditorialTurn) -> EditorialTurn:
