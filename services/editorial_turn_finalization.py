@@ -14,7 +14,7 @@ from services.editorial_psychological_state import (
 )
 from services.editorial_resolved_topics import render_resolved_topic_guard
 from services.editorial_user_facts import render_confirmed_user_facts
-from services.narrative_context import build_narrative_context
+from services.narrative_context import build_narrative_context, memory_catalog
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.editorial_terminal_yard import state_for_target
 
@@ -48,13 +48,19 @@ def _is_strict_canonical_beat(script: EditorialScript, beat_id: str) -> bool:
     return clean in beat_ids or any(clean.startswith(prefix) for prefix in prefixes)
 
 
-def _memory_ids(script: EditorialScript, state: EditorialState) -> list[str]:
+def _initial_memory_ids(script: EditorialScript) -> list[str]:
     profile = script.raw.get("relationship_memory") or {}
-    initial = [
+    if not isinstance(profile, dict):
+        return []
+    return [
         str(item).strip()
         for item in profile.get("initial_memory_ids", []) or []
         if str(item).strip()
-    ] if isinstance(profile, dict) else []
+    ]
+
+
+def _memory_ids(script: EditorialScript, state: EditorialState) -> list[str]:
+    initial = _initial_memory_ids(script)
     active = [
         item.strip()
         for item in str(state.facts.get("_active_memory_ids", "") or "").split(",")
@@ -85,6 +91,34 @@ def _recall_context(script: EditorialScript, turn: EditorialTurn) -> str:
     return "\n".join(part for part in parts if str(part).strip())
 
 
+def _mandatory_context_memory_ids(
+    script: EditorialScript,
+    state: EditorialState,
+    active_ids: list[str],
+    writes: list[str],
+) -> list[str]:
+    """Preserva memórias estruturais sem transformá-las em callbacks repetitivos.
+
+    Entram obrigatoriamente no contexto:
+    - memórias iniciais no primeiro turno finalizado;
+    - memórias escritas pelo beat atual, para efeito no mesmo turno;
+    - a origem consolidada da relação, necessária para continuidade canônica.
+    """
+
+    mandatory: list[str] = []
+    if not str(state.facts.get("_memory_recall_turn", "") or "").strip():
+        mandatory.extend(_initial_memory_ids(script))
+    mandatory.extend(writes)
+
+    catalog = memory_catalog(script.raw)
+    mandatory.extend(
+        memory_id
+        for memory_id in active_ids
+        if memory_id in catalog and catalog[memory_id].category == "relationship_origin"
+    )
+    return list(dict.fromkeys(item for item in mandatory if item))
+
+
 def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
@@ -100,14 +134,21 @@ def finalize_editorial_turn(
     updated.facts["_pending_memory_writes"] = ",".join(writes)
     updated = state_for_target(script, updated, turn.target_id)
 
+    mandatory_ids = _mandatory_context_memory_ids(script, turn.state, active_ids, writes)
+    optional_pool = [memory_id for memory_id in active_ids if memory_id not in mandatory_ids]
     recalled_ids, recalled_facts = select_contextual_memories(
         script.raw,
-        active_ids,
+        optional_pool,
         updated.facts,
         _recall_context(script, turn),
     )
     updated.facts = recalled_facts
-    narrative_context = build_narrative_context(script.raw, recalled_ids, updated.facts)
+    context_memory_ids = list(dict.fromkeys([*mandatory_ids, *recalled_ids]))
+    narrative_context = build_narrative_context(
+        script.raw,
+        context_memory_ids,
+        updated.facts,
+    )
 
     runtime_phase = str(updated.facts.get("_runtime_phase", "canonical") or "canonical")
     canonical_member = _is_strict_canonical_beat(script, turn.target_id)
