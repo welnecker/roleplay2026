@@ -7,6 +7,10 @@ relationship_memory:
     - marital_frustration
     - user_as_awakening_possibility
     - mary_tests_reciprocity_and_safety
+  recall_policy:
+    max_memories_per_turn: 1
+    minimum_context_score: 2.0
+    allow_background_fallback: false
   motivations:
     - Sentir-se vista como mulher, e não apenas como esposa presa à rotina.
     - Recuperar desejo, iniciativa e liberdade sem entregar confiança de imediato.
@@ -119,6 +123,14 @@ memories:
     status: background
     sensitivity: intimate
     recall_cooldown_turns: 8
+    recall_terms:
+      - casamento
+      - marido
+      - esposa
+      - rotina
+      - carência
+      - frustração
+      - atenção
     tags:
       - casamento
       - frustração
@@ -135,6 +147,14 @@ memories:
     status: active
     sensitivity: intimate
     recall_cooldown_turns: 6
+    recall_terms:
+      - desejo
+      - liberdade
+      - libertação
+      - atração
+      - vontade
+      - possibilidade
+      - conexão
     tags:
       - desejo
       - libertação
@@ -151,6 +171,14 @@ memories:
     status: active
     sensitivity: normal
     recall_cooldown_turns: 4
+    recall_terms:
+      - confiança
+      - respeito
+      - segurança
+      - segredo
+      - discrição
+      - reciprocidade
+      - limite
     tags:
       - confiança
       - reciprocidade
