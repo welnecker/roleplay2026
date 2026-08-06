@@ -84,6 +84,7 @@ def test_manifesto_declara_runtime_editorial() -> None:
     assert runtime.editorial.extensions == (
         "content/extensions/continuation.yaml",
         "content/extensions/narrative.yaml",
+        "content/extensions/opening_flow.yaml",
         "content/extensions/story.yaml",
         "content/extensions/fixes.yaml",
         "content/extensions/guardrails.yaml",
