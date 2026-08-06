@@ -2,22 +2,23 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from typing import Any, Mapping
 
-_STORE_KEY = "_episodic_memory_json"
-_RECALLED_KEY = "_episodic_memory_recalled_id"
-_SEQ_KEY = "_episodic_memory_sequence"
+_EPISODE_KEY = "_episodic_memory_json"
+_DRAFT_KEY = "_episodic_memory_draft_json"
+_TURN_KEY = "_episodic_memory_turn"
+_BLOCKED_KEY = "_episodic_creativity_blocked"
 
-_TAG_PATTERNS = {
-    "action": re.compile(r"\ba[cç][aã]o\b", re.IGNORECASE),
-    "initiative": re.compile(r"\b(?:atitude|iniciativa|agir|diret[oa])\b", re.IGNORECASE),
-    "desire": re.compile(r"\b(?:quero|queria|gostaria|vontade|desejo|tes[aã]o)\b", re.IGNORECASE),
-    "lingerie": re.compile(r"\b(?:calcinha|suti[aã]|lingerie)\b", re.IGNORECASE),
-    "phone": re.compile(r"\b(?:telefone|celular|n[uú]mero|liga|mensagem|v[ií]deo)\b", re.IGNORECASE),
-    "marriage": re.compile(r"\b(?:casad[ao]|marido|casamento)\b", re.IGNORECASE),
-    "invitation": re.compile(r"\b(?:topa|aceita|vamos|que tal|caf[eé]|encontro)\b", re.IGNORECASE),
+_STOPWORDS = {
+    "a", "ao", "aos", "aquela", "aquele", "aquilo", "as", "assim", "até",
+    "com", "como", "da", "das", "de", "dela", "dele", "do", "dos", "e",
+    "ela", "ele", "em", "essa", "esse", "esta", "este", "eu", "foi", "isso",
+    "já", "mas", "me", "meu", "minha", "na", "nas", "não", "no", "nos",
+    "o", "os", "ou", "para", "pela", "pelo", "por", "pra", "que", "se",
+    "sem", "ser", "sua", "seu", "também", "te", "tem", "ter", "tu", "um",
+    "uma", "você", "vocês"
 }
-_THREAD_EQUIVALENTS = {"action", "initiative"}
 
 
 def _policy(document: Mapping[str, Any]) -> dict[str, Any]:
@@ -29,94 +30,158 @@ def _policy(document: Mapping[str, Any]) -> dict[str, Any]:
     return dict(nested) if isinstance(nested, dict) else {}
 
 
-def _load(facts: Mapping[str, str]) -> list[dict[str, Any]]:
+def _loads(value: object) -> dict[str, Any]:
     try:
-        parsed = json.loads(str(facts.get(_STORE_KEY, "") or "[]"))
+        parsed = json.loads(str(value or "{}"))
     except (TypeError, ValueError, json.JSONDecodeError):
-        return []
-    return [dict(item) for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
+        return {}
+    return dict(parsed) if isinstance(parsed, dict) else {}
 
 
-def _save(facts: dict[str, str], memories: list[dict[str, Any]], maximum: int) -> None:
-    facts[_STORE_KEY] = json.dumps(memories[-maximum:], ensure_ascii=False, separators=(",", ":"))
+def _dump(value: Mapping[str, Any]) -> str:
+    return json.dumps(dict(value), ensure_ascii=False, separators=(",", ":"))
 
 
-def _tags(text: str) -> list[str]:
-    return [tag for tag, pattern in _TAG_PATTERNS.items() if pattern.search(text)]
+def _clean(text: str, limit: int = 360) -> str:
+    return " ".join(str(text or "").split()).strip()[:limit]
 
 
-def _significant(text: str, tags: list[str]) -> bool:
-    return bool(tags or "?" in text or re.search(r"\b(?:lembra|promet|devendo|responde|explica)\w*\b", text, re.IGNORECASE))
+def _normalized_words(text: str) -> list[str]:
+    normalized = unicodedata.normalize("NFKD", str(text or ""))
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    words = re.findall(r"[a-zA-Z0-9]+", normalized.lower())
+    return [word for word in words if len(word) >= 4 and word not in _STOPWORDS]
 
 
-def _status(text: str) -> str:
-    if "?" in text or re.search(r"\b(?:promet|devendo|responde|explica)\w*\b", text, re.IGNORECASE):
-        return "pending"
-    return "reusable"
+def _anchors(text: str, maximum: int = 8) -> list[str]:
+    return list(dict.fromkeys(_normalized_words(text)))[:maximum]
 
 
-def capture_episode(
+def _matches_active_thread(user_text: str, episode: Mapping[str, Any]) -> bool:
+    current = set(_anchors(user_text, maximum=12))
+    previous = {str(item) for item in episode.get("anchors", []) or []}
+    return bool(current.intersection(previous))
+
+
+def _recall_allowed(policy: Mapping[str, Any], beat_id: str) -> bool:
+    rules = policy.get("recall", []) or []
+    if not rules:
+        return True
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        beat_ids = {str(item) for item in rule.get("beat_ids", []) or []}
+        prefixes = tuple(str(item) for item in rule.get("beat_prefixes", []) or [])
+        if beat_id in beat_ids or any(beat_id.startswith(prefix) for prefix in prefixes):
+            return True
+    return False
+
+
+def advance_episode_turn(document: Mapping[str, Any], facts: dict[str, str]) -> int:
+    """Avança o relógio episódico uma vez por interação do usuário."""
+
+    if not _policy(document):
+        return 0
+    value = int(facts.get(_TURN_KEY, "0") or 0) + 1
+    facts[_TURN_KEY] = str(value)
+    facts[_BLOCKED_KEY] = "false"
+    return value
+
+
+def prepare_bridge_episode(
     document: Mapping[str, Any],
     facts: dict[str, str],
     user_text: str,
     *,
     source_beat_id: str,
-) -> None:
+) -> str:
+    """Reserva o único fio criativo do card ou bloqueia uma nova bifurcação.
+
+    A ponte já é o filtro estrutural de relevância. Não há vocabulário temático:
+    o episódio nasce do texto real do usuário e só é consolidado após a resposta
+    aprovada de Mary.
+    """
+
     policy = _policy(document)
-    if not policy:
-        return
-    text = " ".join(str(user_text or "").split()).strip()
-    if not text:
-        return
+    text = _clean(user_text)
+    if not policy or not text:
+        return "disabled"
 
-    memories = _load(facts)
-    tags = _tags(text)
-    recalled_id = str(facts.pop(_RECALLED_KEY, "") or "").strip()
-    resolved_tags: set[str] = set()
-    if recalled_id:
-        for memory in memories:
-            if str(memory.get("memory_id", "")) == recalled_id:
-                memory["status"] = "resolved"
-                memory["resolution"] = text[:280]
-                resolved_tags = {str(tag) for tag in memory.get("tags", []) or []}
-                break
+    episode = _loads(facts.get(_EPISODE_KEY, ""))
+    current_turn = int(facts.get(_TURN_KEY, "0") or 0)
+    history_turn_window = max(1, int(policy.get("history_turn_window", 6) or 6))
 
-    if recalled_id:
-        carried = set(tags) - resolved_tags
-        if resolved_tags.intersection(_THREAD_EQUIVALENTS):
-            carried -= _THREAD_EQUIVALENTS
-        if not carried:
-            _save(facts, memories, int(policy.get("max_memories", 12) or 12))
-            return
-
-    if not _significant(text, tags):
-        _save(facts, memories, int(policy.get("max_memories", 12) or 12))
-        return
-
-    sequence = int(facts.get(_SEQ_KEY, "0") or 0) + 1
-    facts[_SEQ_KEY] = str(sequence)
-    memories.append(
-        {
-            "memory_id": f"episode_{sequence:04d}",
-            "summary": f'O usuário disse: "{text[:280]}"',
-            "status": _status(text),
-            "tags": tags or ["conversation"],
+    if not episode:
+        facts[_DRAFT_KEY] = _dump({
+            "mode": "new",
+            "user_text": text,
             "source_beat_id": str(source_beat_id or ""),
-            "last_recalled_beat_id": "",
+            "turn": current_turn,
+            "history_turn_window": history_turn_window,
+        })
+        return "new"
+
+    if episode.get("status") != "consumed" and _matches_active_thread(text, episode):
+        facts[_DRAFT_KEY] = _dump({
+            "mode": "continue",
+            "user_text": text,
+            "source_beat_id": str(source_beat_id or ""),
+            "turn": current_turn,
+            "history_turn_window": history_turn_window,
+        })
+        return "continue"
+
+    facts.pop(_DRAFT_KEY, None)
+    facts[_BLOCKED_KEY] = "true"
+    return "blocked"
+
+
+def consolidate_bridge_episode(facts: dict[str, str], assistant_text: str) -> None:
+    """Consolida usuário + Mary somente depois da resposta ter sido aprovada."""
+
+    draft = _loads(facts.pop(_DRAFT_KEY, ""))
+    mary_text = _clean(assistant_text)
+    if not draft or not mary_text:
+        return
+
+    user_text = _clean(str(draft.get("user_text", "")))
+    turn = int(draft.get("turn", 0) or 0)
+    window = max(1, int(draft.get("history_turn_window", 6) or 6))
+    episode = _loads(facts.get(_EPISODE_KEY, ""))
+
+    if draft.get("mode") == "new" or not episode:
+        episode = {
+            "episode_id": "creative_episode_001",
+            "user_text": user_text,
+            "mary_text": mary_text,
+            "latest_user_text": user_text,
+            "latest_mary_text": mary_text,
+            "anchors": _anchors(f"{user_text} {mary_text}"),
+            "source_beat_id": str(draft.get("source_beat_id", "")),
+            "start_turn": turn,
+            "end_turn": turn,
+            "eligible_after_turn": turn + window,
+            "status": "dormant",
+            "continuations": 0,
         }
-    )
-    _save(facts, memories, int(policy.get("max_memories", 12) or 12))
+    else:
+        episode["latest_user_text"] = user_text
+        episode["latest_mary_text"] = mary_text
+        episode["end_turn"] = turn
+        episode["eligible_after_turn"] = turn + window
+        episode["continuations"] = int(episode.get("continuations", 0) or 0) + 1
+        episode["status"] = "dormant"
+        merged = [
+            *[str(item) for item in episode.get("anchors", []) or []],
+            *_anchors(f"{user_text} {mary_text}"),
+        ]
+        episode["anchors"] = list(dict.fromkeys(merged))[:12]
+
+    facts[_EPISODE_KEY] = _dump(episode)
 
 
-def _recall_tags(policy: Mapping[str, Any], beat_id: str) -> set[str]:
-    for rule in policy.get("recall", []) or []:
-        if not isinstance(rule, dict):
-            continue
-        prefixes = tuple(str(item) for item in rule.get("beat_prefixes", []) or [])
-        beat_ids = {str(item) for item in rule.get("beat_ids", []) or []}
-        if beat_id in beat_ids or any(beat_id.startswith(prefix) for prefix in prefixes):
-            return {str(item) for item in rule.get("tags", []) or []}
-    return set()
+def creativity_blocked(facts: Mapping[str, str]) -> bool:
+    return str(facts.get(_BLOCKED_KEY, "false") or "false").lower() == "true"
 
 
 def recall_episode(
@@ -125,29 +190,36 @@ def recall_episode(
     *,
     beat_id: str,
 ) -> str:
+    """Recupera uma única cápsula depois que sua troca saiu do histórico recente."""
+
     policy = _policy(document)
-    wanted = _recall_tags(policy, str(beat_id or ""))
-    if not wanted:
+    episode = _loads(facts.get(_EPISODE_KEY, ""))
+    current_turn = int(facts.get(_TURN_KEY, "0") or 0)
+    clean_beat_id = str(beat_id or "")
+    if (
+        not policy
+        or not episode
+        or episode.get("status") != "dormant"
+        or current_turn < int(episode.get("eligible_after_turn", 0) or 0)
+        or clean_beat_id == str(episode.get("source_beat_id", ""))
+        or not _recall_allowed(policy, clean_beat_id)
+    ):
         return ""
-    memories = _load(facts)
-    candidates = [
-        item
-        for item in memories
-        if item.get("status") in {"pending", "reusable"}
-        and str(item.get("source_beat_id", "")) != beat_id
-        and str(item.get("last_recalled_beat_id", "")) != beat_id
-        and wanted.intersection({str(tag) for tag in item.get("tags", []) or []})
-    ]
-    if not candidates:
-        return ""
-    candidates.sort(key=lambda item: (item.get("status") == "pending", item.get("memory_id", "")), reverse=True)
-    selected = candidates[0]
-    selected["last_recalled_beat_id"] = beat_id
-    if selected.get("status") == "pending":
-        selected["status"] = "recalled"
-        facts[_RECALLED_KEY] = str(selected.get("memory_id", ""))
-    _save(facts, memories, int(policy.get("max_memories", 12) or 12))
-    return str(selected.get("summary", "")).strip()
+
+    episode["status"] = "consumed"
+    episode["recalled_at_beat_id"] = clean_beat_id
+    episode["recalled_at_turn"] = current_turn
+    facts[_EPISODE_KEY] = _dump(episode)
+
+    user_text = str(episode.get("latest_user_text") or episode.get("user_text") or "").strip()
+    mary_text = str(episode.get("latest_mary_text") or episode.get("mary_text") or "").strip()
+    return f'Usuário: "{user_text}" | Mary: "{mary_text}"'
 
 
-__all__ = ["capture_episode", "recall_episode"]
+__all__ = [
+    "advance_episode_turn",
+    "consolidate_bridge_episode",
+    "creativity_blocked",
+    "prepare_bridge_episode",
+    "recall_episode",
+]
