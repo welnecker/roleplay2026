@@ -11,9 +11,9 @@ from services.editorial_conversational_obligation import (
 )
 from services.editorial_episodic_memory import (
     advance_episode_turn,
-    creativity_blocked,
-    prepare_bridge_episode,
+    prepare_selected_memory,
     recall_episode,
+    render_relationship_recollections,
 )
 from services.editorial_resolved_topics import render_resolved_topic_guard
 from services.narrative_context import build_narrative_context
@@ -104,16 +104,16 @@ def finalize_editorial_turn(
 
     user_text = _current_user_text(turn.system_prompt)
     advance_episode_turn(script.raw, updated.facts)
-    if runtime_phase == "bridge":
-        prepare_bridge_episode(
-            script.raw,
-            updated.facts,
-            user_text,
-            source_beat_id=str(turn.state.node_id or turn.target_id or ""),
-        )
+    prepare_selected_memory(
+        script.raw,
+        updated.facts,
+        user_text,
+        source_beat_id=str(turn.state.node_id or turn.target_id or ""),
+        runtime_phase=runtime_phase,
+    )
 
     episodic_recall = ""
-    if runtime_phase == "canonical":
+    if runtime_phase != "terminal_yard":
         episodic_recall = recall_episode(
             script.raw,
             updated.facts,
@@ -130,8 +130,10 @@ def finalize_editorial_turn(
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
     resolved_guard = render_resolved_topic_guard(script, updated)
+    chosen_recollections = render_relationship_recollections(updated.facts)
     prompt_parts = [
         narrative_context,
+        chosen_recollections,
         render_beat_context(beat_context),
         turn.system_prompt,
         resolved_guard,
@@ -140,21 +142,12 @@ def finalize_editorial_turn(
 
     if episodic_recall:
         prompt += (
-            f"\n\nMEMÓRIA EPISÓDICA ANTIGA: {episodic_recall}\n"
-            "Traga essa troca à tona em uma referência curta e natural antes de seguir o beat. "
-            "Não a apresente como nova pergunta se ela já tiver sido respondida."
+            f"\n\nFIO DE CONTINUIDADE ESCOLHIDO PELO USUÁRIO: {episodic_recall}\n"
+            "Este fio foi liberado pelo roteiro neste beat. Retome-o de modo breve e natural, "
+            "integrado ao movimento atual. Não invente detalhes ausentes e não abra um segundo fio."
         )
 
-    if creativity_blocked(updated.facts):
-        prompt += (
-            "\n\nTRAVA DE CRIATIVIDADE DO CARD:\n"
-            "- Um fio criativo do usuário já foi acolhido e registrado neste capítulo.\n"
-            "- Não abra outra fantasia, assunto paralelo ou nova ponte.\n"
-            "- Faça somente uma contenção curta, afetuosa e variada, equivalente a "
-            "'calma, você já me surpreendeu o suficiente', e retome imediatamente o roteiro.\n"
-            "- Não registre nem desenvolva a nova bifurcação."
-        )
-    elif bridge_obligation:
+    if bridge_obligation:
         prompt += (
             "\n\nSUPORTE CONVERSACIONAL DA PONTE:\n"
             "- Responda agora à pergunta ou ao convite quando isso couber sem quebrar o roteiro.\n"
