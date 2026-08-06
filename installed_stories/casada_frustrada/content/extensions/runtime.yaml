@@ -3,6 +3,13 @@ package_id: roleplay2026.casada_frustrada
 bridge_policy:
   mode: required
 runtime_policy:
+  episodic_memory:
+    max_memories: 12
+    recall:
+      - beat_prefixes: [mensagens_iniciais_, video_]
+        tags: [action, initiative, desire, marriage, invitation]
+      - beat_prefixes: [motel_]
+        tags: [lingerie, desire, phone, action, initiative]
   strict_canonical:
     beat_prefixes:
       - motel_
