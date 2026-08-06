@@ -21,6 +21,7 @@ runtime:
       - content/extensions/dynamic_endings.yaml
       - content/extensions/relationship_memory.yaml
       - content/extensions/user_facts.yaml
+      - content/extensions/subjective_impressions.yaml
       - content/extensions/runtime.yaml
 card:
   title: Casada frustrada
