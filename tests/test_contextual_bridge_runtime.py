@@ -49,7 +49,7 @@ def test_substantive_contribution_creates_one_contextual_bridge() -> None:
     assert turn.state.node_id == "motel_003"
     assert turn.state.pending_next_beat_id == "motel_004"
     assert turn.state.facts["_runtime_phase"] == "bridge"
-    assert turn.state.facts["_strict_motel_canonical"] == "false"
+    assert turn.state.facts["_strict_motel_canonical"] == "true"
     assert "CONTRATO DE CONTINUIDADE DA PONTE" in turn.system_prompt
     assert "Preserve a intensidade" in turn.system_prompt
     assert "CONTINUIDADE ESTRITA DO MOTEL:" not in turn.system_prompt
@@ -68,6 +68,18 @@ def test_question_can_breathe_even_when_short() -> None:
     assert turn.state.facts["_runtime_phase"] == "bridge"
 
 
+def test_short_reply_outside_declared_scope_keeps_required_bridge() -> None:
+    turn = decide_editorial_progression_turn(
+        _script(),
+        PilotState(node_id="late_night_004"),
+        "sim",
+    )
+
+    assert turn.target_id == "late_night_004"
+    assert turn.state.pending_next_beat_id == "late_night_005"
+    assert turn.state.facts["_runtime_phase"] == "bridge"
+
+
 def test_engine_implementation_is_not_tied_to_motel_ids() -> None:
     from pathlib import Path
 
@@ -76,5 +88,6 @@ def test_engine_implementation_is_not_tied_to_motel_ids() -> None:
 
     assert "motel_" not in progression
     assert "motel_" not in finalization
+    assert "bridge_selection" in progression
     assert "bridge_continuity" in progression
     assert "qualified_endings" in progression
