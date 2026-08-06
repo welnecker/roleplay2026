@@ -69,12 +69,14 @@ def finalize_editorial_turn(
     updated.facts["_pending_memory_writes"] = ",".join(writes)
     updated = state_for_target(script, updated, turn.target_id)
 
-    strict = _is_strict_canonical_beat(script, turn.target_id)
+    runtime_phase = str(updated.facts.get("_runtime_phase", "canonical") or "canonical")
+    canonical_member = _is_strict_canonical_beat(script, turn.target_id)
+    inject_canonical_prompt = runtime_phase == "canonical" and canonical_member
     strict_policy = _strict_canonical_policy(script)
     state_fact = str(strict_policy.get("state_fact", "") or "").strip()
     updated.facts["_force_fixed_response"] = "false"
     if state_fact:
-        updated.facts[state_fact] = "true" if strict else "false"
+        updated.facts[state_fact] = "true" if canonical_member else "false"
 
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
@@ -85,7 +87,7 @@ def finalize_editorial_turn(
     ]
     prompt = "\n\n".join(part.strip() for part in prompt_parts if part.strip())
 
-    if strict:
+    if inject_canonical_prompt:
         title = str(strict_policy.get("prompt_title", "") or "").strip()
         title = title or "CONTINUIDADE CANÔNICA ESTRITA"
         prompt = (
