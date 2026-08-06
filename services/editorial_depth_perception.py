@@ -21,6 +21,10 @@ _GENERIC_OPENERS = (
     "está bem",
     "tudo bem",
 )
+_DEFAULT_THOUGHT_MARKERS = (
+    ("[PENSAMENTO]", "[/PENSAMENTO]"),
+    ("<thought>", "</thought>"),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +55,7 @@ def assess_depth_perception(
     user_terms: Iterable[str] = (),
     emotional_terms: Iterable[str] = (),
     max_sentences: int = 3,
-    thought_markers: tuple[str, str] = ("<thought>", "</thought>"),
+    thought_markers: tuple[str, str] | tuple[tuple[str, str], ...] | None = None,
 ) -> DepthPerceptionReport:
     """Avalia sinais observáveis de profundidade sem depender de um LLM juiz."""
 
@@ -132,11 +136,30 @@ def _sentence_count(text: str) -> int:
     return len(chunks)
 
 
-def _extract_thought(text: str, markers: tuple[str, str]) -> str:
-    start, end = markers
-    if not start or not end or start not in text or end not in text:
-        return ""
-    return text.split(start, 1)[1].split(end, 1)[0].strip()
+def _marker_pairs(
+    markers: tuple[str, str] | tuple[tuple[str, str], ...] | None,
+) -> tuple[tuple[str, str], ...]:
+    if markers is None:
+        return _DEFAULT_THOUGHT_MARKERS
+    if len(markers) == 2 and all(isinstance(item, str) for item in markers):
+        start, end = markers
+        return ((str(start), str(end)), *_DEFAULT_THOUGHT_MARKERS)
+    pairs = tuple(
+        (str(item[0]), str(item[1]))
+        for item in markers
+        if isinstance(item, tuple) and len(item) == 2
+    )
+    return tuple(dict.fromkeys((*pairs, *_DEFAULT_THOUGHT_MARKERS)))
+
+
+def _extract_thought(
+    text: str,
+    markers: tuple[str, str] | tuple[tuple[str, str], ...] | None,
+) -> str:
+    for start, end in _marker_pairs(markers):
+        if start and end and start in text and end in text:
+            return text.split(start, 1)[1].split(end, 1)[0].strip()
+    return ""
 
 
 def _looks_bureaucratic(
