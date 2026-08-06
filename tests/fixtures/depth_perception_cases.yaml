@@ -1,0 +1,59 @@
+cases:
+  - case_id: deep_reactive_concern
+    expected: deep
+    response: Talvez eu tenha me assustado mais que você, mas fala sério: tem certeza que não machucou?
+    beat_terms: [certeza, machucou]
+    user_terms: [assustado]
+    emotional_terms: [fala sério]
+    max_sentences: 2
+
+  - case_id: shallow_bureaucratic_delivery
+    expected: shallow
+    response: Certo. Tem certeza que não machucou?
+    beat_terms: [certeza, machucou]
+    user_terms: [assustado]
+    emotional_terms: [preocup]
+    max_sentences: 2
+
+  - case_id: deep_short_firmness
+    expected: deep
+    response: Não brinca com isso agora. Você se machucou?
+    beat_terms: [machucou]
+    emotional_terms: [não brinca]
+    max_sentences: 2
+
+  - case_id: shallow_emotion_without_beat
+    expected: shallow
+    response: Eu odeio admitir, mas você me deixou nervosa de um jeito que eu não esperava.
+    beat_terms: [certeza, machucou]
+    emotional_terms: [nervosa]
+    max_sentences: 2
+
+  - case_id: deep_first_person_thought
+    expected: deep
+    response: <thought>Por que eu me assustei tanto com isso?</thought> Tem certeza que não machucou?
+    beat_terms: [certeza, machucou]
+    emotional_terms: [assustei]
+    max_sentences: 2
+
+  - case_id: shallow_third_person_thought
+    expected: shallow
+    response: <thought>Mary sente que está mais preocupada do que deveria.</thought> Tem certeza que não machucou?
+    beat_terms: [certeza, machucou]
+    emotional_terms: [preocupada]
+    max_sentences: 2
+
+  - case_id: adequate_reactive_but_plain
+    expected: adequate
+    response: Você disse que foi só um susto, mas tem certeza que não machucou?
+    beat_terms: [certeza, machucou]
+    user_terms: [susto]
+    emotional_terms: [preocup]
+    max_sentences: 2
+
+  - case_id: shallow_verbose_overprocessing
+    expected: shallow
+    response: Eu fiquei preocupada. Você pareceu distante. Isso me lembrou outras coisas. Eu pensei no que poderia acontecer. Eu não queria exagerar. Mas agora preciso saber se você se machucou.
+    beat_terms: [machucou]
+    emotional_terms: [preocupada]
+    max_sentences: 3
