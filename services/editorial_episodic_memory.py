@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any, Mapping
 
-from services.editorial_memory_ui import clear_memory_request, peek_memory_request
+from services.editorial_memory_ui import peek_memory_request
 
 _TURN_KEY = "_episodic_memory_turn"
 _REQUEST_KEY = "_memory_requested"
@@ -105,7 +105,6 @@ def consolidate_selected_memory(facts: dict[str, str], assistant_text: str) -> N
         items = _load_list(facts.get(_RECOLLECTIONS_KEY, ""))
         items.append({"memory_id": _next_id("recollection", items), "type": "relationship_recollection", "text": f'Usuário: "{user_text}" | Mary: "{mary_text}"', "source_beat_id": str(draft.get("source_beat_id", "")), "created_at_turn": int(draft.get("turn", 0) or 0), "status": "active"})
         facts[_RECOLLECTIONS_KEY] = _dump(items[-20:])
-    clear_memory_request(facts)
 
 
 def _recall_allowed(policy: Mapping[str, Any], beat_id: str) -> bool:
