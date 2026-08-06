@@ -69,7 +69,11 @@ def finalize_editorial_turn(
     updated.facts["_pending_memory_writes"] = ",".join(writes)
     updated = state_for_target(script, updated, turn.target_id)
 
-    strict = _is_strict_canonical_beat(script, turn.target_id)
+    runtime_phase = str(updated.facts.get("_runtime_phase", "canonical") or "canonical")
+    strict = (
+        runtime_phase == "canonical"
+        and _is_strict_canonical_beat(script, turn.target_id)
+    )
     strict_policy = _strict_canonical_policy(script)
     state_fact = str(strict_policy.get("state_fact", "") or "").strip()
     updated.facts["_force_fixed_response"] = "false"
