@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any
 
 from services.editorial_beat_context import build_beat_context, render_beat_context
+from services.editorial_resolved_topics import render_resolved_topic_guard
 from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.editorial_terminal_yard import state_for_target
@@ -80,10 +81,12 @@ def finalize_editorial_turn(
 
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
+    resolved_guard = render_resolved_topic_guard(script, updated)
     prompt_parts = [
         narrative_context,
         render_beat_context(beat_context),
         turn.system_prompt,
+        resolved_guard,
     ]
     prompt = "\n\n".join(part.strip() for part in prompt_parts if part.strip())
 
