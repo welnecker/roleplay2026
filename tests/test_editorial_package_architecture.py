@@ -93,6 +93,7 @@ def test_manifesto_declara_runtime_editorial() -> None:
         "content/extensions/dynamic_endings.yaml",
         "content/extensions/relationship_memory.yaml",
         "content/extensions/user_facts.yaml",
+        "content/extensions/subjective_impressions.yaml",
         "content/extensions/runtime.yaml",
     )
 
