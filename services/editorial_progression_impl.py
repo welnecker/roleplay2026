@@ -24,6 +24,7 @@ from services.editorial_followups import (
 )
 from services.editorial_message_policy import classify_contextual_editorial_message
 from services.editorial_organic_turns import organic_editorial_turn
+from services.editorial_progression_gates import apply_progression_gate
 from services.editorial_resolved_topics import apply_resolved_topics
 from services.editorial_response_policy import clean_editorial_progression_response
 from services.editorial_routing import (
@@ -87,12 +88,7 @@ def _contextual_bridge_allowed(
     state: EditorialState,
     user_text: str,
 ) -> bool:
-    """Aplica seleção contextual somente ao escopo declarado pelo card.
-
-    Fora desse escopo, a política histórica de ponte obrigatória permanece
-    intacta. Dentro dele, respostas breves avançam; perguntas e contribuições
-    substantivas podem respirar.
-    """
+    """Aplica seleção contextual somente ao escopo declarado pelo card."""
 
     policy = _runtime_policy(script).get("bridge_selection") or {}
     if not isinstance(policy, dict) or not policy:
@@ -225,7 +221,14 @@ def _bridge_or_finalize(
     bridge_allowed: bool,
 ) -> EditorialTurn:
     qualified = _recover_unqualified_ending(script, previous_state, user_text, turn)
-    resolved = apply_resolved_topics(script, previous_state, qualified)
+    gated = apply_progression_gate(
+        script,
+        previous_state,
+        qualified,
+        user_text,
+        base_decide=base_decide_turn,
+    )
+    resolved = apply_resolved_topics(script, previous_state, gated)
     prepared = (
         create_bridge_turn(script, previous_state, resolved, user_text)
         if bridge_allowed and _contextual_bridge_allowed(script, previous_state, user_text)
@@ -265,7 +268,13 @@ def decide_editorial_progression_turn(
 
     contextual = decide_contextual_destination_turn(script, working_state, user_text)
     if contextual is not None:
-        return _finalize(script, contextual)
+        return _bridge_or_finalize(
+            script,
+            original_state,
+            contextual,
+            user_text,
+            bridge_allowed=False,
+        )
 
     if not bridge_enabled and not releasing_bridge:
         organic = organic_editorial_turn(script, working_state, user_text)
