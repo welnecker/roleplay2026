@@ -16,6 +16,10 @@ from services.editorial_personality_triggers import (
     active_personality_triggers,
     render_personality_triggers,
 )
+from services.editorial_physical_dramaturgy import (
+    render_physical_dramaturgy,
+    select_physical_dramaturgy,
+)
 from services.editorial_psychological_state import (
     apply_card_psychological_deltas,
     render_psychological_state,
@@ -127,7 +131,7 @@ def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória, psicologia, padrões, personalidade, impressões, fatos e continuidade."""
+    """Aplica memória, psicologia, padrões, corpo, personalidade, impressões, fatos e continuidade."""
 
     available_ids = _memory_ids(script, turn.state)
     writes = _memory_writes_for_target(script, turn.target_id)
@@ -168,6 +172,15 @@ def finalize_editorial_turn(
         str(turn.engagement),
     )
 
+    target = script.beats.get(turn.target_id) or script.endings.get(turn.target_id) or {}
+    physical_aspects = select_physical_dramaturgy(
+        script.raw,
+        updated,
+        target,
+        context_text,
+        str(turn.engagement),
+    )
+
     personality = active_personality_triggers(
         script.raw,
         updated,
@@ -192,6 +205,7 @@ def finalize_editorial_turn(
     psychological_context = render_psychological_state(script.raw, updated)
     impressions_context = render_subjective_impressions(impressions)
     patterns_context = render_behavior_patterns(behavior_patterns)
+    physical_context = render_physical_dramaturgy(physical_aspects)
     personality_context = render_personality_triggers(personality)
     user_facts_context = render_confirmed_user_facts(updated.facts)
     recall_guidance = render_memory_recall_guidance(recalled_ids)
@@ -201,6 +215,7 @@ def finalize_editorial_turn(
         psychological_context,
         impressions_context,
         patterns_context,
+        physical_context,
         personality_context,
         user_facts_context,
         recall_guidance,
