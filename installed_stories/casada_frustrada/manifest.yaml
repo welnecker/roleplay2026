@@ -12,6 +12,7 @@ runtime:
     extensions:
       - content/extensions/continuation.yaml
       - content/extensions/narrative.yaml
+      - content/extensions/opening_flow.yaml
       - content/extensions/story.yaml
       - content/extensions/fixes.yaml
       - content/extensions/guardrails.yaml
