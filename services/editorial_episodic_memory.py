@@ -20,6 +20,13 @@ _STOPWORDS = {
     "uma", "você", "vocês"
 }
 
+_STRUCTURAL_CONTEXT_KEYS = (
+    "_bridge_origin_objective",
+    "_bridge_origin_canonical",
+    "_bridge_target_objective",
+    "_bridge_target_canonical",
+)
+
 
 def _policy(document: Mapping[str, Any]) -> dict[str, Any]:
     direct = document.get("episodic_memory") or {}
@@ -63,6 +70,38 @@ def _matches_active_thread(user_text: str, episode: Mapping[str, Any]) -> bool:
     return bool(current.intersection(previous))
 
 
+def _structural_anchors(facts: Mapping[str, str]) -> set[str]:
+    context = " ".join(str(facts.get(key, "") or "") for key in _STRUCTURAL_CONTEXT_KEYS)
+    return set(_anchors(context, maximum=40))
+
+
+def _is_genuinely_creative_bridge(
+    user_text: str,
+    facts: Mapping[str, str],
+    episode: Mapping[str, Any],
+) -> bool:
+    """Distingue improviso autoral de uma resposta rotineira ao beat.
+
+    A decisão usa somente a divergência lexical em relação ao movimento de origem
+    e ao destino já declarados pela ponte. Não depende de palavras temáticas.
+    Continuações do fio ativo permanecem válidas mesmo quando forem curtas.
+    """
+
+    if episode and episode.get("status") != "consumed":
+        return _matches_active_thread(user_text, episode)
+
+    user_anchors = set(_anchors(user_text, maximum=12))
+    if len(user_anchors) < 3:
+        return False
+
+    structural = _structural_anchors(facts)
+    if not structural:
+        return len(user_anchors) >= 4
+
+    overlap = len(user_anchors.intersection(structural)) / len(user_anchors)
+    return overlap < 0.5
+
+
 def _recall_allowed(policy: Mapping[str, Any], beat_id: str) -> bool:
     rules = policy.get("recall", []) or []
     if not rules:
@@ -95,12 +134,7 @@ def prepare_bridge_episode(
     *,
     source_beat_id: str,
 ) -> str:
-    """Reserva o único fio criativo do card ou bloqueia uma nova bifurcação.
-
-    A ponte já é o filtro estrutural de relevância. Não há vocabulário temático:
-    o episódio nasce do texto real do usuário e só é consolidado após a resposta
-    aprovada de Mary.
-    """
+    """Reserva o único fio criativo do card ou bloqueia nova bifurcação."""
 
     policy = _policy(document)
     text = _clean(user_text)
@@ -108,6 +142,10 @@ def prepare_bridge_episode(
         return "disabled"
 
     episode = _loads(facts.get(_EPISODE_KEY, ""))
+    if not _is_genuinely_creative_bridge(text, facts, episode):
+        facts.pop(_DRAFT_KEY, None)
+        return "ignored"
+
     current_turn = int(facts.get(_TURN_KEY, "0") or 0)
     history_turn_window = max(1, int(policy.get("history_turn_window", 6) or 6))
 
@@ -149,6 +187,10 @@ def consolidate_bridge_episode(facts: dict[str, str], assistant_text: str) -> No
     window = max(1, int(draft.get("history_turn_window", 6) or 6))
     episode = _loads(facts.get(_EPISODE_KEY, ""))
 
+    # O runtime envia as seis interações anteriores. A troca do turno T ainda
+    # aparece no contexto em T + window; só desaparece no turno seguinte.
+    eligible_after_turn = turn + window + 1
+
     if draft.get("mode") == "new" or not episode:
         episode = {
             "episode_id": "creative_episode_001",
@@ -160,7 +202,7 @@ def consolidate_bridge_episode(facts: dict[str, str], assistant_text: str) -> No
             "source_beat_id": str(draft.get("source_beat_id", "")),
             "start_turn": turn,
             "end_turn": turn,
-            "eligible_after_turn": turn + window,
+            "eligible_after_turn": eligible_after_turn,
             "status": "dormant",
             "continuations": 0,
         }
@@ -168,7 +210,7 @@ def consolidate_bridge_episode(facts: dict[str, str], assistant_text: str) -> No
         episode["latest_user_text"] = user_text
         episode["latest_mary_text"] = mary_text
         episode["end_turn"] = turn
-        episode["eligible_after_turn"] = turn + window
+        episode["eligible_after_turn"] = eligible_after_turn
         episode["continuations"] = int(episode.get("continuations", 0) or 0) + 1
         episode["status"] = "dormant"
         merged = [
