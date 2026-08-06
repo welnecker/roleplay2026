@@ -74,6 +74,31 @@ def test_pensamento_em_terceira_pessoa_e_rejeitado() -> None:
     assert "terceira pessoa" in " ".join(report.reasons)
 
 
+def test_delimitador_real_da_plataforma_detecta_terceira_pessoa() -> None:
+    report = assess_depth_perception(
+        "[PENSAMENTO]Mary sente que está mais preocupada do que deveria.[/PENSAMENTO] Tem certeza que não machucou?",
+        beat_terms=("certeza", "machucou"),
+        emotional_terms=("preocupada",),
+        max_sentences=2,
+    )
+
+    assert report.third_person_thought_violation
+    assert not report.first_person_thought
+    assert report.perceived_depth != "deep"
+
+
+def test_delimitador_real_da_plataforma_aceita_primeira_pessoa() -> None:
+    report = assess_depth_perception(
+        "[PENSAMENTO]Por que eu me assustei tanto com isso?[/PENSAMENTO] Tem certeza que não machucou?",
+        beat_terms=("certeza", "machucou"),
+        emotional_terms=("assustei",),
+        max_sentences=2,
+    )
+
+    assert report.first_person_thought
+    assert not report.third_person_thought_violation
+
+
 def test_ausencia_de_bloco_de_pensamento_nao_e_penalizada() -> None:
     report = assess_depth_perception(
         "Você pode rir de mim depois. Primeiro me diz: tem certeza que não machucou?",
