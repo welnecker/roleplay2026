@@ -175,6 +175,7 @@ def merge_editorial_extension(document: dict[str, Any], extension: dict[str, Any
     _replace_declared_policy(merged, extension, "runtime_policy")
     _replace_declared_policy(merged, extension, "relationship_memory")
     _replace_declared_policy(merged, extension, "user_fact_schema")
+    _replace_declared_policy(merged, extension, "subjective_impressions")
 
     _merge_character_patch(merged, extension)
 
