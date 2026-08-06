@@ -162,7 +162,7 @@ def merge_editorial_extension(document: dict[str, Any], extension: dict[str, Any
     for policy_key in (
         "bridge_policy", "runtime_policy", "relationship_memory",
         "user_fact_schema", "subjective_impressions", "behavior_patterns",
-        "physical_dramaturgy",
+        "physical_dramaturgy", "memory_lifecycle", "organic_beat_rhythm",
     ):
         _replace_declared_policy(merged, extension, policy_key)
 

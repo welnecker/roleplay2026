@@ -8,9 +8,18 @@ from services.editorial_longitudinal_patterns import (
     render_behavior_patterns,
     update_behavior_patterns,
 )
+from services.editorial_memory_lifecycle import (
+    eligible_memory_ids,
+    render_memory_lifecycle_guidance,
+    update_memory_lifecycle,
+)
 from services.editorial_memory_recall import (
     render_memory_recall_guidance,
     select_contextual_memories,
+)
+from services.editorial_organic_beat_rhythm import (
+    build_organic_beat_frame,
+    render_organic_beat_frame,
 )
 from services.editorial_personality_triggers import (
     active_personality_triggers,
@@ -127,11 +136,19 @@ def _mandatory_context_memory_ids(
     return list(dict.fromkeys(item for item in mandatory if item))
 
 
+def _next_lifecycle_sequence(state: EditorialState) -> int:
+    try:
+        current = int(str(state.facts.get("_memory_lifecycle_sequence", "0") or "0"))
+    except (TypeError, ValueError):
+        current = 0
+    return current + 1
+
+
 def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória, psicologia, padrões, corpo, personalidade, impressões, fatos e continuidade."""
+    """Aplica memória, ciclo de vida, psicologia, ritmo orgânico e continuidade."""
 
     available_ids = _memory_ids(script, turn.state)
     writes = _memory_writes_for_target(script, turn.target_id)
@@ -144,6 +161,10 @@ def finalize_editorial_turn(
 
     context_text = _turn_context(script, turn)
     mandatory_ids = _mandatory_context_memory_ids(script, turn.state, active_ids, writes)
+
+    # Todas as memórias conhecidas participam da comparação contextual. O ciclo de
+    # vida só as suprime da lembrança espontânea depois dessa comparação, permitindo
+    # que uma menção explícita do usuário reative uma memória dormente ou arquivada.
     optional_pool = [memory_id for memory_id in active_ids if memory_id not in mandatory_ids]
     recalled_ids, recalled_facts = select_contextual_memories(
         script.raw,
@@ -152,7 +173,27 @@ def finalize_editorial_turn(
         context_text,
     )
     updated.facts = recalled_facts
-    context_memory_ids = list(dict.fromkeys([*mandatory_ids, *recalled_ids]))
+
+    lifecycle_sequence = _next_lifecycle_sequence(turn.state)
+    updated.facts["_memory_lifecycle_sequence"] = str(lifecycle_sequence)
+    lifecycle_fingerprint = (
+        f"{lifecycle_sequence}:{turn.target_id}:{turn.engagement}:"
+        f"{','.join(writes)}:{','.join(recalled_ids)}"
+    )
+    updated, lifecycle_states = update_memory_lifecycle(
+        script.raw,
+        updated,
+        active_ids,
+        written_ids=writes,
+        recalled_ids=recalled_ids,
+        fingerprint=lifecycle_fingerprint,
+    )
+    context_memory_ids = eligible_memory_ids(
+        script.raw,
+        list(dict.fromkeys([*mandatory_ids, *recalled_ids])),
+        updated.facts,
+        forced_ids=[*mandatory_ids, *writes, *recalled_ids],
+    )
     narrative_context = build_narrative_context(script.raw, context_memory_ids, updated.facts)
 
     updated, impressions = update_subjective_impressions(
@@ -202,6 +243,7 @@ def finalize_editorial_turn(
 
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
+    beat_frame = build_organic_beat_frame(script.raw, target, beat_context, updated)
     psychological_context = render_psychological_state(script.raw, updated)
     impressions_context = render_subjective_impressions(impressions)
     patterns_context = render_behavior_patterns(behavior_patterns)
@@ -209,8 +251,11 @@ def finalize_editorial_turn(
     personality_context = render_personality_triggers(personality)
     user_facts_context = render_confirmed_user_facts(updated.facts)
     recall_guidance = render_memory_recall_guidance(recalled_ids)
+    lifecycle_guidance = render_memory_lifecycle_guidance(lifecycle_states)
     resolved_guard = render_resolved_topic_guard(script, updated)
     prompt_parts = [
+        render_organic_beat_frame(beat_frame),
+        render_beat_context(beat_context),
         narrative_context,
         psychological_context,
         impressions_context,
@@ -219,7 +264,7 @@ def finalize_editorial_turn(
         personality_context,
         user_facts_context,
         recall_guidance,
-        render_beat_context(beat_context),
+        lifecycle_guidance,
         turn.system_prompt,
         resolved_guard,
     ]
@@ -235,7 +280,8 @@ def finalize_editorial_turn(
             "- A reação e a linha canônica devem formar uma única fala contínua.\n"
             "- Não antecipe ações, mudanças de cena, encerramentos ou acontecimentos de beats posteriores.\n"
             "- Não acrescente nada depois da linha canônica.\n"
-            "- Não abra uma nova pergunta além da que já existir na própria linha canônica."
+            "- Não abra uma nova pergunta além da que já existir na própria linha canônica.\n"
+            "- Qualquer pensamento interno de Mary deve estar em primeira pessoa e servir à forma da fala, nunca aparecer como narração psicológica em terceira pessoa."
         )
 
     return replace(prepared_turn, system_prompt=prompt.strip())
