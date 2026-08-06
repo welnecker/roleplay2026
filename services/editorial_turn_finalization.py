@@ -122,7 +122,8 @@ def finalize_editorial_turn(
 
     if pending_for_canonical:
         prompt += (
-            "\n\nCOMPLEMENTO PENDENTE: responda harmonicamente, dentro deste beat, ao que ficou aberto: "
+            "\n\nCOMPLEMENTO CONVERSACIONAL: verifique no histórico se isto já foi respondido na ponte. "
+            "Se ainda estiver aberto, responda harmonicamente dentro deste beat; se já foi resolvido, não repita: "
             f"{pending_for_canonical}"
         )
 
