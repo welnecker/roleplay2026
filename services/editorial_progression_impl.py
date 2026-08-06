@@ -59,26 +59,6 @@ def _word_count(text: str) -> int:
     return len(re.findall(r"[^\W_]+", str(text or ""), flags=re.UNICODE))
 
 
-def _contextual_bridge_allowed(script: EditorialScript, user_text: str) -> bool:
-    """Decide se há contribuição suficiente para um turno de ponte real.
-
-    A política é lexical e declarativa: respostas curtas de continuidade avançam;
-    perguntas ou contribuições mais densas podem respirar. Nenhuma frase ou tema
-    específico é codificado no motor.
-    """
-
-    policy = bridge_policy(script)
-    selection = str(policy.get("selection", "always") or "always").strip()
-    if selection != "contextual":
-        return True
-
-    maximum_direct_words = max(0, int(policy.get("direct_max_words", 4) or 4))
-    value = str(user_text or "").strip()
-    if "?" in value:
-        return True
-    return _word_count(value) > maximum_direct_words
-
-
 def _matches_scope(
     script: EditorialScript,
     state: EditorialState,
@@ -99,6 +79,34 @@ def _matches_scope(
     return beat_id in beat_ids or block_id in block_ids or any(
         beat_id.startswith(prefix) for prefix in prefixes
     )
+
+
+def _contextual_bridge_allowed(
+    script: EditorialScript,
+    state: EditorialState,
+    user_text: str,
+) -> bool:
+    """Aplica seleção contextual somente ao escopo declarado pelo card.
+
+    Fora desse escopo, a política histórica de ponte obrigatória permanece
+    intacta. Dentro dele, respostas breves avançam; perguntas e contribuições
+    substantivas podem respirar.
+    """
+
+    policy = _runtime_policy(script).get("bridge_selection") or {}
+    if not isinstance(policy, dict) or not policy:
+        return True
+    if not _matches_scope(script, state, policy):
+        return True
+    mode = str(policy.get("mode", "always") or "always").strip()
+    if mode != "contextual":
+        return True
+
+    maximum_direct_words = max(0, int(policy.get("direct_max_words", 4) or 4))
+    value = str(user_text or "").strip()
+    if "?" in value:
+        return True
+    return _word_count(value) > maximum_direct_words
 
 
 def _apply_bridge_continuity(
@@ -143,11 +151,7 @@ def _recover_unqualified_ending(
     user_text: str,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Reavalia somente endings contraditos por sinais explícitos de continuidade.
-
-    Não cria texto alternativo nem ignora hostilidade inequívoca. Apenas elimina
-    o acúmulo histórico de classificações ambíguas e repete a decisão estrutural.
-    """
+    """Reavalia somente endings contraditos por sinais explícitos de continuidade."""
 
     policy = _runtime_policy(script).get("qualified_endings") or {}
     if not isinstance(policy, dict) or not policy or not turn.finished:
@@ -222,7 +226,7 @@ def _bridge_or_finalize(
     qualified = _recover_unqualified_ending(script, previous_state, user_text, turn)
     prepared = (
         create_bridge_turn(script, previous_state, qualified, user_text)
-        if bridge_allowed and _contextual_bridge_allowed(script, user_text)
+        if bridge_allowed and _contextual_bridge_allowed(script, previous_state, user_text)
         else qualified
     )
     prepared = _apply_bridge_continuity(script, previous_state, prepared)
