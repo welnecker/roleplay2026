@@ -20,8 +20,12 @@ _TAG_PATTERNS = {
 
 
 def _policy(document: Mapping[str, Any]) -> dict[str, Any]:
-    value = document.get("episodic_memory") or {}
-    return dict(value) if isinstance(value, dict) else {}
+    direct = document.get("episodic_memory") or {}
+    if isinstance(direct, dict) and direct:
+        return dict(direct)
+    runtime = document.get("runtime_policy") or {}
+    nested = runtime.get("episodic_memory") if isinstance(runtime, dict) else {}
+    return dict(nested) if isinstance(nested, dict) else {}
 
 
 def _load(facts: Mapping[str, str]) -> list[dict[str, Any]]:
