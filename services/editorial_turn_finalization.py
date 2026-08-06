@@ -136,6 +136,14 @@ def _mandatory_context_memory_ids(
     return list(dict.fromkeys(item for item in mandatory if item))
 
 
+def _next_lifecycle_sequence(state: EditorialState) -> int:
+    try:
+        current = int(str(state.facts.get("_memory_lifecycle_sequence", "0") or "0"))
+    except (TypeError, ValueError):
+        current = 0
+    return current + 1
+
+
 def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
@@ -153,13 +161,11 @@ def finalize_editorial_turn(
 
     context_text = _turn_context(script, turn)
     mandatory_ids = _mandatory_context_memory_ids(script, turn.state, active_ids, writes)
-    eligible_ids = eligible_memory_ids(
-        script.raw,
-        active_ids,
-        updated.facts,
-        forced_ids=mandatory_ids,
-    )
-    optional_pool = [memory_id for memory_id in eligible_ids if memory_id not in mandatory_ids]
+
+    # Todas as memórias conhecidas participam da comparação contextual. O ciclo de
+    # vida só as suprime da lembrança espontânea depois dessa comparação, permitindo
+    # que uma menção explícita do usuário reative uma memória dormente ou arquivada.
+    optional_pool = [memory_id for memory_id in active_ids if memory_id not in mandatory_ids]
     recalled_ids, recalled_facts = select_contextual_memories(
         script.raw,
         optional_pool,
@@ -168,8 +174,10 @@ def finalize_editorial_turn(
     )
     updated.facts = recalled_facts
 
+    lifecycle_sequence = _next_lifecycle_sequence(turn.state)
+    updated.facts["_memory_lifecycle_sequence"] = str(lifecycle_sequence)
     lifecycle_fingerprint = (
-        f"{turn.target_id}:{len(updated.recent_engagement)}:{turn.engagement}:"
+        f"{lifecycle_sequence}:{turn.target_id}:{turn.engagement}:"
         f"{','.join(writes)}:{','.join(recalled_ids)}"
     )
     updated, lifecycle_states = update_memory_lifecycle(
