@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from services.editorial_runtime_types import EditorialScript, EditorialState
-from services.editorial_user_facts import extract_declared_user_facts
 from services.organic_interaction import extract_user_facts
 
 
@@ -24,13 +23,11 @@ def normal_editorial_target(
 
 
 def state_with_extracted_facts(
-    script: EditorialScript,
     state: EditorialState,
     user_text: str,
 ) -> EditorialState:
     updated = EditorialState.from_dict(state.to_dict())
-    legacy_facts = extract_user_facts(user_text, updated.facts)
-    updated.facts = extract_declared_user_facts(script.raw, user_text, legacy_facts)
+    updated.facts = extract_user_facts(user_text, updated.facts)
     return updated
 
 
