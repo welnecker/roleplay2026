@@ -30,6 +30,10 @@ runtime_policy:
       - accept
     continuation_routes:
       - continue
+  topic_resolution:
+    topics:
+      physical_wellbeing_after_accident:
+        description: A confirmação de que ninguém se machucou no acidente já foi aceita e encerrada.
   state_updates:
     automatic_followups:
       - target_prefix: retorno_casa_

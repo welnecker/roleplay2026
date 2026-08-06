@@ -172,6 +172,10 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
             constraints = deepcopy(source.get("constraints") or {})
             allowed_topics, confirmed_facts, unknown_facts = _compiled_factual_contract(source, constraints)
             fact_scope = deepcopy(source.get("fact_scope") or constraints.get("fact_scope") or [])
+            resolved_topics_on_exit = _string_items(
+                source.get("resolve_topics_on_exit")
+                or source.get("resolve_topic_on_exit")
+            )
 
             beats.append(
                 {
@@ -196,6 +200,8 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "max_sentences": int(source.get("max_sentences", 1) or 1),
                     "skip_when_facts": deepcopy(source.get("skip_when_facts") or {}),
                     "response_boundary": str(source.get("response_boundary", "") or ""),
+                    "topic_id": str(source.get("topic_id", "") or "").strip(),
+                    "resolve_topics_on_exit": resolved_topics_on_exit,
                     "fact_scope": fact_scope,
                     "allowed_topics": allowed_topics,
                     "confirmed_facts": confirmed_facts,

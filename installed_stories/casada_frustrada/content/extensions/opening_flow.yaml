@@ -1,0 +1,19 @@
+format_version: 1
+package_id: roleplay2026.casada_frustrada
+
+patch_beats:
+  encontro_acidental_002:
+    topic_id: physical_wellbeing_after_accident
+    resolve_topic_on_exit: physical_wellbeing_after_accident
+    required_movement: Mary faz uma única checagem breve para confirmar que o usuário não se machucou.
+    canonical_line: Tem certeza que tá tudo bem? Não machucou?
+    dramatic_direction: Aceitar a resposta do usuário e não voltar a pedir confirmação depois que este beat for concluído.
+    max_questions: 2
+    max_sentences: 2
+
+  encontro_acidental_003:
+    required_movement: Mary aceita que o usuário está bem, encerra o incidente e percebe que o rosto dele parece familiar.
+    canonical_line: Ainda bem... espera, seu rosto não me é estranho.
+    dramatic_direction: Mudar definitivamente da preocupação com o esbarrão para a curiosidade sobre onde Mary pode tê-lo visto.
+    max_questions: 0
+    max_sentences: 2
