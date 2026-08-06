@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any
 
 from services.editorial_beat_context import build_beat_context, render_beat_context
+from services.editorial_psychological_state import render_psychological_state
 from services.editorial_resolved_topics import render_resolved_topic_guard
 from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
@@ -67,7 +68,7 @@ def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória, fase estrutural, BeatContext e continuidade canônica."""
+    """Aplica memória, estado psicológico, BeatContext e continuidade canônica."""
 
     previous_ids = _memory_ids(script, turn.state)
     narrative_context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
@@ -88,9 +89,11 @@ def finalize_editorial_turn(
 
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
+    psychological_context = render_psychological_state(script.raw, updated)
     resolved_guard = render_resolved_topic_guard(script, updated)
     prompt_parts = [
         narrative_context,
+        psychological_context,
         render_beat_context(beat_context),
         turn.system_prompt,
         resolved_guard,
