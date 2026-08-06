@@ -5,15 +5,12 @@ import re
 from typing import Any
 
 from services.editorial_beat_context import build_beat_context, render_beat_context
-from services.editorial_conversational_obligation import (
-    consume_pending_obligation,
-    store_pending_obligation,
-)
+from services.editorial_conversational_obligation import consume_pending_obligation, store_pending_obligation
 from services.editorial_episodic_memory import (
     advance_episode_turn,
-    creativity_blocked,
-    prepare_bridge_episode,
+    prepare_selected_memory,
     recall_episode,
+    render_relationship_recollections,
 )
 from services.editorial_resolved_topics import render_resolved_topic_guard
 from services.narrative_context import build_narrative_context
@@ -40,34 +37,18 @@ def _strict_canonical_policy(script: EditorialScript) -> dict[str, Any]:
 def _is_strict_canonical_beat(script: EditorialScript, beat_id: str) -> bool:
     clean = str(beat_id or "").strip()
     policy = _strict_canonical_policy(script)
-    beat_ids = {
-        str(item).strip()
-        for item in policy.get("beat_ids", []) or []
-        if str(item).strip()
-    }
-    prefixes = tuple(
-        str(item).strip()
-        for item in policy.get("beat_prefixes", []) or []
-        if str(item).strip()
-    )
+    beat_ids = {str(item).strip() for item in policy.get("beat_ids", []) or [] if str(item).strip()}
+    prefixes = tuple(str(item).strip() for item in policy.get("beat_prefixes", []) or [] if str(item).strip())
     return clean in beat_ids or any(clean.startswith(prefix) for prefix in prefixes)
 
 
 def _memory_ids(state: EditorialState) -> list[str]:
-    return [
-        item.strip()
-        for item in str(state.facts.get("_active_memory_ids", "") or "").split(",")
-        if item.strip()
-    ]
+    return [item.strip() for item in str(state.facts.get("_active_memory_ids", "") or "").split(",") if item.strip()]
 
 
 def _memory_writes_for_target(script: EditorialScript, target_id: str) -> list[str]:
     source = script.beats.get(target_id) or script.endings.get(target_id) or {}
-    return [
-        str(item).strip()
-        for item in source.get("memory_writes", []) or []
-        if str(item).strip()
-    ]
+    return [str(item).strip() for item in source.get("memory_writes", []) or [] if str(item).strip()]
 
 
 def _current_user_text(prompt: str) -> str:
@@ -79,12 +60,7 @@ def _current_user_text(prompt: str) -> str:
     return ""
 
 
-def finalize_editorial_turn(
-    script: EditorialScript,
-    turn: EditorialTurn,
-) -> EditorialTurn:
-    """Aplica memória, fase estrutural, BeatContext e continuidade canônica."""
-
+def finalize_editorial_turn(script: EditorialScript, turn: EditorialTurn) -> EditorialTurn:
     previous_ids = _memory_ids(turn.state)
     narrative_context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
     writes = _memory_writes_for_target(script, turn.target_id)
@@ -104,57 +80,40 @@ def finalize_editorial_turn(
 
     user_text = _current_user_text(turn.system_prompt)
     advance_episode_turn(script.raw, updated.facts)
-    if runtime_phase == "bridge":
-        prepare_bridge_episode(
-            script.raw,
-            updated.facts,
-            user_text,
-            source_beat_id=str(turn.state.node_id or turn.target_id or ""),
-        )
+    prepare_selected_memory(
+        script.raw,
+        updated.facts,
+        user_text,
+        source_beat_id=str(turn.state.node_id or turn.target_id or ""),
+        runtime_phase=runtime_phase,
+    )
 
     episodic_recall = ""
-    if runtime_phase == "canonical":
-        episodic_recall = recall_episode(
-            script.raw,
-            updated.facts,
-            beat_id=str(turn.target_id or ""),
-        )
+    if runtime_phase != "terminal_yard":
+        episodic_recall = recall_episode(script.raw, updated.facts, beat_id=str(turn.target_id or ""))
 
-    bridge_obligation = ""
-    if runtime_phase == "bridge":
-        bridge_obligation = store_pending_obligation(updated.facts, user_text)
-    pending_for_canonical = ""
-    if runtime_phase == "canonical":
-        pending_for_canonical = consume_pending_obligation(updated.facts)
+    bridge_obligation = store_pending_obligation(updated.facts, user_text) if runtime_phase == "bridge" else ""
+    pending_for_canonical = consume_pending_obligation(updated.facts) if runtime_phase == "canonical" else ""
 
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
-    resolved_guard = render_resolved_topic_guard(script, updated)
     prompt_parts = [
         narrative_context,
+        render_relationship_recollections(updated.facts),
         render_beat_context(beat_context),
         turn.system_prompt,
-        resolved_guard,
+        render_resolved_topic_guard(script, updated),
     ]
     prompt = "\n\n".join(part.strip() for part in prompt_parts if part.strip())
 
     if episodic_recall:
         prompt += (
-            f"\n\nMEMÓRIA EPISÓDICA ANTIGA: {episodic_recall}\n"
-            "Traga essa troca à tona em uma referência curta e natural antes de seguir o beat. "
-            "Não a apresente como nova pergunta se ela já tiver sido respondida."
+            f"\n\nFIO DE CONTINUIDADE ESCOLHIDO PELO USUÁRIO: {episodic_recall}\n"
+            "Este fio foi liberado pelo roteiro neste beat. Retome-o de modo breve e natural, "
+            "integrado ao movimento atual. Não invente detalhes ausentes e não abra um segundo fio."
         )
 
-    if creativity_blocked(updated.facts):
-        prompt += (
-            "\n\nTRAVA DE CRIATIVIDADE DO CARD:\n"
-            "- Um fio criativo do usuário já foi acolhido e registrado neste capítulo.\n"
-            "- Não abra outra fantasia, assunto paralelo ou nova ponte.\n"
-            "- Faça somente uma contenção curta, afetuosa e variada, equivalente a "
-            "'calma, você já me surpreendeu o suficiente', e retome imediatamente o roteiro.\n"
-            "- Não registre nem desenvolva a nova bifurcação."
-        )
-    elif bridge_obligation:
+    if bridge_obligation:
         prompt += (
             "\n\nSUPORTE CONVERSACIONAL DA PONTE:\n"
             "- Responda agora à pergunta ou ao convite quando isso couber sem quebrar o roteiro.\n"
@@ -170,8 +129,7 @@ def finalize_editorial_turn(
         )
 
     if inject_canonical_prompt:
-        title = str(strict_policy.get("prompt_title", "") or "").strip()
-        title = title or "CONTINUIDADE CANÔNICA ESTRITA"
+        title = str(strict_policy.get("prompt_title", "") or "").strip() or "CONTINUIDADE CANÔNICA ESTRITA"
         prompt = (
             f"{prompt}\n\n{title}:\n"
             "- Responda primeiro ao conteúdo específico do usuário em uma ou duas frases curtas e naturais.\n"
