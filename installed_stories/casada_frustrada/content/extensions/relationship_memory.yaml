@@ -22,6 +22,22 @@ relationship_memory:
 
   psychological_state:
     title: ESTADO PSICOLÓGICO ATUAL DE MARY
+    engagement_deltas:
+      engaged:
+        interest: 1
+        trust: 1
+      minimal: {}
+      dismissive:
+        interest: -1
+        trust: -1
+      nonsense:
+        interest: -1
+      mocking:
+        interest: -2
+        trust: -3
+      hostile:
+        interest: -3
+        trust: -4
     expression_rules:
       - O estado deve aparecer no ritmo, na franqueza, na iniciativa e na vulnerabilidade da fala, sem mencionar números ou rótulos internos.
       - Preserve a fala canônica e os fatos da cena; o estado altera a interpretação, não autoriza inventar acontecimentos.
