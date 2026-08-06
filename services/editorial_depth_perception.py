@@ -104,6 +104,15 @@ def assess_depth_perception(
     score += 1 if first_person_thought else 0
     score += 1 if not third_person_violation else 0
     score -= 2 if bureaucratic_delivery else 0
+    score -= 2 if not concise_completion else 0
+    score -= 3 if third_person_violation else 0
+
+    # Falhas estruturais não podem ser compensadas por prosa bonita.
+    if not beat_centrality:
+        score = min(score, 4)
+    if third_person_violation:
+        score = min(score, 4)
+
     score = max(0, min(10, score))
 
     return DepthPerceptionReport(
