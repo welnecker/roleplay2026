@@ -105,7 +105,7 @@ def consolidate_selected_memory(facts: dict[str, str], assistant_text: str) -> N
         items = _load_list(facts.get(_RECOLLECTIONS_KEY, ""))
         items.append({"memory_id": _next_id("recollection", items), "type": "relationship_recollection", "text": f'Usuário: "{user_text}" | Mary: "{mary_text}"', "source_beat_id": str(draft.get("source_beat_id", "")), "created_at_turn": int(draft.get("turn", 0) or 0), "status": "active"})
         facts[_RECOLLECTIONS_KEY] = _dump(items[-20:])
-    clear_memory_request()
+    clear_memory_request(facts)
 
 
 def _recall_allowed(policy: Mapping[str, Any], beat_id: str) -> bool:
