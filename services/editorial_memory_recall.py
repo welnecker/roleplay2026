@@ -50,10 +50,16 @@ def _recall_state(facts: Mapping[str, str]) -> dict[str, int]:
 
 
 def _memory_terms(memory: NarrativeMemoryDefinition, raw: Mapping[str, Any]) -> set[str]:
+    """Retorna somente gatilhos editoriais realmente discriminantes.
+
+    ``category`` e ``subject`` não entram automaticamente: valores genéricos como
+    ``mary`` ou ``relationship`` causavam lembranças falsas em qualquer turno que
+    apenas mencionasse a personagem ou o usuário.
+    """
+
     declared = raw.get("recall_terms") or raw.get("triggers") or []
     values = [str(item) for item in declared] if isinstance(declared, list) else []
     values.extend(memory.tags)
-    values.extend((memory.category, memory.subject))
     return _tokens(" ".join(values))
 
 
@@ -63,7 +69,7 @@ def select_contextual_memories(
     facts: Mapping[str, str],
     context_text: str,
 ) -> tuple[list[str], dict[str, str]]:
-    """Seleciona poucas memórias relevantes e atualiza cooldown interno."""
+    """Seleciona poucas memórias opcionais relevantes e atualiza cooldown interno."""
 
     policy = _policy(document)
     max_items = max(0, int(policy.get("max_memories_per_turn", 1) or 1))
