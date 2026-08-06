@@ -4,35 +4,12 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 
-_MEMORY_STATUSES = {"active", "background", "resolved", "superseded", "forgotten", "sensitive"}
-
-
 @dataclass(frozen=True, slots=True)
 class NarrativeMemoryDefinition:
-    """Memória declarada pelo card, independente de personagem ou história."""
-
     memory_id: str
     category: str
     importance: int
     summary: str
-    subject: str = "relationship"
-    emotional_weight: int = 5
-    relationship_relevance: int = 5
-    confidence: float = 1.0
-    status: str = "active"
-    sensitivity: str = "normal"
-    recall_cooldown_turns: int = 0
-    tags: tuple[str, ...] = ()
-
-    @property
-    def recall_priority(self) -> float:
-        """Prioridade estável; relevância contextual poderá ser somada pelo runtime futuro."""
-
-        return (
-            self.importance * 0.40
-            + self.emotional_weight * 0.30
-            + self.relationship_relevance * 0.30
-        ) * self.confidence
 
 
 def character_context(document: dict[str, Any]) -> str:
@@ -57,34 +34,6 @@ def character_context(document: dict[str, Any]) -> str:
     return "\n\n".join(sections)
 
 
-def relational_profile_context(document: dict[str, Any]) -> str:
-    """Renderiza o eixo relacional configurado pelo card, sem conhecer Mary."""
-
-    raw = document.get("relationship_memory") or {}
-    if not isinstance(raw, dict) or not raw:
-        return ""
-
-    title = str(raw.get("title", "EIXO RELACIONAL DA HISTÓRIA") or "EIXO RELACIONAL DA HISTÓRIA")
-    premise = str(raw.get("premise", "") or "").strip()
-    awakening = str(raw.get("awakening", "") or "").strip()
-    character_view = str(raw.get("character_view_of_user", "") or "").strip()
-    motivations = _items(raw.get("motivations"))
-    tensions = _items(raw.get("tensions"))
-    guardrails = _items(raw.get("interpretation_rules"))
-
-    lines: list[str] = []
-    if premise:
-        lines.append(f"- Situação de origem: {premise}")
-    if awakening:
-        lines.append(f"- Transformação em curso: {awakening}")
-    if character_view:
-        lines.append(f"- Como a personagem percebe o usuário: {character_view}")
-    lines.extend(f"- Motivação: {item}" for item in motivations)
-    lines.extend(f"- Tensão interna: {item}" for item in tensions)
-    lines.extend(f"- Regra de interpretação: {item}" for item in guardrails)
-    return f"{title}:\n" + "\n".join(lines) if lines else ""
-
-
 def memory_catalog(document: dict[str, Any]) -> dict[str, NarrativeMemoryDefinition]:
     raw = document.get("memories") or {}
     definitions: dict[str, NarrativeMemoryDefinition] = {}
@@ -106,21 +55,11 @@ def memory_catalog(document: dict[str, Any]) -> dict[str, NarrativeMemoryDefinit
         summary = str(value.get("summary") or value.get("memory_text") or "").strip()
         if not summary:
             continue
-        raw_status = str(value.get("status", "active") or "active").strip().casefold()
-        status = raw_status if raw_status in _MEMORY_STATUSES else "active"
         definitions[memory_id] = NarrativeMemoryDefinition(
             memory_id=memory_id,
             category=str(value.get("category", "event") or "event"),
-            importance=_score(value.get("importance", 5)),
+            importance=max(0, min(10, int(value.get("importance", 5) or 5))),
             summary=summary,
-            subject=str(value.get("subject", "relationship") or "relationship"),
-            emotional_weight=_score(value.get("emotional_weight", 5)),
-            relationship_relevance=_score(value.get("relationship_relevance", 5)),
-            confidence=_confidence(value.get("confidence", 1.0)),
-            status=status,
-            sensitivity=str(value.get("sensitivity", "normal") or "normal"),
-            recall_cooldown_turns=max(0, int(value.get("recall_cooldown_turns", 0) or 0)),
-            tags=tuple(_items(value.get("tags"))),
         )
     return definitions
 
@@ -133,27 +72,15 @@ def render_active_memories(
     max_items: int = 12,
 ) -> str:
     catalog = memory_catalog(document)
-    selected = [
-        catalog[memory_id]
-        for memory_id in memory_ids
-        if memory_id in catalog and catalog[memory_id].status not in {"forgotten", "superseded"}
-    ]
-    selected.sort(key=lambda item: (-item.recall_priority, item.memory_id))
+    selected = [catalog[memory_id] for memory_id in memory_ids if memory_id in catalog]
+    selected.sort(key=lambda item: (-item.importance, item.memory_id))
     selected = selected[: max(1, int(max_items))]
     if not selected:
         return "MEMÓRIAS DA RELAÇÃO:\n- Nenhuma memória narrativa consolidada ainda."
 
     variables = {str(key): str(value) for key, value in dict(facts or {}).items()}
     variables.setdefault("user_name", "o usuário")
-    lines = []
-    for item in selected:
-        summary = _safe_format(item.summary, variables)
-        metadata = (
-            f"categoria={item.category}; sujeito={item.subject}; "
-            f"peso emocional={item.emotional_weight}/10; "
-            f"relevância relacional={item.relationship_relevance}/10; estado={item.status}"
-        )
-        lines.append(f"- {summary} ({metadata})")
+    lines = [f"- {_safe_format(item.summary, variables)}" for item in selected]
     return "MEMÓRIAS DA RELAÇÃO:\n" + "\n".join(lines)
 
 
@@ -162,12 +89,7 @@ def build_narrative_context(
     memory_ids: Iterable[str],
     facts: dict[str, str] | None = None,
 ) -> str:
-    sections = [
-        character_context(document),
-        relational_profile_context(document),
-        render_active_memories(document, memory_ids, facts),
-    ]
-    return "\n\n".join(section for section in sections if section.strip())
+    return character_context(document) + "\n\n" + render_active_memories(document, memory_ids, facts)
 
 
 def validate_memory_references(document: dict[str, Any]) -> None:
@@ -228,14 +150,6 @@ def _items(value: Any) -> list[str]:
     if isinstance(value, str) and value.strip():
         return [value.strip()]
     return []
-
-
-def _score(value: Any) -> int:
-    return max(0, min(10, int(value or 0)))
-
-
-def _confidence(value: Any) -> float:
-    return max(0.0, min(1.0, float(value if value is not None else 1.0)))
 
 
 def _safe_format(template: str, variables: dict[str, str]) -> str:
