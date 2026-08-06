@@ -93,6 +93,7 @@ def test_manifesto_declara_runtime_editorial() -> None:
         "content/extensions/trust_progression.yaml",
         "content/extensions/physical_dramaturgy.yaml",
         "content/extensions/memory_lifecycle.yaml",
+        "content/extensions/organic_beat_rhythm.yaml",
         "content/extensions/runtime.yaml",
     )
 
