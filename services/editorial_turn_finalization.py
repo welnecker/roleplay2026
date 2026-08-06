@@ -4,6 +4,10 @@ from dataclasses import replace
 from typing import Any
 
 from services.editorial_beat_context import build_beat_context, render_beat_context
+from services.editorial_longitudinal_patterns import (
+    render_behavior_patterns,
+    update_behavior_patterns,
+)
 from services.editorial_memory_recall import (
     render_memory_recall_guidance,
     select_contextual_memories,
@@ -123,7 +127,7 @@ def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória, psicologia, personalidade, impressões, fatos e continuidade."""
+    """Aplica memória, psicologia, padrões, personalidade, impressões, fatos e continuidade."""
 
     available_ids = _memory_ids(script, turn.state)
     writes = _memory_writes_for_target(script, turn.target_id)
@@ -157,6 +161,13 @@ def finalize_editorial_turn(
         item.impression_id for item in impressions
     )
 
+    updated, behavior_patterns = update_behavior_patterns(
+        script.raw,
+        updated,
+        context_text,
+        str(turn.engagement),
+    )
+
     personality = active_personality_triggers(
         script.raw,
         updated,
@@ -180,6 +191,7 @@ def finalize_editorial_turn(
     beat_context = build_beat_context(script, turn.state, prepared_turn)
     psychological_context = render_psychological_state(script.raw, updated)
     impressions_context = render_subjective_impressions(impressions)
+    patterns_context = render_behavior_patterns(behavior_patterns)
     personality_context = render_personality_triggers(personality)
     user_facts_context = render_confirmed_user_facts(updated.facts)
     recall_guidance = render_memory_recall_guidance(recalled_ids)
@@ -188,6 +200,7 @@ def finalize_editorial_turn(
         narrative_context,
         psychological_context,
         impressions_context,
+        patterns_context,
         personality_context,
         user_facts_context,
         recall_guidance,
