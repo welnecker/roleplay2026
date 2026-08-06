@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import re
+from typing import Any
 
 from services import editorial_runtime_impl as runtime_impl
 from services.editorial_bridge import (
@@ -45,6 +47,160 @@ def prepare_editorial_script(script: EditorialScript) -> EditorialScript:
     return script
 
 
+def _runtime_policy(script: EditorialScript) -> dict[str, Any]:
+    direct = script.raw.get("runtime_policy") or {}
+    if isinstance(direct, dict) and direct:
+        return direct
+    legacy = script.raw.get("organic_slack") or {}
+    return legacy if isinstance(legacy, dict) else {}
+
+
+def _word_count(text: str) -> int:
+    return len(re.findall(r"[^\W_]+", str(text or ""), flags=re.UNICODE))
+
+
+def _contextual_bridge_allowed(script: EditorialScript, user_text: str) -> bool:
+    """Decide se há contribuição suficiente para um turno de ponte real.
+
+    A política é lexical e declarativa: respostas curtas de continuidade avançam;
+    perguntas ou contribuições mais densas podem respirar. Nenhuma frase ou tema
+    específico é codificado no motor.
+    """
+
+    policy = bridge_policy(script)
+    selection = str(policy.get("selection", "always") or "always").strip()
+    if selection != "contextual":
+        return True
+
+    maximum_direct_words = max(0, int(policy.get("direct_max_words", 4) or 4))
+    value = str(user_text or "").strip()
+    if "?" in value:
+        return True
+    return _word_count(value) > maximum_direct_words
+
+
+def _matches_scope(
+    script: EditorialScript,
+    state: EditorialState,
+    policy: dict[str, Any],
+) -> bool:
+    beat_id = str(state.node_id or script.first_beat_id).strip()
+    beat = script.beats.get(beat_id) or {}
+    block_id = str(beat.get("block_id", "") or "").strip()
+    beat_ids = {str(item).strip() for item in policy.get("beat_ids", []) or []}
+    block_ids = {str(item).strip() for item in policy.get("block_ids", []) or []}
+    prefixes = tuple(
+        str(item).strip()
+        for item in policy.get("beat_prefixes", []) or []
+        if str(item).strip()
+    )
+    if not beat_ids and not block_ids and not prefixes:
+        return True
+    return beat_id in beat_ids or block_id in block_ids or any(
+        beat_id.startswith(prefix) for prefix in prefixes
+    )
+
+
+def _apply_bridge_continuity(
+    script: EditorialScript,
+    previous_state: EditorialState,
+    turn: EditorialTurn,
+) -> EditorialTurn:
+    if str(turn.state.facts.get("_runtime_phase", "") or "") != "bridge":
+        return turn
+
+    policy = _runtime_policy(script).get("bridge_continuity") or {}
+    if not isinstance(policy, dict) or not policy or not _matches_scope(script, previous_state, policy):
+        return turn
+
+    instructions = [
+        "CONTRATO DE CONTINUIDADE DA PONTE:",
+        "- A ponte pertence integralmente à mesma cena e deve responder ao conteúdo novo do usuário.",
+        "- Não recite, reencene nem prolongue o movimento já consumido na origem.",
+        "- Não execute nem parafraseie o movimento reservado ao destino.",
+        "- Não use explicação, resumo ou fala genérica apenas para ocupar um turno.",
+    ]
+    if bool(policy.get("preserve_intensity", False)):
+        instructions.extend(
+            (
+                "- Preserve a intensidade, o ritmo, o vocabulário e a dinâmica vigentes na cena.",
+                "- Não suavize artificialmente o tom para adiar o próximo beat.",
+            )
+        )
+    if bool(policy.get("allow_expressive_freedom", False)):
+        instructions.append(
+            "- Há liberdade expressiva dentro das fronteiras da origem e do destino, sem copiar a linha canônica."
+        )
+    return replace(
+        turn,
+        system_prompt=f"{turn.system_prompt.strip()}\n\n" + "\n".join(instructions),
+    )
+
+
+def _recover_unqualified_ending(
+    script: EditorialScript,
+    previous_state: EditorialState,
+    user_text: str,
+    turn: EditorialTurn,
+) -> EditorialTurn:
+    """Reavalia somente endings contraditos por sinais explícitos de continuidade.
+
+    Não cria texto alternativo nem ignora hostilidade inequívoca. Apenas elimina
+    o acúmulo histórico de classificações ambíguas e repete a decisão estrutural.
+    """
+
+    policy = _runtime_policy(script).get("qualified_endings") or {}
+    if not isinstance(policy, dict) or not policy or not turn.finished:
+        return turn
+
+    protected_codes = {
+        str(item).strip()
+        for item in policy.get("ending_codes", []) or []
+        if str(item).strip()
+    }
+    ambiguous = {
+        str(item).strip()
+        for item in policy.get("ambiguous_engagements", []) or []
+        if str(item).strip()
+    }
+    continue_intents = {
+        str(item).strip()
+        for item in policy.get("continuation_intents", []) or []
+        if str(item).strip()
+    }
+    continue_routes = {
+        str(item).strip()
+        for item in policy.get("continuation_routes", []) or []
+        if str(item).strip()
+    }
+
+    facts = previous_state.facts
+    intent = str(facts.get("_last_user_intent", "") or "").strip()
+    route = str(facts.get("_contextual_route", "") or "").strip()
+    if protected_codes and turn.ending_code not in protected_codes:
+        return turn
+    if ambiguous and turn.engagement not in ambiguous:
+        return turn
+    if continue_intents and intent not in continue_intents:
+        return turn
+    if continue_routes and route not in continue_routes:
+        return turn
+
+    retry_state = EditorialState.from_dict(previous_state.to_dict())
+    retry_state.recent_engagement = [
+        item for item in retry_state.recent_engagement if item not in ambiguous
+    ]
+    retry_state.finished = False
+    retry_state.run_status = "active"
+    retry_state.ending_code = ""
+    recovered = base_decide_turn(script, retry_state, user_text)
+    if recovered.finished:
+        return turn
+    recovered_state = EditorialState.from_dict(recovered.state.to_dict())
+    recovered_state.facts["_qualified_ending_recovered"] = "true"
+    return replace(recovered, state=recovered_state)
+
+
 def _finalize(script: EditorialScript, turn: EditorialTurn, *, organic: bool = False) -> EditorialTurn:
     updated = EditorialState.from_dict(turn.state.to_dict())
     if bridge_policy(script):
@@ -63,11 +219,13 @@ def _bridge_or_finalize(
     *,
     bridge_allowed: bool,
 ) -> EditorialTurn:
+    qualified = _recover_unqualified_ending(script, previous_state, user_text, turn)
     prepared = (
-        create_bridge_turn(script, previous_state, turn, user_text)
-        if bridge_allowed
-        else turn
+        create_bridge_turn(script, previous_state, qualified, user_text)
+        if bridge_allowed and _contextual_bridge_allowed(script, user_text)
+        else qualified
     )
+    prepared = _apply_bridge_continuity(script, previous_state, prepared)
     return _finalize(script, prepared)
 
 
@@ -103,9 +261,6 @@ def decide_editorial_progression_turn(
     if contextual is not None:
         return _finalize(script, contextual)
 
-    # Cards ainda não migrados mantêm integralmente a folga orgânica antiga.
-    # Na ponte estrutural opt-in, ela é substituída pela nova fase para não haver
-    # duas máquinas intermediárias concorrentes.
     if not bridge_enabled and not releasing_bridge:
         organic = organic_editorial_turn(script, working_state, user_text)
         if organic is not None:
@@ -153,7 +308,7 @@ def decide_editorial_progression_turn(
     turn = base_decide_turn(script, routing_state, user_text)
     return _bridge_or_finalize(
         script,
-        original_state,
+        routing_state,
         turn,
         user_text,
         bridge_allowed=bridge_enabled and not releasing_bridge,
