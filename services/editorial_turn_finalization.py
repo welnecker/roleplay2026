@@ -17,6 +17,10 @@ from services.editorial_memory_recall import (
     render_memory_recall_guidance,
     select_contextual_memories,
 )
+from services.editorial_organic_beat_rhythm import (
+    build_organic_beat_frame,
+    render_organic_beat_frame,
+)
 from services.editorial_personality_triggers import (
     active_personality_triggers,
     render_personality_triggers,
@@ -136,7 +140,7 @@ def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória, ciclo de vida, psicologia, padrões, corpo e continuidade."""
+    """Aplica memória, ciclo de vida, psicologia, ritmo orgânico e continuidade."""
 
     available_ids = _memory_ids(script, turn.state)
     writes = _memory_writes_for_target(script, turn.target_id)
@@ -231,6 +235,7 @@ def finalize_editorial_turn(
 
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
+    beat_frame = build_organic_beat_frame(script.raw, target, beat_context, updated)
     psychological_context = render_psychological_state(script.raw, updated)
     impressions_context = render_subjective_impressions(impressions)
     patterns_context = render_behavior_patterns(behavior_patterns)
@@ -241,6 +246,8 @@ def finalize_editorial_turn(
     lifecycle_guidance = render_memory_lifecycle_guidance(lifecycle_states)
     resolved_guard = render_resolved_topic_guard(script, updated)
     prompt_parts = [
+        render_organic_beat_frame(beat_frame),
+        render_beat_context(beat_context),
         narrative_context,
         psychological_context,
         impressions_context,
@@ -250,7 +257,6 @@ def finalize_editorial_turn(
         user_facts_context,
         recall_guidance,
         lifecycle_guidance,
-        render_beat_context(beat_context),
         turn.system_prompt,
         resolved_guard,
     ]
@@ -266,7 +272,8 @@ def finalize_editorial_turn(
             "- A reação e a linha canônica devem formar uma única fala contínua.\n"
             "- Não antecipe ações, mudanças de cena, encerramentos ou acontecimentos de beats posteriores.\n"
             "- Não acrescente nada depois da linha canônica.\n"
-            "- Não abra uma nova pergunta além da que já existir na própria linha canônica."
+            "- Não abra uma nova pergunta além da que já existir na própria linha canônica.\n"
+            "- Qualquer pensamento interno de Mary deve estar em primeira pessoa e servir à forma da fala, nunca aparecer como narração psicológica em terceira pessoa."
         )
 
     return replace(prepared_turn, system_prompt=prompt.strip())
