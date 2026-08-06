@@ -9,6 +9,7 @@ from services.editorial_psychological_state import (
     render_psychological_state,
 )
 from services.editorial_resolved_topics import render_resolved_topic_guard
+from services.editorial_user_facts import render_confirmed_user_facts
 from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.editorial_terminal_yard import state_for_target
@@ -71,16 +72,12 @@ def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória, estado psicológico, BeatContext e continuidade canônica."""
+    """Aplica memória, estado psicológico, fatos, BeatContext e continuidade."""
 
     previous_ids = _memory_ids(script, turn.state)
     writes = _memory_writes_for_target(script, turn.target_id)
     updated = EditorialState.from_dict(turn.state.to_dict())
-    updated = apply_card_psychological_deltas(
-        script.raw,
-        updated,
-        str(turn.engagement),
-    )
+    updated = apply_card_psychological_deltas(script.raw, updated, str(turn.engagement))
     updated.facts["_active_memory_ids"] = ",".join(dict.fromkeys([*previous_ids, *writes]))
     updated.facts["_pending_memory_writes"] = ",".join(writes)
     updated = state_for_target(script, updated, turn.target_id)
@@ -98,10 +95,12 @@ def finalize_editorial_turn(
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
     psychological_context = render_psychological_state(script.raw, updated)
+    user_facts_context = render_confirmed_user_facts(updated.facts)
     resolved_guard = render_resolved_topic_guard(script, updated)
     prompt_parts = [
         narrative_context,
         psychological_context,
+        user_facts_context,
         render_beat_context(beat_context),
         turn.system_prompt,
         resolved_guard,
