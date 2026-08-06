@@ -8,6 +8,10 @@ from services.editorial_memory_recall import (
     render_memory_recall_guidance,
     select_contextual_memories,
 )
+from services.editorial_personality_triggers import (
+    active_personality_triggers,
+    render_personality_triggers,
+)
 from services.editorial_psychological_state import (
     apply_card_psychological_deltas,
     render_psychological_state,
@@ -78,7 +82,7 @@ def _memory_writes_for_target(script: EditorialScript, target_id: str) -> list[s
     ]
 
 
-def _recall_context(script: EditorialScript, turn: EditorialTurn) -> str:
+def _turn_context(script: EditorialScript, turn: EditorialTurn) -> str:
     source = script.beats.get(turn.target_id) or script.endings.get(turn.target_id) or {}
     parts = [
         turn.system_prompt,
@@ -97,14 +101,6 @@ def _mandatory_context_memory_ids(
     active_ids: list[str],
     writes: list[str],
 ) -> list[str]:
-    """Preserva memórias estruturais sem transformá-las em callbacks repetitivos.
-
-    Entram obrigatoriamente no contexto:
-    - memórias iniciais no primeiro turno finalizado;
-    - memórias escritas pelo beat atual, para efeito no mesmo turno;
-    - a origem consolidada da relação, necessária para continuidade canônica.
-    """
-
     mandatory: list[str] = []
     if not str(state.facts.get("_memory_recall_turn", "") or "").strip():
         mandatory.extend(_initial_memory_ids(script))
@@ -123,7 +119,7 @@ def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória, estado psicológico, fatos, BeatContext e continuidade."""
+    """Aplica memória, psicologia, personalidade, fatos e continuidade."""
 
     available_ids = _memory_ids(script, turn.state)
     writes = _memory_writes_for_target(script, turn.target_id)
@@ -134,20 +130,27 @@ def finalize_editorial_turn(
     updated.facts["_pending_memory_writes"] = ",".join(writes)
     updated = state_for_target(script, updated, turn.target_id)
 
+    context_text = _turn_context(script, turn)
     mandatory_ids = _mandatory_context_memory_ids(script, turn.state, active_ids, writes)
     optional_pool = [memory_id for memory_id in active_ids if memory_id not in mandatory_ids]
     recalled_ids, recalled_facts = select_contextual_memories(
         script.raw,
         optional_pool,
         updated.facts,
-        _recall_context(script, turn),
+        context_text,
     )
     updated.facts = recalled_facts
     context_memory_ids = list(dict.fromkeys([*mandatory_ids, *recalled_ids]))
-    narrative_context = build_narrative_context(
+    narrative_context = build_narrative_context(script.raw, context_memory_ids, updated.facts)
+
+    personality = active_personality_triggers(
         script.raw,
-        context_memory_ids,
-        updated.facts,
+        updated,
+        context_text,
+        str(turn.engagement),
+    )
+    updated.facts["_active_personality_trigger_ids"] = ",".join(
+        item.trigger_id for item in personality
     )
 
     runtime_phase = str(updated.facts.get("_runtime_phase", "canonical") or "canonical")
@@ -162,12 +165,14 @@ def finalize_editorial_turn(
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
     psychological_context = render_psychological_state(script.raw, updated)
+    personality_context = render_personality_triggers(personality)
     user_facts_context = render_confirmed_user_facts(updated.facts)
     recall_guidance = render_memory_recall_guidance(recalled_ids)
     resolved_guard = render_resolved_topic_guard(script, updated)
     prompt_parts = [
         narrative_context,
         psychological_context,
+        personality_context,
         user_facts_context,
         recall_guidance,
         render_beat_context(beat_context),
