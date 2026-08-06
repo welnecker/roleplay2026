@@ -53,7 +53,7 @@ def test_confianca_baixa_redireciona_para_contencao_natural() -> None:
     assert turn.target_id == "mensagens_iniciais_008"
     assert turn.state.facts["_progression_gate_blocked_target"] == "mensagens_iniciais_009"
     assert turn.state.facts["_progression_gate_dimension"] == "trust"
-    assert "Confiança ainda insuficiente" in turn.system_prompt
+    assert "CONFIANÇA AINDA INSUFICIENTE" in turn.system_prompt
     assert "limiares" in turn.system_prompt
 
 
