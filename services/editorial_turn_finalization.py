@@ -9,7 +9,12 @@ from services.editorial_conversational_obligation import (
     consume_pending_obligation,
     store_pending_obligation,
 )
-from services.editorial_episodic_memory import capture_episode, recall_episode
+from services.editorial_episodic_memory import (
+    advance_episode_turn,
+    creativity_blocked,
+    prepare_bridge_episode,
+    recall_episode,
+)
 from services.editorial_resolved_topics import render_resolved_topic_guard
 from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
@@ -98,12 +103,15 @@ def finalize_editorial_turn(
         updated.facts[state_fact] = "true" if canonical_member else "false"
 
     user_text = _current_user_text(turn.system_prompt)
-    capture_episode(
-        script.raw,
-        updated.facts,
-        user_text,
-        source_beat_id=str(turn.state.node_id or turn.target_id or ""),
-    )
+    advance_episode_turn(script.raw, updated.facts)
+    if runtime_phase == "bridge":
+        prepare_bridge_episode(
+            script.raw,
+            updated.facts,
+            user_text,
+            source_beat_id=str(turn.state.node_id or turn.target_id or ""),
+        )
+
     episodic_recall = ""
     if runtime_phase == "canonical":
         episodic_recall = recall_episode(
@@ -132,11 +140,21 @@ def finalize_editorial_turn(
 
     if episodic_recall:
         prompt += (
-            f"\n\nECO EPISÓDICO: {episodic_recall}\n"
-            "Retome-o somente se couber organicamente no beat; não repita uma pendência já esclarecida."
+            f"\n\nMEMÓRIA EPISÓDICA ANTIGA: {episodic_recall}\n"
+            "Traga essa troca à tona em uma referência curta e natural antes de seguir o beat. "
+            "Não a apresente como nova pergunta se ela já tiver sido respondida."
         )
 
-    if bridge_obligation:
+    if creativity_blocked(updated.facts):
+        prompt += (
+            "\n\nTRAVA DE CRIATIVIDADE DO CARD:\n"
+            "- Um fio criativo do usuário já foi acolhido e registrado neste capítulo.\n"
+            "- Não abra outra fantasia, assunto paralelo ou nova ponte.\n"
+            "- Faça somente uma contenção curta, afetuosa e variada, equivalente a "
+            "'calma, você já me surpreendeu o suficiente', e retome imediatamente o roteiro.\n"
+            "- Não registre nem desenvolva a nova bifurcação."
+        )
+    elif bridge_obligation:
         prompt += (
             "\n\nSUPORTE CONVERSACIONAL DA PONTE:\n"
             "- Responda agora à pergunta ou ao convite quando isso couber sem quebrar o roteiro.\n"
