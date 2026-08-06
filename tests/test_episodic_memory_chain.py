@@ -88,19 +88,32 @@ def test_type_is_derived_only_from_runtime_phase() -> None:
     ) == "recollection"
 
 
-def test_complete_multiline_user_message_is_extracted_from_prompt() -> None:
+def test_bridge_multiline_user_text_keeps_user_authored_uppercase_label() -> None:
     prompt = (
         "FASE ESTRUTURAL: PONTE NARRATIVA.\n"
-        "FALA ATUAL DO USUÁRIO: Eu queria te perguntar uma coisa.\n\n"
-        "É sobre algo que aconteceu na chamada de vídeo.\n"
-        "Não quero falar aqui no meio de todo mundo.\n"
+        "FALA ATUAL DO USUÁRIO: Primeiro parágrafo.\n\n"
+        "OBSERVAÇÃO: isto ainda pertence à mensagem do usuário.\n\n"
+        "Terceiro parágrafo.\n"
         "BEAT DE ORIGEM: reencontro_fila_006\n"
-        "MOVIMENTO DE ORIGEM JÁ CONCLUÍDO: Mary agradece a ajuda."
+        "MOVIMENTO DE ORIGEM JÁ CONCLUÍDO — PROIBIDO REPETIR: teste"
     )
-
     extracted = _current_user_text(prompt)
-
-    assert "Eu queria te perguntar uma coisa." in extracted
-    assert "aconteceu na chamada de vídeo" in extracted
-    assert "Não quero falar aqui" in extracted
+    assert "Primeiro parágrafo" in extracted
+    assert "OBSERVAÇÃO:" in extracted
+    assert "Terceiro parágrafo" in extracted
     assert "BEAT DE ORIGEM" not in extracted
+
+
+def test_canonical_multiline_user_text_keeps_user_authored_uppercase_label() -> None:
+    prompt = (
+        "REGRAS ABSOLUTAS:\n- teste\n"
+        "RESPOSTA DO USUÁRIO: Primeiro parágrafo.\n\n"
+        "OBSERVAÇÃO: isto ainda pertence à mensagem do usuário.\n\n"
+        "Terceiro parágrafo.\n"
+        "UNIDADES DO MOVIMENTO:\n- dialogue: teste"
+    )
+    extracted = _current_user_text(prompt)
+    assert "Primeiro parágrafo" in extracted
+    assert "OBSERVAÇÃO:" in extracted
+    assert "Terceiro parágrafo" in extracted
+    assert "UNIDADES DO MOVIMENTO" not in extracted

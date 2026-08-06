@@ -17,10 +17,16 @@ from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.editorial_terminal_yard import state_for_target
 
-_USER_TEXT_BLOCK = re.compile(
-    r"^(?:FALA ATUAL DO USUÁRIO|RESPOSTA DO USUÁRIO):[ \t]*(.*?)"
-    r"(?=\n[A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇ0-9 _—-]{2,}:|\Z)",
-    flags=re.MULTILINE | re.DOTALL,
+_USER_TEXT_PATTERNS = (
+    re.compile(
+        r"^FALA ATUAL DO USUÁRIO:[ \t]*(.*?)(?=\nBEAT DE ORIGEM:|\Z)",
+        flags=re.MULTILINE | re.DOTALL,
+    ),
+    re.compile(
+        r"^RESPOSTA DO USUÁRIO:[ \t]*(.*?)"
+        r"(?=\n(?:REAÇÃO ORGÂNICA NECESSÁRIA|UNIDADES DO MOVIMENTO):|\Z)",
+        flags=re.MULTILINE | re.DOTALL,
+    ),
 )
 
 
@@ -55,8 +61,12 @@ def _memory_writes_for_target(script: EditorialScript, target_id: str) -> list[s
 
 
 def _current_user_text(prompt: str) -> str:
-    match = _USER_TEXT_BLOCK.search(str(prompt or ""))
-    return match.group(1).strip() if match else ""
+    value = str(prompt or "")
+    for pattern in _USER_TEXT_PATTERNS:
+        match = pattern.search(value)
+        if match:
+            return match.group(1).strip()
+    return ""
 
 
 def finalize_editorial_turn(script: EditorialScript, turn: EditorialTurn) -> EditorialTurn:
