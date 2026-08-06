@@ -251,7 +251,7 @@ def decide_editorial_progression_turn(
         state.node_id or script.first_beat_id,
     )
     base_state = release_bridge_state(script, state) if releasing_bridge else state
-    working_state = state_with_extracted_facts(base_state, user_text)
+    working_state = state_with_extracted_facts(script, base_state, user_text)
 
     yard_turn = decide_terminal_yard_turn(
         script,
