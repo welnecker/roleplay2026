@@ -24,7 +24,11 @@ def test_card_declara_politica_de_recuperacao_contextual() -> None:
 
     assert policy["max_memories_per_turn"] == 1
     assert policy["allow_background_fallback"] is False
-    assert "casamento" in document["memories"]["marital_frustration"]["recall_terms"]
+    memory = next(
+        item for item in document["memories"]
+        if item["memory_id"] == "marital_frustration"
+    )
+    assert "casamento" in memory["recall_terms"]
 
 
 def test_recupera_memoria_relacionada_ao_assunto_do_turno() -> None:
