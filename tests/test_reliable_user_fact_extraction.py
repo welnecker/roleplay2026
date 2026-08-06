@@ -75,7 +75,7 @@ def test_baixa_confianca_nao_vira_fato() -> None:
                     "minimum_confidence": 0.9,
                     "extractors": [
                         {
-                            "pattern": r"\\btalvez eu seja professor\\b",
+                            "pattern": r"\btalvez eu seja professor\b",
                             "value": "teacher",
                             "confidence": 0.5,
                         }
@@ -112,7 +112,7 @@ def test_esquema_e_reutilizavel_por_outro_card() -> None:
                     "minimum_confidence": 0.9,
                     "extractors": [
                         {
-                            "pattern": r"\\beu gosto de café\\b",
+                            "pattern": r"\beu gosto de café\b",
                             "value": "true",
                             "confidence": 1.0,
                             "source": "explicit_self_report",
