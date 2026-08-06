@@ -20,15 +20,8 @@ class EditorialPackageError(RuntimeError):
 
 
 _FREE_TEXT_KEYS = {
-    "introduction",
-    "title",
-    "required_movement",
-    "canonical_line",
-    "dramatic_direction",
-    "text",
-    "summary",
-    "premise",
-    "awakening",
+    "introduction", "title", "required_movement", "canonical_line",
+    "dramatic_direction", "text", "summary", "premise", "awakening",
     "character_view_of_user",
 }
 _FREE_TEXT_PATTERN = re.compile(
@@ -77,11 +70,10 @@ def load_editorial_yaml(path: Path) -> dict[str, Any]:
 
 def _iter_beats(document: dict[str, Any]):
     for block in document.get("blocks", []) or []:
-        if not isinstance(block, dict):
-            continue
-        for beat in block.get("beats", []) or []:
-            if isinstance(beat, dict):
-                yield beat
+        if isinstance(block, dict):
+            for beat in block.get("beats", []) or []:
+                if isinstance(beat, dict):
+                    yield beat
 
 
 def _memory_entries(value: Any) -> list[dict[str, Any]]:
@@ -131,11 +123,7 @@ def _merge_character_patch(merged: dict[str, Any], extension: dict[str, Any]) ->
         _append_unique_strings(character, profile_key, profile_patch.get("append", []))
 
 
-def _replace_declared_policy(
-    merged: dict[str, Any],
-    extension: dict[str, Any],
-    key: str,
-) -> None:
+def _replace_declared_policy(merged: dict[str, Any], extension: dict[str, Any], key: str) -> None:
     value = extension.get(key)
     if value is None:
         return
@@ -171,11 +159,11 @@ def merge_editorial_extension(document: dict[str, Any], extension: dict[str, Any
             raise EditorialPackageError("organic_slack deve ser um mapa")
         merged["organic_slack"] = deepcopy(organic_slack)
 
-    _replace_declared_policy(merged, extension, "bridge_policy")
-    _replace_declared_policy(merged, extension, "runtime_policy")
-    _replace_declared_policy(merged, extension, "relationship_memory")
-    _replace_declared_policy(merged, extension, "user_fact_schema")
-    _replace_declared_policy(merged, extension, "subjective_impressions")
+    for policy_key in (
+        "bridge_policy", "runtime_policy", "relationship_memory",
+        "user_fact_schema", "subjective_impressions", "behavior_patterns",
+    ):
+        _replace_declared_policy(merged, extension, policy_key)
 
     _merge_character_patch(merged, extension)
 
