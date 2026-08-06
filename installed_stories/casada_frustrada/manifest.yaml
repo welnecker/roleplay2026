@@ -22,6 +22,7 @@ runtime:
       - content/extensions/relationship_memory.yaml
       - content/extensions/user_facts.yaml
       - content/extensions/subjective_impressions.yaml
+      - content/extensions/behavior_patterns.yaml
       - content/extensions/trust_progression.yaml
       - content/extensions/runtime.yaml
 card:
