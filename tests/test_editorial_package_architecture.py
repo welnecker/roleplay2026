@@ -94,6 +94,7 @@ def test_manifesto_declara_runtime_editorial() -> None:
         "content/extensions/relationship_memory.yaml",
         "content/extensions/user_facts.yaml",
         "content/extensions/subjective_impressions.yaml",
+        "content/extensions/trust_progression.yaml",
         "content/extensions/runtime.yaml",
     )
 
