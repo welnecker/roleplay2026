@@ -4,7 +4,10 @@ from dataclasses import replace
 from typing import Any
 
 from services.editorial_beat_context import build_beat_context, render_beat_context
-from services.editorial_psychological_state import render_psychological_state
+from services.editorial_psychological_state import (
+    apply_card_psychological_deltas,
+    render_psychological_state,
+)
 from services.editorial_resolved_topics import render_resolved_topic_guard
 from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
@@ -71,12 +74,17 @@ def finalize_editorial_turn(
     """Aplica memória, estado psicológico, BeatContext e continuidade canônica."""
 
     previous_ids = _memory_ids(script, turn.state)
-    narrative_context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
     writes = _memory_writes_for_target(script, turn.target_id)
     updated = EditorialState.from_dict(turn.state.to_dict())
+    updated = apply_card_psychological_deltas(
+        script.raw,
+        updated,
+        str(turn.engagement),
+    )
     updated.facts["_active_memory_ids"] = ",".join(dict.fromkeys([*previous_ids, *writes]))
     updated.facts["_pending_memory_writes"] = ",".join(writes)
     updated = state_for_target(script, updated, turn.target_id)
+    narrative_context = build_narrative_context(script.raw, previous_ids, updated.facts)
 
     runtime_phase = str(updated.facts.get("_runtime_phase", "canonical") or "canonical")
     canonical_member = _is_strict_canonical_beat(script, turn.target_id)
