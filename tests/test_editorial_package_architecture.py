@@ -91,6 +91,7 @@ def test_manifesto_declara_runtime_editorial() -> None:
         "content/extensions/subjective_impressions.yaml",
         "content/extensions/behavior_patterns.yaml",
         "content/extensions/trust_progression.yaml",
+        "content/extensions/physical_dramaturgy.yaml",
         "content/extensions/runtime.yaml",
     )
 
