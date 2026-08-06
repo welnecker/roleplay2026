@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import json
-
 from services.editorial_episodic_memory import (
     advance_episode_turn,
-    consolidate_bridge_episode,
-    creativity_blocked,
-    prepare_bridge_episode,
+    consolidate_selected_memory,
+    continuity_memories,
+    mark_memory_requested,
+    prepare_selected_memory,
     recall_episode,
+    relationship_recollections,
+    render_relationship_recollections,
 )
 
 
@@ -15,144 +16,134 @@ def _document():
     return {
         "runtime_policy": {
             "episodic_memory": {
-                "history_turn_window": 3,
-                "recall": [{"beat_prefixes": ["telefone_", "motel_"]}],
+                "recall": [
+                    {
+                        "beat_ids": ["estacionamento_conversa_001"],
+                        "beat_prefixes": ["motel_"],
+                    }
+                ]
             }
         }
     }
 
 
-def _bridge_facts() -> dict[str, str]:
-    return {
-        "_bridge_origin_objective": "Mary pergunta o nome do usuário.",
-        "_bridge_origin_canonical": "Ainda nem sei seu nome.",
-        "_bridge_target_objective": "Mary agradece a ajuda e segue para o carro.",
-        "_bridge_target_canonical": "Obrigada pela ajuda. Vamos até o carro.",
-    }
+def test_unmarked_interaction_never_creates_memory() -> None:
+    facts: dict[str, str] = {}
+    advance_episode_turn(_document(), facts)
+    mode = prepare_selected_memory(
+        _document(),
+        facts,
+        "Você é muito atenciosa.",
+        source_beat_id="encontro_acidental_002",
+        runtime_phase="bridge",
+    )
+    consolidate_selected_memory(facts, "Obrigada por dizer isso.")
+    assert mode == "ignored"
+    assert continuity_memories(facts) == []
+    assert relationship_recollections(facts) == []
 
 
-def _episode(facts):
-    return json.loads(facts["_episodic_memory_json"])
+def test_marked_bridge_creates_consumable_continuity_thread() -> None:
+    facts: dict[str, str] = {}
+    mark_memory_requested(facts, True)
+    advance_episode_turn(_document(), facts)
+    mode = prepare_selected_memory(
+        _document(),
+        facts,
+        "Eu queria te perguntar uma coisa, mas aqui parece perigoso.",
+        source_beat_id="reencontro_fila_006",
+        runtime_phase="bridge",
+    )
+    assert mode == "continuity"
+
+    consolidate_selected_memory(
+        facts,
+        "Aqui não. Quando chegarmos ao estacionamento, você me conta.",
+    )
+
+    threads = continuity_memories(facts)
+    assert len(threads) == 1
+    assert threads[0]["status"] == "available"
+    assert "queria te perguntar" in threads[0]["user_text"]
+    assert "estacionamento" in threads[0]["mary_text"]
 
 
-def _turn(facts, amount=1):
-    for _ in range(amount):
+def test_script_can_recall_thread_immediately_or_n_turns_later() -> None:
+    facts: dict[str, str] = {}
+    mark_memory_requested(facts, True)
+    advance_episode_turn(_document(), facts)
+    prepare_selected_memory(
+        _document(),
+        facts,
+        "Depois eu quero te contar um segredo.",
+        source_beat_id="reencontro_fila_006",
+        runtime_phase="bridge",
+    )
+    consolidate_selected_memory(facts, "Tudo bem, me conta quando se sentir à vontade.")
+
+    # Beat não habilitado: a memória permanece disponível.
+    assert recall_episode(_document(), facts, beat_id="reencontro_fila_007") == ""
+    assert continuity_memories(facts)[0]["status"] == "available"
+
+    # Pode passar qualquer quantidade de turnos sem perda.
+    for _ in range(12):
         advance_episode_turn(_document(), facts)
 
-
-def test_routine_canonical_answer_does_not_claim_episode_slot() -> None:
-    facts = _bridge_facts()
-    _turn(facts)
-
-    mode = prepare_bridge_episode(
-        _document(),
-        facts,
-        "Meu nome é Janio.",
-        source_beat_id="estacionamento_001",
+    recalled = recall_episode(
+        _document(), facts, beat_id="estacionamento_conversa_001"
     )
-
-    assert mode == "ignored"
-    assert "_episodic_memory_draft_json" not in facts
-    assert "_episodic_memory_json" not in facts
-
-
-def test_bridge_saves_user_and_mary_as_one_capsule() -> None:
-    facts = _bridge_facts()
-    _turn(facts)
-    mode = prepare_bridge_episode(
-        _document(),
-        facts,
-        "Eu pagaria pra ver a cor da sua calcinha.",
-        source_beat_id="estacionamento_001",
-    )
-    assert mode == "new"
-
-    consolidate_bridge_episode(
-        facts,
-        "Você é atrevido, mas agora fiquei curiosa para saber quanto pagaria.",
-    )
-
-    episode = _episode(facts)
-    assert episode["episode_id"] == "creative_episode_001"
-    assert "cor da sua calcinha" in episode["user_text"]
-    assert "quanto pagaria" in episode["mary_text"]
-    assert episode["status"] == "dormant"
-    assert episode["eligible_after_turn"] == 5
-
-
-def test_capsule_stays_dormant_until_exchange_leaves_recent_history() -> None:
-    facts = _bridge_facts()
-    _turn(facts)
-    prepare_bridge_episode(
-        _document(), facts, "Quero descobrir seu segredo.", source_beat_id="estacionamento_001"
-    )
-    consolidate_bridge_episode(facts, "Talvez um dia eu conte.")
-
-    _turn(facts, 3)
-    assert recall_episode(_document(), facts, beat_id="telefone_001") == ""
-
-    _turn(facts)
-    recalled = recall_episode(_document(), facts, beat_id="telefone_001")
-    assert "Quero descobrir seu segredo" in recalled
-    assert "Talvez um dia eu conte" in recalled
-    assert _episode(facts)["status"] == "consumed"
+    assert "contar um segredo" in recalled
+    assert continuity_memories(facts)[0]["status"] == "consumed"
     assert recall_episode(_document(), facts, beat_id="motel_001") == ""
 
 
-def test_same_thread_updates_capsule_instead_of_creating_another() -> None:
-    facts = _bridge_facts()
-    _turn(facts)
-    prepare_bridge_episode(
-        _document(), facts, "Eu pagaria pra ver a cor da sua calcinha.", source_beat_id="estacionamento_001"
-    )
-    consolidate_bridge_episode(facts, "E quanto você pagaria?")
-
-    _turn(facts)
-    mode = prepare_bridge_episode(
-        _document(), facts, "Pagaria bem pela cor da calcinha.", source_beat_id="estacionamento_002"
-    )
-    assert mode == "continue"
-    consolidate_bridge_episode(facts, "Então continue curioso.")
-
-    episode = _episode(facts)
-    assert episode["episode_id"] == "creative_episode_001"
-    assert episode["continuations"] == 1
-    assert episode["latest_mary_text"] == "Então continue curioso."
-    assert episode["eligible_after_turn"] == 6
-
-
-def test_new_creativity_is_blocked_after_card_slot_was_used() -> None:
-    facts = _bridge_facts()
-    _turn(facts)
-    prepare_bridge_episode(
-        _document(), facts, "Quero descobrir seu segredo.", source_beat_id="estacionamento_001"
-    )
-    consolidate_bridge_episode(facts, "Talvez eu conte depois.")
-
-    _turn(facts)
-    mode = prepare_bridge_episode(
-        _document(), facts, "Vamos viajar juntos amanhã.", source_beat_id="estacionamento_002"
-    )
-
-    assert mode == "blocked"
-    assert creativity_blocked(facts)
-    assert _episode(facts)["user_text"] == "Quero descobrir seu segredo."
-    assert "_episodic_memory_draft_json" not in facts
-
-
-def test_terms_are_not_predeclared_or_topic_specific() -> None:
-    facts = _bridge_facts()
-    _turn(facts)
-    mode = prepare_bridge_episode(
+def test_marked_canonical_beat_creates_persistent_recollection() -> None:
+    facts: dict[str, str] = {}
+    mark_memory_requested(facts, True)
+    advance_episode_turn(_document(), facts)
+    mode = prepare_selected_memory(
         _document(),
         facts,
-        "Quero plantar uma jabuticabeira na lua com você.",
-        source_beat_id="estacionamento_001",
+        "Moro no bloco B do Plaza.",
+        source_beat_id="encontro_acidental_004",
+        runtime_phase="canonical",
     )
-    assert mode == "new"
-    consolidate_bridge_episode(facts, "Essa foi a proposta mais improvável que ouvi hoje.")
+    assert mode == "recollection"
 
-    episode = _episode(facts)
-    assert "jabuticabeira" in episode["anchors"]
-    assert "lua" not in episode["anchors"]
-    assert "jabuticabeira na lua" in episode["user_text"]
+    consolidate_selected_memory(facts, "Então somos vizinhos, eu também moro no Plaza.")
+
+    recollections = relationship_recollections(facts)
+    assert len(recollections) == 1
+    assert recollections[0]["status"] == "active"
+    rendered = render_relationship_recollections(facts)
+    assert "Moro no bloco B do Plaza" in rendered
+    assert "somos vizinhos" in rendered
+
+    # Lembranças cotidianas não são consumidas pelo uso no prompt.
+    assert render_relationship_recollections(facts) == rendered
+    assert relationship_recollections(facts)[0]["status"] == "active"
+
+
+def test_same_turn_type_is_derived_only_from_runtime_phase() -> None:
+    bridge_facts: dict[str, str] = {}
+    canonical_facts: dict[str, str] = {}
+
+    mark_memory_requested(bridge_facts, True)
+    mark_memory_requested(canonical_facts, True)
+    advance_episode_turn(_document(), bridge_facts)
+    advance_episode_turn(_document(), canonical_facts)
+
+    assert prepare_selected_memory(
+        _document(),
+        bridge_facts,
+        "A mesma fala pode ter funções diferentes.",
+        source_beat_id="beat_001",
+        runtime_phase="bridge",
+    ) == "continuity"
+    assert prepare_selected_memory(
+        _document(),
+        canonical_facts,
+        "A mesma fala pode ter funções diferentes.",
+        source_beat_id="beat_001",
+        runtime_phase="canonical",
+    ) == "recollection"
