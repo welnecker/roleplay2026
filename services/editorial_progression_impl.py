@@ -24,6 +24,7 @@ from services.editorial_followups import (
 )
 from services.editorial_message_policy import classify_contextual_editorial_message
 from services.editorial_organic_turns import organic_editorial_turn
+from services.editorial_resolved_topics import apply_resolved_topics
 from services.editorial_response_policy import clean_editorial_progression_response
 from services.editorial_routing import (
     routing_state_for_declared_skips,
@@ -224,10 +225,11 @@ def _bridge_or_finalize(
     bridge_allowed: bool,
 ) -> EditorialTurn:
     qualified = _recover_unqualified_ending(script, previous_state, user_text, turn)
+    resolved = apply_resolved_topics(script, previous_state, qualified)
     prepared = (
-        create_bridge_turn(script, previous_state, qualified, user_text)
+        create_bridge_turn(script, previous_state, resolved, user_text)
         if bridge_allowed and _contextual_bridge_allowed(script, previous_state, user_text)
-        else qualified
+        else resolved
     )
     prepared = _apply_bridge_continuity(script, previous_state, prepared)
     return _finalize(script, prepared)
