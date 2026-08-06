@@ -21,13 +21,19 @@ class UserFactRecord:
     supersedes: str = ""
 
 
+def _string_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value or "").strip()
+
+
 def _load_records(facts: Mapping[str, str]) -> dict[str, UserFactRecord]:
     raw = str(facts.get(_FACT_RECORDS_KEY, "") or "").strip()
     if not raw:
         return {}
     try:
         parsed = json.loads(raw)
-    except (TypeError, ValueError, json.JSONDecodeError):
+    except (TypeError, ValueError):
         return {}
     if not isinstance(parsed, dict):
         return {}
@@ -37,12 +43,12 @@ def _load_records(facts: Mapping[str, str]) -> dict[str, UserFactRecord]:
             continue
         records[str(fact_id)] = UserFactRecord(
             fact_id=str(fact_id),
-            value=str(item.get("value", "") or ""),
+            value=_string_value(item.get("value", "")),
             confidence=max(0.0, min(1.0, float(item.get("confidence", 0.0) or 0.0))),
             source=str(item.get("source", "") or ""),
             evidence=str(item.get("evidence", "") or ""),
             status=str(item.get("status", "active") or "active"),
-            supersedes=str(item.get("supersedes", "") or ""),
+            supersedes=_string_value(item.get("supersedes", "")),
         )
     return records
 
@@ -53,7 +59,7 @@ def _load_history(facts: Mapping[str, str]) -> list[dict[str, Any]]:
         return []
     try:
         parsed = json.loads(raw)
-    except (TypeError, ValueError, json.JSONDecodeError):
+    except (TypeError, ValueError):
         return []
     return [dict(item) for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
 
@@ -89,7 +95,7 @@ def _match_declared_value(
         if not isinstance(extractor, dict):
             continue
         pattern = str(extractor.get("pattern", "") or "").strip()
-        value = str(extractor.get("value", "") or "").strip()
+        value = _string_value(extractor.get("value", ""))
         if not pattern or not value:
             continue
         try:
@@ -100,13 +106,12 @@ def _match_declared_value(
             continue
         confidence = max(0.0, min(1.0, float(extractor.get("confidence", 1.0) or 1.0)))
         source = str(extractor.get("source", f"declared_pattern_{index + 1}") or f"declared_pattern_{index + 1}")
-        evidence = match.group(0).strip()
         return UserFactRecord(
             fact_id=fact_id,
             value=value,
             confidence=confidence,
             source=source,
-            evidence=evidence,
+            evidence=match.group(0).strip(),
         )
     return None
 
@@ -134,11 +139,7 @@ def extract_declared_user_facts(
     user_text: str,
     known_facts: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
-    """Extrai fatos somente de padrões declarados pelo card.
-
-    Mantém valores simples em ``facts`` para compatibilidade com rotas existentes
-    e registra metadados estruturados, origem e histórico em chaves internas.
-    """
+    """Extrai fatos somente de padrões declarados pelo card."""
 
     facts = {str(key): str(value) for key, value in dict(known_facts or {}).items()}
     text = _normalized_text(user_text)
@@ -175,9 +176,7 @@ def extract_declared_user_facts(
         superseded_id = groups.get(group, "") if group else ""
         if superseded_id and superseded_id != fact_id and superseded_id in records:
             previous = records[superseded_id]
-            records[superseded_id] = UserFactRecord(
-                **{**asdict(previous), "status": "superseded"}
-            )
+            records[superseded_id] = UserFactRecord(**{**asdict(previous), "status": "superseded"})
             history.append({**asdict(previous), "status": "superseded_by", "superseded_by": fact_id})
             facts.pop(superseded_id, None)
 
@@ -210,8 +209,7 @@ def render_confirmed_user_facts(facts: Mapping[str, str]) -> str:
     if not records:
         return ""
     lines = ["FATOS CONFIRMADOS SOBRE O USUÁRIO:"]
-    for record in records.values():
-        lines.append(f"- {record.fact_id}: {record.value}")
+    lines.extend(f"- {record.fact_id}: {record.value}" for record in records.values())
     lines.extend(
         (
             "REGRAS DE USO:",
