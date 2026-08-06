@@ -39,12 +39,19 @@ def _is_strict_canonical_beat(script: EditorialScript, beat_id: str) -> bool:
     return clean in beat_ids or any(clean.startswith(prefix) for prefix in prefixes)
 
 
-def _memory_ids(state: EditorialState) -> list[str]:
-    return [
+def _memory_ids(script: EditorialScript, state: EditorialState) -> list[str]:
+    profile = script.raw.get("relationship_memory") or {}
+    initial = [
+        str(item).strip()
+        for item in profile.get("initial_memory_ids", []) or []
+        if str(item).strip()
+    ] if isinstance(profile, dict) else []
+    active = [
         item.strip()
         for item in str(state.facts.get("_active_memory_ids", "") or "").split(",")
         if item.strip()
     ]
+    return list(dict.fromkeys([*initial, *active]))
 
 
 def _memory_writes_for_target(script: EditorialScript, target_id: str) -> list[str]:
@@ -62,7 +69,7 @@ def finalize_editorial_turn(
 ) -> EditorialTurn:
     """Aplica memória, fase estrutural, BeatContext e continuidade canônica."""
 
-    previous_ids = _memory_ids(turn.state)
+    previous_ids = _memory_ids(script, turn.state)
     narrative_context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
     writes = _memory_writes_for_target(script, turn.target_id)
     updated = EditorialState.from_dict(turn.state.to_dict())
