@@ -2,12 +2,31 @@ format_version: 1
 package_id: roleplay2026.casada_frustrada
 bridge_policy:
   mode: required
+  selection: contextual
+  direct_max_words: 4
 runtime_policy:
   strict_canonical:
     beat_prefixes:
       - motel_
     state_fact: _strict_motel_canonical
     prompt_title: CONTINUIDADE ESTRITA DO MOTEL
+  bridge_continuity:
+    block_ids:
+      - motel_encounter
+    preserve_intensity: true
+    allow_expressive_freedom: true
+  qualified_endings:
+    ending_codes:
+      - hostile
+      - lost_interest
+    ambiguous_engagements:
+      - dismissive
+      - minimal
+      - nonsense
+    continuation_intents:
+      - accept
+    continuation_routes:
+      - continue
   state_updates:
     automatic_followups:
       - target_prefix: retorno_casa_
