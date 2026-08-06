@@ -17,6 +17,7 @@ _TAG_PATTERNS = {
     "marriage": re.compile(r"\b(?:casad[ao]|marido|casamento)\b", re.IGNORECASE),
     "invitation": re.compile(r"\b(?:topa|aceita|vamos|que tal|caf[eé]|encontro)\b", re.IGNORECASE),
 }
+_THREAD_EQUIVALENTS = {"action", "initiative"}
 
 
 def _policy(document: Mapping[str, Any]) -> dict[str, Any]:
@@ -69,15 +70,25 @@ def capture_episode(
         return
 
     memories = _load(facts)
+    tags = _tags(text)
     recalled_id = str(facts.pop(_RECALLED_KEY, "") or "").strip()
+    resolved_tags: set[str] = set()
     if recalled_id:
         for memory in memories:
             if str(memory.get("memory_id", "")) == recalled_id:
                 memory["status"] = "resolved"
                 memory["resolution"] = text[:280]
+                resolved_tags = {str(tag) for tag in memory.get("tags", []) or []}
                 break
 
-    tags = _tags(text)
+    if recalled_id:
+        carried = set(tags) - resolved_tags
+        if resolved_tags.intersection(_THREAD_EQUIVALENTS):
+            carried -= _THREAD_EQUIVALENTS
+        if not carried:
+            _save(facts, memories, int(policy.get("max_memories", 12) or 12))
+            return
+
     if not _significant(text, tags):
         _save(facts, memories, int(policy.get("max_memories", 12) or 12))
         return
