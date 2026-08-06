@@ -4,9 +4,12 @@ bridge_policy:
   mode: required
 runtime_policy:
   episodic_memory:
-    history_turn_window: 6
     recall:
-      - beat_prefixes: [mensagens_iniciais_, video_, motel_]
+      - beat_prefixes:
+          - estacionamento_conversa_
+          - mensagens_iniciais_
+          - video_
+          - motel_
   strict_canonical:
     beat_prefixes:
       - motel_
