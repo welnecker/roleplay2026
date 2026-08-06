@@ -72,7 +72,7 @@ def render_editorial_scene_image(package_id: str, node_id: str) -> bool:
                 st.image(str(image["path"]), caption=caption or None, use_container_width=True)
             rendered = True
 
-    render_memory_selector()
+    render_memory_selector(package_id)
     return rendered
 
 
