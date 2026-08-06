@@ -4,6 +4,10 @@ from dataclasses import replace
 from typing import Any
 
 from services.editorial_beat_context import build_beat_context, render_beat_context
+from services.editorial_memory_recall import (
+    render_memory_recall_guidance,
+    select_contextual_memories,
+)
 from services.editorial_psychological_state import (
     apply_card_psychological_deltas,
     render_psychological_state,
@@ -68,20 +72,42 @@ def _memory_writes_for_target(script: EditorialScript, target_id: str) -> list[s
     ]
 
 
+def _recall_context(script: EditorialScript, turn: EditorialTurn) -> str:
+    source = script.beats.get(turn.target_id) or script.endings.get(turn.target_id) or {}
+    parts = [
+        turn.system_prompt,
+        turn.visible_fallback,
+        str(source.get("objective", "") or ""),
+        str(source.get("block_id", "") or ""),
+        str(source.get("topic_id", "") or ""),
+        " ".join(str(item) for item in source.get("allowed_topics", []) or []),
+    ]
+    return "\n".join(part for part in parts if str(part).strip())
+
+
 def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
     """Aplica memória, estado psicológico, fatos, BeatContext e continuidade."""
 
-    previous_ids = _memory_ids(script, turn.state)
+    available_ids = _memory_ids(script, turn.state)
     writes = _memory_writes_for_target(script, turn.target_id)
     updated = EditorialState.from_dict(turn.state.to_dict())
     updated = apply_card_psychological_deltas(script.raw, updated, str(turn.engagement))
-    updated.facts["_active_memory_ids"] = ",".join(dict.fromkeys([*previous_ids, *writes]))
+    active_ids = list(dict.fromkeys([*available_ids, *writes]))
+    updated.facts["_active_memory_ids"] = ",".join(active_ids)
     updated.facts["_pending_memory_writes"] = ",".join(writes)
     updated = state_for_target(script, updated, turn.target_id)
-    narrative_context = build_narrative_context(script.raw, previous_ids, updated.facts)
+
+    recalled_ids, recalled_facts = select_contextual_memories(
+        script.raw,
+        active_ids,
+        updated.facts,
+        _recall_context(script, turn),
+    )
+    updated.facts = recalled_facts
+    narrative_context = build_narrative_context(script.raw, recalled_ids, updated.facts)
 
     runtime_phase = str(updated.facts.get("_runtime_phase", "canonical") or "canonical")
     canonical_member = _is_strict_canonical_beat(script, turn.target_id)
@@ -96,11 +122,13 @@ def finalize_editorial_turn(
     beat_context = build_beat_context(script, turn.state, prepared_turn)
     psychological_context = render_psychological_state(script.raw, updated)
     user_facts_context = render_confirmed_user_facts(updated.facts)
+    recall_guidance = render_memory_recall_guidance(recalled_ids)
     resolved_guard = render_resolved_topic_guard(script, updated)
     prompt_parts = [
         narrative_context,
         psychological_context,
         user_facts_context,
+        recall_guidance,
         render_beat_context(beat_context),
         turn.system_prompt,
         resolved_guard,
