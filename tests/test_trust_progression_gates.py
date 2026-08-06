@@ -35,6 +35,17 @@ def test_card_declara_confianca_como_condicao_real() -> None:
     assert video["fallback_target"] == "video_001"
 
 
+def test_compilador_preserva_progression_gate_no_script_executavel() -> None:
+    compiled = compile_editorial_document(load_source_document())
+    beats = {beat["beat_id"]: beat for beat in compiled["scene"]["beats"]}
+
+    assert beats["mensagens_iniciais_009"]["progression_gate"]["min"] == 5
+    assert (
+        beats["mensagens_iniciais_009"]["progression_gate"]["fallback_target"]
+        == "mensagens_iniciais_008"
+    )
+
+
 def test_interacao_atual_pode_liberar_o_destino() -> None:
     document = load_source_document()
     state = PilotState(trust=4)
