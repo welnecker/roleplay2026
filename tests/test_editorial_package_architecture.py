@@ -35,10 +35,7 @@ commerce:
 """,
         encoding="utf-8",
     )
-    (package_root / "story.yaml").write_text(
-        "story_id: compatibility\n",
-        encoding="utf-8",
-    )
+    (package_root / "story.yaml").write_text("story_id: compatibility\n", encoding="utf-8")
     (package_root / "editorial.yaml").write_text(
         """
 format_version: 2
@@ -73,9 +70,7 @@ patch_beats:
 
 def test_manifesto_declara_runtime_editorial() -> None:
     root = Path(__file__).resolve().parent.parent
-    package = load_manifest(
-        root / "installed_stories" / "casada_frustrada" / "manifest.yaml"
-    )
+    package = load_manifest(root / "installed_stories" / "casada_frustrada" / "manifest.yaml")
 
     runtime = package.manifest.runtime
     assert runtime.kind == "editorial"
@@ -94,6 +89,7 @@ def test_manifesto_declara_runtime_editorial() -> None:
         "content/extensions/relationship_memory.yaml",
         "content/extensions/user_facts.yaml",
         "content/extensions/subjective_impressions.yaml",
+        "content/extensions/behavior_patterns.yaml",
         "content/extensions/trust_progression.yaml",
         "content/extensions/runtime.yaml",
     )
@@ -122,11 +118,8 @@ def test_card_canonico_possui_conteudo_autocontido() -> None:
 
 def test_carregador_aplica_extensoes_declaradas_no_manifesto(tmp_path: Path) -> None:
     package = _write_package(tmp_path)
-
     document = load_editorial_document(package)
-
-    beat = document["blocks"][0]["beats"][0]
-    assert beat["response_boundary"] == "integrated_canonical"
+    assert document["blocks"][0]["beats"][0]["response_boundary"] == "integrated_canonical"
 
 
 def test_carregador_rejeita_arquivo_fora_do_pacote(tmp_path: Path) -> None:
