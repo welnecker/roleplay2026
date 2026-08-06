@@ -24,6 +24,7 @@ runtime:
       - content/extensions/subjective_impressions.yaml
       - content/extensions/behavior_patterns.yaml
       - content/extensions/trust_progression.yaml
+      - content/extensions/physical_dramaturgy.yaml
       - content/extensions/runtime.yaml
 card:
   title: Casada frustrada
