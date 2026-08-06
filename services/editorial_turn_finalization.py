@@ -9,12 +9,14 @@ from services.editorial_conversational_obligation import (
     consume_pending_obligation,
     store_pending_obligation,
 )
+from services.editorial_episodic_memory import capture_episode, recall_episode
 from services.editorial_resolved_topics import render_resolved_topic_guard
 from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.editorial_terminal_yard import state_for_target
 
 _USER_LINE = re.compile(r"^FALA ATUAL DO USUÁRIO:\s*(.+)$", re.MULTILINE)
+_RESPONSE_LINE = re.compile(r"^RESPOSTA DO USUÁRIO:\s*(.+)$", re.MULTILINE)
 
 
 def _runtime_policy(script: EditorialScript) -> dict[str, Any]:
@@ -63,9 +65,13 @@ def _memory_writes_for_target(script: EditorialScript, target_id: str) -> list[s
     ]
 
 
-def _bridge_user_text(prompt: str) -> str:
-    match = _USER_LINE.search(str(prompt or ""))
-    return match.group(1).strip() if match else ""
+def _current_user_text(prompt: str) -> str:
+    value = str(prompt or "")
+    for pattern in (_USER_LINE, _RESPONSE_LINE):
+        match = pattern.search(value)
+        if match:
+            return match.group(1).strip()
+    return ""
 
 
 def finalize_editorial_turn(
@@ -91,12 +97,24 @@ def finalize_editorial_turn(
     if state_fact:
         updated.facts[state_fact] = "true" if canonical_member else "false"
 
+    user_text = _current_user_text(turn.system_prompt)
+    capture_episode(
+        script.raw,
+        updated.facts,
+        user_text,
+        source_beat_id=str(turn.state.node_id or turn.target_id or ""),
+    )
+    episodic_recall = ""
+    if runtime_phase == "canonical":
+        episodic_recall = recall_episode(
+            script.raw,
+            updated.facts,
+            beat_id=str(turn.target_id or ""),
+        )
+
     bridge_obligation = ""
     if runtime_phase == "bridge":
-        bridge_obligation = store_pending_obligation(
-            updated.facts,
-            _bridge_user_text(turn.system_prompt),
-        )
+        bridge_obligation = store_pending_obligation(updated.facts, user_text)
     pending_for_canonical = ""
     if runtime_phase == "canonical":
         pending_for_canonical = consume_pending_obligation(updated.facts)
@@ -111,6 +129,12 @@ def finalize_editorial_turn(
         resolved_guard,
     ]
     prompt = "\n\n".join(part.strip() for part in prompt_parts if part.strip())
+
+    if episodic_recall:
+        prompt += (
+            f"\n\nECO EPISÓDICO: {episodic_recall}\n"
+            "Retome-o somente se couber organicamente no beat; não repita uma pendência já esclarecida."
+        )
 
     if bridge_obligation:
         prompt += (
