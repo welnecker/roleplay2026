@@ -1,0 +1,97 @@
+relationship_memory:
+  user_fact_schema:
+    title: FATOS CONFIÁVEIS SOBRE O USUÁRIO
+    rules:
+      - Registre apenas informações afirmadas explicitamente pelo usuário.
+      - Não derive estado civil, moradia, filhos, profissão ou intenção a partir de insinuações.
+      - Uma correção explícita substitui o valor anterior e preserva histórico interno.
+      - Valores mutuamente exclusivos não podem permanecer ativos ao mesmo tempo.
+    facts:
+      user_relationship_status:
+        minimum_confidence: 0.9
+        explicit_confidence: 0.9
+        update_policy: replace_on_explicit
+        exclusive_group: relationship_status
+        extractors:
+          - pattern: "\\b(?:sou|estou)\\s+solteir[oa]\\b"
+            value: single
+            confidence: 1.0
+            source: explicit_self_report
+          - pattern: "\\b(?:sou|estou)\\s+casad[oa]\\b"
+            value: married
+            confidence: 1.0
+            source: explicit_self_report
+          - pattern: "\\b(?:sou|estou)\\s+separad[oa]\\b"
+            value: separated
+            confidence: 1.0
+            source: explicit_self_report
+          - pattern: "\\b(?:sou|estou)\\s+divorciad[oa]\\b"
+            value: divorced
+            confidence: 1.0
+            source: explicit_self_report
+          - pattern: "\\bna verdade,?\\s+(?:sou|estou)\\s+solteir[oa]\\b"
+            value: single
+            confidence: 1.0
+            source: explicit_correction
+          - pattern: "\\bna verdade,?\\s+(?:sou|estou)\\s+casad[oa]\\b"
+            value: married
+            confidence: 1.0
+            source: explicit_correction
+          - pattern: "\\bna verdade,?\\s+(?:sou|estou)\\s+separad[oa]\\b"
+            value: separated
+            confidence: 1.0
+            source: explicit_correction
+
+      user_living_arrangement:
+        minimum_confidence: 0.9
+        explicit_confidence: 0.9
+        update_policy: replace_on_explicit
+        exclusive_group: living_arrangement
+        extractors:
+          - pattern: "\\bmoro sozinho\\b"
+            value: lives_alone
+            confidence: 1.0
+            source: explicit_self_report
+          - pattern: "\\bmoro sozinha\\b"
+            value: lives_alone
+            confidence: 1.0
+            source: explicit_self_report
+          - pattern: "\\bmoro com (?:minha|meu|a minha|o meu) companheir[oa]\\b"
+            value: lives_with_partner
+            confidence: 1.0
+            source: explicit_self_report
+          - pattern: "\\bmoro com meus pais\\b"
+            value: lives_with_parents
+            confidence: 1.0
+            source: explicit_self_report
+          - pattern: "\\bna verdade,?\\s+moro sozinho\\b"
+            value: lives_alone
+            confidence: 1.0
+            source: explicit_correction
+          - pattern: "\\bna verdade,?\\s+moro com meus pais\\b"
+            value: lives_with_parents
+            confidence: 1.0
+            source: explicit_correction
+
+      user_has_children:
+        minimum_confidence: 0.9
+        explicit_confidence: 0.9
+        update_policy: replace_on_explicit
+        exclusive_group: parenthood
+        extractors:
+          - pattern: "\\btenho (?:um|uma|dois|duas|três|tres|\\d+) filh[oa]s?\\b"
+            value: true
+            confidence: 1.0
+            source: explicit_self_report
+          - pattern: "\\bnão tenho filhos\\b"
+            value: false
+            confidence: 1.0
+            source: explicit_self_report
+          - pattern: "\\bna verdade,?\\s+tenho (?:um|uma|dois|duas|três|tres|\\d+) filh[oa]s?\\b"
+            value: true
+            confidence: 1.0
+            source: explicit_correction
+          - pattern: "\\bna verdade,?\\s+não tenho filhos\\b"
+            value: false
+            confidence: 1.0
+            source: explicit_correction
