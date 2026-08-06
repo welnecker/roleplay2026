@@ -6,6 +6,7 @@ import streamlit as st
 import yaml
 
 from services.editorial_content import find_editorial_package
+from services.editorial_memory_ui import render_memory_selector
 
 
 # O mapa visual foi criado originalmente para os IDs do motor declarativo.
@@ -54,8 +55,6 @@ def load_scene_image_map(package_root: Path) -> dict[str, dict[str, object]]:
             "path": image_path,
             "caption": str(value.get("caption", "")).strip(),
             "alt": str(value.get("alt", "")).strip(),
-            # O campo é preservado por compatibilidade, mas a interface nunca
-            # abre a imagem automaticamente.
             "expanded": False,
         }
     return result
@@ -72,26 +71,26 @@ def resolve_editorial_scene_image(
 
 
 def render_editorial_scene_image(package_id: str, node_id: str) -> bool:
-    """Renderiza explicitamente a imagem do beat, sempre recolhida."""
+    """Renderiza a cena e o seletor explícito da próxima interação."""
 
+    rendered = False
     package = find_editorial_package(package_id)
-    if package is None or not node_id:
-        return False
+    if package is not None and node_id:
+        image = resolve_editorial_scene_image(package.root, node_id)
+        if image is not None:
+            caption = str(image.get("caption", "")).strip()
+            alt = str(image.get("alt", "")).strip()
+            label = caption or alt or "Cena atual"
+            with st.expander(f"🖼️ {label}", expanded=False):
+                st.image(
+                    str(image["path"]),
+                    caption=caption or None,
+                    use_container_width=True,
+                )
+            rendered = True
 
-    image = resolve_editorial_scene_image(package.root, node_id)
-    if image is None:
-        return False
-
-    caption = str(image.get("caption", "")).strip()
-    alt = str(image.get("alt", "")).strip()
-    label = caption or alt or "Cena atual"
-    with st.expander(f"🖼️ {label}", expanded=False):
-        st.image(
-            str(image["path"]),
-            caption=caption or None,
-            use_container_width=True,
-        )
-    return True
+    render_memory_selector()
+    return rendered
 
 
 __all__ = [
