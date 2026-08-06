@@ -14,12 +14,7 @@ _FIRST_PERSON_THOUGHT = re.compile(
     re.IGNORECASE,
 )
 _GENERIC_OPENERS = (
-    "entendo",
-    "compreendo",
-    "certo",
-    "ok",
-    "está bem",
-    "tudo bem",
+    "entendo", "compreendo", "certo", "ok", "está bem", "tudo bem",
 )
 
 
@@ -37,7 +32,16 @@ class DepthPerceptionReport:
 
     @property
     def perceived_depth(self) -> str:
-        if self.score >= 8:
+        deep_shape = (
+            self.beat_centrality
+            and self.user_specificity
+            and self.emotional_embodiment
+            and self.concise_completion
+            and self.first_person_thought
+            and not self.third_person_thought_violation
+            and not self.bureaucratic_delivery
+        )
+        if self.score >= 8 and deep_shape:
             return "deep"
         if self.score >= 5:
             return "adequate"
@@ -104,15 +108,11 @@ def assess_depth_perception(
     score += 1 if first_person_thought else 0
     score += 1 if not third_person_violation else 0
     score -= 2 if bureaucratic_delivery else 0
-    score -= 2 if not concise_completion else 0
+    score -= 3 if not concise_completion else 0
     score -= 3 if third_person_violation else 0
 
-    # Falhas estruturais não podem ser compensadas por prosa bonita.
-    if not beat_centrality:
+    if not beat_centrality or third_person_violation:
         score = min(score, 4)
-    if third_person_violation:
-        score = min(score, 4)
-
     score = max(0, min(10, score))
 
     return DepthPerceptionReport(
