@@ -17,6 +17,10 @@ from services.editorial_psychological_state import (
     render_psychological_state,
 )
 from services.editorial_resolved_topics import render_resolved_topic_guard
+from services.editorial_subjective_impressions import (
+    render_subjective_impressions,
+    update_subjective_impressions,
+)
 from services.editorial_user_facts import render_confirmed_user_facts
 from services.narrative_context import build_narrative_context, memory_catalog
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
@@ -119,7 +123,7 @@ def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
 ) -> EditorialTurn:
-    """Aplica memória, psicologia, personalidade, fatos e continuidade."""
+    """Aplica memória, psicologia, personalidade, impressões, fatos e continuidade."""
 
     available_ids = _memory_ids(script, turn.state)
     writes = _memory_writes_for_target(script, turn.target_id)
@@ -143,6 +147,16 @@ def finalize_editorial_turn(
     context_memory_ids = list(dict.fromkeys([*mandatory_ids, *recalled_ids]))
     narrative_context = build_narrative_context(script.raw, context_memory_ids, updated.facts)
 
+    updated, impressions = update_subjective_impressions(
+        script.raw,
+        updated,
+        context_text,
+        str(turn.engagement),
+    )
+    updated.facts["_active_subjective_impression_ids"] = ",".join(
+        item.impression_id for item in impressions
+    )
+
     personality = active_personality_triggers(
         script.raw,
         updated,
@@ -165,6 +179,7 @@ def finalize_editorial_turn(
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
     psychological_context = render_psychological_state(script.raw, updated)
+    impressions_context = render_subjective_impressions(impressions)
     personality_context = render_personality_triggers(personality)
     user_facts_context = render_confirmed_user_facts(updated.facts)
     recall_guidance = render_memory_recall_guidance(recalled_ids)
@@ -172,6 +187,7 @@ def finalize_editorial_turn(
     prompt_parts = [
         narrative_context,
         psychological_context,
+        impressions_context,
         personality_context,
         user_facts_context,
         recall_guidance,
