@@ -10,6 +10,7 @@ from services.editorial_episodic_memory import (
     relationship_recollections,
     render_relationship_recollections,
 )
+from services.editorial_turn_finalization import _current_user_text
 
 
 def _document():
@@ -85,3 +86,21 @@ def test_type_is_derived_only_from_runtime_phase() -> None:
     assert prepare_selected_memory(
         _document(), canonical, "A mesma fala.", source_beat_id="beat_001", runtime_phase="canonical"
     ) == "recollection"
+
+
+def test_complete_multiline_user_message_is_extracted_from_prompt() -> None:
+    prompt = (
+        "FASE ESTRUTURAL: PONTE NARRATIVA.\n"
+        "FALA ATUAL DO USUÁRIO: Eu queria te perguntar uma coisa.\n\n"
+        "É sobre algo que aconteceu na chamada de vídeo.\n"
+        "Não quero falar aqui no meio de todo mundo.\n"
+        "BEAT DE ORIGEM: reencontro_fila_006\n"
+        "MOVIMENTO DE ORIGEM JÁ CONCLUÍDO: Mary agradece a ajuda."
+    )
+
+    extracted = _current_user_text(prompt)
+
+    assert "Eu queria te perguntar uma coisa." in extracted
+    assert "aconteceu na chamada de vídeo" in extracted
+    assert "Não quero falar aqui" in extracted
+    assert "BEAT DE ORIGEM" not in extracted
