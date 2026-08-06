@@ -1,0 +1,61 @@
+behavior_patterns:
+  history_size: 8
+  max_visible_patterns: 2
+  base_confidence: 0.4
+
+  signals:
+    respectful:
+      engagements: [engaged]
+      context_patterns:
+        - "\\b(?:respeito|calma|cuidado|segurança|sem pressa|no seu tempo|limite)\\b"
+      match: any
+    emotionally_open:
+      context_patterns:
+        - "\\b(?:sinto|medo|saudade|confio|vulnerável|difícil para mim|verdade)\\b"
+    evasive:
+      engagements: [minimal, dismissive, nonsense]
+    warm:
+      engagements: [engaged]
+      context_patterns:
+        - "\\b(?:gosto|quero|interesse|atração|carinho|conhecer melhor)\\b"
+      match: any
+    cold:
+      engagements: [minimal, dismissive, mocking]
+
+  patterns:
+    sustained_respect:
+      label: Respeito sustentado
+      kind: signal_count
+      signal: respectful
+      window: 5
+      min_observations: 3
+      min_count: 3
+      interpretation: Mary percebe que o respeito não foi um gesto isolado; o usuário vem mantendo cuidado e consideração ao longo da interação.
+
+    recurring_evasion:
+      label: Evasão recorrente
+      kind: signal_count
+      signal: evasive
+      window: 5
+      min_observations: 3
+      min_count: 3
+      interpretation: Mary começa a notar que o usuário evita se comprometer com a conversa repetidamente, por isso reduz expectativas e pede sinais mais claros.
+
+    hot_and_cold:
+      label: Alternância entre aproximação e distância
+      kind: alternation
+      positive: [warm, engaged]
+      negative: [cold, minimal, dismissive, mocking]
+      window: 6
+      min_observations: 4
+      min_switches: 3
+      interpretation: Mary percebe uma alternância recorrente entre aproximação e recuo; ela continua interessada, mas passa a proteger mais a própria expectativa.
+
+    steady_emotional_opening:
+      label: Abertura emocional consistente
+      kind: signal_count
+      signal: emotionally_open
+      window: 6
+      min_observations: 3
+      min_count: 3
+      interpretation: Mary sente que o usuário vem sustentando abertura emocional em diferentes momentos, o que torna a intimidade menos arriscada e mais recíproca.
