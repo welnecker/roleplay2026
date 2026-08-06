@@ -91,6 +91,7 @@ def test_manifesto_declara_runtime_editorial() -> None:
         "content/extensions/transitions.yaml",
         "content/extensions/parking_dialogue.yaml",
         "content/extensions/dynamic_endings.yaml",
+        "content/extensions/relationship_memory.yaml",
         "content/extensions/runtime.yaml",
     )
 
