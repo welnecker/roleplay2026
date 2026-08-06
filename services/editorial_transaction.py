@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from services.editorial_beat_context import BeatContext, build_beat_context
+from services.editorial_episodic_memory import consolidate_bridge_episode
 from services.editorial_phase_contract import adapt_context_for_runtime_phase
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.organic_interaction import extract_assistant_facts
@@ -51,6 +52,7 @@ def commit_editorial_turn(
         raise ValueError("Uma resposta vazia não pode ser commitada.")
     committed_state = EditorialState.from_dict(pending.proposed_state.to_dict())
     committed_state.facts = extract_assistant_facts(approved, committed_state.facts)
+    consolidate_bridge_episode(committed_state.facts, approved)
     return CommittedEditorialTurn(
         response=approved,
         state=committed_state,
