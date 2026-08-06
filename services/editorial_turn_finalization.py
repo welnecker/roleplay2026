@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import re
 from typing import Any
 
 from services.editorial_beat_context import build_beat_context, render_beat_context
+from services.editorial_conversational_obligation import (
+    consume_pending_obligation,
+    store_pending_obligation,
+)
 from services.editorial_resolved_topics import render_resolved_topic_guard
 from services.narrative_context import build_narrative_context
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.editorial_terminal_yard import state_for_target
+
+_USER_LINE = re.compile(r"^FALA ATUAL DO USUÁRIO:\s*(.+)$", re.MULTILINE)
 
 
 def _runtime_policy(script: EditorialScript) -> dict[str, Any]:
@@ -56,6 +63,11 @@ def _memory_writes_for_target(script: EditorialScript, target_id: str) -> list[s
     ]
 
 
+def _bridge_user_text(prompt: str) -> str:
+    match = _USER_LINE.search(str(prompt or ""))
+    return match.group(1).strip() if match else ""
+
+
 def finalize_editorial_turn(
     script: EditorialScript,
     turn: EditorialTurn,
@@ -79,6 +91,16 @@ def finalize_editorial_turn(
     if state_fact:
         updated.facts[state_fact] = "true" if canonical_member else "false"
 
+    bridge_obligation = ""
+    if runtime_phase == "bridge":
+        bridge_obligation = store_pending_obligation(
+            updated.facts,
+            _bridge_user_text(turn.system_prompt),
+        )
+    pending_for_canonical = ""
+    if runtime_phase == "canonical":
+        pending_for_canonical = consume_pending_obligation(updated.facts)
+
     prepared_turn = replace(turn, state=updated)
     beat_context = build_beat_context(script, turn.state, prepared_turn)
     resolved_guard = render_resolved_topic_guard(script, updated)
@@ -89,6 +111,21 @@ def finalize_editorial_turn(
         resolved_guard,
     ]
     prompt = "\n\n".join(part.strip() for part in prompt_parts if part.strip())
+
+    if bridge_obligation:
+        prompt += (
+            "\n\nSUPORTE CONVERSACIONAL DA PONTE:\n"
+            "- Responda agora à pergunta ou ao convite quando isso couber sem quebrar o roteiro.\n"
+            "- Se não couber por inteiro, reconheça brevemente; a conclusão será integrada ao próximo beat.\n"
+            "- Não use texto de preenchimento e não abandone a direção do roteiro."
+        )
+
+    if pending_for_canonical:
+        prompt += (
+            "\n\nCOMPLEMENTO CONVERSACIONAL: verifique no histórico se isto já foi respondido na ponte. "
+            "Se ainda estiver aberto, responda harmonicamente dentro deste beat; se já foi resolvido, não repita: "
+            f"{pending_for_canonical}"
+        )
 
     if inject_canonical_prompt:
         title = str(strict_policy.get("prompt_title", "") or "").strip()
