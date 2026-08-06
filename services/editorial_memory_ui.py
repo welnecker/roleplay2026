@@ -1,21 +1,48 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import streamlit as st
 
-_MEMORY_REQUEST_KEY = "editorial_memory_requested"
-_RESET_PENDING_KEY = "editorial_memory_reset_pending"
+_ACTIVE_SELECTOR_KEY = "editorial_memory_active_selector_key"
+_TURN_FACT_KEY = "_episodic_memory_turn"
 
 
-def render_memory_selector() -> bool:
-    # A seleção pertence somente ao envio anterior. O reset é agendado apenas
-    # depois que a persistência daquele turno termina com sucesso e é aplicado
-    # antes de recriar o widget no rerun seguinte.
-    if bool(st.session_state.pop(_RESET_PENDING_KEY, False)):
-        st.session_state.pop(_MEMORY_REQUEST_KEY, None)
+def _persisted_turn_for_package(package_id: str) -> int:
+    """Lê somente o turno do estado editorial persistido do card atual."""
 
+    suffix = f":{str(package_id or '').strip()}:editorial_state"
+    values = (
+        value
+        for key, value in st.session_state.items()
+        if str(key).endswith(suffix)
+    )
+    for value in values:
+        facts = getattr(value, "facts", None)
+        if not isinstance(facts, Mapping):
+            continue
+        try:
+            return max(0, int(facts.get(_TURN_FACT_KEY, "0") or 0))
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _selector_key(package_id: str) -> str:
+    package = str(package_id or "").strip() or "editorial"
+    turn = _persisted_turn_for_package(package)
+    return f"editorial_memory_requested:{package}:{turn}"
+
+
+def render_memory_selector(package_id: str) -> bool:
+    """Renderiza uma escolha descartável, válida somente para o turno atual."""
+
+    key = _selector_key(package_id)
+    st.session_state[_ACTIVE_SELECTOR_KEY] = key
     selected = st.checkbox(
         "Mary deve se lembrar desta interação",
-        key=_MEMORY_REQUEST_KEY,
+        key=key,
+        value=False,
         help=(
             "Em uma ponte, cria um assunto que o roteiro poderá retomar e consumir. "
             "Em um beat canônico, cria uma lembrança cotidiana persistente."
@@ -27,13 +54,8 @@ def render_memory_selector() -> bool:
 
 
 def peek_memory_request() -> bool:
-    return bool(st.session_state.get(_MEMORY_REQUEST_KEY, False))
+    key = str(st.session_state.get(_ACTIVE_SELECTOR_KEY, "") or "").strip()
+    return bool(key and st.session_state.get(key, False))
 
 
-def schedule_memory_selector_reset() -> None:
-    """Faz a próxima interação começar desmarcada após persistência bem-sucedida."""
-
-    st.session_state[_RESET_PENDING_KEY] = True
-
-
-__all__ = ["peek_memory_request", "render_memory_selector", "schedule_memory_selector_reset"]
+__all__ = ["peek_memory_request", "render_memory_selector"]
