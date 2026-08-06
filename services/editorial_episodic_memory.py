@@ -4,6 +4,8 @@ import json
 import re
 from typing import Any, Mapping
 
+from services.editorial_memory_ui import clear_memory_request, peek_memory_request
+
 _TURN_KEY = "_episodic_memory_turn"
 _REQUEST_KEY = "_memory_requested"
 _DRAFT_KEY = "_selected_memory_draft_json"
@@ -54,13 +56,12 @@ def _visible(text: str, limit: int = 240) -> str:
 
 
 def mark_memory_requested(facts: dict[str, str], requested: bool) -> None:
-    """Registra a escolha explícita feita na interface para o próximo turno."""
-
     facts[_REQUEST_KEY] = "true" if requested else "false"
 
 
 def memory_requested(facts: Mapping[str, str]) -> bool:
-    return str(facts.get(_REQUEST_KEY, "false") or "false").lower() == "true"
+    selected_in_state = str(facts.get(_REQUEST_KEY, "false") or "false").lower() == "true"
+    return selected_in_state or peek_memory_request()
 
 
 def advance_episode_turn(document: Mapping[str, Any], facts: dict[str, str]) -> int:
@@ -82,8 +83,8 @@ def prepare_selected_memory(
     """Prepara somente memórias explicitamente marcadas pelo usuário.
 
     A fase estrutural elimina a ambiguidade:
-    - bridge -> fio de continuidade consumível;
-    - canonical -> lembrança cotidiana persistente.
+    bridge -> fio de continuidade consumível;
+    canonical -> lembrança cotidiana persistente.
     """
 
     policy = _policy(document)
@@ -107,7 +108,12 @@ def prepare_selected_memory(
 
 
 def _next_id(prefix: str, items: list[dict[str, Any]]) -> str:
-    return f"{prefix}_{len(items) + 1:03d}"
+    highest = 0
+    for item in items:
+        match = re.search(r"(\d+)$", str(item.get("memory_id", "")))
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return f"{prefix}_{highest + 1:03d}"
 
 
 def consolidate_selected_memory(facts: dict[str, str], assistant_text: str) -> None:
@@ -135,21 +141,21 @@ def consolidate_selected_memory(facts: dict[str, str], assistant_text: str) -> N
             }
         )
         facts[_THREADS_KEY] = _dump(threads)
-        return
+    else:
+        recollections = _load_list(facts.get(_RECOLLECTIONS_KEY, ""))
+        recollections.append(
+            {
+                "memory_id": _next_id("recollection", recollections),
+                "type": "relationship_recollection",
+                "text": f'Usuário: "{user_text}" | Mary: "{mary_text}"',
+                "source_beat_id": str(draft.get("source_beat_id", "")),
+                "created_at_turn": int(draft.get("turn", 0) or 0),
+                "status": "active",
+            }
+        )
+        facts[_RECOLLECTIONS_KEY] = _dump(recollections[-20:])
 
-    recollections = _load_list(facts.get(_RECOLLECTIONS_KEY, ""))
-    recollections.append(
-        {
-            "memory_id": _next_id("recollection", recollections),
-            "type": "relationship_recollection",
-            "text": f'Usuário: "{user_text}" | Mary: "{mary_text}"',
-            "source_beat_id": str(draft.get("source_beat_id", "")),
-            "created_at_turn": int(draft.get("turn", 0) or 0),
-            "status": "active",
-        }
-    )
-    max_items = max(1, int(_load_dict(facts.get("_memory_limits_json", "")).get("recollections", 20) or 20))
-    facts[_RECOLLECTIONS_KEY] = _dump(recollections[-max_items:])
+    clear_memory_request()
 
 
 def _recall_allowed(policy: Mapping[str, Any], beat_id: str) -> bool:
@@ -219,7 +225,7 @@ def relationship_recollections(facts: Mapping[str, str]) -> list[dict[str, Any]]
     return _load_list(facts.get(_RECOLLECTIONS_KEY, ""))
 
 
-# Compatibilidade temporária com chamadas e testes antigos da branch.
+# Compatibilidade temporária com chamadas antigas da branch.
 def prepare_bridge_episode(
     document: Mapping[str, Any],
     facts: dict[str, str],
