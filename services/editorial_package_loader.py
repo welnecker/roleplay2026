@@ -27,6 +27,9 @@ _FREE_TEXT_KEYS = {
     "dramatic_direction",
     "text",
     "summary",
+    "premise",
+    "awakening",
+    "character_view_of_user",
 }
 _FREE_TEXT_PATTERN = re.compile(
     r"^(?P<indent>\s*)(?P<key>" + "|".join(sorted(_FREE_TEXT_KEYS)) + r"):\s*(?P<value>.*)$"
@@ -85,18 +88,17 @@ def _memory_entries(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, list):
         return [deepcopy(item) for item in value if isinstance(item, dict)]
     if isinstance(value, dict):
-        return [
-            {
-                "memory_id": str(memory_id),
-                "memory_text": str(definition.get("summary") or definition.get("memory_text") or ""),
-                "summary": str(definition.get("summary") or definition.get("memory_text") or ""),
-                "category": str(definition.get("category", "event") or "event"),
-                "importance": int(definition.get("importance", 5) or 5),
-                "source_beat_id": str(definition.get("source_beat_id", "")),
-            }
-            for memory_id, definition in value.items()
-            if isinstance(definition, dict)
-        ]
+        entries: list[dict[str, Any]] = []
+        for memory_id, definition in value.items():
+            if not isinstance(definition, dict):
+                continue
+            entry = deepcopy(definition)
+            entry["memory_id"] = str(memory_id)
+            summary = str(entry.get("summary") or entry.get("memory_text") or "")
+            entry["summary"] = summary
+            entry["memory_text"] = summary
+            entries.append(entry)
+        return entries
     return []
 
 
@@ -171,6 +173,7 @@ def merge_editorial_extension(document: dict[str, Any], extension: dict[str, Any
 
     _replace_declared_policy(merged, extension, "bridge_policy")
     _replace_declared_policy(merged, extension, "runtime_policy")
+    _replace_declared_policy(merged, extension, "relationship_memory")
 
     _merge_character_patch(merged, extension)
 
