@@ -26,7 +26,8 @@ def test_resposta_no_caminho_exige_posicao_clara_e_curta() -> None:
 
     assert beat["max_sentences"] == 2
     assert beat["max_questions"] == 0
-    assert "sim, não ou limite claro" in instruction
+    assert "voz natural e pessoal" in instruction
+    assert "negociação" in instruction
     assert "não pedir nova explicação" in instruction
 
 
@@ -38,14 +39,17 @@ def test_porta_malas_responde_uma_vez_antes_do_nome() -> None:
     assert "porta_malas_conversa_002" not in script.beats
 
 
-def test_porta_malas_nao_fica_apenas_em_confirmacao_generica() -> None:
+def test_porta_malas_preserva_atracao_sem_linguagem_burocratica() -> None:
     script = _script()
     beat = script.beats["porta_malas_conversa_001"]
     anchor = beat["units"][0]["anchor"].casefold()
     instruction = beat["units"][0]["instruction"].casefold()
 
-    assert "proposta bem direta" in anchor
-    assert "posição inequívoca" in instruction
+    assert "você também está mexendo comigo" in anchor
+    assert "mulher atraída" in instruction
+    assert "não como mediadora de uma proposta" in instruction
+    assert "acordo" not in anchor
+    assert "não vou cozinhar você" not in anchor
     assert beat["max_sentences"] == 2
 
 
