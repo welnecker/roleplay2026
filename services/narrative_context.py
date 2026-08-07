@@ -39,6 +39,18 @@ def _find_character_path_block(path: Mapping[str, Any], beat_id: str) -> Mapping
     return {}
 
 
+def _find_phase_guidance(block: Mapping[str, Any], beat_id: str) -> tuple[str, str]:
+    clean = str(beat_id or "").strip()
+    phases = block.get("phase_guidance") or {}
+    if not isinstance(phases, Mapping):
+        return "", ""
+    for prefix, guidance in phases.items():
+        key = str(prefix).strip()
+        if key and clean.startswith(key):
+            return key, str(guidance or "").strip()
+    return "", ""
+
+
 def render_character_core_path(
     document: dict[str, Any],
     *,
@@ -47,8 +59,8 @@ def render_character_core_path(
 ) -> str:
     """Renderiza somente o trecho do caminho correspondente ao beat atual.
 
-    O caminho não replica o roteiro. Ele transforma o movimento já declarado pelo
-    beat em orientação de percepção, intenção e ponte para o mesmo character_core.
+    O caminho não replica o roteiro. Ele transforma a família do beat em uma
+    orientação psicológica curta para percepção, intenção e ponte.
     """
 
     path = document.get("character_core_path") or {}
@@ -66,18 +78,15 @@ def render_character_core_path(
     if arc:
         lines.append(f"- arco deste bloco: {arc}")
 
+    phase_prefix, phase_guidance = _find_phase_guidance(block, beat_id)
+    if phase_guidance:
+        lines.append(f"- família do beat: {phase_prefix}")
+        lines.append(f"- orientação psicológica deste beat: {phase_guidance}")
+
     thought_contract = _items(path.get("thought_contract"))
     if thought_contract:
         lines.append("- contrato beat a beat:")
         lines.extend(f"  - {item}" for item in thought_contract)
-
-    guidance = block.get("beat_guidance") or {}
-    if isinstance(guidance, Mapping):
-        lines.append("- orientação para o beat atual:")
-        for key, value in guidance.items():
-            text = str(value or "").strip()
-            if text:
-                lines.append(f"  - {key}: {text}")
 
     if str(runtime_phase or "").strip() == "bridge":
         bridge_rule = str(block.get("bridge_rule", "") or "").strip()
@@ -86,9 +95,9 @@ def render_character_core_path(
 
     lines.extend(
         (
-            "- Use o objetivo e a direção do BEAT ATUAL para escolher qual orientação acima é relevante agora.",
-            "- O pensamento interno deve explicar a intenção viva por trás do movimento atual, não repetir sua redação.",
-            "- A ponte pode alterar ritmo e expressão, mas nunca muda o macrobloco nem executa o beat seguinte.",
+            "- Use o objetivo e a direção do BEAT ATUAL como fonte dos acontecimentos; esta orientação só define a leitura de Mary.",
+            "- O pensamento interno explica a intenção viva por trás do movimento atual, não repete sua redação.",
+            "- A ponte responde primeiro ao usuário e depois retoma o fio, sem executar o beat seguinte.",
         )
     )
     return "\n".join(lines)
