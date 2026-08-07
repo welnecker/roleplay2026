@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,7 +12,67 @@ class NarrativeMemoryDefinition:
     summary: str
 
 
+def _items(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _core_section(lines: list[str], title: str, values: Any) -> None:
+    items = _items(values)
+    if not items:
+        return
+    lines.append(f"{title}:")
+    lines.extend(f"- {item}" for item in items)
+
+
+def render_character_core(document: dict[str, Any]) -> str:
+    """Renderiza um único núcleo autoritativo para beats, pontes e pátios.
+
+    Cards novos podem declarar ``character_core`` no documento editorial. Quando
+    presente, esse bloco substitui a ficha fragmentada no prompt e passa a ser a
+    única referência estável de interpretação da personagem. Cards antigos
+    continuam usando ``physical_profile``, ``psychological_profile`` e
+    ``speech_style`` por compatibilidade.
+    """
+
+    core = document.get("character_core") or {}
+    if not isinstance(core, Mapping) or not core:
+        return ""
+
+    character = document.get("character") or {}
+    name = str(character.get("name", "Mary") or "Mary")
+    age = int(character.get("age", 0) or 0)
+    summary = str(core.get("summary", "") or "").strip()
+
+    lines = [f"NÚCLEO VIVO E AUTORITATIVO DE {name.upper()}:"]
+    if age > 0:
+        lines.append(f"- idade: {age} anos")
+    if summary:
+        lines.append(f"- essência: {summary}")
+
+    _core_section(lines, "APARÊNCIA FÍSICA", core.get("physical"))
+    _core_section(lines, "PSICOLOGIA ESTÁVEL", core.get("psychological"))
+    _core_section(lines, "REGRAS DO PENSAMENTO INTERNO", core.get("thought_rules"))
+    _core_section(lines, "COMO ESTE NÚCLEO ORIENTA OS BEATS", core.get("beat_guidance"))
+    _core_section(lines, "COMO ESTE NÚCLEO ORIENTA AS PONTES", core.get("bridge_guidance"))
+    lines.extend(
+        (
+            "REGRA DE CONTINUIDADE:",
+            "- Beats e pontes são caminhos diferentes do mesmo personagem; nunca troque a psicologia de Mary entre eles.",
+            "- O roteiro decide o acontecimento e a progressão; este núcleo decide a percepção, o desejo, o humor, o disfarce e a iniciativa de Mary.",
+        )
+    )
+    return "\n".join(lines)
+
+
 def character_context(document: dict[str, Any]) -> str:
+    core = render_character_core(document)
+    if core:
+        return core
+
     character = document.get("character") or {}
     name = str(character.get("name", "Mary") or "Mary")
     age = int(character.get("age", 0) or 0)
@@ -144,17 +204,21 @@ def validate_terminal_yards(document: dict[str, Any]) -> None:
                 raise ValueError(f"Último movimento do pátio {block_id} deve apontar para ending.")
 
 
-def _items(value: Any) -> list[str]:
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    if isinstance(value, str) and value.strip():
-        return [value.strip()]
-    return []
-
-
 def _safe_format(template: str, variables: dict[str, str]) -> str:
     class SafeDict(dict[str, str]):
         def __missing__(self, key: str) -> str:
             return "{" + key + "}"
 
     return template.format_map(SafeDict(variables)).strip()
+
+
+__all__ = [
+    "NarrativeMemoryDefinition",
+    "build_narrative_context",
+    "character_context",
+    "memory_catalog",
+    "render_active_memories",
+    "render_character_core",
+    "validate_memory_references",
+    "validate_terminal_yards",
+]
