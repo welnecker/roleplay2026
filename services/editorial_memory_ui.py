@@ -8,36 +8,36 @@ _ACTIVE_SELECTOR_KEY = "editorial_memory_active_selector_key"
 _TURN_FACT_KEY = "_episodic_memory_turn"
 
 
-def _persisted_turn_for_package(package_id: str) -> int:
-    """Lê somente o turno do estado editorial persistido do card atual."""
+def _persisted_turn_for_user_package(user_id: str, package_id: str) -> int:
+    """Lê o turno somente do estado editorial do usuário e card atuais."""
 
-    suffix = f":{str(package_id or '').strip()}:editorial_state"
-    values = (
-        value
-        for key, value in st.session_state.items()
-        if str(key).endswith(suffix)
-    )
-    for value in values:
-        facts = getattr(value, "facts", None)
-        if not isinstance(facts, Mapping):
-            continue
-        try:
-            return max(0, int(facts.get(_TURN_FACT_KEY, "0") or 0))
-        except (TypeError, ValueError):
-            return 0
-    return 0
+    clean_user_id = str(user_id or "").strip()
+    clean_package_id = str(package_id or "").strip()
+    if not clean_user_id or not clean_package_id:
+        return 0
+
+    state_key = f"editorial:{clean_user_id}:{clean_package_id}:editorial_state"
+    value = st.session_state.get(state_key)
+    facts = getattr(value, "facts", None)
+    if not isinstance(facts, Mapping):
+        return 0
+    try:
+        return max(0, int(facts.get(_TURN_FACT_KEY, "0") or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
-def _selector_key(package_id: str) -> str:
+def _selector_key(package_id: str, user_id: str) -> str:
     package = str(package_id or "").strip() or "editorial"
-    turn = _persisted_turn_for_package(package)
-    return f"editorial_memory_requested:{package}:{turn}"
+    user = str(user_id or "").strip() or "anonymous"
+    turn = _persisted_turn_for_user_package(user, package)
+    return f"editorial_memory_requested:{user}:{package}:{turn}"
 
 
-def render_memory_selector(package_id: str) -> bool:
+def render_memory_selector(package_id: str, user_id: str = "") -> bool:
     """Renderiza uma escolha descartável, válida somente para o turno atual."""
 
-    key = _selector_key(package_id)
+    key = _selector_key(package_id, user_id)
     st.session_state[_ACTIVE_SELECTOR_KEY] = key
     selected = st.checkbox(
         "Mary deve se lembrar desta interação",
