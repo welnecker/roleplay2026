@@ -57,11 +57,7 @@ def render_character_core_path(
     beat_id: str = "",
     runtime_phase: str = "canonical",
 ) -> str:
-    """Renderiza somente o trecho do caminho correspondente ao beat atual.
-
-    O caminho não replica o roteiro. Ele transforma a família do beat em uma
-    orientação psicológica curta para percepção, intenção e ponte.
-    """
+    """Renderiza somente o trecho do caminho correspondente ao beat atual."""
 
     path = document.get("character_core_path") or {}
     if not isinstance(path, Mapping) or not path:
@@ -95,7 +91,7 @@ def render_character_core_path(
 
     lines.extend(
         (
-            "- Use o objetivo e a direção do BEAT ATUAL como fonte dos acontecimentos; esta orientação só define a leitura de Mary.",
+            "- O beat decide o acontecimento; o caminho decide a interpretação de Mary.",
             "- O pensamento interno explica a intenção viva por trás do movimento atual, não repete sua redação.",
             "- A ponte responde primeiro ao usuário e depois retoma o fio, sem executar o beat seguinte.",
         )
@@ -104,14 +100,7 @@ def render_character_core_path(
 
 
 def render_character_core(document: dict[str, Any], *, beat_id: str = "", runtime_phase: str = "canonical") -> str:
-    """Renderiza um único núcleo autoritativo para beats, pontes e pátios.
-
-    Cards novos podem declarar ``character_core`` no documento editorial. Quando
-    presente, esse bloco substitui a ficha fragmentada no prompt e passa a ser a
-    única referência estável de interpretação da personagem. Cards antigos
-    continuam usando ``physical_profile``, ``psychological_profile`` e
-    ``speech_style`` por compatibilidade.
-    """
+    """Renderiza um único núcleo autoritativo para beats, pontes e pátios."""
 
     core = document.get("character_core") or {}
     if not isinstance(core, Mapping) or not core:
