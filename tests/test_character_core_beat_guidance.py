@@ -52,14 +52,18 @@ def test_ponte_usa_regra_do_mesmo_macrobloco() -> None:
     assert "nunca salto de intimidade" not in context
 
 
-def test_pensamento_exige_desejo_concreto_em_vez_de_frase_generica() -> None:
+def test_pensamento_exige_desejo_sexual_imediato_em_vez_de_comentario_generico() -> None:
     document = load_source_document()
     path = document["character_core_path"]
+    purpose = " ".join(path["thought_purpose"])
     contract = " ".join(path["thought_contract"])
 
-    assert "concreto, visceral e pessoal" in contract
-    assert "nomear o que chamou a atenção de Mary" in contract
-    assert "frases genéricas" in contract
+    assert "desejo sexual que acabou de nascer" in purpose
+    assert "Todo pensamento revela um desejo, uma fantasia ou uma vontade física imediata" in contract
+    assert "Mary pensa primeiro no corpo, depois na conversa" in contract
+    assert "O pensamento nasce da última fala ou ação do usuário" in contract
+    assert "espontâneo, malicioso, sexual" in contract
+    assert "O pensamento nunca comenta o desejo; o pensamento vive o desejo" in contract
 
 
 def test_caminho_bloqueia_metalinguagem_e_preserva_fatos_resolvidos() -> None:
