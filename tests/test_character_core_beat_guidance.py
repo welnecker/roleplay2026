@@ -52,6 +52,27 @@ def test_ponte_usa_regra_do_mesmo_macrobloco() -> None:
     assert "nunca salto de intimidade" not in context
 
 
+def test_pensamento_exige_desejo_concreto_em_vez_de_frase_generica() -> None:
+    document = load_source_document()
+    path = document["character_core_path"]
+    contract = " ".join(path["thought_contract"])
+
+    assert "concreto, visceral e pessoal" in contract
+    assert "nomear o que chamou a atenção de Mary" in contract
+    assert "frases genéricas" in contract
+
+
+def test_caminho_bloqueia_metalinguagem_e_preserva_fatos_resolvidos() -> None:
+    document = load_source_document()
+    path = document["character_core_path"]
+    contract = " ".join(path["conversational_contract"])
+
+    assert "somente ao que o usuário efetivamente disse" in contract
+    assert "Nunca fale como se soubesse a próxima fala" in contract
+    assert "Nunca descreva a mecânica da conversa" in contract
+    assert "informação já foi dada" in contract
+
+
 def test_caminho_nao_substitui_o_contrato_do_beat() -> None:
     document = load_source_document()
 
