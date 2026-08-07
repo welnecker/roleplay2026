@@ -24,10 +24,10 @@ def test_ficha_e_memorias_entram_no_contexto_do_modelo() -> None:
         {"user_name": "Janio"},
     )
 
-    assert "IDENTIDADE ESTÁVEL DE MARY" in context
+    assert "NÚCLEO VIVO E AUTORITATIVO DE MARY" in context
     assert "25 anos" in context
-    assert "PERSONALIDADE ESTÁVEL" in context
-    assert "ESTILO DE FALA" in context
+    assert "PSICOLOGIA ESTÁVEL" in context
+    assert "REGRAS DO PENSAMENTO INTERNO" in context
     assert "Mary e Janio se conheceram" in context
     assert "condomínio Plaza" in context
 
