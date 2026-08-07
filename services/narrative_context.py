@@ -28,7 +28,73 @@ def _core_section(lines: list[str], title: str, values: Any) -> None:
     lines.extend(f"- {item}" for item in items)
 
 
-def render_character_core(document: dict[str, Any]) -> str:
+def _find_character_path_block(path: Mapping[str, Any], beat_id: str) -> Mapping[str, Any]:
+    clean = str(beat_id or "").strip()
+    for block in path.get("blocks", []) or []:
+        if not isinstance(block, Mapping):
+            continue
+        prefixes = _items(block.get("beat_prefixes"))
+        if any(clean.startswith(prefix) for prefix in prefixes):
+            return block
+    return {}
+
+
+def render_character_core_path(
+    document: dict[str, Any],
+    *,
+    beat_id: str = "",
+    runtime_phase: str = "canonical",
+) -> str:
+    """Renderiza somente o trecho do caminho correspondente ao beat atual.
+
+    O caminho não replica o roteiro. Ele transforma o movimento já declarado pelo
+    beat em orientação de percepção, intenção e ponte para o mesmo character_core.
+    """
+
+    path = document.get("character_core_path") or {}
+    if not isinstance(path, Mapping) or not path:
+        return ""
+    block = _find_character_path_block(path, beat_id)
+    if not block:
+        return ""
+
+    lines = ["CAMINHO VIVO DE INTERPRETAÇÃO:"]
+    lines.append(f"- macrobloco ativo: {str(block.get('block_id', '')).strip()}")
+    if beat_id:
+        lines.append(f"- beat atual: {beat_id}")
+    arc = str(block.get("arc", "") or "").strip()
+    if arc:
+        lines.append(f"- arco deste bloco: {arc}")
+
+    thought_contract = _items(path.get("thought_contract"))
+    if thought_contract:
+        lines.append("- contrato beat a beat:")
+        lines.extend(f"  - {item}" for item in thought_contract)
+
+    guidance = block.get("beat_guidance") or {}
+    if isinstance(guidance, Mapping):
+        lines.append("- orientação para o beat atual:")
+        for key, value in guidance.items():
+            text = str(value or "").strip()
+            if text:
+                lines.append(f"  - {key}: {text}")
+
+    if str(runtime_phase or "").strip() == "bridge":
+        bridge_rule = str(block.get("bridge_rule", "") or "").strip()
+        if bridge_rule:
+            lines.append(f"- regra da ponte: {bridge_rule}")
+
+    lines.extend(
+        (
+            "- Use o objetivo e a direção do BEAT ATUAL para escolher qual orientação acima é relevante agora.",
+            "- O pensamento interno deve explicar a intenção viva por trás do movimento atual, não repetir sua redação.",
+            "- A ponte pode alterar ritmo e expressão, mas nunca muda o macrobloco nem executa o beat seguinte.",
+        )
+    )
+    return "\n".join(lines)
+
+
+def render_character_core(document: dict[str, Any], *, beat_id: str = "", runtime_phase: str = "canonical") -> str:
     """Renderiza um único núcleo autoritativo para beats, pontes e pátios.
 
     Cards novos podem declarar ``character_core`` no documento editorial. Quando
@@ -58,6 +124,13 @@ def render_character_core(document: dict[str, Any]) -> str:
     _core_section(lines, "REGRAS DO PENSAMENTO INTERNO", core.get("thought_rules"))
     _core_section(lines, "COMO ESTE NÚCLEO ORIENTA OS BEATS", core.get("beat_guidance"))
     _core_section(lines, "COMO ESTE NÚCLEO ORIENTA AS PONTES", core.get("bridge_guidance"))
+    path = render_character_core_path(
+        document,
+        beat_id=beat_id,
+        runtime_phase=runtime_phase,
+    )
+    if path:
+        lines.append(path)
     lines.extend(
         (
             "REGRA DE CONTINUIDADE:",
@@ -68,8 +141,13 @@ def render_character_core(document: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def character_context(document: dict[str, Any]) -> str:
-    core = render_character_core(document)
+def character_context(
+    document: dict[str, Any],
+    *,
+    beat_id: str = "",
+    runtime_phase: str = "canonical",
+) -> str:
+    core = render_character_core(document, beat_id=beat_id, runtime_phase=runtime_phase)
     if core:
         return core
 
@@ -148,8 +226,15 @@ def build_narrative_context(
     document: dict[str, Any],
     memory_ids: Iterable[str],
     facts: dict[str, str] | None = None,
+    *,
+    beat_id: str = "",
+    runtime_phase: str = "canonical",
 ) -> str:
-    return character_context(document) + "\n\n" + render_active_memories(document, memory_ids, facts)
+    return character_context(
+        document,
+        beat_id=beat_id,
+        runtime_phase=runtime_phase,
+    ) + "\n\n" + render_active_memories(document, memory_ids, facts)
 
 
 def validate_memory_references(document: dict[str, Any]) -> None:
@@ -219,6 +304,7 @@ __all__ = [
     "memory_catalog",
     "render_active_memories",
     "render_character_core",
+    "render_character_core_path",
     "validate_memory_references",
     "validate_terminal_yards",
 ]
