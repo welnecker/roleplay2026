@@ -39,6 +39,10 @@ _PRESENTATION_CLAUSE_PATTERN = re.compile(
     rf"(?:^|(?<=[.!?,;])\s+)(?:eu\s+)?sou\s+(?:(?:o|a)\s+)?(?P<name>{_NAME_TOKEN})(?=$|\s*[,!.?;])",
     re.IGNORECASE,
 )
+_BARE_NAME_PRESENTATION_PATTERN = re.compile(
+    rf"^\s*(?P<name>{_NAME_TOKEN})\s*(?:\.{2,}|…+|[-–—])\s*(?:muito\s+)?prazer\b",
+    re.IGNORECASE,
+)
 _MARY_PRESENTATION_PATTERNS = (
     re.compile(r"\beu\s+sou\s+(?:a\s+)?mary\b", re.IGNORECASE),
     re.compile(r"\bmeu\s+nome\s+[ée]\s+mary\b", re.IGNORECASE),
@@ -205,6 +209,12 @@ def extract_name_evidence(text: str) -> NameEvidence | None:
             name = _validated_name(match.group("name"))
             if name:
                 return NameEvidence(name, source, "explicit")
+
+    match = _BARE_NAME_PRESENTATION_PATTERN.search(value)
+    if match is not None:
+        name = _validated_name(match.group("name"))
+        if name:
+            return NameEvidence(name, "bare_presentation", "contextual")
 
     match = _PRESENTATION_CLAUSE_PATTERN.search(value)
     if match is not None:
