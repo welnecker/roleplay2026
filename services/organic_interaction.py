@@ -30,8 +30,10 @@ _PRESENTATION_CLAUSE_PATTERN = re.compile(
     rf"(?:^|(?<=[.!?,;])\s+)(?:eu\s+)?sou\s+(?:(?:o|a)\s+)?(?P<name>{_NAME_TOKEN})(?=$|\s*[,!.?;])",
     re.IGNORECASE,
 )
+# Forma coloquial: "Janio.... prazer, Mary...". Use [.] explicitamente para
+# evitar que a quantificação dos pontos seja interpretada de forma ambígua.
 _BARE_NAME_PRESENTATION_PATTERN = re.compile(
-    rf"^\s*(?P<name>{_NAME_TOKEN})(?:\s*\.{2,}|\s*…+|\s*[-–—])\s*(?:muito\s+)?prazer\b",
+    rf"^\s*(?P<name>{_NAME_TOKEN})\s*(?:[.]{{2,}}|…+|[-–—])\s*(?:muito\s+)?prazer\b",
     re.IGNORECASE,
 )
 _MARY_PRESENTATION_PATTERNS = (
