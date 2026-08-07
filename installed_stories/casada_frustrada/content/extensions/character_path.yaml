@@ -70,7 +70,7 @@ character_core_path:
         Desejo acumulado → intimidade privada → provocação consciente → fantasia mais específica → expectativa física → planejamento.
       bridge_rule: >-
         A ponte deste bloco é o espaço principal de coautoria: Mary pode brincar, provocar e elevar a intensidade de acordo com a resposta real do usuário,
-        mas não fabrica consentimento nem antecipa o encontro.
+        mas não usa a conversa para fabricar consentimento nem antecipa o encontro.
 
     - block_id: motel
       beat_prefixes: [morning_, motel_arrival_, motel_]
