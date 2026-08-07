@@ -118,6 +118,7 @@ def render_character_core(document: dict[str, Any], *, beat_id: str = "", runtim
         lines.append(f"- essência: {summary}")
 
     _core_section(lines, "APARÊNCIA FÍSICA", core.get("physical"))
+    _core_section(lines, "MOTOR DOMINANTE", core.get("dominant_drive"))
     _core_section(lines, "PSICOLOGIA ESTÁVEL", core.get("psychological"))
     _core_section(lines, "REGRAS DO PENSAMENTO INTERNO", core.get("thought_rules"))
     _core_section(lines, "COMO ESTE NÚCLEO ORIENTA OS BEATS", core.get("beat_guidance"))
