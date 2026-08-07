@@ -4,38 +4,53 @@ from collections.abc import Mapping
 
 import streamlit as st
 
-_MEMORY_REQUEST_KEY = "editorial_memory_requested"
-_RESET_PENDING_KEY = "editorial_memory_reset_pending"
-_MEMORY_FACT_KEYS = (
-    "_continuity_memories_json",
-    "_relationship_recollections_json",
-)
+_ACTIVE_SELECTOR_KEY = "editorial_memory_active_selector_key"
+_TURN_FACT_KEY = "_episodic_memory_turn"
 
 
-def _reset_target_is_persisted(target: Mapping[str, str]) -> bool:
-    """Confirma que a memória consolidada já chegou ao estado durável da sessão."""
-
-    for value in st.session_state.values():
-        facts = getattr(value, "facts", None)
-        if not isinstance(facts, Mapping):
-            continue
-        if all(str(facts.get(key, "") or "") == expected for key, expected in target.items()):
-            return True
-    return False
+def _current_user_id(explicit_user_id: str = "") -> str:
+    clean = str(explicit_user_id or "").strip()
+    if clean:
+        return clean
+    authenticated = st.session_state.get("authenticated_user")
+    return str(getattr(authenticated, "user_id", "") or "").strip()
 
 
-def render_memory_selector() -> bool:
-    # O reset só ocorre em um rerun no qual o estado já persistido contém a
-    # memória consolidada. Em falha de persistência, a seleção permanece ativa
-    # para que o usuário possa reenviar a interação sem perder sua escolha.
-    pending = st.session_state.get(_RESET_PENDING_KEY)
-    if isinstance(pending, Mapping) and _reset_target_is_persisted(pending):
-        st.session_state.pop(_RESET_PENDING_KEY, None)
-        st.session_state.pop(_MEMORY_REQUEST_KEY, None)
+def _persisted_turn_for_user_package(user_id: str, package_id: str) -> int:
+    """Lê o turno somente do estado editorial do usuário e card atuais."""
 
+    clean_user_id = _current_user_id(user_id)
+    clean_package_id = str(package_id or "").strip()
+    if not clean_user_id or not clean_package_id:
+        return 0
+
+    state_key = f"editorial:{clean_user_id}:{clean_package_id}:editorial_state"
+    value = st.session_state.get(state_key)
+    facts = getattr(value, "facts", None)
+    if not isinstance(facts, Mapping):
+        return 0
+    try:
+        return max(0, int(facts.get(_TURN_FACT_KEY, "0") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _selector_key(package_id: str, user_id: str = "") -> str:
+    package = str(package_id or "").strip() or "editorial"
+    user = _current_user_id(user_id) or "anonymous"
+    turn = _persisted_turn_for_user_package(user, package)
+    return f"editorial_memory_requested:{user}:{package}:{turn}"
+
+
+def render_memory_selector(package_id: str, user_id: str = "") -> bool:
+    """Renderiza uma escolha descartável, válida somente para o turno atual."""
+
+    key = _selector_key(package_id, user_id)
+    st.session_state[_ACTIVE_SELECTOR_KEY] = key
     selected = st.checkbox(
         "Mary deve se lembrar desta interação",
-        key=_MEMORY_REQUEST_KEY,
+        key=key,
+        value=False,
         help=(
             "Em uma ponte, cria um assunto que o roteiro poderá retomar e consumir. "
             "Em um beat canônico, cria uma lembrança cotidiana persistente."
@@ -47,16 +62,8 @@ def render_memory_selector() -> bool:
 
 
 def peek_memory_request() -> bool:
-    return bool(st.session_state.get(_MEMORY_REQUEST_KEY, False))
+    key = str(st.session_state.get(_ACTIVE_SELECTOR_KEY, "") or "").strip()
+    return bool(key and st.session_state.get(key, False))
 
 
-def clear_memory_request(facts: Mapping[str, str]) -> None:
-    """Agenda o reset condicionado à confirmação do estado persistido."""
-
-    st.session_state[_RESET_PENDING_KEY] = {
-        key: str(facts.get(key, "") or "")
-        for key in _MEMORY_FACT_KEYS
-    }
-
-
-__all__ = ["clear_memory_request", "peek_memory_request", "render_memory_selector"]
+__all__ = ["peek_memory_request", "render_memory_selector"]

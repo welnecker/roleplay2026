@@ -57,7 +57,7 @@ def resolve_editorial_scene_image(package_root: Path, node_id: str) -> dict[str,
     return load_scene_image_map(package_root).get(scene_key)
 
 
-def render_editorial_scene_image(package_id: str, node_id: str) -> bool:
+def render_editorial_scene_image(package_id: str, node_id: str, user_id: str = "") -> bool:
     """Renderiza apoio visual e a escolha explícita da próxima memória."""
 
     rendered = False
@@ -72,7 +72,7 @@ def render_editorial_scene_image(package_id: str, node_id: str) -> bool:
                 st.image(str(image["path"]), caption=caption or None, use_container_width=True)
             rendered = True
 
-    render_memory_selector()
+    render_memory_selector(package_id, user_id)
     return rendered
 
 

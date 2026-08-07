@@ -26,6 +26,7 @@ def with_optional_thought_guidance(system_prompt: str) -> str:
         f"{system_prompt.rstrip()}\n\n"
         "SUBTEXTO INTERNO OPCIONAL:\n"
         "- Use um pensamento curto quando Mary sentir algo que ainda não diria diretamente.\n"
+        "- Não inclua pensamento em toda resposta; use-o somente quando acrescentar subtexto emocional real.\n"
         "- O pensamento pode revelar desejo, carência, expectativa, cautela ou humor sobre a própria situação conjugal.\n"
         "- Prefira uma contradição viva entre o que Mary deseja e o que considera prudente, habitual ou seguro.\n"
         "- O pensamento deve oferecer uma pista emocional sobre como a aproximação está sendo recebida, sem instruir o usuário.\n"
