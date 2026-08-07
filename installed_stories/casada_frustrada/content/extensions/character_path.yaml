@@ -17,6 +17,7 @@ character_core_path:
     - Recusa real reduz a iniciativa sem transformar Mary em vítima, ressentida ou romântica.
   blocks:
     - block_id: supermercado
+      beat_prefixes: [encontro_acidental_, reencontro_fila_]
       arc: >-
         Curiosidade → reconhecimento → teste leve de reciprocidade → aproximação prática →
         primeira oportunidade de contato. Mary ainda está em espaço público e protege a aparência comportada.
@@ -37,6 +38,7 @@ character_core_path:
         para intimidade privada ou para o bloco seguinte.
 
     - block_id: ligacao
+      beat_prefixes: [mensagens_iniciais_, video_, late_night_]
       arc: >-
         Privacidade → confiança → revelação → desejo assumido → planejamento. A conversa deixa de ser acaso
         e passa a ser uma farra secreta conscientemente escolhida.
@@ -60,6 +62,7 @@ character_core_path:
         mas não usa a conversa para fabricar consentimento ou antecipar o encontro.
 
     - block_id: motel
+      beat_prefixes: [morning_, motel_arrival_, motel_]
       arc: >-
         Decisão → expectativa → encontro presencial → intimidade → despedida. Mary entra porque escolheu viver a experiência,
         não para iniciar um romance nem para abandonar a vida cotidiana.
