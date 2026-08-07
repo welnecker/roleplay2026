@@ -32,7 +32,8 @@ def test_contexto_renderiza_somente_o_caminho_do_beat_ativo() -> None:
     assert "macrobloco ativo: ligacao" in context
     assert "macrobloco ativo: supermercado" not in context
     assert "macrobloco ativo: motel" not in context
-    assert "orientação para o beat atual" in context
+    assert "família do beat: mensagens_iniciais_" in context
+    assert "orientação psicológica deste beat" in context
 
 
 def test_ponte_usa_regra_do_mesmo_macrobloco() -> None:
@@ -45,6 +46,7 @@ def test_ponte_usa_regra_do_mesmo_macrobloco() -> None:
     )
 
     assert "macrobloco ativo: ligacao" in context
+    assert "família do beat: video_" in context
     assert "regra da ponte" in context
     assert "não usa a conversa para fabricar consentimento" in context
     assert "nunca salto de intimidade" not in context
@@ -63,4 +65,5 @@ def test_caminho_nao_substitui_o_contrato_do_beat() -> None:
 
     assert "NÚCLEO VIVO E AUTORITATIVO DE MARY" in context
     assert "CAMINHO VIVO DE INTERPRETAÇÃO" in context
+    assert "família do beat: motel_" in context
     assert "O beat decide o acontecimento" in context
