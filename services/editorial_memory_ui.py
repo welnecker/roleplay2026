@@ -8,10 +8,18 @@ _ACTIVE_SELECTOR_KEY = "editorial_memory_active_selector_key"
 _TURN_FACT_KEY = "_episodic_memory_turn"
 
 
+def _current_user_id(explicit_user_id: str = "") -> str:
+    clean = str(explicit_user_id or "").strip()
+    if clean:
+        return clean
+    authenticated = st.session_state.get("authenticated_user")
+    return str(getattr(authenticated, "user_id", "") or "").strip()
+
+
 def _persisted_turn_for_user_package(user_id: str, package_id: str) -> int:
     """Lê o turno somente do estado editorial do usuário e card atuais."""
 
-    clean_user_id = str(user_id or "").strip()
+    clean_user_id = _current_user_id(user_id)
     clean_package_id = str(package_id or "").strip()
     if not clean_user_id or not clean_package_id:
         return 0
@@ -27,9 +35,9 @@ def _persisted_turn_for_user_package(user_id: str, package_id: str) -> int:
         return 0
 
 
-def _selector_key(package_id: str, user_id: str) -> str:
+def _selector_key(package_id: str, user_id: str = "") -> str:
     package = str(package_id or "").strip() or "editorial"
-    user = str(user_id or "").strip() or "anonymous"
+    user = _current_user_id(user_id) or "anonymous"
     turn = _persisted_turn_for_user_package(user, package)
     return f"editorial_memory_requested:{user}:{package}:{turn}"
 
