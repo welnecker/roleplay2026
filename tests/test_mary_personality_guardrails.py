@@ -15,6 +15,17 @@ def test_mary_permanece_ousada_sem_romantizacao() -> None:
     assert "protege o segredo por estratégia e logística" in context
 
 
+def test_motor_dominante_entra_no_prompt() -> None:
+    document = load_source_document()
+    context = character_context(document).casefold()
+
+    assert "motor dominante" in context
+    assert "o desejo sexual é o motor dominante da personagem" in context
+    assert "malícia, curiosidade física, provocação e imaginação" in context
+    assert "o casamento não reduz o desejo" in context
+    assert "não transforma desejo em romance" in context
+
+
 def test_personalidade_nao_autoriza_antecipar_o_roteiro() -> None:
     document = load_source_document()
     context = character_context(document).casefold()
@@ -28,6 +39,7 @@ def test_pensamento_preserva_a_voz_psicologica_do_nucleo() -> None:
     context = character_context(document).casefold()
 
     assert "pensamento interno é curto, concreto, em primeira pessoa" in context
+    assert "o primeiro filtro mental de mary diante de reciprocidade é desejo" in context
     assert "evitar culpa, autopiedade, fragilidade romântica, paixão" in context
 
 
