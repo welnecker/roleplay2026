@@ -171,6 +171,7 @@ def merge_editorial_extension(document: dict[str, Any], extension: dict[str, Any
 
     _replace_declared_policy(merged, extension, "bridge_policy")
     _replace_declared_policy(merged, extension, "runtime_policy")
+    _replace_declared_policy(merged, extension, "character_core")
 
     _merge_character_patch(merged, extension)
 
@@ -218,16 +219,3 @@ def load_editorial_document(package: InstalledStoryPackage) -> dict[str, Any]:
 def compile_editorial_package(package: InstalledStoryPackage) -> EditorialScript:
     document = load_editorial_document(package)
     return prepare_editorial_script(EditorialScript(compile_editorial_document(document)))
-
-
-def editorial_story_start(package: InstalledStoryPackage) -> tuple[str, str, str]:
-    raw = load_editorial_document(package)
-    blocks = [item for item in raw.get("blocks", []) if isinstance(item, dict)]
-    if not blocks:
-        raise EditorialPackageError("História editorial sem blocos")
-    first = min(blocks, key=lambda item: int(item.get("order", 0) or 0))
-    return (
-        str(raw.get("script_version", "")),
-        str(first.get("block_id", "")),
-        str(first.get("entry_beat_id", "")),
-    )
