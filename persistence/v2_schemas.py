@@ -130,6 +130,15 @@ RUNTIME_SCHEMAS: Final[dict[str, tuple[str, ...]]] = {
 
 
 EDITORIAL_SCHEMAS: Final[dict[str, tuple[str, ...]]] = {
+    "ROTEIROS": (
+        "package_id",
+        "script_version",
+        "line_id",
+        "order",
+        "instruction",
+        "status",
+        "updated_at",
+    ),
     "STORIES": (
         "package_id",
         "script_version",
