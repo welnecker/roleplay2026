@@ -219,10 +219,26 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                 }
             )
 
+    beat_ids = {item["beat_id"] for item in beats}
     first_block = blocks[0]
     first_beat_id = str(first_block.get("entry_beat_id", "") or "").strip()
-    if first_beat_id not in {item["beat_id"] for item in beats}:
-        raise ValueError(f"Primeiro beat inexistente: {first_beat_id!r}")
+    if first_beat_id not in beat_ids:
+        if str(document.get("authoring_source", "")) != "spreadsheet" or not beats:
+            raise ValueError(f"Primeiro beat inexistente: {first_beat_id!r}")
+        first_beat = beats[0]
+        first_beat_id = str(first_beat["beat_id"])
+        first_block = next(
+            (
+                block
+                for block in blocks
+                if str(block.get("block_id", "")) == str(first_beat.get("block_id", ""))
+            ),
+            blocks[0],
+        )
+        first_block["entry_beat_id"] = first_beat_id
+        blocks = [first_block, *(block for block in blocks if block is not first_block)]
+        for block_order, block in enumerate(blocks, start=1):
+            block["order"] = block_order
     compiled = deepcopy(document)
     compiled["blocks"] = blocks
     compiled["scene"] = {

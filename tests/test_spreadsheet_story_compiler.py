@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from services.editorial_compiler import compile_editorial_document
 from services.spreadsheet_story_compiler import (
     SpreadsheetStoryError,
     compile_spreadsheet_story,
@@ -129,3 +130,39 @@ def test_ponte_e_orientacao_do_mesmo_beat() -> None:
         "PONTE: Eu reajo sem antecipar o próximo assunto."
     )
     assert beat["allowed_transitions"]["dismissive"] == "beat"
+
+
+def test_cena_vazia_e_ignorada_antes_do_primeiro_beat() -> None:
+    document = compile_spreadsheet_story(
+        _base(),
+        [
+            _row("cena_vazia", 10, "[CENA preparacao] Estou me preparando."),
+            _row("cena_real", 20, "[CENA supermercado] Estou fazendo compras."),
+            _row("primeiro", 30, "[BEAT] Eu esbarro no usuário."),
+            _row("fala", 40, "[FALA] Desculpa!"),
+            _row("fim", 50, "[FIM story_complete] Encerrar."),
+        ],
+        script_version="1.0.0",
+    )
+
+    assert document["blocks"][0]["block_id"] == "supermercado"
+    assert document["blocks"][0]["entry_beat_id"] == "primeiro"
+
+
+def test_bloco_com_apenas_fim_nao_se_torna_primeiro_bloco() -> None:
+    document = compile_spreadsheet_story(
+        _base(),
+        [
+            _row("fim", 10, "[FIM story_complete] Encerrar."),
+            _row("cena", 20, "[CENA supermercado] Estou fazendo compras."),
+            _row("primeiro", 30, "[BEAT] Eu esbarro no usuário."),
+            _row("fala", 40, "[FALA] Desculpa!"),
+        ],
+        script_version="1.0.0",
+    )
+
+    assert document["blocks"][0]["entry_beat_id"] == "primeiro"
+    assert document["blocks"][-1]["beats"][0]["type"] == "ending"
+
+    compiled = compile_editorial_document(document)
+    assert compiled["scene"]["first_beat_id"] == "primeiro"
