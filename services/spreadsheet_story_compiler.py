@@ -265,6 +265,9 @@ def compile_spreadsheet_story(
         raise SpreadsheetStoryError(f"{line_id}: marcador não reconhecido: {kind}")
 
     flush_beat()
+    blocks[:] = [block for block in blocks if block.get("beats")]
+    for block_order, block in enumerate(blocks, start=1):
+        block["order"] = block_order
     if not blocks or not any(block.get("beats") for block in blocks):
         raise SpreadsheetStoryError("O roteiro não contém beats.")
     if not endings:
