@@ -286,6 +286,15 @@ def compile_spreadsheet_story(
         for beat in block.get("beats", [])
         if str(beat.get("type", "dialogue")) != "ending"
     ]
+    if not ordered_beats:
+        active_line_ids = ", ".join(
+            str(row.get("line_id", "") or "<sem line_id>") for row in source_rows
+        )
+        raise SpreadsheetStoryError(
+            f"A versão {script_version!r} não contém nenhuma linha [BEAT] executável. "
+            f"Linhas ativas carregadas: {active_line_ids}"
+        )
+
     ending_id = str(endings[-1]["beat_id"])
     for index, beat in enumerate(ordered_beats):
         target = (
