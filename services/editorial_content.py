@@ -13,6 +13,7 @@ from persistence.editorial import GoogleSheetsEditorialRepository
 from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from services import editorial_runtime_impl as runtime_impl
+from services.editorial_compiler import compile_editorial_document
 from services.editorial_package_loader import (
     compile_editorial_package,
     editorial_story_start,
@@ -21,8 +22,10 @@ from services.editorial_package_loader import (
 from services.editorial_progression import (
     clean_editorial_progression_response,
     decide_editorial_progression_turn,
+    prepare_editorial_script,
 )
 from services.editorial_runtime import EditorialScript
+from services.spreadsheet_story_compiler import compile_spreadsheet_story
 
 
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
@@ -153,12 +156,32 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
     return ensure_editorial_package(secrets, _default_editorial_package())
 
 
+def load_effective_editorial_document(
+    secrets: Any,
+    package: InstalledStoryPackage,
+) -> dict[str, Any]:
+    """Prefere ROTEIROS e preserva o YAML como fallback de migração."""
+
+    repository = ensure_editorial_package(secrets, package)
+    base_document = load_editorial_document(package)
+    script_version, rows = repository.load_active_story_lines(package.manifest.package_id)
+    if not rows:
+        return base_document
+    return compile_spreadsheet_story(
+        base_document,
+        rows,
+        script_version=script_version,
+    )
+
+
 def load_editorial_package(
     secrets: Any,
     package: InstalledStoryPackage,
 ) -> EditorialScript:
-    ensure_editorial_package(secrets, package)
-    return compile_editorial_package(package)
+    document = load_effective_editorial_document(secrets, package)
+    return prepare_editorial_script(
+        EditorialScript(compile_editorial_document(document))
+    )
 
 
 def load_editorial_pilot(secrets: Any) -> EditorialScript:
@@ -175,5 +198,13 @@ def load_editorial_story_start(
     package = find_editorial_package(package_id)
     if package is None:
         return None
-    ensure_editorial_package(secrets, package)
-    return editorial_story_start(package)
+    document = load_effective_editorial_document(secrets, package)
+    blocks = [item for item in document.get("blocks", []) if isinstance(item, dict)]
+    if not blocks:
+        return None
+    first = min(blocks, key=lambda item: int(item.get("order", 0) or 0))
+    return (
+        str(document.get("script_version", "")),
+        str(first.get("block_id", "")),
+        str(first.get("entry_beat_id", "")),
+    )
