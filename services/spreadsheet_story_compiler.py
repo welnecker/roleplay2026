@@ -266,6 +266,12 @@ def compile_spreadsheet_story(
 
     flush_beat()
     blocks[:] = [block for block in blocks if block.get("beats")]
+    blocks.sort(
+        key=lambda block: (
+            not bool(str(block.get("entry_beat_id", "") or "").strip()),
+            int(block.get("order", 0) or 0),
+        )
+    )
     for block_order, block in enumerate(blocks, start=1):
         block["order"] = block_order
     if not blocks or not any(block.get("beats") for block in blocks):
