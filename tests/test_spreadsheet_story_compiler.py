@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from services.editorial_compiler import compile_editorial_document
 from services.spreadsheet_story_compiler import (
     SpreadsheetStoryError,
     compile_spreadsheet_story,
@@ -162,3 +163,6 @@ def test_bloco_com_apenas_fim_nao_se_torna_primeiro_bloco() -> None:
 
     assert document["blocks"][0]["entry_beat_id"] == "primeiro"
     assert document["blocks"][-1]["beats"][0]["type"] == "ending"
+
+    compiled = compile_editorial_document(document)
+    assert compiled["scene"]["first_beat_id"] == "primeiro"
