@@ -19,6 +19,7 @@ runtime:
       - content/extensions/transitions.yaml
       - content/extensions/parking_dialogue.yaml
       - content/extensions/dynamic_endings.yaml
+      - content/extensions/character_path.yaml
       - content/extensions/runtime.yaml
 card:
   title: Casada frustrada

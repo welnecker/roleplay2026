@@ -71,6 +71,15 @@ ACCOUNTS_BILLING_SCHEMAS: Final[dict[str, tuple[str, ...]]] = {
 
 
 RUNTIME_SCHEMAS: Final[dict[str, tuple[str, ...]]] = {
+    "ROTEIROS": (
+        "package_id",
+        "script_version",
+        "line_id",
+        "order",
+        "instruction",
+        "status",
+        "updated_at",
+    ),
     "STORY_RUNS": (
         "run_id",
         "credit_id",

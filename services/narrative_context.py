@@ -28,15 +28,79 @@ def _core_section(lines: list[str], title: str, values: Any) -> None:
     lines.extend(f"- {item}" for item in items)
 
 
-def render_character_core(document: dict[str, Any]) -> str:
-    """Renderiza um único núcleo autoritativo para beats, pontes e pátios.
+def _find_character_path_block(path: Mapping[str, Any], beat_id: str) -> Mapping[str, Any]:
+    clean = str(beat_id or "").strip()
+    for block in path.get("blocks", []) or []:
+        if not isinstance(block, Mapping):
+            continue
+        prefixes = _items(block.get("beat_prefixes"))
+        if any(clean.startswith(prefix) for prefix in prefixes):
+            return block
+    return {}
 
-    Cards novos podem declarar ``character_core`` no documento editorial. Quando
-    presente, esse bloco substitui a ficha fragmentada no prompt e passa a ser a
-    única referência estável de interpretação da personagem. Cards antigos
-    continuam usando ``physical_profile``, ``psychological_profile`` e
-    ``speech_style`` por compatibilidade.
-    """
+
+def _find_phase_guidance(block: Mapping[str, Any], beat_id: str) -> tuple[str, str]:
+    clean = str(beat_id or "").strip()
+    phases = block.get("phase_guidance") or {}
+    if not isinstance(phases, Mapping):
+        return "", ""
+    for prefix, guidance in phases.items():
+        key = str(prefix).strip()
+        if key and clean.startswith(key):
+            return key, str(guidance or "").strip()
+    return "", ""
+
+
+def render_character_core_path(
+    document: dict[str, Any],
+    *,
+    beat_id: str = "",
+    runtime_phase: str = "canonical",
+) -> str:
+    """Renderiza somente o trecho do caminho correspondente ao beat atual."""
+
+    path = document.get("character_core_path") or {}
+    if not isinstance(path, Mapping) or not path:
+        return ""
+    block = _find_character_path_block(path, beat_id)
+    if not block:
+        return ""
+
+    lines = ["CAMINHO VIVO DE INTERPRETAÇÃO:"]
+    lines.append(f"- macrobloco ativo: {str(block.get('block_id', '')).strip()}")
+    if beat_id:
+        lines.append(f"- beat atual: {beat_id}")
+    arc = str(block.get("arc", "") or "").strip()
+    if arc:
+        lines.append(f"- arco deste bloco: {arc}")
+
+    phase_prefix, phase_guidance = _find_phase_guidance(block, beat_id)
+    if phase_guidance:
+        lines.append(f"- família do beat: {phase_prefix}")
+        lines.append(f"- orientação psicológica deste beat: {phase_guidance}")
+
+    thought_contract = _items(path.get("thought_contract"))
+    if thought_contract:
+        lines.append("- contrato beat a beat:")
+        lines.extend(f"  - {item}" for item in thought_contract)
+
+    if str(runtime_phase or "").strip() == "bridge":
+        bridge_rule = str(block.get("bridge_rule", "") or "").strip()
+        if bridge_rule:
+            lines.append(f"- regra da ponte: {bridge_rule}")
+
+    lines.extend(
+        (
+            "- O beat decide o acontecimento; o caminho decide a interpretação de Mary.",
+            "- O pensamento interno explica a intenção viva por trás do movimento atual, não repete sua redação.",
+            "- A ponte responde primeiro ao usuário e depois retoma o fio, sem executar o beat seguinte.",
+        )
+    )
+    return "\n".join(lines)
+
+
+def render_character_core(document: dict[str, Any], *, beat_id: str = "", runtime_phase: str = "canonical") -> str:
+    """Renderiza um único núcleo autoritativo para beats, pontes e pátios."""
 
     core = document.get("character_core") or {}
     if not isinstance(core, Mapping) or not core:
@@ -54,10 +118,18 @@ def render_character_core(document: dict[str, Any]) -> str:
         lines.append(f"- essência: {summary}")
 
     _core_section(lines, "APARÊNCIA FÍSICA", core.get("physical"))
+    _core_section(lines, "MOTOR DOMINANTE", core.get("dominant_drive"))
     _core_section(lines, "PSICOLOGIA ESTÁVEL", core.get("psychological"))
     _core_section(lines, "REGRAS DO PENSAMENTO INTERNO", core.get("thought_rules"))
     _core_section(lines, "COMO ESTE NÚCLEO ORIENTA OS BEATS", core.get("beat_guidance"))
     _core_section(lines, "COMO ESTE NÚCLEO ORIENTA AS PONTES", core.get("bridge_guidance"))
+    path = render_character_core_path(
+        document,
+        beat_id=beat_id,
+        runtime_phase=runtime_phase,
+    )
+    if path:
+        lines.append(path)
     lines.extend(
         (
             "REGRA DE CONTINUIDADE:",
@@ -68,8 +140,13 @@ def render_character_core(document: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def character_context(document: dict[str, Any]) -> str:
-    core = render_character_core(document)
+def character_context(
+    document: dict[str, Any],
+    *,
+    beat_id: str = "",
+    runtime_phase: str = "canonical",
+) -> str:
+    core = render_character_core(document, beat_id=beat_id, runtime_phase=runtime_phase)
     if core:
         return core
 
@@ -148,8 +225,15 @@ def build_narrative_context(
     document: dict[str, Any],
     memory_ids: Iterable[str],
     facts: dict[str, str] | None = None,
+    *,
+    beat_id: str = "",
+    runtime_phase: str = "canonical",
 ) -> str:
-    return character_context(document) + "\n\n" + render_active_memories(document, memory_ids, facts)
+    return character_context(
+        document,
+        beat_id=beat_id,
+        runtime_phase=runtime_phase,
+    ) + "\n\n" + render_active_memories(document, memory_ids, facts)
 
 
 def validate_memory_references(document: dict[str, Any]) -> None:
@@ -219,6 +303,7 @@ __all__ = [
     "memory_catalog",
     "render_active_memories",
     "render_character_core",
+    "render_character_core_path",
     "validate_memory_references",
     "validate_terminal_yards",
 ]

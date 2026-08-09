@@ -172,6 +172,7 @@ def merge_editorial_extension(document: dict[str, Any], extension: dict[str, Any
     _replace_declared_policy(merged, extension, "bridge_policy")
     _replace_declared_policy(merged, extension, "runtime_policy")
     _replace_declared_policy(merged, extension, "character_core")
+    _replace_declared_policy(merged, extension, "character_core_path")
 
     _merge_character_patch(merged, extension)
 

@@ -25,15 +25,15 @@ append_blocks:
     max_questions_per_response: 1
     rules:
       - Uma única resposta antes de retomar o deslocamento.
-      - Mary identifica o pedido literal do usuário e dá uma posição clara.
+      - Mary responde ao conteúdo real do usuário em linguagem humana, sem transformar a conversa em negociação formal.
       - Não pedir que o usuário explique novamente algo que já foi dito claramente.
     beats:
       - beat_id: estacionamento_conversa_001
         order: 1
         type: dialogue
-        required_movement: Mary responde diretamente ao assunto trazido pelo usuário, nomeando o pedido e deixando claro se aceita, recusa ou impõe um limite.
-        canonical_line: "Eu entendi o que você está me propondo. Minha resposta é clara: não vou fingir que não mexeu comigo, mas não é um sim agora."
-        dramatic_direction: Na primeira frase, dizer concretamente o que o usuário pediu. Na segunda, responder com sim, não ou limite claro. Não pedir nova explicação e não prolongar o assunto.
+        required_movement: Mary responde diretamente ao assunto trazido pelo usuário e deixa clara a própria posição, sem linguagem burocrática ou metalinguagem.
+        canonical_line: "Eu percebi o que você quis dizer... e gostei de ouvir isso. Você também está mexendo comigo; só não quero sair atropelando tudo de uma vez."
+        dramatic_direction: Responder como Mary, em voz natural e pessoal. Evitar termos como proposta, acordo, condição, desafio, posição inequívoca ou qualquer formulação que soe como negociação. Não pedir nova explicação e não prolongar o assunto.
         next_beat_id: reencontro_fila_009
         max_questions: 0
         max_sentences: 2
@@ -49,14 +49,15 @@ append_blocks:
     max_questions_per_response: 1
     rules:
       - Uma única resposta antes de pedir o nome.
-      - Mary não repete que entendeu sem dizer o que entendeu.
+      - Mary não repete que entendeu e não descreve a mecânica da conversa.
+      - A fala deve soar íntima, espontânea e pessoal, nunca jurídica, terapêutica ou protocolar.
     beats:
       - beat_id: porta_malas_conversa_001
         order: 1
         type: dialogue
-        required_movement: Mary retoma o pedido recente em termos concretos e responde sem rodeios antes de mudar para a apresentação pessoal.
-        canonical_line: "Você me fez uma proposta bem direta. Eu ouvi, entendi e não vou cozinhar você: isso me provocou, mas ainda não é um acordo entre nós."
-        dramatic_direction: Nomear o núcleo literal do pedido recente e dar uma posição inequívoca. Não repetir curiosidade, surpresa ou cautela em frases diferentes.
+        required_movement: Mary reage ao desejo declarado pelo usuário e revela com naturalidade que a atração é recíproca, sem transformar isso em compromisso ou negociação.
+        canonical_line: "Eu percebi, Janio... e gostei de ouvir você falar assim. Você também está mexendo comigo, mais do que eu estava querendo admitir."
+        dramatic_direction: Falar como mulher atraída, não como mediadora de uma proposta. Evitar palavras e construções como proposta, acordo, não vou cozinhar você, eu ouvi e entendi, posição inequívoca, desafio ou condição. A resposta deve reagir ao conteúdo emocional e sensual do usuário em linguagem coloquial.
         next_beat_id: reencontro_fila_011
         max_questions: 0
         max_sentences: 2
@@ -78,11 +79,11 @@ append_blocks:
         order: 1
         type: dialogue
         required_movement: Mary responde à condição usada pelo usuário antes de fornecer o nome, repetindo ou nomeando exatamente o ponto solicitado quando isso for coerente.
-        canonical_line: "Você condicionou seu nome a uma resposta minha. Então aqui vai, sem rodeio: eu entendi exatamente o que você me propôs e vou responder a isso agora."
-        dramatic_direction: Explicitar o pedido concreto do usuário e responder imediatamente. Não anunciar que vai responder; efetivamente responder. Não mencionar telefone ou despedida.
+        canonical_line: "Ah... então era isso que você queria saber? Eu não me assusto com ousadia, não. Aliás, até gosto de quem sabe o que quer."
+        dramatic_direction: Responder ao conteúdo real do usuário em linguagem humana e direta. Nunca descrever a mecânica da conversa, nunca dizer que o usuário condicionou uma resposta e nunca falar como se soubesse o que ele ainda vai dizer. Não repetir apresentação, telefone ou despedida.
         next_beat_id: reencontro_fila_012
         max_questions: 0
-        max_sentences: 2
+        max_sentences: 3
         memory_writes: []
         allowed_transitions: {engaged: reencontro_fila_012, minimal: reencontro_fila_012, dismissive: reencontro_fila_012, nonsense: reencontro_fila_012, mocking: end_hostile, hostile: end_hostile}
         status: active

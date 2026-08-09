@@ -227,6 +227,46 @@ class GoogleSheetsEditorialRepository:
             },
         }
 
+    def load_active_story_lines(
+        self,
+        package_id: str,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Lê em lote a versão ativa mais recente da aba autoral ROTEIROS."""
+
+        rows = [
+            row
+            for row in self._records("ROTEIROS")
+            if str(row.get("package_id", "")).strip() == package_id
+            and str(row.get("status", "active") or "active").strip().casefold() == "active"
+        ]
+        if not rows:
+            return "", []
+
+        versions = sorted(
+            {str(row.get("script_version", "") or "").strip() for row in rows},
+            key=self._version_key,
+        )
+        version = versions[-1]
+        selected = [
+            row
+            for row in rows
+            if str(row.get("script_version", "") or "").strip() == version
+        ]
+        selected.sort(
+            key=lambda row: (
+                int(row.get("order", 0) or 0),
+                str(row.get("line_id", "")),
+            )
+        )
+        return version, selected
+
+    @staticmethod
+    def _version_key(value: str) -> tuple[tuple[int, str], ...]:
+        parts: list[tuple[int, str]] = []
+        for item in str(value or "").replace("-", ".").split("."):
+            parts.append((0, f"{int(item):012d}") if item.isdigit() else (1, item))
+        return tuple(parts)
+
     def _worksheet(self, name: str) -> Worksheet:
         if name not in self._worksheets:
             self._worksheets[name] = self.spreadsheet.worksheet(name)

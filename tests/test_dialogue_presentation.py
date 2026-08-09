@@ -75,9 +75,20 @@ def test_renderizacao_escapa_html_do_usuario() -> None:
 def test_orientacao_mantem_pensamento_opcional() -> None:
     prompt = with_optional_thought_guidance("PROMPT BASE")
 
-    assert "Não inclua pensamento em toda resposta" in prompt
+    assert "não inclua pensamento" in prompt.casefold()
     assert "[PENSAMENTO]" in prompt
     assert "primeira pessoa" in prompt
+
+
+def test_subtexto_reforca_desejo_sem_inventar_conflito_romantico() -> None:
+    prompt = with_optional_thought_guidance("PROMPT BASE").casefold()
+
+    assert "desejo sexual é motor da personagem" in prompt
+    assert "não invente conflito moral" in prompt
+    assert "o casamento só entra" in prompt
+    assert "nunca atribua ao usuário intenção" in prompt
+    assert "prefira uma contradição viva" not in prompt
+    assert "carência, expectativa, cautela" not in prompt
 
 
 def test_marcadores_precisam_ser_balanceados() -> None:
