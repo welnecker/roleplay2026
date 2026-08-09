@@ -79,6 +79,7 @@ def compile_spreadsheet_story(
 
     document = deepcopy(base_document)
     document["script_version"] = str(script_version or document.get("script_version", ""))
+    document["authoring_source"] = "spreadsheet"
     document["blocks"] = []
 
     character = dict(document.get("character") or {})
