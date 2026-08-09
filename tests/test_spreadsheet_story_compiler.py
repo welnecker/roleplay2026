@@ -146,3 +146,19 @@ def test_cena_vazia_e_ignorada_antes_do_primeiro_beat() -> None:
 
     assert document["blocks"][0]["block_id"] == "supermercado"
     assert document["blocks"][0]["entry_beat_id"] == "primeiro"
+
+
+def test_bloco_com_apenas_fim_nao_se_torna_primeiro_bloco() -> None:
+    document = compile_spreadsheet_story(
+        _base(),
+        [
+            _row("fim", 10, "[FIM story_complete] Encerrar."),
+            _row("cena", 20, "[CENA supermercado] Estou fazendo compras."),
+            _row("primeiro", 30, "[BEAT] Eu esbarro no usuário."),
+            _row("fala", 40, "[FALA] Desculpa!"),
+        ],
+        script_version="1.0.0",
+    )
+
+    assert document["blocks"][0]["entry_beat_id"] == "primeiro"
+    assert document["blocks"][-1]["beats"][0]["type"] == "ending"
