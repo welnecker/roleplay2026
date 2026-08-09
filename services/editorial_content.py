@@ -30,6 +30,7 @@ from services.spreadsheet_story_compiler import compile_spreadsheet_story
 
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
 _EDITORIAL_REPOSITORY: GoogleSheetsEditorialRepository | None = None
+_SCRIPT_REPOSITORY: GoogleSheetsEditorialRepository | None = None
 _PUBLISHED_PACKAGES: set[str] = set()
 _FREE_TEXT_KEYS = {
     "introduction",
@@ -136,6 +137,25 @@ def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
     return _EDITORIAL_REPOSITORY
 
 
+def build_runtime_script_repository(
+    secrets: Any,
+) -> GoogleSheetsEditorialRepository:
+    """Abre somente ROTEIROS na planilha ROLEPLAY_RUNTIME."""
+
+    global _SCRIPT_REPOSITORY
+    if _SCRIPT_REPOSITORY is not None:
+        return _SCRIPT_REPOSITORY
+    credentials = secrets.get("gcp_service_account")
+    if not credentials:
+        raise ValueError("[gcp_service_account] não está configurado")
+    ids = read_spreadsheet_ids(secrets)
+    _SCRIPT_REPOSITORY = GoogleSheetsEditorialRepository.from_service_account(
+        credentials=dict(credentials),
+        spreadsheet_id=ids.runtime,
+    )
+    return _SCRIPT_REPOSITORY
+
+
 def ensure_editorial_package(
     secrets: Any,
     package: InstalledStoryPackage,
@@ -162,9 +182,12 @@ def load_effective_editorial_document(
 ) -> dict[str, Any]:
     """Prefere ROTEIROS e preserva o YAML como fallback de migração."""
 
-    repository = ensure_editorial_package(secrets, package)
+    ensure_editorial_package(secrets, package)
+    script_repository = build_runtime_script_repository(secrets)
     base_document = load_editorial_document(package)
-    script_version, rows = repository.load_active_story_lines(package.manifest.package_id)
+    script_version, rows = script_repository.load_active_story_lines(
+        package.manifest.package_id
+    )
     if not rows:
         return base_document
     return compile_spreadsheet_story(
