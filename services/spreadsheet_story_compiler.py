@@ -12,6 +12,11 @@ _FIRST_PERSON = re.compile(
     r"preciso|sinto|penso|percebo|acho|espero|posso|tenho|sei|fico)\b",
     re.IGNORECASE,
 )
+_EXPLICIT_SEXUAL_STAGE = re.compile(
+    r"\b(foder|transar|sexo|sexual|vibrador|pau|rola|buceta|xoxota|"
+    r"gozar|gozo|mamada|chupar|pelad[ao]s?|nua|nu)\b",
+    re.IGNORECASE,
+)
 _PROFILE_TAGS = {
     "HOMEM",
     "MULHER",
@@ -144,6 +149,33 @@ def compile_spreadsheet_story(
                 "speech": speech,
                 "thought_variants": thought_variants,
                 "speech_variants": speech_variants,
+            }
+        authored_stage = "\n".join(
+            (
+                str(current_beat.get("required_movement", "") or ""),
+                thought,
+                speech,
+                *thought_variants.values(),
+                *speech_variants.values(),
+            )
+        )
+        if not _EXPLICIT_SEXUAL_STAGE.search(authored_stage):
+            current_beat["interaction_context"] = {
+                "relationship_stage": "scripted_before_explicit_intimacy",
+                "intimacy_level": 0,
+                "mary_disclosed_desire": False,
+                "mutual_attraction_confirmed": False,
+                "allowed_interactions": [
+                    "resposta compatível com o acontecimento e o assunto do beat atual",
+                    "flerte leve sem impor uma prática sexual ainda não introduzida pelo roteiro",
+                ],
+                "recoverable_tensions": [
+                    "linguagem ríspida ou palavrão que ainda responde ao contexto atual"
+                ],
+                "terminal_violations": [
+                    "explicit_sexual_proposition_before_mutual_intimacy"
+                ],
+                "terminal_yard_target": "__generic_disagreement_warning",
             }
         current_beat = None
 
