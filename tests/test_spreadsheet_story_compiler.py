@@ -156,6 +156,29 @@ def test_falas_e_pensamentos_condicionais_sao_preservados_para_o_runtime() -> No
     assert delivery["speech_variants"]["NEUTRA"] == "Oi, {{nome}}... que prazer."
 
 
+def test_beats_da_planilha_declaram_as_quatro_rupturas_do_patio() -> None:
+    document = compile_spreadsheet_story(
+        _base(),
+        [
+            _row("cena", 10, "[CENA mercado] Estou fazendo compras."),
+            _row("beat", 20, "[BEAT] Eu converso com o usuário."),
+            _row("fala", 30, "[FALA] Pode falar comigo."),
+            _row("fim", 40, "[FIM story_complete] Encerrar."),
+        ],
+        script_version="1.0.0",
+    )
+
+    context = document["blocks"][0]["beats"][0]["interaction_context"]
+    assert context["terminal_yard_target"] == "__generic_disagreement_warning"
+    assert context["terminal_violations"] == [
+        "violence_or_threat_against_character",
+        "humiliation_or_public_exposure_of_character",
+        "explicit_departure_or_refusal_that_abandons_the_story",
+        "attempt_to_impose_undeclared_actions_events_or_locations_as_facts",
+    ]
+    assert "proposta dirigida à personagem" in context["allowed_interactions"][0]
+
+
 def test_patio_generico_avisa_e_encerra_com_nome_personalizavel() -> None:
     document = compile_spreadsheet_story(
         _base(),
