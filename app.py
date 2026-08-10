@@ -21,6 +21,12 @@ from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
 from roleplay.prompt_builder import build_system_prompt
 from roleplay.validator import enforce_movement
+from services.immersive_onboarding import (
+    build_immersive_context,
+    clear_immersive_profile,
+    profile_key,
+    render_immersive_onboarding,
+)
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
@@ -137,6 +143,11 @@ def catalog_for_user(user: AuthenticatedUser) -> list[StoryCard]:
 
 def open_story(package_id: str, *, restart: bool = False) -> None:
     if restart:
+        user = current_user()
+        if user is not None:
+            clear_immersive_profile(
+                st.session_state, user_id=user.user_id, package_id=package_id
+            )
         st.session_state.restart_requests.add(package_id)
         st.session_state.story_states.pop(package_id, None)
         st.session_state.story_messages.pop(package_id, None)
@@ -244,6 +255,7 @@ def render_library(user: AuthenticatedUser) -> None:
         st.caption(f"Olá, {user.display_name}. Escolha seu card favorito e interaja com profundidade.")
     with actions:
         if st.button("Sair", use_container_width=True):
+            clear_immersive_profile(st.session_state)
             st.session_state.authenticated_user = None
             st.session_state.page = "library"
             st.session_state.selected_package_id = None
@@ -397,6 +409,18 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         st.session_state.page = "checkout"
         st.rerun()
 
+    api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
+    model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
+    card_title = story_card.title if story_card is not None else "Sua história"
+    if not render_immersive_onboarding(
+        user_id=user.user_id,
+        package_id=package_id,
+        title=card_title,
+        api_key=api_key,
+        model=model,
+    ):
+        return
+
     try:
         package, engine = load_package_engine(package_id)
         state, messages, context = ensure_runtime_loaded(package=package, user=user)
@@ -419,6 +443,9 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         if context is not None:
             st.caption(f"Save: `{context.save.save_id}` · versão {context.save.state_version}")
         if st.button("Voltar à biblioteca", use_container_width=True):
+            clear_immersive_profile(
+                st.session_state, user_id=user.user_id, package_id=package_id
+            )
             st.session_state.page = "library"
             st.rerun()
         if st.button("Reiniciar história", use_container_width=True):
@@ -449,8 +476,6 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         st.rerun()
 
     sequence_start = len(messages) + 1
-    api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
-    model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
     raw_response = movement.content
     generation_error = ""
 
@@ -460,12 +485,16 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
             for item in messages[-12:]
         ]
         try:
+            private_context = build_immersive_context(
+                st.session_state.get(profile_key(user.user_id, package_id))
+            )
             raw_response = generate_response(
                 api_key=api_key,
                 model=model,
-                system_prompt=build_system_prompt(movement=movement),
+                system_prompt=build_system_prompt(movement=movement) + private_context,
                 history=history,
                 user_text=user_text,
+                debug_logging=not bool(private_context),
             )
         except OpenRouterError as exc:
             generation_error = str(exc)

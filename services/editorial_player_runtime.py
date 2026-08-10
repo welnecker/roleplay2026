@@ -45,6 +45,12 @@ from services.editorial_transaction import (
     commit_editorial_turn,
     prepare_pending_editorial_turn,
 )
+from services.immersive_onboarding import (
+    build_immersive_context,
+    clear_immersive_profile,
+    profile_key,
+    render_immersive_onboarding,
+)
 from services.paid_run_access import get_paid_run_access, terminate_paid_access
 from services.runtime_persistence import (
     RuntimePersistenceContext,
@@ -204,9 +210,17 @@ def clear_session(user: AuthenticatedUser) -> None:
     for key in session_keys(user.user_id):
         st.session_state.pop(key, None)
     st.session_state.pop(END_CONFIRMATION_KEY, None)
+    clear_immersive_profile(
+        st.session_state, user_id=user.user_id, package_id=PACKAGE_ID
+    )
 
 
 def return_to_library() -> None:
+    user = authenticated_user()
+    if user is not None:
+        clear_immersive_profile(
+            st.session_state, user_id=user.user_id, package_id=PACKAGE_ID
+        )
     st.session_state.pop(END_CONFIRMATION_KEY, None)
     st.session_state.page = "library"
     st.session_state.selected_package_id = None
@@ -271,7 +285,20 @@ if user is None:
         st.switch_page("app.py")
     st.stop()
 
-fresh_start = prepare_after_payment(user)
+restart_after_onboarding_key = f"immersive_restart:{user.user_id}:{PACKAGE_ID}"
+if prepare_after_payment(user):
+    st.session_state[restart_after_onboarding_key] = True
+api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
+model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
+if not render_immersive_onboarding(
+    user_id=user.user_id,
+    package_id=PACKAGE_ID,
+    title=PACKAGE_TITLE,
+    api_key=api_key,
+    model=model,
+):
+    st.stop()
+fresh_start = bool(st.session_state.pop(restart_after_onboarding_key, False))
 try:
     script = load_script(PACKAGE_ID)
 except Exception as exc:
@@ -379,8 +406,6 @@ except Exception as exc:
     st.error("Não foi possível decidir o próximo movimento da história.")
     st.stop()
 
-api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
-model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
 if not api_key:
     log_editorial_exception(
         "openrouter_not_configured",
@@ -398,6 +423,9 @@ history = [
     for item in messages[-12:]
 ]
 base_prompt = with_optional_thought_guidance(pending.prompt)
+private_context = build_immersive_context(
+    st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
+)
 evaluation_prompt = build_semantic_evaluation_prompt(pending.context)
 raw_model_response = ""
 assistant_text = ""
@@ -418,9 +446,10 @@ for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
         raw_model_response = generate_response(
             api_key=api_key,
             model=model,
-            system_prompt=generation_prompt,
+            system_prompt=generation_prompt + private_context,
             history=history,
             user_text=user_text,
+            debug_logging=not bool(private_context),
         )
         candidate = clean_editorial_model_response(raw_model_response, "")
         deterministic = evaluate_deterministic_response(candidate, pending.context)
