@@ -194,7 +194,7 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "on_user": legacy_transitions,
                     "transition_rules": compile_transition_rules(source),
                     "intent_classifiers": deepcopy(source.get("intent_classifiers") or []),
-                    "terminal_transition": "",
+                    "terminal_transition": str(source.get("terminal_transition", "") or "").strip(),
                     "memory_writes": [str(item) for item in source.get("memory_writes", [])],
                     "max_questions": int(source.get("max_questions", 1) or 0),
                     "max_sentences": int(source.get("max_sentences", 1) or 1),
