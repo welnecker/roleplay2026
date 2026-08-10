@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from platform_core.auth import AuthenticatedUser
 from services.script_authoring import (
@@ -58,6 +59,42 @@ def _append_tag(template: str, block_id: str) -> None:
 def _clear_draft() -> None:
     st.session_state[DRAFT_KEY] = ""
     st.session_state.pop(ROWS_KEY, None)
+
+
+def _render_name_placeholder_button() -> None:
+    components.html(
+        """
+        <button id="copy-name" type="button">Copiar {{nome}}</button>
+        <span id="copy-status" aria-live="polite"></span>
+        <script>
+        const button = document.getElementById("copy-name");
+        const status = document.getElementById("copy-status");
+        button.style.width = "100%";
+        button.style.padding = "0.55rem 0.75rem";
+        button.style.borderRadius = "0.5rem";
+        button.style.border = "1px solid rgba(128, 128, 128, 0.45)";
+        button.style.background = "transparent";
+        button.style.color = "inherit";
+        button.style.cursor = "pointer";
+        button.onclick = async () => {
+          const value = "{{nome}}";
+          try {
+            await navigator.clipboard.writeText(value);
+          } catch (error) {
+            const helper = document.createElement("textarea");
+            helper.value = value;
+            document.body.appendChild(helper);
+            helper.select();
+            document.execCommand("copy");
+            helper.remove();
+          }
+          status.textContent = " Copiado";
+          setTimeout(() => { status.textContent = ""; }, 1600);
+        };
+        </script>
+        """,
+        height=48,
+    )
 
 
 user = _authenticated_user()
@@ -134,6 +171,15 @@ for index, (label, template) in enumerate(_TAG_BUTTONS):
         if st.button(label, key=f"script_tag:{label}", use_container_width=True):
             _append_tag(template, block_id)
             st.rerun()
+
+name_button, name_help = st.columns([1, 4])
+with name_button:
+    _render_name_placeholder_button()
+with name_help:
+    st.caption(
+        "Posicione o cursor dentro do roteiro e cole para inserir o nome do usuário "
+        "em qualquer fala ou pensamento."
+    )
 
 with st.expander("Tags direcionadas por tratamento ou anatomia"):
     directed = (
