@@ -10,6 +10,11 @@ from services.editorial_memory_ui import render_memory_selector
 
 
 _EDITORIAL_TO_SCENE_KEY = {
+    # IDs usados pelo roteiro simplificado carregado da aba ROTEIROS.
+    "supermercado_001": "encontro_acidental_001",
+    "supermercado_002": "encontro_acidental_002",
+    "supermercado_003": "encontro_acidental_004",
+    "supermercado_004": "encontro_acidental_despedida_001",
     "reencontro_fila_001": "encontro_001",
     "reencontro_fila_005": "fila_005",
     "reencontro_fila_006": "fila_006",
@@ -57,8 +62,14 @@ def resolve_editorial_scene_image(package_root: Path, node_id: str) -> dict[str,
     return load_scene_image_map(package_root).get(scene_key)
 
 
-def render_editorial_scene_image(package_id: str, node_id: str, user_id: str = "") -> bool:
-    """Renderiza apoio visual e a escolha explícita da próxima memória."""
+def render_editorial_scene_image(
+    package_id: str,
+    node_id: str,
+    user_id: str = "",
+    *,
+    render_memory: bool = True,
+) -> bool:
+    """Renderiza a imagem do beat e, opcionalmente, o seletor de memória."""
 
     rendered = False
     package = find_editorial_package(package_id)
@@ -72,7 +83,8 @@ def render_editorial_scene_image(package_id: str, node_id: str, user_id: str = "
                 st.image(str(image["path"]), caption=caption or None, use_container_width=True)
             rendered = True
 
-    render_memory_selector(package_id, user_id)
+    if render_memory:
+        render_memory_selector(package_id, user_id)
     return rendered
 
 
