@@ -1,0 +1,30 @@
+format_version: 2
+package_id: roleplay2026.camilly
+version: 1.0.0
+author:
+  id: welnecker
+  name: Welnecker
+entrypoint: story.yaml
+runtime:
+  kind: editorial
+  editorial:
+    source: content/editorial.yaml
+card:
+  title: Camilly
+  subtitle: Loirinha, atrevida e direta. Camilly já sabe o que quer provocar em você.
+  description: Uma história adulta de desejo explícito, provocação e prazer, conduzida pelas palavras do roteiro.
+  genres:
+    - Romance adulto
+    - Erótico
+  chapter_label: História completa
+  cover: ""
+  character_profile:
+    name: Camilly
+    identity: Camilly é uma mulher adulta, loira, sensual e segura do próprio corpo.
+    personality: Atrevida, sexual, espontânea e direta. Fala como uma mulher real, sem metáforas genéricas ou frases artificiais.
+    intention: Provocar desejo, dar prazer e deixar o usuário cada vez mais envolvido com ela.
+commerce:
+  access: paid
+  price_cents: 990
+  currency: BRL
+  replay_policy: new_purchase
