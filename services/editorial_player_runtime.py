@@ -48,8 +48,11 @@ from services.editorial_transaction import (
 from services.immersive_onboarding import (
     build_immersive_context,
     clear_immersive_profile,
+    persistent_profile_payload,
     profile_key,
+    recover_persistent_profile,
     render_immersive_onboarding,
+    restore_profile_for_run,
 )
 from services.paid_run_access import get_paid_run_access, terminate_paid_access
 from services.runtime_persistence import (
@@ -285,25 +288,9 @@ if user is None:
         st.switch_page("app.py")
     st.stop()
 
-restart_after_onboarding_key = f"immersive_restart:{user.user_id}:{PACKAGE_ID}"
-if prepare_after_payment(user):
-    st.session_state[restart_after_onboarding_key] = True
+fresh_start = prepare_after_payment(user)
 api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
 model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
-if not render_immersive_onboarding(
-    user_id=user.user_id,
-    package_id=PACKAGE_ID,
-    title=PACKAGE_TITLE,
-    character_name=(
-        PACKAGE.manifest.card.character_profile.name
-        if PACKAGE.manifest.card.character_profile
-        else PACKAGE_TITLE
-    ),
-    api_key=api_key,
-    model=model,
-):
-    st.stop()
-fresh_start = bool(st.session_state.pop(restart_after_onboarding_key, False))
 try:
     script = load_script(PACKAGE_ID)
 except Exception as exc:
@@ -325,6 +312,26 @@ except Exception as exc:
         package_id=PACKAGE_ID,
     )
     st.error(f"Não foi possível abrir a história: {exc}")
+    st.stop()
+
+restore_profile_for_run(
+    st.session_state,
+    user_id=user.user_id,
+    package_id=PACKAGE_ID,
+    messages=messages,
+)
+if not render_immersive_onboarding(
+    user_id=user.user_id,
+    package_id=PACKAGE_ID,
+    title=PACKAGE_TITLE,
+    character_name=(
+        PACKAGE.manifest.card.character_profile.name
+        if PACKAGE.manifest.card.character_profile
+        else PACKAGE_TITLE
+    ),
+    api_key=api_key,
+    model=model,
+):
     st.stop()
 
 if not editorial_state.finished and not story_state.finished:
@@ -534,6 +541,11 @@ metadata = build_editorial_metadata(
     ending_code=turn.ending_code,
     diagnostics=diagnostics,
 )
+immersive_memory = persistent_profile_payload(
+    st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
+)
+if immersive_memory and recover_persistent_profile(messages) is None:
+    metadata["immersive_profile"] = immersive_memory
 repository = runtime_repository()
 if repository is None:
     st.error("Google Sheets ficou indisponível durante a interação.")

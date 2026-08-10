@@ -12,9 +12,10 @@ ALLOWED_IMAGE_TYPES = ("jpg", "jpeg", "png", "webp")
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 PRIVACY_NOTICE = (
     "As fotos enviadas serão usadas somente durante esta sessão para personalizar "
-    "a história. Elas não serão salvas nem armazenadas. Se você sair ou encerrar "
-    "a sessão atual, as fotos e as informações extraídas delas serão apagadas e "
-    "não estarão disponíveis quando retornar. Todas as etapas são opcionais."
+    "a história. Os arquivos das fotos não serão salvos nem armazenados. A descrição "
+    "extraída será guardada como memória desta execução para que a personagem reconheça "
+    "você quando retornar. Essa memória termina com a história e não passa para uma nova "
+    "execução paga. Todas as etapas são opcionais."
 )
 
 
@@ -59,6 +60,54 @@ def build_immersive_context(profile: dict[str, Any] | None) -> str:
         + "\nUse apenas quando for natural para a cena. Não diga que analisou uma foto, "
         "não enumere características e não invente detalhes ausentes."
     )
+
+
+def persistent_profile_payload(profile: dict[str, Any] | None) -> dict[str, str]:
+    """Retorna somente texto autorizado para a memória da run; nunca bytes da foto."""
+
+    if not profile or not profile.get("completed"):
+        return {}
+    return {
+        key: str(profile.get(key, "") or "").strip()
+        for key in ("preferred_name", "gender", "appearance", "intimate")
+        if str(profile.get(key, "") or "").strip()
+    }
+
+
+def recover_persistent_profile(messages: list[dict[str, object]]) -> dict[str, Any] | None:
+    for message in reversed(messages):
+        payload = message.get("immersive_profile")
+        if isinstance(payload, dict):
+            return {
+                **{
+                    key: str(payload.get(key, "") or "").strip()
+                    for key in ("preferred_name", "gender", "appearance", "intimate")
+                    if str(payload.get(key, "") or "").strip()
+                },
+                "completed": True,
+                "stage": 3,
+            }
+    return None
+
+
+def restore_profile_for_run(
+    state: MutableMapping[str, Any],
+    *,
+    user_id: str,
+    package_id: str,
+    messages: list[dict[str, object]],
+) -> None:
+    """Recupera a memória textual ou evita onboarding em uma run legada já iniciada."""
+
+    key = profile_key(user_id, package_id)
+    current = state.get(key)
+    if isinstance(current, dict) and current.get("completed"):
+        return
+    recovered = recover_persistent_profile(messages)
+    if recovered is not None:
+        state[key] = recovered
+    elif messages:
+        state[key] = {"completed": True, "stage": 3}
 
 
 def photo_acknowledgement(character_name: str, *, intimate: bool = False) -> str:

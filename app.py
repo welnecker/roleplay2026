@@ -24,8 +24,11 @@ from roleplay.validator import enforce_movement
 from services.immersive_onboarding import (
     build_immersive_context,
     clear_immersive_profile,
+    persistent_profile_payload,
     profile_key,
+    recover_persistent_profile,
     render_immersive_onboarding,
+    restore_profile_for_run,
 )
 from services.runtime_persistence import (
     RuntimePersistenceContext,
@@ -136,6 +139,11 @@ def catalog_for_user(user: AuthenticatedUser) -> list[StoryCard]:
                 chapter_label=story.chapter_label,
                 cover_url=story.cover_url,
                 is_tasting=story.is_tasting,
+                profile_name=story.profile_name,
+                profile_identity=story.profile_identity,
+                profile_personality=story.profile_personality,
+                profile_intention=story.profile_intention,
+                replay_requires_purchase=story.replay_requires_purchase,
             )
         )
     return result
@@ -409,19 +417,6 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         st.session_state.page = "checkout"
         st.rerun()
 
-    api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
-    model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
-    card_title = story_card.title if story_card is not None else "Sua história"
-    if not render_immersive_onboarding(
-        user_id=user.user_id,
-        package_id=package_id,
-        title=card_title,
-        character_name=(story_card.profile_name if story_card is not None else card_title),
-        api_key=api_key,
-        model=model,
-    ):
-        return
-
     try:
         package, engine = load_package_engine(package_id)
         state, messages, context = ensure_runtime_loaded(package=package, user=user)
@@ -430,6 +425,25 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         if st.button("Voltar à biblioteca"):
             st.session_state.page = "library"
             st.rerun()
+        return
+
+    api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
+    model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
+    card_title = story_card.title if story_card is not None else "Sua história"
+    restore_profile_for_run(
+        st.session_state,
+        user_id=user.user_id,
+        package_id=package_id,
+        messages=messages,
+    )
+    if not render_immersive_onboarding(
+        user_id=user.user_id,
+        package_id=package_id,
+        title=card_title,
+        character_name=(story_card.profile_name if story_card is not None else card_title),
+        api_key=api_key,
+        model=model,
+    ):
         return
 
     with st.sidebar:
@@ -508,6 +522,11 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         "screenplay_beat": movement.beat,
         "screenplay_fallback": used_fallback or bool(generation_error),
     }
+    immersive_memory = persistent_profile_payload(
+        st.session_state.get(profile_key(user.user_id, package_id))
+    )
+    if immersive_memory and recover_persistent_profile(messages) is None:
+        assistant_metadata["immersive_profile"] = immersive_memory
     if movement.scene_image is not None:
         assistant_metadata["scene_image"] = {
             "file": movement.scene_image.file,

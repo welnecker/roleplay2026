@@ -296,11 +296,14 @@ def persist_turn(
 
     if state.finished:
         requested_status = str(
-            assistant_metadata.get("pilot_run_status", "completed") or "completed"
+            assistant_metadata.get("editorial_run_status")
+            or assistant_metadata.get("pilot_run_status")
+            or "completed"
         )
         run_status = "terminated" if requested_status == "terminated" else "completed"
         ending_code = str(
-            assistant_metadata.get("pilot_ending_code", "normal_completion")
+            assistant_metadata.get("editorial_ending_code")
+            or assistant_metadata.get("pilot_ending_code")
             or "normal_completion"
         )
         finish_active_run(
