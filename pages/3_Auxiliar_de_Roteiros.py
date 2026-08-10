@@ -64,38 +64,53 @@ def _clear_draft() -> None:
 def _render_name_placeholder_button() -> None:
     components.html(
         """
-        <button id="copy-name" type="button">Copiar {{nome}}</button>
-        <span id="copy-status" aria-live="polite"></span>
-        <script>
-        const button = document.getElementById("copy-name");
-        const status = document.getElementById("copy-status");
-        button.style.width = "100%";
-        button.style.padding = "0.55rem 0.75rem";
-        button.style.borderRadius = "0.5rem";
-        button.style.border = "1px solid rgba(128, 128, 128, 0.45)";
-        button.style.background = "transparent";
-        button.style.color = "inherit";
-        button.style.cursor = "pointer";
-        button.onclick = async () => {
-          const value = "{{nome}}";
-          try {
-            await navigator.clipboard.writeText(value);
-          } catch (error) {
-            const helper = document.createElement("textarea");
-            helper.value = value;
-            document.body.appendChild(helper);
-            helper.select();
-            document.execCommand("copy");
-            helper.remove();
+        <style>
+          html, body { margin: 0; padding: 0; background: transparent; }
+          #copy-name {
+            width: 100%;
+            min-height: 40px;
+            padding: 0.55rem 0.75rem;
+            border: 1px solid #9b6cff;
+            border-radius: 0.5rem;
+            background: #6f3fc5;
+            color: #ffffff;
+            font: 600 14px sans-serif;
+            cursor: pointer;
           }
-          status.textContent = " Copiado";
-          setTimeout(() => { status.textContent = ""; }, 1600);
-        };
+          #copy-name:hover { background: #8251db; }
+          #copy-name:active { transform: translateY(1px); }
+          #copy-name.copied { background: #237a57; border-color: #45b789; }
+        </style>
+        <textarea id="copy-helper" aria-hidden="true"
+          style="position:fixed;left:-9999px;top:-9999px;">{{nome}}</textarea>
+        <button id="copy-name" type="button" onclick="copyName()">Copiar {{nome}}</button>
+        <script>
+          function copyName() {
+            const button = document.getElementById("copy-name");
+            const helper = document.getElementById("copy-helper");
+            helper.focus();
+            helper.select();
+            helper.setSelectionRange(0, helper.value.length);
+            let copied = false;
+            try {
+              copied = document.execCommand("copy");
+            } catch (error) {
+              copied = false;
+            }
+            if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(helper.value).catch(() => {});
+            }
+            button.textContent = "Copiado ✓";
+            button.classList.add("copied");
+            setTimeout(() => {
+              button.textContent = "Copiar {{nome}}";
+              button.classList.remove("copied");
+            }, 1600);
+          }
         </script>
         """,
-        height=48,
+        height=44,
     )
-
 
 user = _authenticated_user()
 if user is None:
