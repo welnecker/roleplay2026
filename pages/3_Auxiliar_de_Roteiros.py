@@ -20,16 +20,16 @@ st.set_page_config(page_title="Auxiliar de Roteiros", page_icon="📝", layout="
 DRAFT_KEY = "script_authoring_draft"
 ROWS_KEY = "script_authoring_rows"
 _TAG_BUTTONS = (
-    ("Cena", "[CENA {block_id}] "),
-    ("Beat", "[BEAT] "),
-    ("Pensamento", "[PENSAMENTO] "),
-    ("Fala exata", "[FALA EXATA] "),
-    ("Fala", "[FALA] "),
-    ("Fala livre", "[FALA LIVRE] "),
-    ("Ponte", "[PONTE] "),
-    ("Transição", "[TRANSIÇÃO] "),
-    ("Pátio final", "[PÁTIO FINAL despedida] "),
-    ("Fim", "[FIM story_complete] "),
+    ("Cena", "[CENA {block_id}] ", "Abre um bloco narrativo. Ex.: [CENA supermercado] Eu caminho pelo corredor."),
+    ("Beat", "[BEAT] ", "Define o acontecimento obrigatório. Ex.: [BEAT] Eu esbarro no usuário."),
+    ("Pensamento", "[PENSAMENTO] ", "Pensamento interno da personagem. Ex.: [PENSAMENTO] Espero não ter machucado ele."),
+    ("Fala exata", "[FALA EXATA] ", "Texto autoral que deve aparecer. Ex.: [FALA EXATA] Eita... desculpa!"),
+    ("Fala", "[FALA] ", "Fala canônica da personagem. Ex.: [FALA] Tem certeza que está tudo bem?"),
+    ("Fala livre", "[FALA LIVRE] ", "Orienta o modelo sem fixar cada palavra. Ex.: [FALA LIVRE] Eu pergunto se ele está bem."),
+    ("Ponte", "[PONTE] ", "Orienta a reação dentro do beat. Ex.: [PONTE] Eu respondo sem mudar de assunto."),
+    ("Transição", "[TRANSIÇÃO] ", "Introduz tempo ou local antes do próximo beat. Ex.: [TRANSIÇÃO] MINUTOS DEPOIS — FILA."),
+    ("Pátio final", "[PÁTIO FINAL despedida] ", "Abre o encerramento normal. Depois dele, escreva pelo menos dois beats."),
+    ("Fim", "[FIM story_complete] ", "Encerra a run. Deve ser a última instrução do roteiro."),
 )
 
 
@@ -181,9 +181,14 @@ with action_col:
 
 st.subheader("Inserir tag")
 button_columns = st.columns(5)
-for index, (label, template) in enumerate(_TAG_BUTTONS):
+for index, (label, template, description) in enumerate(_TAG_BUTTONS):
     with button_columns[index % len(button_columns)]:
-        if st.button(label, key=f"script_tag:{label}", use_container_width=True):
+        if st.button(
+            label,
+            key=f"script_tag:{label}",
+            help=description,
+            use_container_width=True,
+        ):
             _append_tag(template, block_id)
             st.rerun()
 
