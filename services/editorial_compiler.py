@@ -208,6 +208,7 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "unknown_facts": unknown_facts,
                     "factual_contract_mode": "explicit+derived",
                     "constraints": constraints,
+                    "profile_delivery": deepcopy(source.get("profile_delivery") or {}),
                     "block_id": block_id,
                     "block_type": block_type,
                     "position_in_block": position,

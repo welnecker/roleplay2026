@@ -5,6 +5,7 @@ from services.immersive_onboarding import (
     _analyze_once,
     build_immersive_context,
     clear_immersive_profile,
+    identity_is_complete,
     persistent_profile_payload,
     photo_acknowledgement,
     profile_key,
@@ -26,6 +27,12 @@ def test_profile_is_session_scoped_and_removable() -> None:
     clear_immersive_profile(state, user_id="user-1", package_id="story-1")
     assert key not in state
     assert state["unrelated"] == 1
+
+
+def test_name_and_treatment_are_required() -> None:
+    assert identity_is_complete("", "Como homem") is False
+    assert identity_is_complete("Janio", None) is False
+    assert identity_is_complete("Janio", "Como homem") is True
 
 
 def test_private_context_requires_completed_profile() -> None:
@@ -89,7 +96,8 @@ def test_description_is_persisted_without_photo_bytes_and_recovered() -> None:
         {
             "completed": True,
             "preferred_name": "Jânio",
-            "gender": "Homem",
+            "story_gender": "Como homem",
+            "body_route": "Corpo masculino",
             "appearance": "cabelos curtos e barba",
             "intimate": "descrição íntima",
             "appearance_attempt_digest": "hash-que-nao-pode-persistir",
@@ -97,7 +105,8 @@ def test_description_is_persisted_without_photo_bytes_and_recovered() -> None:
     )
     assert payload == {
         "preferred_name": "Jânio",
-        "gender": "Homem",
+        "story_gender": "Como homem",
+        "body_route": "Corpo masculino",
         "appearance": "cabelos curtos e barba",
         "intimate": "descrição íntima",
     }

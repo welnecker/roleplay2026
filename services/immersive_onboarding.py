@@ -23,6 +23,10 @@ def profile_key(user_id: str, package_id: str) -> str:
     return f"immersive_profile:{user_id}:{package_id}"
 
 
+def identity_is_complete(name: str, story_gender: Any) -> bool:
+    return bool(str(name or "").strip() and str(story_gender or "").strip())
+
+
 def clear_immersive_profile(
     state: MutableMapping[str, Any], *, user_id: str = "", package_id: str = ""
 ) -> None:
@@ -41,13 +45,18 @@ def build_immersive_context(profile: dict[str, Any] | None) -> str:
         return ""
     facts: list[str] = []
     name = str(profile.get("preferred_name", "") or "").strip()
-    gender = str(profile.get("gender", "") or "").strip()
+    story_gender = str(
+        profile.get("story_gender") or profile.get("gender") or ""
+    ).strip()
+    body_route = str(profile.get("body_route", "") or "").strip()
     appearance = str(profile.get("appearance", "") or "").strip()
     intimate = str(profile.get("intimate", "") or "").strip()
     if name:
         facts.append(f"Nome escolhido pelo usuário: {name}.")
-    if gender and gender != "Prefiro não informar":
-        facts.append(f"Gênero informado pelo usuário: {gender}.")
+    if story_gender:
+        facts.append(f"Tratamento escolhido pelo usuário: {story_gender}.")
+    if body_route and body_route != "Prefiro não informar":
+        facts.append(f"Anatomia declarada para cenas íntimas: {body_route}.")
     if appearance:
         facts.append(f"Aparência visível informada para esta sessão: {appearance}")
     if intimate:
@@ -69,7 +78,13 @@ def persistent_profile_payload(profile: dict[str, Any] | None) -> dict[str, str]
         return {}
     return {
         key: str(profile.get(key, "") or "").strip()
-        for key in ("preferred_name", "gender", "appearance", "intimate")
+        for key in (
+            "preferred_name",
+            "story_gender",
+            "body_route",
+            "appearance",
+            "intimate",
+        )
         if str(profile.get(key, "") or "").strip()
     }
 
@@ -78,15 +93,30 @@ def recover_persistent_profile(messages: list[dict[str, object]]) -> dict[str, A
     for message in reversed(messages):
         payload = message.get("immersive_profile")
         if isinstance(payload, dict):
-            return {
+            recovered = {
                 **{
                     key: str(payload.get(key, "") or "").strip()
-                    for key in ("preferred_name", "gender", "appearance", "intimate")
+                    for key in (
+                        "preferred_name",
+                        "story_gender",
+                        "body_route",
+                        "appearance",
+                        "intimate",
+                    )
                     if str(payload.get(key, "") or "").strip()
                 },
                 "completed": True,
                 "stage": 3,
             }
+            legacy_gender = str(payload.get("gender", "") or "").strip()
+            if legacy_gender and not recovered.get("story_gender"):
+                recovered["story_gender"] = {
+                    "Homem": "Como homem",
+                    "Mulher": "Como mulher",
+                    "Não binário": "De forma neutra",
+                    "Prefiro não informar": "De forma neutra",
+                }.get(legacy_gender, legacy_gender)
+            return recovered
     return None
 
 
@@ -186,7 +216,7 @@ def _analyze_once(
             kind=kind,
             api_key=api_key,
             model=model,
-            gender=str(profile.get("gender", "")),
+            gender=str(profile.get("body_route") or profile.get("story_gender") or ""),
         )
     except OpenRouterError as exc:
         error = str(exc)
@@ -215,22 +245,37 @@ def render_immersive_onboarding(
 
     if stage == 0:
         st.subheader("Como você quer entrar nesta história?")
-        with st.form(f"immersive_identity:{package_id}"):
-            name = st.text_input(
-                "Como gostaria de ser chamado nesta história?",
-                value=str(profile.get("preferred_name", "")),
+        name = st.text_input(
+            "Como a personagem deve chamar você?",
+            value=str(profile.get("preferred_name", "")),
+            placeholder="Nome ou apelido",
+        )
+        story_gender = st.selectbox(
+            "Como você quer ser tratado nesta história?",
+            ("Como homem", "Como mulher", "De forma neutra"),
+            index=None,
+            placeholder="Escolha uma opção",
+        )
+        body_route = st.selectbox(
+            "Qual anatomia deve orientar as cenas íntimas? (opcional)",
+            (
+                "Prefiro não informar",
+                "Corpo masculino",
+                "Corpo feminino",
+                "Corpo intersexo",
+            ),
+        )
+        can_continue = identity_is_complete(name, story_gender)
+        if st.button("Continuar", type="primary", disabled=not can_continue):
+            profile.update(
+                preferred_name=name.strip(),
+                story_gender=str(story_gender),
+                body_route=str(body_route),
+                stage=1,
             )
-            gender = st.selectbox(
-                "Qual é o seu gênero?",
-                ("Prefiro não informar", "Homem", "Mulher", "Não binário"),
-            )
-            submitted = st.form_submit_button("Continuar", type="primary")
-        if submitted:
-            profile.update(preferred_name=name.strip(), gender=gender, stage=1)
             st.rerun()
-        if st.button("Pular personalização e iniciar"):
-            profile.update(completed=True, stage=3)
-            st.rerun()
+        if not name.strip():
+            st.caption("O nome ou apelido é obrigatório.")
         return False
 
     if stage == 1:

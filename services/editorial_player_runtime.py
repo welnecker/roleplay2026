@@ -61,6 +61,10 @@ from services.runtime_persistence import (
     persist_assistant_message,
     persist_turn,
 )
+from services.story_profile import (
+    opening_with_required_name,
+    personalize_editorial_script,
+)
 from ui_components import CARD_CSS
 
 
@@ -333,6 +337,9 @@ if not render_immersive_onboarding(
     model=model,
 ):
     st.stop()
+immersive_profile = st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
+if isinstance(immersive_profile, dict):
+    script = personalize_editorial_script(script, immersive_profile)
 
 if not editorial_state.finished and not story_state.finished:
     try:
@@ -383,7 +390,10 @@ st.title(PACKAGE_TITLE)
 st.caption(PACKAGE_SUBTITLE or "História editorial")
 
 if not messages:
-    render_message("assistant", editorial_opening_text(script))
+    opening = editorial_opening_text(script)
+    if isinstance(immersive_profile, dict):
+        opening = opening_with_required_name(opening, immersive_profile)
+    render_message("assistant", opening)
 for message in messages:
     render_message(str(message.get("role", "assistant")), str(message.get("content", "")))
 

@@ -132,6 +132,30 @@ def test_ponte_e_orientacao_do_mesmo_beat() -> None:
     assert beat["allowed_transitions"]["dismissive"] == "beat"
 
 
+def test_falas_e_pensamentos_condicionais_sao_preservados_para_o_runtime() -> None:
+    document = compile_spreadsheet_story(
+        _base(),
+        [
+            _row("cena", 10, "[CENA quarto] Estou esperando o usuário."),
+            _row("beat", 20, "[BEAT] Eu recebo {{nome}} com prazer."),
+            _row("pensamento_h", 30, "[PENSAMENTO HOMEM] Que homem gostoso."),
+            _row("pensamento_m", 40, "[PENSAMENTO MULHER] Que mulher gostosa."),
+            _row("fala_h", 50, "[FALA EXATA HOMEM] Oi, {{nome}}... meu lindo."),
+            _row("fala_m", 60, "[FALA EXATA MULHER] Oi, {{nome}}... minha linda."),
+            _row("fala_n", 70, "[FALA NEUTRA] Oi, {{nome}}... que prazer."),
+            _row("fim", 80, "[FIM story_complete] Encerrar."),
+        ],
+        script_version="1.0.0",
+    )
+
+    delivery = document["blocks"][0]["beats"][0]["profile_delivery"]
+    assert delivery["thought_variants"]["HOMEM"] == "Que homem gostoso."
+    assert delivery["thought_variants"]["MULHER"] == "Que mulher gostosa."
+    assert delivery["speech_variants"]["HOMEM"] == "Oi, {{nome}}... meu lindo."
+    assert delivery["speech_variants"]["MULHER"] == "Oi, {{nome}}... minha linda."
+    assert delivery["speech_variants"]["NEUTRA"] == "Oi, {{nome}}... que prazer."
+
+
 def test_cena_vazia_e_ignorada_antes_do_primeiro_beat() -> None:
     document = compile_spreadsheet_story(
         _base(),

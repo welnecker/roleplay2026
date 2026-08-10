@@ -35,6 +35,7 @@ from services.runtime_persistence import (
     open_persistent_runtime,
     persist_turn,
 )
+from services.story_profile import resolve_profile_text
 from ui_components import inject_theme, render_story_card
 
 
@@ -491,7 +492,9 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         st.rerun()
 
     sequence_start = len(messages) + 1
-    raw_response = movement.content
+    immersive_profile = st.session_state.get(profile_key(user.user_id, package_id))
+    profile_mapping = immersive_profile if isinstance(immersive_profile, dict) else {}
+    raw_response = resolve_profile_text(movement.content, profile_mapping)
     generation_error = ""
 
     if api_key:
@@ -506,7 +509,9 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
             raw_response = generate_response(
                 api_key=api_key,
                 model=model,
-                system_prompt=build_system_prompt(movement=movement) + private_context,
+                system_prompt=resolve_profile_text(
+                    build_system_prompt(movement=movement), profile_mapping
+                ) + private_context,
                 history=history,
                 user_text=user_text,
                 debug_logging=not bool(private_context),

@@ -12,6 +12,15 @@ _FIRST_PERSON = re.compile(
     r"preciso|sinto|penso|percebo|acho|espero|posso|tenho|sei|fico)\b",
     re.IGNORECASE,
 )
+_PROFILE_TAGS = {
+    "HOMEM",
+    "MULHER",
+    "NEUTRO",
+    "NEUTRA",
+    "CORPO_MASCULINO",
+    "CORPO_FEMININO",
+    "CORPO_INTERSEXO",
+}
 
 
 class SpreadsheetStoryError(ValueError):
@@ -33,9 +42,12 @@ def _marker(value: Any) -> tuple[str, str, str]:
     parts = header.split(maxsplit=1)
     kind = _plain(parts[0]).upper()
     argument = parts[1].strip() if len(parts) > 1 else ""
-    if kind == "FALA" and _plain(argument) in {"exata", "livre"}:
-        kind = "FALA_" + _plain(argument).upper()
-        argument = ""
+    if kind == "FALA":
+        argument_parts = argument.split(maxsplit=1)
+        delivery = _plain(argument_parts[0]) if argument_parts else ""
+        if delivery in {"exata", "livre"}:
+            kind = "FALA_" + delivery.upper()
+            argument = argument_parts[1].strip() if len(argument_parts) > 1 else ""
     if kind == "PATIO" and _plain(argument).startswith("final"):
         kind = "PATIO_FINAL"
         argument = argument[5:].strip()
@@ -115,6 +127,8 @@ def compile_spreadsheet_story(
         thought = str(current_beat.pop("_thought", "") or "").strip()
         speech = str(current_beat.pop("_speech", "") or "").strip()
         transition = str(current_beat.pop("_transition", "") or "").strip()
+        thought_variants = dict(current_beat.pop("_thought_variants", {}) or {})
+        speech_variants = dict(current_beat.pop("_speech_variants", {}) or {})
         visible: list[str] = []
         if transition:
             visible.append(f"[{transition.upper()}]")
@@ -123,6 +137,14 @@ def compile_spreadsheet_story(
         if speech:
             visible.append(speech)
         current_beat["canonical_line"] = "\n\n".join(visible)
+        if thought_variants or speech_variants:
+            current_beat["profile_delivery"] = {
+                "transition": transition,
+                "thought": thought,
+                "speech": speech,
+                "thought_variants": thought_variants,
+                "speech_variants": speech_variants,
+            }
         current_beat = None
 
     for row in source_rows:
@@ -204,6 +226,8 @@ def compile_spreadsheet_story(
                 "_thought": "",
                 "_speech": "",
                 "_transition": pending_transition,
+                "_thought_variants": {},
+                "_speech_variants": {},
             }
             pending_transition = ""
             block["beats"].append(current_beat)
@@ -215,13 +239,33 @@ def compile_spreadsheet_story(
             if current_beat is None:
                 raise SpreadsheetStoryError(f"{line_id}: {kind} sem [BEAT] anterior.")
             if kind == "PENSAMENTO":
-                current_beat["_thought"] = "\n".join(
-                    part for part in (current_beat["_thought"], text) if part
-                )
+                profile_tag = _plain(argument).upper() if argument else ""
+                if profile_tag and profile_tag not in _PROFILE_TAGS:
+                    raise SpreadsheetStoryError(
+                        f"{line_id}: direcionamento de perfil desconhecido: {argument!r}"
+                    )
+                if profile_tag:
+                    if profile_tag == "NEUTRO":
+                        profile_tag = "NEUTRA"
+                    current_beat["_thought_variants"][profile_tag] = text
+                else:
+                    current_beat["_thought"] = "\n".join(
+                        part for part in (current_beat["_thought"], text) if part
+                    )
             elif kind in {"FALA", "FALA_EXATA"}:
-                current_beat["_speech"] = "\n".join(
-                    part for part in (current_beat["_speech"], text) if part
-                )
+                profile_tag = _plain(argument).upper() if argument else ""
+                if profile_tag and profile_tag not in _PROFILE_TAGS:
+                    raise SpreadsheetStoryError(
+                        f"{line_id}: direcionamento de perfil desconhecido: {argument!r}"
+                    )
+                if profile_tag:
+                    if profile_tag == "NEUTRO":
+                        profile_tag = "NEUTRA"
+                    current_beat["_speech_variants"][profile_tag] = text
+                else:
+                    current_beat["_speech"] = "\n".join(
+                        part for part in (current_beat["_speech"], text) if part
+                    )
             elif kind == "FALA_LIVRE":
                 direction = f"Crie em primeira pessoa a fala orientada por: {text}"
                 current_beat["dramatic_direction"] = "\n".join(
