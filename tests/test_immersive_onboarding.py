@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from services.immersive_onboarding import (
     PRIVACY_NOTICE,
+    _analyze_once,
     build_immersive_context,
     clear_immersive_profile,
+    photo_acknowledgement,
     profile_key,
 )
 
@@ -36,3 +38,43 @@ def test_private_context_requires_completed_profile() -> None:
     assert "Alex" in context
     assert "cabelo curto" in context
     assert "descrição privada" in context
+
+
+class _Upload:
+    def getvalue(self) -> bytes:
+        return b"same-private-file"
+
+
+def test_same_uploaded_file_is_analyzed_only_once(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def fake_analyze(*args, **kwargs) -> str:
+        calls.append(str(kwargs["kind"]))
+        return "descrição"
+
+    monkeypatch.setattr("services.immersive_onboarding._analyze", fake_analyze)
+    profile: dict[str, object] = {"gender": "Homem"}
+
+    first, first_error = _analyze_once(
+        profile, _Upload(), kind="appearance", api_key="key", model="model"
+    )
+    second, second_error = _analyze_once(
+        profile, _Upload(), kind="appearance", api_key="key", model="model"
+    )
+
+    assert first == "descrição"
+    assert first_error == ""
+    assert second == ""
+    assert second_error == ""
+    assert calls == ["appearance"]
+
+
+def test_acknowledgement_praises_and_explains_immersion() -> None:
+    general = photo_acknowledgement("Camilly")
+    intimate = photo_acknowledgement("Camilly", intimate=True)
+
+    assert "gostei do que vi" in general.lower()
+    assert "Camilly" in general
+    assert "mais pessoal e imersiva" in general
+    assert "gostei muito do que vi" in intimate.lower()
+    assert "mais íntima e imersiva" in intimate

@@ -416,6 +416,7 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         user_id=user.user_id,
         package_id=package_id,
         title=card_title,
+        character_name=(story_card.profile_name if story_card is not None else card_title),
         api_key=api_key,
         model=model,
     ):

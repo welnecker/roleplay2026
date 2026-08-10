@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any, MutableMapping
 
 import streamlit as st
@@ -60,6 +61,19 @@ def build_immersive_context(profile: dict[str, Any] | None) -> str:
     )
 
 
+def photo_acknowledgement(character_name: str, *, intimate: bool = False) -> str:
+    name = str(character_name or "A personagem").strip()
+    if intimate:
+        return (
+            f"Humm... gostei muito do que vi. Agora que eu, {name}, conheço você "
+            "ainda mais de perto, nossa história vai ficar muito mais íntima e imersiva."
+        )
+    return (
+        f"Humm... gostei do que vi. Agora que eu, {name}, sei quem está do outro "
+        "lado, nossa história vai ficar muito mais pessoal e imersiva."
+    )
+
+
 def _image_prompt(kind: str, gender: str) -> str:
     if kind == "appearance":
         return (
@@ -92,8 +106,54 @@ def _analyze(uploaded: Any, *, kind: str, api_key: str, model: str, gender: str)
     )
 
 
+def _uploaded_digest(uploaded: Any) -> str:
+    """Identifica o arquivo na sessão sem conservar seus bytes."""
+
+    return hashlib.sha256(uploaded.getvalue()).hexdigest()
+
+
+def _analyze_once(
+    profile: dict[str, Any],
+    uploaded: Any,
+    *,
+    kind: str,
+    api_key: str,
+    model: str,
+) -> tuple[str, str]:
+    """Executa no máximo uma chamada automática para cada arquivo selecionado."""
+
+    attempt_key = f"{kind}_attempt_digest"
+    error_key = f"{kind}_error"
+    digest = _uploaded_digest(uploaded)
+    if profile.get(attempt_key) == digest:
+        return "", str(profile.get(error_key, "") or "")
+
+    # Marque antes da chamada: mesmo uma falha não dispara repetição automática.
+    profile[attempt_key] = digest
+    profile.pop(error_key, None)
+    try:
+        description = _analyze(
+            uploaded,
+            kind=kind,
+            api_key=api_key,
+            model=model,
+            gender=str(profile.get("gender", "")),
+        )
+    except OpenRouterError as exc:
+        error = str(exc)
+        profile[error_key] = error
+        return "", error
+    return description, ""
+
+
 def render_immersive_onboarding(
-    *, user_id: str, package_id: str, title: str, api_key: str, model: str
+    *,
+    user_id: str,
+    package_id: str,
+    title: str,
+    character_name: str,
+    api_key: str,
+    model: str,
 ) -> bool:
     key = profile_key(user_id, package_id)
     profile = st.session_state.setdefault(key, {"stage": 0, "completed": False})
@@ -126,21 +186,33 @@ def render_immersive_onboarding(
 
     if stage == 1:
         st.subheader("Cole sua foto aqui, para que eu possa saber como você é")
+        if profile.get("appearance"):
+            st.markdown(f"**{character_name} observa sua foto:**")
+            st.write(str(profile["appearance"]))
+            st.success(photo_acknowledgement(character_name))
+            if st.button("Continuar", type="primary"):
+                profile["stage"] = 2
+                st.rerun()
+            return False
+        st.caption("Ao selecionar o arquivo, a análise começará automaticamente.")
         uploaded = st.file_uploader(
             "Foto opcional", type=ALLOWED_IMAGE_TYPES, key=f"appearance_upload:{package_id}"
         )
-        if uploaded is not None and st.button("Usar esta foto", type="primary"):
-            try:
-                with st.spinner("Observando a foto uma única vez..."):
-                    description = _analyze(
-                        uploaded, kind="appearance", api_key=api_key, model=model,
-                        gender=str(profile.get("gender", "")),
-                    )
-            except OpenRouterError as exc:
-                st.error(str(exc))
-            else:
-                profile.update(appearance=description, stage=2)
+        if uploaded is not None:
+            with st.spinner("Foto recebida. Observando uma única vez..."):
+                description, error = _analyze_once(
+                    profile, uploaded, kind="appearance", api_key=api_key, model=model
+                )
+            if description:
+                profile["appearance"] = description
                 st.rerun()
+            if error:
+                st.error(error)
+                st.caption("A foto não foi processada novamente para evitar consumo duplicado.")
+                if st.button("Tentar novamente com esta foto"):
+                    profile.pop("appearance_attempt_digest", None)
+                    profile.pop("appearance_error", None)
+                    st.rerun()
         if st.button("Continuar sem foto"):
             profile["stage"] = 2
             st.rerun()
@@ -148,26 +220,43 @@ def render_immersive_onboarding(
 
     if stage == 2:
         st.subheader("Cole a foto íntima aqui")
+        if profile.get("intimate"):
+            st.markdown(f"**{character_name} observa sua foto íntima:**")
+            st.write(str(profile["intimate"]))
+            st.success(photo_acknowledgement(character_name, intimate=True))
+            if st.button("Iniciar história", type="primary"):
+                profile.update(completed=True, stage=3)
+                st.rerun()
+            return False
         st.warning("Envie somente uma imagem sua, sendo maior de 18 anos, ou uma imagem que você tenha autorização expressa para usar.")
-        adult = st.checkbox("Confirmo que tenho 18 anos ou mais.")
-        authorized = st.checkbox("Confirmo que a imagem é minha ou tenho autorização expressa.")
+        adult = st.checkbox(
+            "Confirmo que tenho 18 anos ou mais.",
+            key=f"intimate_adult:{package_id}",
+        )
+        authorized = st.checkbox(
+            "Confirmo que a imagem é minha ou tenho autorização expressa.",
+            key=f"intimate_authorized:{package_id}",
+        )
         uploaded = st.file_uploader(
             "Foto íntima opcional", type=ALLOWED_IMAGE_TYPES, key=f"intimate_upload:{package_id}"
         )
-        if uploaded is not None and st.button(
-            "Usar esta foto", type="primary", disabled=not (adult and authorized)
-        ):
-            try:
-                with st.spinner("Observando a foto uma única vez..."):
-                    description = _analyze(
-                        uploaded, kind="intimate", api_key=api_key, model=model,
-                        gender=str(profile.get("gender", "")),
-                    )
-            except OpenRouterError as exc:
-                st.error(str(exc))
-            else:
-                profile.update(intimate=description, completed=True, stage=3)
+        if uploaded is not None and not (adult and authorized):
+            st.info("Foto recebida. Marque as duas confirmações para iniciar a análise.")
+        if uploaded is not None and adult and authorized:
+            with st.spinner("Foto recebida. Observando uma única vez..."):
+                description, error = _analyze_once(
+                    profile, uploaded, kind="intimate", api_key=api_key, model=model
+                )
+            if description:
+                profile["intimate"] = description
                 st.rerun()
+            if error:
+                st.error(error)
+                st.caption("A foto não foi processada novamente para evitar consumo duplicado.")
+                if st.button("Tentar novamente com esta foto"):
+                    profile.pop("intimate_attempt_digest", None)
+                    profile.pop("intimate_error", None)
+                    st.rerun()
         if st.button("Continuar sem foto íntima"):
             profile.update(completed=True, stage=3)
             st.rerun()

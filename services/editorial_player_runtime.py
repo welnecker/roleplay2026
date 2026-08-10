@@ -294,6 +294,11 @@ if not render_immersive_onboarding(
     user_id=user.user_id,
     package_id=PACKAGE_ID,
     title=PACKAGE_TITLE,
+    character_name=(
+        PACKAGE.manifest.card.character_profile.name
+        if PACKAGE.manifest.card.character_profile
+        else PACKAGE_TITLE
+    ),
     api_key=api_key,
     model=model,
 ):
