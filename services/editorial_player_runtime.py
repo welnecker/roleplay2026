@@ -395,6 +395,24 @@ if not messages:
         opening = opening_with_required_name(opening, immersive_profile)
     render_message("assistant", opening)
 for message in messages:
+    if str(message.get("role", "assistant")) == "assistant":
+        message_node_id = str(
+            message.get("editorial_node") or message.get("beat_id") or ""
+        ).strip()
+        if message_node_id:
+            try:
+                render_editorial_scene_image(
+                    PACKAGE_ID,
+                    message_node_id,
+                    render_memory=False,
+                )
+            except Exception as exc:
+                log_editorial_exception(
+                    "render_editorial_message_image",
+                    exc,
+                    package_id=PACKAGE_ID,
+                    node_id=message_node_id,
+                )
     render_message(str(message.get("role", "assistant")), str(message.get("content", "")))
 
 if editorial_state.finished or story_state.finished:
@@ -407,7 +425,16 @@ if editorial_state.finished or story_state.finished:
         return_to_library()
     st.stop()
 
-render_current_scene(editorial_state)
+last_message_node_id = ""
+if messages and str(messages[-1].get("role", "")) == "assistant":
+    last_message_node_id = str(
+        messages[-1].get("editorial_node") or messages[-1].get("beat_id") or ""
+    ).strip()
+if last_message_node_id != editorial_state.node_id:
+    render_current_scene(editorial_state)
+else:
+    # A imagem do beat já foi exibida junto da fala; mantém apenas o controle de memória.
+    render_editorial_scene_image(PACKAGE_ID, "", user.user_id)
 user_text = st.chat_input("Responda")
 if not user_text:
     st.stop()
