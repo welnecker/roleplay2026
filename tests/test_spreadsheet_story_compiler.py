@@ -129,7 +129,7 @@ def test_ponte_e_orientacao_do_mesmo_beat() -> None:
     assert beat["dramatic_direction"] == (
         "PONTE: Eu reajo sem antecipar o próximo assunto."
     )
-    assert beat["allowed_transitions"]["dismissive"] == "beat"
+    assert beat["allowed_transitions"]["dismissive"] == "__generic_disagreement_warning"
 
 
 def test_falas_e_pensamentos_condicionais_sao_preservados_para_o_runtime() -> None:
@@ -154,6 +154,39 @@ def test_falas_e_pensamentos_condicionais_sao_preservados_para_o_runtime() -> No
     assert delivery["speech_variants"]["HOMEM"] == "Oi, {{nome}}... meu lindo."
     assert delivery["speech_variants"]["MULHER"] == "Oi, {{nome}}... minha linda."
     assert delivery["speech_variants"]["NEUTRA"] == "Oi, {{nome}}... que prazer."
+
+
+def test_patio_generico_avisa_e_encerra_com_nome_personalizavel() -> None:
+    document = compile_spreadsheet_story(
+        _base(),
+        [
+            _row("cena", 10, "[CENA quarto] Estou esperando o usuário."),
+            _row("beat", 20, "[BEAT] Eu inicio a conversa."),
+            _row("fala", 30, "[FALA EXATA] Que bom ter você aqui."),
+            _row("fim", 40, "[FIM story_complete] Encerrar."),
+        ],
+        script_version="1.0.0",
+    )
+
+    beat = document["blocks"][0]["beats"][0]
+    assert beat["allowed_transitions"]["dismissive"] == "__generic_disagreement_warning"
+    yard = next(
+        block
+        for block in document["blocks"]
+        if block["block_id"] == "patio_generico_desacordo"
+    )
+    warning, closing, ending = yard["beats"]
+    assert "{{nome}}" in warning["canonical_line"]
+    assert "último aviso" in warning["canonical_line"]
+    assert closing["terminal_transition"] == ending["beat_id"]
+    assert "nossa interação se encerra aqui" in closing["canonical_line"]
+    assert ending["ending"] == {
+        "run_status": "terminated",
+        "ending_code": "generic_user_disagreement",
+    }
+
+    compiled = compile_editorial_document(document)
+    assert compiled["scene"]["beats_by_id"][closing["beat_id"]]["terminal_transition"] == ending["beat_id"]
 
 
 def test_cena_vazia_e_ignorada_antes_do_primeiro_beat() -> None:
@@ -186,7 +219,13 @@ def test_bloco_com_apenas_fim_nao_se_torna_primeiro_bloco() -> None:
     )
 
     assert document["blocks"][0]["entry_beat_id"] == "primeiro"
-    assert document["blocks"][-1]["beats"][0]["type"] == "ending"
+    endings = [
+        beat
+        for block in document["blocks"]
+        for beat in block["beats"]
+        if beat["type"] == "ending"
+    ]
+    assert any(ending["beat_id"] == "fim" for ending in endings)
 
     compiled = compile_editorial_document(document)
     assert compiled["scene"]["first_beat_id"] == "primeiro"
