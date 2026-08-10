@@ -55,6 +55,11 @@ def _append_tag(template: str, block_id: str) -> None:
     st.session_state.pop(ROWS_KEY, None)
 
 
+def _clear_draft() -> None:
+    st.session_state[DRAFT_KEY] = ""
+    st.session_state.pop(ROWS_KEY, None)
+
+
 user = _authenticated_user()
 if user is None:
     st.error("Entre na sua conta antes de acessar o auxiliar de roteiros.")
@@ -165,10 +170,11 @@ generate_column, clear_column = st.columns([3, 1])
 with generate_column:
     generate = st.button("Validar e gerar", type="primary", use_container_width=True)
 with clear_column:
-    if st.button("Limpar", use_container_width=True):
-        st.session_state[DRAFT_KEY] = ""
-        st.session_state.pop(ROWS_KEY, None)
-        st.rerun()
+    st.button(
+        "Limpar",
+        use_container_width=True,
+        on_click=_clear_draft,
+    )
 
 if generate:
     try:
