@@ -350,11 +350,97 @@ def compile_spreadsheet_story(
         beat["allowed_transitions"] = {
             "engaged": target,
             "minimal": target,
-            "dismissive": beat["beat_id"],
-            "nonsense": beat["beat_id"],
-            "mocking": ending_id,
-            "hostile": ending_id,
+            "dismissive": "__generic_disagreement_warning",
+            "nonsense": "__generic_disagreement_warning",
+            "mocking": "__generic_disagreement_warning",
+            "hostile": "__generic_disagreement_warning",
         }
+
+    generic_warning_id = "__generic_disagreement_warning"
+    generic_closing_id = "__generic_disagreement_closing"
+    generic_ending_id = "__generic_disagreement_end"
+    reserved_ids = {generic_warning_id, generic_closing_id, generic_ending_id}
+    conflict = reserved_ids.intersection(seen_line_ids)
+    if conflict:
+        raise SpreadsheetStoryError(
+            "line_id reservado para o pátio genérico: " + ", ".join(sorted(conflict))
+        )
+
+    all_to_closing = {
+        engagement: generic_closing_id
+        for engagement in ("engaged", "minimal", "dismissive", "nonsense", "mocking", "hostile")
+    }
+    all_to_ending = {
+        engagement: generic_ending_id
+        for engagement in ("engaged", "minimal", "dismissive", "nonsense", "mocking", "hostile")
+    }
+    generic_yard = {
+        "block_id": "patio_generico_desacordo",
+        "block_type": "terminal_yard",
+        "order": len(blocks) + 1,
+        "title": "Encerramento por desacordo",
+        "entry_beat_id": generic_warning_id,
+        "min_user_turns": 2,
+        "max_user_turns": 2,
+        "max_movements_per_response": 1,
+        "max_questions_per_response": 0,
+        "rules": ["Eu dou um último aviso e encerro se a incompatibilidade continuar."],
+        "beats": [
+            {
+                "beat_id": generic_warning_id,
+                "order": 1,
+                "type": "dialogue",
+                "required_movement": "Eu dou ao usuário um último aviso antes de encerrar.",
+                "canonical_line": (
+                    "{{nome}}, você não parece querer se divertir de forma correta comigo. "
+                    "Por favor, este é o último aviso."
+                ),
+                "dramatic_direction": "Use integralmente a fala canônica, sem perguntas adicionais.",
+                "next_beat_id": generic_closing_id,
+                "max_questions": 0,
+                "max_sentences": 2,
+                "memory_writes": [],
+                "allowed_transitions": all_to_closing,
+                "status": "active",
+            },
+            {
+                "beat_id": generic_closing_id,
+                "order": 2,
+                "type": "dialogue",
+                "required_movement": "Eu encerro definitivamente a interação.",
+                "canonical_line": (
+                    "Tudo bem, {{nome}}, nossa interação se encerra aqui. Tchau."
+                ),
+                "dramatic_direction": "Use integralmente a fala canônica e não deixe convite para continuar.",
+                "next_beat_id": generic_ending_id,
+                "terminal_transition": generic_ending_id,
+                "max_questions": 0,
+                "max_sentences": 2,
+                "memory_writes": [],
+                "allowed_transitions": all_to_ending,
+                "status": "active",
+            },
+            {
+                "beat_id": generic_ending_id,
+                "order": 3,
+                "type": "ending",
+                "required_movement": "Encerrar a run por incompatibilidade com o roteiro.",
+                "canonical_line": "",
+                "dramatic_direction": "",
+                "next_beat_id": "",
+                "max_questions": 0,
+                "max_sentences": 1,
+                "memory_writes": [],
+                "allowed_transitions": {},
+                "ending": {
+                    "run_status": "terminated",
+                    "ending_code": "generic_user_disagreement",
+                },
+                "status": "active",
+            },
+        ],
+    }
+    blocks.append(generic_yard)
 
     return document
 
