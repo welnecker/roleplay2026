@@ -197,21 +197,76 @@ with name_help:
     )
 
 with st.expander("Tags direcionadas por tratamento ou anatomia"):
+    st.info(
+        "Todos os pensamentos e falas abaixo pertencem à personagem. "
+        "O complemento HOMEM, MULHER ou NEUTRA escolhe qual variante será usada "
+        "conforme o tratamento selecionado pelo usuário."
+    )
     directed = (
-        ("Pensamento homem", "[PENSAMENTO HOMEM] "),
-        ("Pensamento mulher", "[PENSAMENTO MULHER] "),
-        ("Pensamento neutro", "[PENSAMENTO NEUTRA] "),
-        ("Fala homem", "[FALA EXATA HOMEM] "),
-        ("Fala mulher", "[FALA EXATA MULHER] "),
-        ("Fala neutra", "[FALA EXATA NEUTRA] "),
-        ("Pensamento corpo masculino", "[PENSAMENTO CORPO_MASCULINO] "),
-        ("Pensamento corpo feminino", "[PENSAMENTO CORPO_FEMININO] "),
-        ("Pensamento corpo intersexo", "[PENSAMENTO CORPO_INTERSEXO] "),
+        (
+            "Pensamento para homem",
+            "[PENSAMENTO HOMEM] ",
+            "Pensamento interno da personagem quando o usuário escolheu “Como homem”. "
+            "Ex.: [PENSAMENTO HOMEM] Humm... gostei do jeito dele.",
+        ),
+        (
+            "Pensamento para mulher",
+            "[PENSAMENTO MULHER] ",
+            "Pensamento interno da personagem quando o usuário escolheu “Como mulher”. "
+            "Ex.: [PENSAMENTO MULHER] Humm... gostei do jeito dela.",
+        ),
+        (
+            "Pensamento neutro",
+            "[PENSAMENTO NEUTRA] ",
+            "Pensamento interno da personagem para tratamento neutro. "
+            "Ex.: [PENSAMENTO NEUTRA] Humm... gostei dessa aproximação.",
+        ),
+        (
+            "Fala para homem",
+            "[FALA EXATA HOMEM] ",
+            "Fala da personagem dirigida ao usuário tratado como homem. "
+            "Ex.: [FALA EXATA HOMEM] Oi, {{nome}}... meu lindo.",
+        ),
+        (
+            "Fala para mulher",
+            "[FALA EXATA MULHER] ",
+            "Fala da personagem dirigida ao usuário tratado como mulher. "
+            "Ex.: [FALA EXATA MULHER] Oi, {{nome}}... minha linda.",
+        ),
+        (
+            "Fala neutra",
+            "[FALA EXATA NEUTRA] ",
+            "Fala da personagem sem flexão masculina ou feminina. "
+            "Ex.: [FALA EXATA NEUTRA] Oi, {{nome}}... que prazer.",
+        ),
+        (
+            "Pensamento — corpo masculino",
+            "[PENSAMENTO CORPO_MASCULINO] ",
+            "Pensamento da personagem usado somente quando o usuário informou anatomia masculina. "
+            "Use quando o conteúdo depende da anatomia, não apenas do tratamento.",
+        ),
+        (
+            "Pensamento — corpo feminino",
+            "[PENSAMENTO CORPO_FEMININO] ",
+            "Pensamento da personagem usado somente quando o usuário informou anatomia feminina. "
+            "Use quando o conteúdo depende da anatomia, não apenas do tratamento.",
+        ),
+        (
+            "Pensamento — corpo intersexo",
+            "[PENSAMENTO CORPO_INTERSEXO] ",
+            "Pensamento da personagem usado somente quando o usuário informou anatomia intersexo. "
+            "Use quando o conteúdo depende da anatomia, não apenas do tratamento.",
+        ),
     )
     directed_columns = st.columns(3)
-    for index, (label, template) in enumerate(directed):
+    for index, (label, template, description) in enumerate(directed):
         with directed_columns[index % 3]:
-            if st.button(label, key=f"script_directed:{label}", use_container_width=True):
+            if st.button(
+                label,
+                key=f"script_directed:{label}",
+                help=description,
+                use_container_width=True,
+            ):
                 _append_tag(template, block_id)
                 st.rerun()
 
