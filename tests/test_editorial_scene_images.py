@@ -97,6 +97,22 @@ def test_renderizacao_explicita_mantem_imagem_recolhida(monkeypatch, tmp_path: P
     assert observed["use_container_width"] is True
 
 
+def test_ids_da_planilha_reutilizam_imagens_do_roteiro_original(tmp_path: Path) -> None:
+    package = _package(tmp_path)
+    image_dir = package / "assets" / "scenes" / "supermercado"
+    (image_dir / "encontro_acidental_001.jpg").write_bytes(b"fake-image")
+    with (package / "scene_images.yaml").open("a", encoding="utf-8") as target:
+        target.write(
+            "\nencontro_acidental_001:\n"
+            "  file: assets/scenes/supermercado/encontro_acidental_001.jpg\n"
+        )
+
+    image = resolve_editorial_scene_image(package, "supermercado_001")
+
+    assert image is not None
+    assert Path(image["path"]).name == "encontro_acidental_001.jpg"
+
+
 def test_imagem_ausente_falha_com_mensagem_explicita(tmp_path: Path) -> None:
     package = tmp_path / "casada_frustrada"
     package.mkdir()
