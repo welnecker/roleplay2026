@@ -1,0 +1,282 @@
+from __future__ import annotations
+
+import csv
+import io
+import re
+import unicodedata
+from dataclasses import dataclass
+from typing import Iterable
+
+
+ROTEIROS_COLUMNS = (
+    "package_id",
+    "script_version",
+    "line_id",
+    "order",
+    "instruction",
+    "status",
+    "updated_at",
+)
+_TAG_PATTERN = re.compile(
+    r"(?ms)^[ \t]*\[([^\]\n]+)\][ \t]*(.*?)(?=^[ \t]*\[[^\]\n]+\]|\Z)"
+)
+_SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
+_FIRST_PERSON = re.compile(
+    r"\b(eu|me|mim|meu|minha|meus|minhas|comigo|estou|sou|vou|quero|"
+    r"preciso|sinto|penso|percebo|acho|espero|posso|tenho|sei|fico)\b",
+    re.IGNORECASE,
+)
+_DEPENDENT_KINDS = {"PENSAMENTO", "FALA", "FALA_EXATA", "FALA_LIVRE", "PONTE"}
+
+
+class ScriptAuthoringError(ValueError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedInstruction:
+    header: str
+    kind: str
+    argument: str
+    text: str
+    instruction: str
+
+
+def _plain(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    return "".join(char for char in normalized if not unicodedata.combining(char))
+
+
+def slugify(value: str, *, fallback: str = "roteiro") -> str:
+    clean = _SLUG_PATTERN.sub("_", _plain(value).casefold()).strip("_")
+    return clean or fallback
+
+
+def package_id_from_title(title: str) -> str:
+    return "roleplay2026." + slugify(title, fallback="nova_historia")
+
+
+def parse_instruction(header: str, text: str) -> ParsedInstruction:
+    raw_header = " ".join(str(header or "").strip().split())
+    parts = raw_header.split()
+    if not parts:
+        raise ScriptAuthoringError("Tag vazia.")
+
+    first = _plain(parts[0]).upper()
+    argument = " ".join(parts[1:]).strip()
+    kind = first
+    if first == "FALA":
+        normalized_argument = _plain(argument).casefold()
+        if normalized_argument == "exata" or normalized_argument.startswith("exata "):
+            kind = "FALA_EXATA"
+        elif normalized_argument == "livre" or normalized_argument.startswith("livre "):
+            kind = "FALA_LIVRE"
+    elif first == "PATIO":
+        if not _plain(argument).casefold().startswith("final"):
+            raise ScriptAuthoringError(
+                f"Tag não reconhecida: [{raw_header}]. Use [PÁTIO FINAL id]."
+            )
+        kind = "PATIO_FINAL"
+    elif first == "TRANSICAO":
+        kind = "TRANSICAO"
+
+    allowed = {
+        "CENA",
+        "BEAT",
+        "PENSAMENTO",
+        "FALA",
+        "FALA_EXATA",
+        "FALA_LIVRE",
+        "PONTE",
+        "TRANSICAO",
+        "PATIO_FINAL",
+        "FIM",
+    }
+    if kind not in allowed:
+        raise ScriptAuthoringError(f"Tag não reconhecida: [{raw_header}].")
+
+    clean_text = str(text or "").strip()
+    instruction = f"[{raw_header}]"
+    if clean_text:
+        instruction += " " + clean_text
+    return ParsedInstruction(raw_header, kind, argument, clean_text, instruction)
+
+
+def parse_draft(draft: str) -> list[ParsedInstruction]:
+    source = str(draft or "").strip()
+    if not source:
+        raise ScriptAuthoringError("Digite ao menos uma instrução.")
+
+    matches = list(_TAG_PATTERN.finditer(source))
+    if not matches:
+        raise ScriptAuthoringError("Nenhuma tag de roteiro foi encontrada.")
+    prefix = source[: matches[0].start()].strip()
+    if prefix:
+        raise ScriptAuthoringError("Existe texto antes da primeira tag.")
+
+    parsed = [
+        parse_instruction(match.group(1), match.group(2))
+        for match in matches
+    ]
+    consumed = "".join(match.group(0) for match in matches).strip()
+    if not consumed:
+        raise ScriptAuthoringError("O roteiro não pôde ser interpretado.")
+    return parsed
+
+
+def _unique_line_id(base: str, used: set[str]) -> str:
+    candidate = slugify(base)
+    suffix = 2
+    while candidate in used:
+        candidate = f"{slugify(base)}_{suffix:02d}"
+        suffix += 1
+    used.add(candidate)
+    return candidate
+
+
+def _validate_sequence(items: Iterable[ParsedInstruction]) -> list[str]:
+    errors: list[str] = []
+    current_beat = ""
+    beat_count = 0
+    yard_beat_count = 0
+    in_final_yard = False
+    has_ending = False
+
+    for index, item in enumerate(items, start=1):
+        if item.kind == "BEAT":
+            beat_count += 1
+            current_beat = f"beat_{beat_count}"
+            if in_final_yard:
+                yard_beat_count += 1
+        elif item.kind in _DEPENDENT_KINDS and not current_beat:
+            errors.append(f"Linha autoral {index}: [{item.header}] precisa de [BEAT] anterior.")
+        elif item.kind == "PATIO_FINAL":
+            current_beat = ""
+            in_final_yard = True
+        elif item.kind == "CENA":
+            current_beat = ""
+        elif item.kind == "FIM":
+            has_ending = True
+
+        if item.kind in {"BEAT", "PENSAMENTO", "PONTE", "PATIO_FINAL"}:
+            if item.text and not _FIRST_PERSON.search(item.text):
+                errors.append(
+                    f"Linha autoral {index}: [{item.header}] deve ser escrita em primeira pessoa."
+                )
+
+    if beat_count == 0:
+        errors.append("O roteiro precisa ter ao menos um [BEAT].")
+    if not has_ending:
+        errors.append("O roteiro precisa terminar com [FIM código].")
+    if in_final_yard and yard_beat_count < 2:
+        errors.append("[PÁTIO FINAL] precisa conter pelo menos dois [BEAT].")
+    if items and list(items)[-1].kind != "FIM":
+        errors.append("[FIM código] deve ser a última instrução.")
+    return errors
+
+
+def compile_draft_rows(
+    draft: str,
+    *,
+    package_id: str,
+    script_version: str,
+    initial_block_id: str,
+    start_order: int = 10,
+    order_step: int = 10,
+) -> list[dict[str, object]]:
+    clean_package = str(package_id or "").strip()
+    clean_version = str(script_version or "").strip()
+    if not clean_package.startswith("roleplay2026.") or clean_package.endswith("."):
+        raise ScriptAuthoringError(
+            "package_id deve seguir o formato roleplay2026.nome_da_historia."
+        )
+    if not clean_version:
+        raise ScriptAuthoringError("Informe a script_version.")
+    if int(start_order) < 0 or int(order_step) <= 0:
+        raise ScriptAuthoringError("A ordem inicial deve ser positiva e o intervalo maior que zero.")
+
+    items = parse_draft(draft)
+    errors = _validate_sequence(items)
+    if errors:
+        raise ScriptAuthoringError("\n".join(errors))
+
+    current_block = slugify(initial_block_id, fallback="roteiro")
+    current_beat = ""
+    beat_number = 0
+    transition_number = 0
+    used: set[str] = set()
+    rows: list[dict[str, object]] = []
+
+    for index, item in enumerate(items):
+        if item.kind == "CENA":
+            current_block = slugify(item.argument or current_block)
+            line_id = _unique_line_id(f"{current_block}_cena", used)
+            current_beat = ""
+        elif item.kind == "PATIO_FINAL":
+            current_block = slugify(
+                item.argument.removeprefix("FINAL").strip() or "patio_final"
+            )
+            line_id = _unique_line_id(f"{current_block}_patio_final", used)
+            current_beat = ""
+        elif item.kind == "BEAT":
+            beat_number += 1
+            current_beat = f"{current_block}_{beat_number:03d}"
+            line_id = _unique_line_id(current_beat, used)
+        elif item.kind == "PENSAMENTO":
+            line_id = _unique_line_id(f"{current_beat}_pensamento", used)
+        elif item.kind in {"FALA", "FALA_EXATA", "FALA_LIVRE"}:
+            line_id = _unique_line_id(f"{current_beat}_fala", used)
+        elif item.kind == "PONTE":
+            line_id = _unique_line_id(f"{current_beat}_ponte", used)
+        elif item.kind == "TRANSICAO":
+            transition_number += 1
+            line_id = _unique_line_id(
+                f"{current_block}_transicao_{transition_number:03d}", used
+            )
+            current_beat = ""
+        elif item.kind == "FIM":
+            line_id = _unique_line_id(f"{current_block}_fim", used)
+        else:
+            line_id = _unique_line_id(f"{current_block}_linha_{index + 1:03d}", used)
+
+        rows.append(
+            {
+                "package_id": clean_package,
+                "script_version": clean_version,
+                "line_id": line_id,
+                "order": int(start_order) + index * int(order_step),
+                "instruction": item.instruction,
+                "status": "active",
+                "updated_at": "",
+            }
+        )
+    return rows
+
+
+def rows_to_delimited(rows: Iterable[dict[str, object]], *, delimiter: str) -> str:
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=ROTEIROS_COLUMNS, delimiter=delimiter)
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({column: row.get(column, "") for column in ROTEIROS_COLUMNS})
+    return output.getvalue()
+
+
+def rows_to_tsv(rows: Iterable[dict[str, object]]) -> str:
+    return rows_to_delimited(rows, delimiter="\t")
+
+
+def rows_to_csv(rows: Iterable[dict[str, object]]) -> str:
+    return "\ufeff" + rows_to_delimited(rows, delimiter=";")
+
+
+__all__ = [
+    "ROTEIROS_COLUMNS",
+    "ScriptAuthoringError",
+    "compile_draft_rows",
+    "package_id_from_title",
+    "parse_draft",
+    "rows_to_csv",
+    "rows_to_tsv",
+    "slugify",
+]
