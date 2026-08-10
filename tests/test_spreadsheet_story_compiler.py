@@ -186,7 +186,12 @@ def test_patio_generico_avisa_e_encerra_com_nome_personalizavel() -> None:
     }
 
     compiled = compile_editorial_document(document)
-    assert compiled["scene"]["beats_by_id"][closing["beat_id"]]["terminal_transition"] == ending["beat_id"]
+    compiled_closing = next(
+        beat
+        for beat in compiled["scene"]["beats"]
+        if beat["beat_id"] == closing["beat_id"]
+    )
+    assert compiled_closing["terminal_transition"] == ending["beat_id"]
 
 
 def test_cena_vazia_e_ignorada_antes_do_primeiro_beat() -> None:
