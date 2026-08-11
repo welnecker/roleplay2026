@@ -66,6 +66,8 @@ def render_character_core_path(
     if not block:
         return ""
 
+    character = document.get("character") or {}
+    name = str(character.get("name", "Personagem") or "Personagem")
     lines = ["CAMINHO VIVO DE INTERPRETAÇÃO:"]
     lines.append(f"- macrobloco ativo: {str(block.get('block_id', '')).strip()}")
     if beat_id:
@@ -91,7 +93,7 @@ def render_character_core_path(
 
     lines.extend(
         (
-            "- O beat decide o acontecimento; o caminho decide a interpretação de Mary.",
+            f"- O beat decide o acontecimento; o caminho decide a interpretação de {name}.",
             "- O pensamento interno explica a intenção viva por trás do movimento atual, não repete sua redação.",
             "- A ponte responde primeiro ao usuário e depois retoma o fio, sem executar o beat seguinte.",
         )
@@ -133,8 +135,8 @@ def render_character_core(document: dict[str, Any], *, beat_id: str = "", runtim
     lines.extend(
         (
             "REGRA DE CONTINUIDADE:",
-            "- Beats e pontes são caminhos diferentes do mesmo personagem; nunca troque a psicologia de Mary entre eles.",
-            "- O roteiro decide o acontecimento e a progressão; este núcleo decide a percepção, o desejo, o humor, o disfarce e a iniciativa de Mary.",
+            f"- Beats e pontes são caminhos diferentes do mesmo personagem; nunca troque a psicologia de {name} entre eles.",
+            f"- O roteiro decide o acontecimento e a progressão; este núcleo decide a percepção, o desejo, o humor, o disfarce e a iniciativa de {name}.",
         )
     )
     return "\n".join(lines)

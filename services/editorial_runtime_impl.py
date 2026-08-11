@@ -82,6 +82,11 @@ class PilotScript:
         self.first_beat_id = configured_first if configured_first in self.beats else next(iter(self.beats))
         self.engagement_policy = raw.get("engagement_policy") or {}
 
+    @property
+    def character_name(self) -> str:
+        character = self.raw.get("character") or {}
+        return str(character.get("name", "Personagem") or "Personagem")
+
     @classmethod
     def load(cls, path: Path) -> "PilotScript":
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -285,7 +290,7 @@ def _ending_turn(
     state.run_status = str(ending.get("run_status", "terminated"))
     state.ending_code = str(ending.get("ending_code", ending_id))
     prompt = (
-        "Você é Mary. Encerre a cena somente com pensamento curto, fala direta ou onomatopeia. "
+        f"Você é {script.character_name}. Encerre a cena somente com pensamento curto, fala direta ou onomatopeia. "
         "Não descreva movimentos, expressões faciais, postura, olhar, mãos, corpo ou cenário. "
         "Não faça perguntas e não deixe convite para continuar. "
         "Não mencione aplicativo, regras, roteiro ou evento técnico.\n\n"
@@ -334,8 +339,8 @@ def _build_organic_prompt(
         else "Não antecipe outro movimento nesta resposta."
     )
     return (
-        "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
-        "Este é um TURNO ORGÂNICO INTERMEDIÁRIO. A prioridade é mostrar que Mary ouviu e entendeu o usuário.\n"
+        f"Você é {script.character_name}, uma personagem adulta numa história guiada.\n"
+        f"Este é um TURNO ORGÂNICO INTERMEDIÁRIO. A prioridade é mostrar que {script.character_name} ouviu e entendeu o usuário.\n"
         "Não recite mecanicamente a próxima fala do roteiro. Reaja somente ao conteúdo novo.\n"
         "Não narre ações do usuário nem use terceira pessoa, rubricas ou asteriscos.\n\n"
         f"TIPO DE CONTRIBUIÇÃO: {signal_kind}\n"
@@ -369,14 +374,14 @@ def _build_prompt(
         else ""
     )
     return (
-        "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
+        f"Você é {script.character_name}, uma personagem adulta numa história guiada.\n"
         "A resposta deve soar como voz viva, não como prosa narrativa.\n\n"
         "REGRAS ABSOLUTAS:\n"
         "- Não narre ações, movimentos, gestos, expressões, postura ou contato visual.\n"
         "- Não use terceira pessoa, rubricas, asteriscos ou parênteses de ação.\n"
         "- onomatopeia é permitida quando surgir naturalmente na fala.\n"
         "- Não invente ações, pensamentos, endereço, profissão ou passado do usuário.\n"
-        "- Mary pode expressar apenas o próprio pensamento interno quando o formato opcional permitir.\n"
+        f"- {script.character_name} pode expressar apenas o próprio pensamento interno quando o formato opcional permitir.\n"
         "- Siga o movimento atual com máxima fidelidade e não crie outra trama.\n"
         "- Preserve semanticamente a fala canônica, mas adapte ritmo e ligação ao que o usuário disse.\n"
         "- Use fatos confirmados pelo usuário quando forem relevantes.\n"

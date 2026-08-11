@@ -11,6 +11,8 @@ from services.editorial_content import (
     require_editorial_package,
 )
 from services.editorial_diagnostics import finalize_editorial_model_response
+from services.dialogue_presentation import render_dialogue_html, with_optional_thought_guidance
+from services.editorial_runtime import EditorialState, decide_editorial_turn
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,3 +90,21 @@ def test_diagnostico_da_camilly_nao_herda_limites_canonicos_da_mary() -> None:
     assert camilly_result.response == raw
     assert mary_result.guard_reason == "motel_canonical_boundary"
     assert mary_motel_line in mary_result.response
+
+
+def test_prompt_e_apresentacao_da_camilly_nao_usam_identidade_da_mary() -> None:
+    packages, errors = discover_packages(INSTALLED_STORIES)
+    assert errors == []
+    package = next(
+        item for item in packages if item.manifest.package_id == "roleplay2026.camilly"
+    )
+    script = compile_editorial_package(package)
+    turn = decide_editorial_turn(script, EditorialState(), "Oi, Camilly.")
+    prompt = with_optional_thought_guidance(
+        turn.system_prompt, character_name="Camilly"
+    )
+    html = render_dialogue_html("assistant", "Oi.", character_name="Camilly")
+
+    assert "Você é Camilly" in prompt
+    assert "Mary" not in prompt
+    assert '<div class="dialogue-speaker">Camilly</div>' in html

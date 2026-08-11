@@ -98,6 +98,12 @@ except Exception as exc:
 PACKAGE_ID = PACKAGE.manifest.package_id
 PACKAGE_TITLE = PACKAGE.manifest.card.title
 PACKAGE_SUBTITLE = PACKAGE.manifest.card.subtitle
+CHARACTER_NAME = (
+    PACKAGE.manifest.card.character_profile.name
+    if PACKAGE.manifest.card.character_profile
+    else PACKAGE_TITLE
+)
+CHARACTER_ID = CHARACTER_NAME.strip().casefold().replace(" ", "_") or "character"
 END_CONFIRMATION_KEY = f"confirm_end:{PACKAGE_ID}"
 
 st.set_page_config(page_title=PACKAGE_TITLE, page_icon="📖", layout="centered")
@@ -259,7 +265,10 @@ def end_story_and_return(user: AuthenticatedUser) -> None:
 
 
 def render_message(role: str, content: str) -> None:
-    st.markdown(render_dialogue_html(role, content), unsafe_allow_html=True)
+    st.markdown(
+        render_dialogue_html(role, content, character_name=CHARACTER_NAME),
+        unsafe_allow_html=True,
+    )
 
 
 def render_current_scene(state: EditorialState) -> None:
@@ -471,7 +480,9 @@ history = [
     {"role": str(item.get("role", "assistant")), "content": str(item.get("content", ""))}
     for item in messages[-12:]
 ]
-base_prompt = with_optional_thought_guidance(pending.prompt)
+base_prompt = with_optional_thought_guidance(
+    pending.prompt, character_name=CHARACTER_NAME
+)
 private_context = build_immersive_context(
     st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
 )
@@ -578,6 +589,7 @@ metadata = build_editorial_metadata(
     ending_code=turn.ending_code,
     diagnostics=diagnostics,
 )
+metadata["character_id"] = CHARACTER_ID
 immersive_memory = persistent_profile_payload(
     st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
 )
@@ -614,6 +626,7 @@ try:
                 node_id=str(followup["target_id"]),
                 state=final_editorial_state.to_dict(),
             )
+            followup_metadata["character_id"] = CHARACTER_ID
             updated_context = persist_assistant_message(
                 repository,
                 context=updated_context,

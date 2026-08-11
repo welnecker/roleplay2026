@@ -19,27 +19,29 @@ class PresentedDialogue:
     speech: str
 
 
-def with_optional_thought_guidance(system_prompt: str) -> str:
+def with_optional_thought_guidance(
+    system_prompt: str, *, character_name: str = "Mary"
+) -> str:
     """Acrescenta subtexto opcional coerente com o núcleo vivo da personagem."""
 
     return (
         f"{system_prompt.rstrip()}\n\n"
         "SUBTEXTO INTERNO OPCIONAL:\n"
-        "- Use um pensamento curto somente quando ele revelar algo que Mary ainda não diria em voz alta.\n"
+        f"- Use um pensamento curto somente quando ele revelar algo que {character_name} ainda não diria em voz alta.\n"
         "- O pensamento deve nascer do desejo, da malícia, da curiosidade, da fantasia, da expectativa ou da estratégia do instante.\n"
-        "- O desejo sexual é motor da personagem: quando houver atração e reciprocidade, o pensamento deve avançar para o que Mary quer, imagina ou pretende provocar, em vez de recuar para culpa ou sentimentalismo.\n"
-        "- Não invente conflito moral. Mary não precisa se convencer de que pode desejar; quando hesita, a hesitação é prática ou estratégica: como, onde, quando, discrição, oportunidade ou ritmo.\n"
+        f"- O desejo sexual é motor da personagem: quando houver atração e reciprocidade, o pensamento deve avançar para o que {character_name} quer, imagina ou pretende provocar, em vez de recuar para culpa ou sentimentalismo.\n"
+        f"- Não invente conflito moral. {character_name} não precisa se convencer de que pode desejar; quando hesita, a hesitação é prática ou estratégica: como, onde, quando, discrição, oportunidade ou ritmo.\n"
         "- Não use carência romântica, medo de sentir, culpa conjugal, prudência emocional, linguagem de confissão ou frases como 'mais do que eu queria admitir' para fabricar profundidade.\n"
         "- O casamento só entra no pensamento quando for concretamente relevante ao segredo, à logística ou à brincadeira do beat atual.\n"
         "- O pensamento pode ser mais franco que a fala externa, mas não executa ação, convite ou acontecimento de beat futuro.\n"
         "- Nunca atribua ao usuário intenção, motivação, fantasia, ação ou sentimento que ele não tenha declarado.\n"
         "- Use primeira pessoa e no máximo duas frases curtas; não inclua pensamento quando ele não acrescentar direção real.\n"
-        "- Depois do pensamento, escreva a fala de Mary normalmente.\n"
+        f"- Depois do pensamento, escreva a fala de {character_name} normalmente.\n"
         "- Quando usar pensamento, empregue exatamente este formato:\n"
         "[PENSAMENTO]\n"
-        "pensamento curto de Mary em primeira pessoa\n"
+        f"pensamento curto de {character_name} em primeira pessoa\n"
         "[/PENSAMENTO]\n\n"
-        "fala direta de Mary\n"
+        f"fala direta de {character_name}\n"
         "- Não escreva os marcadores quando não houver pensamento."
     )
 
@@ -64,12 +66,14 @@ def has_balanced_thought_markers(content: str) -> bool:
     return opens == closes and opens <= 1
 
 
-def render_dialogue_html(role: str, content: str) -> str:
+def render_dialogue_html(
+    role: str, content: str, *, character_name: str = "Mary"
+) -> str:
     dialogue = split_dialogue(content)
     role_name = str(role or "assistant").casefold()
     is_user = role_name == "user"
     wrapper_class = "dialogue-message dialogue-user" if is_user else "dialogue-message dialogue-mary"
-    speaker = "Você" if is_user else "Mary"
+    speaker = "Você" if is_user else character_name
 
     thought_html = ""
     if not is_user and dialogue.thought:

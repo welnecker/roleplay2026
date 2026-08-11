@@ -266,6 +266,7 @@ def persist_turn(
     )
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)
+    character_id = str(persisted_metadata.get("character_id", "") or "character")
 
     persisted_sequence = max(1, int(context.next_sequence or 1))
     repository.append_interaction(
@@ -286,7 +287,7 @@ def persist_turn(
         user_id=user.user_id,
         package_id=context.package_id,
         role="assistant",
-        speaker_id="mary",
+        speaker_id=character_id,
         content=assistant_text,
         sequence=persisted_sequence + 1,
         block_id=block_id,
@@ -351,6 +352,7 @@ def persist_assistant_message(
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)
     persisted_metadata["automatic_bridge"] = True
+    character_id = str(persisted_metadata.get("character_id", "") or "character")
 
     sequence = max(1, int(context.next_sequence or 1))
     repository.append_interaction(
@@ -359,7 +361,7 @@ def persist_assistant_message(
         user_id=user.user_id,
         package_id=context.package_id,
         role="assistant",
-        speaker_id="mary",
+        speaker_id=character_id,
         content=assistant_text,
         sequence=sequence,
         block_id=block_id,

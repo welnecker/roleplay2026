@@ -28,6 +28,7 @@ class BeatContext:
     max_sentences: int
     max_questions: int
     response_boundary: str
+    character_name: str = "Mary"
     interaction_context: ResolvedInteractionContext = field(
         default_factory=ResolvedInteractionContext
     )
@@ -189,6 +190,10 @@ def build_beat_context(
         max_sentences=int(target.get("max_sentences", 0) or 0),
         max_questions=int(target.get("max_questions", 0) or 0),
         response_boundary=str(target.get("response_boundary", "") or "").strip(),
+        character_name=str(
+            (script.raw.get("character") or {}).get("name", "Mary")
+            or "Mary"
+        ),
         interaction_context=interaction_context,
     )
 
@@ -224,7 +229,7 @@ def render_beat_context(context: BeatContext) -> str:
             f"  - ambiente: {relational.setting}",
             f"  - privacidade: {relational.privacy}",
             f"  - nível de intimidade: {relational.intimacy_level}",
-            f"  - desejo de Mary revelado: {'sim' if relational.mary_disclosed_desire else 'não'}",
+            f"  - desejo de {context.character_name} revelado: {'sim' if relational.mary_disclosed_desire else 'não'}",
             f"  - atração mútua confirmada: {'sim' if relational.mutual_attraction_confirmed else 'não'}",
         )
     )
