@@ -30,6 +30,7 @@ class BeatContext:
     response_boundary: str
     authored_thought: str = ""
     exact_speech: str = ""
+    forbidden_literal_texts: tuple[str, ...] = ()
     character_name: str = "Mary"
     interaction_context: ResolvedInteractionContext = field(
         default_factory=ResolvedInteractionContext

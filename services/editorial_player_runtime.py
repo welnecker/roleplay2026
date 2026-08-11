@@ -403,10 +403,13 @@ if not messages:
     opening = editorial_opening_text(script)
     if isinstance(immersive_profile, dict):
         opening = opening_with_required_name(opening, immersive_profile)
+    opening_editorial_state = EditorialState.from_dict(editorial_state.to_dict())
+    opening_editorial_state.node_id = script.first_beat_id
+    opening_editorial_state.facts["_runtime_phase"] = "canonical"
     opening_metadata = build_editorial_metadata(
         node_id=script.first_beat_id,
         engagement="opening",
-        state=editorial_state.to_dict(),
+        state=opening_editorial_state.to_dict(),
         finished=False,
         run_status="active",
         ending_code="",
@@ -441,6 +444,7 @@ if not messages:
         st.error(f"Não foi possível registrar a abertura: {exc}")
         st.stop()
     messages.append({"role": "assistant", "content": opening, **opening_metadata})
+    editorial_state = opening_editorial_state
     save_session(user, context, story_state, messages, editorial_state)
 for message in messages:
     if str(message.get("role", "assistant")) == "assistant":

@@ -82,6 +82,30 @@ def test_texto_autoral_obrigatorio_e_validado_literalmente() -> None:
     )
 
 
+def test_ponte_rejeita_deja_vu_literal_do_beat_consumido() -> None:
+    context = _context(
+        forbidden_literal_texts=(
+            "Humm... gostei do jeito dele.",
+            "Oi, Nilo... gostei de ver você aqui, meu lindo.",
+        )
+    )
+
+    repeated = evaluate_deterministic_response(
+        "[PENSAMENTO]\nHumm... gostei do jeito dele.\n[/PENSAMENTO]\n\n"
+        "Eu me chamo Camilly.",
+        context,
+    )
+    new_reaction = evaluate_deterministic_response(
+        "[PENSAMENTO]\nEle quer saber meu nome.\n[/PENSAMENTO]\n\n"
+        "Eu me chamo Camilly.",
+        context,
+    )
+
+    assert repeated.valid is False
+    assert repeated.violations == ("forbidden_literal_text_repeated",)
+    assert new_reaction.valid is True
+
+
 def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
     rendered = render_beat_context(_context())
 

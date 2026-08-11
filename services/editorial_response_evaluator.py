@@ -55,6 +55,7 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
 _VIOLATION_GUIDANCE = {
     "authored_thought_missing": "Inclua literalmente o pensamento autoral obrigatório dentro de um único bloco [PENSAMENTO].",
     "exact_speech_missing": "Inclua literalmente a fala autoral exata obrigatória na parte audível da resposta.",
+    "forbidden_literal_text_repeated": "Remova o pensamento ou a fala autoral já consumida ou reservada a outro beat; produza apenas uma reação nova.",
     "invented_unconfirmed_detail": (
         "Não trate metáfora, flerte, humor, duplo sentido ou improviso plausível como fato novo. "
         "Corrija apenas contradições, ações presumidas do usuário ou avanço indevido do roteiro."
@@ -183,6 +184,14 @@ def evaluate_deterministic_response(
         context.exact_speech
     ) not in _whitespace_normalized(visible):
         violations.append("exact_speech_missing")
+
+    normalized_response = _whitespace_normalized(text)
+    if any(
+        _whitespace_normalized(fragment) in normalized_response
+        for fragment in context.forbidden_literal_texts
+        if _whitespace_normalized(fragment)
+    ):
+        violations.append("forbidden_literal_text_repeated")
 
     style_advisories: list[str] = []
     if context.max_sentences and _sentence_count(visible) > context.max_sentences:

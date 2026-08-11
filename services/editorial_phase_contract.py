@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import re
 
 from services.editorial_beat_context import BeatContext
 from services.editorial_runtime_types import EditorialState
@@ -13,6 +14,31 @@ def runtime_phase(state: EditorialState) -> str:
 
 def _fact(state: EditorialState, key: str) -> str:
     return str(state.facts.get(key, "") or "").strip()
+
+
+def _authored_parts(value: str) -> tuple[str, ...]:
+    """Separa pensamento e fala para impedir déjà-vu literal na ponte."""
+
+    text = str(value or "").strip()
+    if not text:
+        return ()
+    thoughts = [
+        match.strip()
+        for match in re.findall(
+            r"\[PENSAMENTO\](.*?)\[/PENSAMENTO\]",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if match.strip()
+    ]
+    audible = re.sub(
+        r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
+        "",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    audible = re.sub(r"^\s*\[[^\]]+\]\s*", "", audible).strip()
+    return tuple(dict.fromkeys((*thoughts, *((audible,) if audible else ()))))
 
 
 def adapt_context_for_runtime_phase(
@@ -30,6 +56,13 @@ def adapt_context_for_runtime_phase(
         target_canonical = _fact(state, "_bridge_target_canonical")
         return replace(
             context,
+            authored_thought="",
+            exact_speech="",
+            forbidden_literal_texts=tuple(
+                dict.fromkeys(
+                    (*_authored_parts(origin_canonical), *_authored_parts(target_canonical))
+                )
+            ),
             transition_status="bridge_pending",
             required_outcomes=(
                 "responder genuinamente ao conteúdo mais recente do usuário",
