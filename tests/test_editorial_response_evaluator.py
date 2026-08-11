@@ -106,6 +106,23 @@ def test_ponte_rejeita_deja_vu_literal_do_beat_consumido() -> None:
     assert new_reaction.valid is True
 
 
+def test_ponte_rejeita_pergunta_que_criaria_pendencia() -> None:
+    context = _context(forbid_new_questions=True, max_questions=0)
+
+    with_question = evaluate_deterministic_response(
+        "Gostei do que você disse. O que você faria comigo?",
+        context,
+    )
+    closed_reaction = evaluate_deterministic_response(
+        "Gostei do que você disse e quero guardar essa expectativa.",
+        context,
+    )
+
+    assert with_question.valid is False
+    assert with_question.violations == ("bridge_question_created",)
+    assert closed_reaction.valid is True
+
+
 def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
     rendered = render_beat_context(_context())
 

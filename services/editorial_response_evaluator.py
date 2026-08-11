@@ -56,6 +56,7 @@ _VIOLATION_GUIDANCE = {
     "authored_thought_missing": "Inclua literalmente o pensamento autoral obrigatório dentro de um único bloco [PENSAMENTO].",
     "exact_speech_missing": "Inclua literalmente a fala autoral exata obrigatória na parte audível da resposta.",
     "forbidden_literal_text_repeated": "Remova o pensamento ou a fala autoral já consumida ou reservada a outro beat; produza apenas uma reação nova.",
+    "bridge_question_created": "Remova a nova pergunta. A ponte deve reagir ao usuário sem criar assunto ou obrigação para o turno seguinte.",
     "invented_unconfirmed_detail": (
         "Não trate metáfora, flerte, humor, duplo sentido ou improviso plausível como fato novo. "
         "Corrija apenas contradições, ações presumidas do usuário ou avanço indevido do roteiro."
@@ -180,6 +181,8 @@ def evaluate_deterministic_response(
             violations.append("authored_thought_missing")
 
     visible = _visible_dialogue(text)
+    if context.forbid_new_questions and "?" in visible:
+        violations.append("bridge_question_created")
     if context.exact_speech and _whitespace_normalized(
         context.exact_speech
     ) not in _whitespace_normalized(visible):

@@ -54,6 +54,8 @@ def test_ponte_recebe_contrato_funcional_especifico() -> None:
     assert "beat_002" in context.response_boundary
     assert context.authored_thought == ""
     assert context.exact_speech == ""
+    assert context.max_questions == 0
+    assert context.forbid_new_questions is True
     assert context.forbidden_literal_texts == (
         "Já gostei dele.",
         "Oi, Nilo.",

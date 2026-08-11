@@ -6,6 +6,7 @@ from roleplay.models import StoryState
 from services import runtime_persistence
 from services.runtime_persistence import (
     RuntimePersistenceContext,
+    _editorial_location,
     _next_sequence_from_messages,
     persist_opening_message,
 )
@@ -89,3 +90,21 @@ def test_abertura_e_persistida_com_personagem_e_sem_usuario_ficticio(monkeypatch
     assert repository.appended[0]["beat_id"] == "abertura_001"
     assert repository.appended[0]["metadata"]["opening_message"] is True
     assert updated.next_sequence == 2
+
+
+def test_local_editorial_persistido_acompanha_o_beat_executado() -> None:
+    run = SimpleNamespace(
+        current_block_id="abertura",
+        current_beat_id="abertura_001",
+    )
+
+    block_id, beat_id = _editorial_location(
+        {
+            "editorial_block": "intimidade",
+            "editorial_node": "intimidade_006",
+        },
+        run,
+    )
+
+    assert block_id == "intimidade"
+    assert beat_id == "intimidade_006"

@@ -415,6 +415,9 @@ if not messages:
         ending_code="",
     )
     opening_metadata["character_id"] = CHARACTER_ID
+    opening_metadata["editorial_block"] = str(
+        (script.beats.get(script.first_beat_id) or {}).get("block_id", "") or ""
+    )
     opening_memory = persistent_profile_payload(
         st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
     )
@@ -633,6 +636,9 @@ metadata = build_editorial_metadata(
     diagnostics=diagnostics,
 )
 metadata["character_id"] = CHARACTER_ID
+metadata["editorial_block"] = str(
+    (script.beats.get(turn.target_id) or {}).get("block_id", "") or ""
+)
 immersive_memory = persistent_profile_payload(
     st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
 )
@@ -670,6 +676,12 @@ try:
                 state=final_editorial_state.to_dict(),
             )
             followup_metadata["character_id"] = CHARACTER_ID
+            followup_metadata["editorial_block"] = str(
+                (script.beats.get(str(followup["target_id"])) or {}).get(
+                    "block_id", ""
+                )
+                or ""
+            )
             updated_context = persist_assistant_message(
                 repository,
                 context=updated_context,

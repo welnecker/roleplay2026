@@ -240,6 +240,26 @@ def _ensure_run_and_session(
     return run, session
 
 
+def _editorial_location(
+    metadata: dict[str, object],
+    run: StoryRun,
+) -> tuple[str, str]:
+    """Resolve o local efetivamente executado, sem reutilizar o início da run."""
+
+    beat_id = str(
+        metadata.get("editorial_node")
+        or metadata.get("screenplay_beat")
+        or metadata.get("pilot_node")
+        or run.current_beat_id
+    ).strip()
+    block_id = str(
+        metadata.get("editorial_block")
+        or metadata.get("screenplay_route")
+        or run.current_block_id
+    ).strip()
+    return block_id, beat_id
+
+
 def persist_turn(
     repository: GoogleSheetsV2RuntimeRepository,
     *,
@@ -254,16 +274,7 @@ def persist_turn(
     del sequence_start
     run, session = _ensure_run_and_session(repository, context=context, user=user)
 
-    block_id = str(
-        assistant_metadata.get("screenplay_route")
-        or assistant_metadata.get("pilot_node")
-        or run.current_block_id
-    )
-    beat_id = str(
-        assistant_metadata.get("screenplay_beat")
-        or assistant_metadata.get("pilot_node")
-        or run.current_beat_id
-    )
+    block_id, beat_id = _editorial_location(assistant_metadata, run)
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)
     character_id = str(persisted_metadata.get("character_id", "") or "character")
@@ -344,16 +355,7 @@ def persist_opening_message(
     """
 
     run, session = _ensure_run_and_session(repository, context=context, user=user)
-    node_id = str(
-        assistant_metadata.get("editorial_node")
-        or assistant_metadata.get("screenplay_beat")
-        or assistant_metadata.get("pilot_node")
-        or run.current_beat_id
-    ).strip()
-    block_id = str(
-        assistant_metadata.get("screenplay_route")
-        or run.current_block_id
-    ).strip()
+    block_id, node_id = _editorial_location(assistant_metadata, run)
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)
     persisted_metadata["opening_message"] = True
@@ -400,16 +402,7 @@ def persist_assistant_message(
     """Registra uma ponte automática de Mary sem inventar uma fala do usuário."""
 
     run, session = _ensure_run_and_session(repository, context=context, user=user)
-    block_id = str(
-        assistant_metadata.get("screenplay_route")
-        or assistant_metadata.get("pilot_node")
-        or run.current_block_id
-    )
-    beat_id = str(
-        assistant_metadata.get("screenplay_beat")
-        or assistant_metadata.get("pilot_node")
-        or run.current_beat_id
-    )
+    block_id, beat_id = _editorial_location(assistant_metadata, run)
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)
     persisted_metadata["automatic_bridge"] = True

@@ -31,6 +31,7 @@ class BeatContext:
     authored_thought: str = ""
     exact_speech: str = ""
     forbidden_literal_texts: tuple[str, ...] = ()
+    forbid_new_questions: bool = False
     character_name: str = "Mary"
     interaction_context: ResolvedInteractionContext = field(
         default_factory=ResolvedInteractionContext

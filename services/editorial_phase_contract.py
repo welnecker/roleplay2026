@@ -58,6 +58,8 @@ def adapt_context_for_runtime_phase(
             context,
             authored_thought="",
             exact_speech="",
+            max_questions=0,
+            forbid_new_questions=True,
             forbidden_literal_texts=tuple(
                 dict.fromkeys(
                     (*_authored_parts(origin_canonical), *_authored_parts(target_canonical))
