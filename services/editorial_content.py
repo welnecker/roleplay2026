@@ -29,6 +29,7 @@ from services.spreadsheet_story_compiler import compile_spreadsheet_story
 
 
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
+LEGACY_EDITORIAL_PACKAGE_ID = "roleplay2026.casada_frustrada"
 _EDITORIAL_REPOSITORY: GoogleSheetsEditorialRepository | None = None
 _SCRIPT_REPOSITORY: GoogleSheetsEditorialRepository | None = None
 _PUBLISHED_PACKAGES: set[str] = set()
@@ -106,20 +107,36 @@ def find_editorial_package(package_id: str) -> InstalledStoryPackage | None:
     )
 
 
-def _default_editorial_package() -> InstalledStoryPackage:
-    packages = editorial_packages()
-    if len(packages) != 1:
+def require_editorial_package(package_id: str) -> InstalledStoryPackage:
+    """Resolve uma história sem depender da quantidade ou da ordem dos pacotes."""
+
+    clean = str(package_id or "").strip().lower()
+    if not clean:
+        raise ValueError("package_id da história é obrigatório")
+    package = find_editorial_package(clean)
+    if package is None:
+        available = [item.manifest.package_id for item in editorial_packages()]
         raise ValueError(
-            "Era esperado exatamente um pacote editorial para a fachada legada; "
-            f"encontrados: {[item.manifest.package_id for item in packages]}"
+            f"História editorial não encontrada: {clean!r}. Disponíveis: {available}"
         )
-    return packages[0]
+    return package
+
+
+def _default_editorial_package() -> InstalledStoryPackage:
+    """Compatibilidade determinística para chamadas antigas específicas da Mary."""
+
+    return require_editorial_package(LEGACY_EDITORIAL_PACKAGE_ID)
 
 
 def load_source_document(
-    package: InstalledStoryPackage | None = None,
+    package: InstalledStoryPackage | str | None = None,
 ) -> dict[str, Any]:
-    return load_editorial_document(package or _default_editorial_package())
+    selected = (
+        require_editorial_package(package)
+        if isinstance(package, str)
+        else package or _default_editorial_package()
+    )
+    return load_editorial_document(selected)
 
 
 def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
