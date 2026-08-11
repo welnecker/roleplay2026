@@ -93,6 +93,11 @@ def render_character_core_path(
         lines.append("- contrato beat a beat:")
         lines.extend(f"  - {item}" for item in thought_contract)
 
+    conversational_contract = _items(path.get("conversational_contract"))
+    if conversational_contract:
+        lines.append("- contrato da conversa:")
+        lines.extend(f"  - {item}" for item in conversational_contract)
+
     if str(runtime_phase or "").strip() == "bridge":
         bridge_rule = str(block.get("bridge_rule", "") or "").strip()
         if bridge_rule:
@@ -150,6 +155,7 @@ def render_character_core(document: dict[str, Any], *, beat_id: str = "", runtim
     )
     _core_section(lines, "REGRAS DO ROTEIRO", core.get("story_rules"))
     _core_section(lines, "REGRAS DO PENSAMENTO INTERNO", core.get("thought_rules"))
+    _core_section(lines, "REGRAS DA RESPOSTA", core.get("response_rules"))
     _core_section(lines, "COMO ESTE NÚCLEO ORIENTA OS BEATS", core.get("beat_guidance"))
     _core_section(lines, "COMO ESTE NÚCLEO ORIENTA AS PONTES", core.get("bridge_guidance"))
     path = render_character_core_path(

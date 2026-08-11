@@ -129,6 +129,8 @@ def compile_spreadsheet_story(
         transition = str(current_beat.pop("_transition", "") or "").strip()
         thought_variants = dict(current_beat.pop("_thought_variants", {}) or {})
         speech_variants = dict(current_beat.pop("_speech_variants", {}) or {})
+        speech_exact = bool(current_beat.pop("_speech_exact", False))
+        has_bridge = bool(current_beat.pop("_has_bridge", False))
         visible: list[str] = []
         if transition:
             visible.append(f"[{transition.upper()}]")
@@ -137,13 +139,17 @@ def compile_spreadsheet_story(
         if speech:
             visible.append(speech)
         current_beat["canonical_line"] = "\n\n".join(visible)
-        if thought_variants or speech_variants:
+        current_beat["authored_thought"] = thought
+        current_beat["exact_speech"] = speech if speech_exact else ""
+        current_beat["has_authored_bridge"] = has_bridge
+        if thought or speech or thought_variants or speech_variants:
             current_beat["profile_delivery"] = {
                 "transition": transition,
                 "thought": thought,
                 "speech": speech,
                 "thought_variants": thought_variants,
                 "speech_variants": speech_variants,
+                "speech_exact": speech_exact,
             }
         current_beat["interaction_context"] = {
             "relationship_stage": "scripted_interaction",
@@ -245,6 +251,8 @@ def compile_spreadsheet_story(
                 "_transition": pending_transition,
                 "_thought_variants": {},
                 "_speech_variants": {},
+                "_speech_exact": False,
+                "_has_bridge": False,
             }
             pending_transition = ""
             block["beats"].append(current_beat)
@@ -270,6 +278,8 @@ def compile_spreadsheet_story(
                         part for part in (current_beat["_thought"], text) if part
                     )
             elif kind in {"FALA", "FALA_EXATA"}:
+                if kind == "FALA_EXATA":
+                    current_beat["_speech_exact"] = True
                 profile_tag = _plain(argument).upper() if argument else ""
                 if profile_tag and profile_tag not in _PROFILE_TAGS:
                     raise SpreadsheetStoryError(
@@ -289,6 +299,7 @@ def compile_spreadsheet_story(
                     part for part in (current_beat["dramatic_direction"], direction) if part
                 )
             else:
+                current_beat["_has_bridge"] = True
                 current_beat["dramatic_direction"] = "\n".join(
                     part
                     for part in (
@@ -340,6 +351,22 @@ def compile_spreadsheet_story(
         raise SpreadsheetStoryError("O roteiro não contém beats.")
     if not endings:
         raise SpreadsheetStoryError("O roteiro precisa terminar com [FIM].")
+
+    bridge_beat_ids = [
+        str(beat.get("beat_id", "") or "").strip()
+        for block in blocks
+        for beat in block.get("beats", []) or []
+        if isinstance(beat, dict) and bool(beat.get("has_authored_bridge", False))
+    ]
+    if bridge_beat_ids:
+        declared_bridge_policy = dict(document.get("bridge_policy") or {})
+        declared_bridge_policy.update(
+            {
+                "mode": "required",
+                "beat_ids": bridge_beat_ids,
+            }
+        )
+        document["bridge_policy"] = declared_bridge_policy
 
     ordered_beats = [
         beat

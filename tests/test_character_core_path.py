@@ -65,3 +65,22 @@ def test_character_core_remove_carencia_romantizada_do_caminho_autoritativo() ->
     assert "não procura salvação emocional" in context
     assert "sem culpa automática" in context
     assert "farra secreta" in context
+
+
+def test_mary_define_intensidade_sexual_com_brevidade() -> None:
+    document = load_source_document()
+    context = build_narrative_context(document, [], {}, beat_id="reencontro_fila_001")
+
+    assert "desejo sexual concreto e corporal" in context
+    assert "intensidade não significa texto longo" in context
+    assert "pensamento e fala formam uma única reação curta" in context
+    assert "deixar a intensidade sexual explícita no pensamento interno" in context
+
+
+def test_caminho_de_mary_rejeita_intensidade_generica_e_prolixa() -> None:
+    document = load_source_document()
+    context = build_narrative_context(document, [], {}, beat_id="reencontro_fila_001")
+
+    assert "desejo sexual específico em poucas palavras" in context
+    assert "quero conhecê-lo melhor" in context
+    assert "curiosidade vaga" in context

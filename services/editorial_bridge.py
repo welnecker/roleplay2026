@@ -157,7 +157,9 @@ def should_create_bridge(
         return False
     if _requires_integrated_canonical_response(script, target):
         return False
-    return not _is_structural_destination(script, target)
+    origin_beat = script.beats.get(origin) or {}
+    authored_bridge = bool(origin_beat.get("has_authored_bridge", False))
+    return authored_bridge or not _is_structural_destination(script, target)
 
 
 def create_bridge_turn(

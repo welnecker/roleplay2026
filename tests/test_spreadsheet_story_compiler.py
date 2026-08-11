@@ -60,6 +60,8 @@ def test_pensamento_e_fala_sao_compilados_na_mesma_resposta() -> None:
     )
     assert beat["next_beat_id"] == "fim"
     assert document["script_version"] == "1.0.0"
+    assert beat["authored_thought"] == "Merda... espero não ter machucado ele."
+    assert beat["exact_speech"] == "Eita, caralho... desculpa!"
 
 
 def test_transicao_entra_na_mesma_entrega_do_beat_seguinte() -> None:
@@ -130,6 +132,8 @@ def test_ponte_e_orientacao_do_mesmo_beat() -> None:
         "PONTE: Eu reajo sem antecipar o próximo assunto."
     )
     assert beat["allowed_transitions"]["dismissive"] == "__generic_disagreement_warning"
+    assert beat["has_authored_bridge"] is True
+    assert document["bridge_policy"] == {"mode": "required", "beat_ids": ["beat"]}
 
 
 def test_falas_e_pensamentos_condicionais_sao_preservados_para_o_runtime() -> None:
@@ -154,6 +158,7 @@ def test_falas_e_pensamentos_condicionais_sao_preservados_para_o_runtime() -> No
     assert delivery["speech_variants"]["HOMEM"] == "Oi, {{nome}}... meu lindo."
     assert delivery["speech_variants"]["MULHER"] == "Oi, {{nome}}... minha linda."
     assert delivery["speech_variants"]["NEUTRA"] == "Oi, {{nome}}... que prazer."
+    assert delivery["speech_exact"] is True
 
 
 def test_beats_da_planilha_declaram_as_quatro_rupturas_do_patio() -> None:

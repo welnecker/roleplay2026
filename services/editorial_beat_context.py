@@ -28,6 +28,8 @@ class BeatContext:
     max_sentences: int
     max_questions: int
     response_boundary: str
+    authored_thought: str = ""
+    exact_speech: str = ""
     character_name: str = "Mary"
     interaction_context: ResolvedInteractionContext = field(
         default_factory=ResolvedInteractionContext
@@ -190,6 +192,8 @@ def build_beat_context(
         max_sentences=int(target.get("max_sentences", 0) or 0),
         max_questions=int(target.get("max_questions", 0) or 0),
         response_boundary=str(target.get("response_boundary", "") or "").strip(),
+        authored_thought=str(target.get("authored_thought", "") or "").strip(),
+        exact_speech=str(target.get("exact_speech", "") or "").strip(),
         character_name=str(
             (script.raw.get("character") or {}).get("name", "Mary")
             or "Mary"
@@ -262,6 +266,16 @@ def render_beat_context(context: BeatContext) -> str:
         lines.append(f"- Máximo de perguntas: {context.max_questions}")
     if context.response_boundary:
         lines.append(f"- Limite de resposta: {context.response_boundary}")
+    if context.authored_thought:
+        lines.append(
+            "- Pensamento autoral obrigatório — reproduza literalmente dentro de [PENSAMENTO]: "
+            + context.authored_thought
+        )
+    if context.exact_speech:
+        lines.append(
+            "- Fala autoral exata obrigatória — reproduza literalmente na parte audível: "
+            + context.exact_speech
+        )
     lines.extend(
         (
             "- O contexto relacional descreve o estágio vigente; não presume consentimento nem decisão do usuário.",
@@ -269,7 +283,7 @@ def render_beat_context(context: BeatContext) -> str:
             "- Não presuma aceite, recusa ou qualquer decisão que o usuário não tenha declarado explicitamente.",
             "- Não avance para outro beat, local ou acontecimento sem autorização da decisão de transição.",
             "- Não antecipe acontecimentos, locais ou decisões de beats posteriores.",
-            "- A referência semântica orienta o sentido; não a repita mecanicamente.",
+            "- A referência semântica orienta o sentido; somente campos declarados como autorais obrigatórios exigem reprodução literal.",
         )
     )
     return "\n".join(lines)

@@ -57,6 +57,31 @@ def test_limites_de_estilo_nao_bloqueiam_resposta_narrativamente_valida() -> Non
     assert result.violations == ()
 
 
+def test_texto_autoral_obrigatorio_e_validado_literalmente() -> None:
+    context = _context(
+        authored_thought="Quero sentir essa aproximação.",
+        exact_speech="Pode chegar mais perto, Vini.",
+    )
+
+    valid = evaluate_deterministic_response(
+        "[PENSAMENTO]\nQuero sentir essa aproximação.\n[/PENSAMENTO]\n\n"
+        "Pode chegar mais perto, Vini. Estou esperando.",
+        context,
+    )
+    changed = evaluate_deterministic_response(
+        "[PENSAMENTO]\nEstou curiosa com essa aproximação.\n[/PENSAMENTO]\n\n"
+        "Chegue perto de mim, Vini.",
+        context,
+    )
+
+    assert valid.valid is True
+    assert changed.valid is False
+    assert changed.violations == (
+        "authored_thought_missing",
+        "exact_speech_missing",
+    )
+
+
 def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
     rendered = render_beat_context(_context())
 

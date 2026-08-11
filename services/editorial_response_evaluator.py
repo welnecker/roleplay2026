@@ -53,6 +53,8 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
     }
 )
 _VIOLATION_GUIDANCE = {
+    "authored_thought_missing": "Inclua literalmente o pensamento autoral obrigatório dentro de um único bloco [PENSAMENTO].",
+    "exact_speech_missing": "Inclua literalmente a fala autoral exata obrigatória na parte audível da resposta.",
     "invented_unconfirmed_detail": (
         "Não trate metáfora, flerte, humor, duplo sentido ou improviso plausível como fato novo. "
         "Corrija apenas contradições, ações presumidas do usuário ou avanço indevido do roteiro."
@@ -98,6 +100,10 @@ def _sentence_count(text: str) -> int:
 
 def _normalized(value: str) -> str:
     return " ".join(re.findall(r"\w+", str(value or "").casefold(), flags=re.UNICODE))
+
+
+def _whitespace_normalized(value: str) -> str:
+    return " ".join(str(value or "").split())
 
 
 def _context_allows_violation(code: str, context: BeatContext | None) -> bool:
@@ -156,7 +162,28 @@ def evaluate_deterministic_response(
     if "[PENSAMENTO]" in residual.upper() or "[/PENSAMENTO]" in residual.upper():
         violations.append("malformed_thought_block")
 
+    if context.authored_thought:
+        required_thought = _whitespace_normalized(context.authored_thought)
+        rendered_thoughts = " ".join(
+            _whitespace_normalized(
+                re.sub(
+                    r"^\[PENSAMENTO\]|\[/PENSAMENTO\]$",
+                    "",
+                    item.strip(),
+                    flags=re.IGNORECASE,
+                )
+            )
+            for item in thought_matches
+        )
+        if required_thought not in rendered_thoughts:
+            violations.append("authored_thought_missing")
+
     visible = _visible_dialogue(text)
+    if context.exact_speech and _whitespace_normalized(
+        context.exact_speech
+    ) not in _whitespace_normalized(visible):
+        violations.append("exact_speech_missing")
+
     style_advisories: list[str] = []
     if context.max_sentences and _sentence_count(visible) > context.max_sentences:
         style_advisories.append("max_sentences_exceeded")

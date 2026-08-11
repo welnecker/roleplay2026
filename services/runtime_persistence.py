@@ -327,6 +327,67 @@ def persist_turn(
     )
 
 
+def persist_opening_message(
+    repository: GoogleSheetsV2RuntimeRepository,
+    *,
+    context: RuntimePersistenceContext,
+    user: AuthenticatedUser,
+    state: StoryState,
+    assistant_text: str,
+    assistant_metadata: dict[str, object],
+) -> RuntimePersistenceContext:
+    """Persiste a abertura exibida, uma única vez por run.
+
+    A idempotência final pertence ao repositório: uma repetição causada por
+    rerun do Streamlit encontra a mesma sequência, papel e conteúdo e não cria
+    outra linha.
+    """
+
+    run, session = _ensure_run_and_session(repository, context=context, user=user)
+    node_id = str(
+        assistant_metadata.get("editorial_node")
+        or assistant_metadata.get("screenplay_beat")
+        or assistant_metadata.get("pilot_node")
+        or run.current_beat_id
+    ).strip()
+    block_id = str(
+        assistant_metadata.get("screenplay_route")
+        or run.current_block_id
+    ).strip()
+    persisted_metadata = dict(assistant_metadata)
+    persisted_metadata["_story_state"] = serialize_story_state(state)
+    persisted_metadata["opening_message"] = True
+    character_id = str(persisted_metadata.get("character_id", "") or "character")
+    sequence = max(1, int(context.next_sequence or 1))
+
+    repository.append_interaction(
+        run_id=run.run_id,
+        session_id=session.session_id,
+        user_id=user.user_id,
+        package_id=context.package_id,
+        role="assistant",
+        speaker_id=character_id,
+        content=assistant_text,
+        sequence=sequence,
+        block_id=block_id,
+        beat_id=node_id,
+        metadata=persisted_metadata,
+    )
+    run = repository.update_run_progress(
+        run=run,
+        block_id=block_id,
+        beat_id=node_id,
+    )
+    return RuntimePersistenceContext(
+        package_id=context.package_id,
+        package_version=context.package_version,
+        run=run,
+        session=session,
+        instance_id=context.instance_id,
+        next_sequence=sequence + 1,
+    )
+
+
 def persist_assistant_message(
     repository: GoogleSheetsV2RuntimeRepository,
     *,

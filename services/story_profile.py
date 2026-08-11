@@ -120,6 +120,20 @@ def personalize_editorial_script(
                 unit["instruction"] = resolve_profile_text(
                     str(unit.get("instruction", "") or ""), profile
                 )
+        if isinstance(delivery, Mapping):
+            tags = profile_tags(profile)
+            selected_thought = _selected_variant(
+                delivery.get("thought_variants"), tags
+            ) or str(delivery.get("thought", "") or "").strip()
+            selected_speech = _selected_variant(
+                delivery.get("speech_variants"), tags
+            ) or str(delivery.get("speech", "") or "").strip()
+            beat["authored_thought"] = resolve_profile_text(selected_thought, profile)
+            beat["exact_speech"] = (
+                resolve_profile_text(selected_speech, profile)
+                if bool(delivery.get("speech_exact", False))
+                else ""
+            )
         beat["objective"] = resolve_profile_text(
             str(beat.get("objective", "") or ""), profile
         )

@@ -58,6 +58,7 @@ from services.paid_run_access import get_paid_run_access, terminate_paid_access
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
+    persist_opening_message,
     persist_assistant_message,
     persist_turn,
 )
@@ -402,7 +403,45 @@ if not messages:
     opening = editorial_opening_text(script)
     if isinstance(immersive_profile, dict):
         opening = opening_with_required_name(opening, immersive_profile)
-    render_message("assistant", opening)
+    opening_metadata = build_editorial_metadata(
+        node_id=script.first_beat_id,
+        engagement="opening",
+        state=editorial_state.to_dict(),
+        finished=False,
+        run_status="active",
+        ending_code="",
+    )
+    opening_metadata["character_id"] = CHARACTER_ID
+    opening_memory = persistent_profile_payload(
+        st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
+    )
+    if opening_memory:
+        opening_metadata["immersive_profile"] = opening_memory
+    repository = runtime_repository()
+    if repository is None:
+        st.error("Google Sheets ficou indisponível ao registrar a abertura.")
+        st.stop()
+    try:
+        context = persist_opening_message(
+            repository,
+            context=context,
+            user=user,
+            state=story_state,
+            assistant_text=opening,
+            assistant_metadata=opening_metadata,
+        )
+    except Exception as exc:
+        log_editorial_exception(
+            "persist_opening_message",
+            exc,
+            user_id=user.user_id,
+            package_id=PACKAGE_ID,
+            node_id=script.first_beat_id,
+        )
+        st.error(f"Não foi possível registrar a abertura: {exc}")
+        st.stop()
+    messages.append({"role": "assistant", "content": opening, **opening_metadata})
+    save_session(user, context, story_state, messages, editorial_state)
 for message in messages:
     if str(message.get("role", "assistant")) == "assistant":
         message_node_id = str(

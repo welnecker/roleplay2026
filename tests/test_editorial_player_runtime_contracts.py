@@ -53,6 +53,7 @@ def test_player_usa_pipeline_editorial_transacional() -> None:
     assert "parse_semantic_evaluation(semantic_raw)" in source
     assert "commit_editorial_turn(pending, assistant_text)" in source
     assert "editorial_opening_text(script)" in source
+    assert "persist_opening_message(" in source
     assert "build_editorial_turn_diagnostics(" in source
     assert "editorial_followups_after(turn.target_id)" in source
     assert "state_after_editorial_followup(" in source
