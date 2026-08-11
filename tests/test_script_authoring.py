@@ -4,9 +4,11 @@ import pytest
 
 from services.script_authoring import (
     ScriptAuthoringError,
+    clear_authoring_state,
     compile_draft_rows,
     package_id_from_title,
     rows_to_tsv,
+    synchronized_package_id,
 )
 
 
@@ -40,6 +42,33 @@ def test_package_id_e_gerado_a_partir_do_titulo() -> None:
     assert package_id_from_title("Encontro com Camilly") == (
         "roleplay2026.encontro_com_camilly"
     )
+
+
+def test_sugestao_de_package_id_acompanha_titulo_sem_apagar_edicao_manual() -> None:
+    generated, suggestion = synchronized_package_id("Encontro com Camilly", "", "")
+    assert generated == "roleplay2026.encontro_com_camilly"
+
+    updated, new_suggestion = synchronized_package_id(
+        "Segunda história", generated, suggestion
+    )
+    assert updated == "roleplay2026.segunda_historia"
+
+    manual, _ = synchronized_package_id(
+        "Terceira história", "roleplay2026.id_autoral", new_suggestion
+    )
+    assert manual == "roleplay2026.id_autoral"
+
+
+def test_limpeza_remove_rascunho_e_linhas_sem_afetar_outro_estado() -> None:
+    state = {
+        "draft": "[BEAT] Eu começo.",
+        "rows": [{"line_id": "teste"}],
+        "login": "ok",
+    }
+
+    clear_authoring_state(state, draft_key="draft", rows_key="rows")
+
+    assert state == {"draft": "", "login": "ok"}
 
 
 def test_editor_gera_colunas_ids_e_ordens_da_aba_roteiros() -> None:
@@ -80,6 +109,58 @@ def test_tsv_tem_cabecalho_oficial_e_preserva_placeholder() -> None:
         "package_id\tscript_version\tline_id\torder\tinstruction\tstatus\tupdated_at"
     )
     assert "{{nome}}" in rendered
+
+
+def test_tags_direcionadas_sao_preservadas_e_recebem_ids_identificaveis() -> None:
+    draft = """
+[CENA encontro] Eu recebo o usuário.
+[BEAT] Eu começo a conversa.
+[PENSAMENTO HOMEM] Humm... gostei do jeito dele.
+[PENSAMENTO MULHER] Humm... gostei do jeito dela.
+[PENSAMENTO NEUTRA] Humm... gostei dessa aproximação.
+[PENSAMENTO CORPO_MASCULINO] Eu desejo conhecer esse corpo masculino.
+[PENSAMENTO CORPO_FEMININO] Eu desejo conhecer esse corpo feminino.
+[PENSAMENTO CORPO_INTERSEXO] Eu desejo conhecer esse corpo intersexo.
+[FALA EXATA HOMEM] Oi, {{nome}}... meu lindo.
+[FALA EXATA MULHER] Oi, {{nome}}... minha linda.
+[FALA EXATA NEUTRA] Oi, {{nome}}... que prazer.
+[FIM story_complete] Encerrar a história.
+""".strip()
+
+    rows = compile_draft_rows(
+        draft,
+        package_id="roleplay2026.direcionada",
+        script_version="1.0.0",
+        initial_block_id="encontro",
+    )
+
+    instructions = [str(row["instruction"]) for row in rows]
+    line_ids = [str(row["line_id"]) for row in rows]
+    assert instructions[2:] == [
+        "[PENSAMENTO HOMEM] Humm... gostei do jeito dele.",
+        "[PENSAMENTO MULHER] Humm... gostei do jeito dela.",
+        "[PENSAMENTO NEUTRA] Humm... gostei dessa aproximação.",
+        "[PENSAMENTO CORPO_MASCULINO] Eu desejo conhecer esse corpo masculino.",
+        "[PENSAMENTO CORPO_FEMININO] Eu desejo conhecer esse corpo feminino.",
+        "[PENSAMENTO CORPO_INTERSEXO] Eu desejo conhecer esse corpo intersexo.",
+        "[FALA EXATA HOMEM] Oi, {{nome}}... meu lindo.",
+        "[FALA EXATA MULHER] Oi, {{nome}}... minha linda.",
+        "[FALA EXATA NEUTRA] Oi, {{nome}}... que prazer.",
+        "[FIM story_complete] Encerrar a história.",
+    ]
+    assert line_ids[2:11] == [
+        "encontro_001_pensamento_homem",
+        "encontro_001_pensamento_mulher",
+        "encontro_001_pensamento_neutra",
+        "encontro_001_pensamento_corpo_masculino",
+        "encontro_001_pensamento_corpo_feminino",
+        "encontro_001_pensamento_corpo_intersexo",
+        "encontro_001_fala_homem",
+        "encontro_001_fala_mulher",
+        "encontro_001_fala_neutra",
+    ]
+    assert len(line_ids) == len(set(line_ids))
+    assert "[FALA EXATA HOMEM] Oi, {{nome}}... meu lindo." in rows_to_tsv(rows)
 
 
 def test_fala_sem_beat_e_bloqueada() -> None:

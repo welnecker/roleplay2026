@@ -5,7 +5,7 @@ import io
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable, MutableMapping
 
 
 ROTEIROS_COLUMNS = (
@@ -23,10 +23,16 @@ _TAG_PATTERN = re.compile(
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 _FIRST_PERSON = re.compile(
     r"\b(eu|me|mim|meu|minha|meus|minhas|comigo|estou|sou|vou|quero|"
-    r"preciso|sinto|penso|percebo|acho|espero|posso|tenho|sei|fico)\b",
+    r"preciso|sinto|penso|percebo|acho|espero|posso|tenho|sei|fico|"
+    r"gosto|gostei|adoro|adorei|desejo|desejei|imagino|imaginei|"
+    r"noto|notei|reparo|reparei|senti|fiquei|achei)\b",
     re.IGNORECASE,
 )
 _DEPENDENT_KINDS = {"PENSAMENTO", "FALA", "FALA_EXATA", "FALA_LIVRE", "PONTE"}
+_PROFILE_TAGS = {
+    "HOMEM", "MULHER", "NEUTRO", "NEUTRA", "CORPO_MASCULINO",
+    "CORPO_FEMININO", "CORPO_INTERSEXO",
+}
 
 
 class ScriptAuthoringError(ValueError):
@@ -54,6 +60,26 @@ def slugify(value: str, *, fallback: str = "roteiro") -> str:
 
 def package_id_from_title(title: str) -> str:
     return "roleplay2026." + slugify(title, fallback="nova_historia")
+
+
+def synchronized_package_id(
+    title: str, current_package_id: str, previous_suggestion: str = ""
+) -> tuple[str, str]:
+    """Atualiza a sugestão sem apagar um package_id editado manualmente."""
+    suggestion = package_id_from_title(title) if str(title or "").strip() else ""
+    current = str(current_package_id or "").strip()
+    previous = str(previous_suggestion or "").strip()
+    if not current or current == previous:
+        current = suggestion
+    return current, suggestion
+
+
+def clear_authoring_state(
+    state: MutableMapping[str, Any], *, draft_key: str, rows_key: str
+) -> None:
+    """Limpa o rascunho antes da recriação dos widgets pelo Streamlit."""
+    state[draft_key] = ""
+    state.pop(rows_key, None)
 
 
 def parse_instruction(header: str, text: str) -> ParsedInstruction:
@@ -135,6 +161,7 @@ def _unique_line_id(base: str, used: set[str]) -> str:
 
 
 def _validate_sequence(items: Iterable[ParsedInstruction]) -> list[str]:
+    materialized = list(items)
     errors: list[str] = []
     current_beat = ""
     beat_count = 0
@@ -142,7 +169,7 @@ def _validate_sequence(items: Iterable[ParsedInstruction]) -> list[str]:
     in_final_yard = False
     has_ending = False
 
-    for index, item in enumerate(items, start=1):
+    for index, item in enumerate(materialized, start=1):
         if item.kind == "BEAT":
             beat_count += 1
             current_beat = f"beat_{beat_count}"
@@ -170,9 +197,19 @@ def _validate_sequence(items: Iterable[ParsedInstruction]) -> list[str]:
         errors.append("O roteiro precisa terminar com [FIM código].")
     if in_final_yard and yard_beat_count < 2:
         errors.append("[PÁTIO FINAL] precisa conter pelo menos dois [BEAT].")
-    if items and list(items)[-1].kind != "FIM":
+    if materialized and materialized[-1].kind != "FIM":
         errors.append("[FIM código] deve ser a última instrução.")
     return errors
+
+
+def _profile_suffix(item: ParsedInstruction) -> str:
+    argument = _plain(item.argument).upper().split()
+    if item.kind in {"FALA_EXATA", "FALA_LIVRE"} and argument:
+        argument = argument[1:]
+    profile_tag = "_".join(argument)
+    if profile_tag == "NEUTRO":
+        profile_tag = "NEUTRA"
+    return profile_tag.casefold() if profile_tag in _PROFILE_TAGS else ""
 
 
 def compile_draft_rows(
@@ -223,9 +260,13 @@ def compile_draft_rows(
             current_beat = f"{current_block}_{beat_number:03d}"
             line_id = _unique_line_id(current_beat, used)
         elif item.kind == "PENSAMENTO":
-            line_id = _unique_line_id(f"{current_beat}_pensamento", used)
+            suffix = _profile_suffix(item)
+            base = f"{current_beat}_pensamento"
+            line_id = _unique_line_id(f"{base}_{suffix}" if suffix else base, used)
         elif item.kind in {"FALA", "FALA_EXATA", "FALA_LIVRE"}:
-            line_id = _unique_line_id(f"{current_beat}_fala", used)
+            suffix = _profile_suffix(item)
+            base = f"{current_beat}_fala"
+            line_id = _unique_line_id(f"{base}_{suffix}" if suffix else base, used)
         elif item.kind == "PONTE":
             line_id = _unique_line_id(f"{current_beat}_ponte", used)
         elif item.kind == "TRANSICAO":
@@ -273,10 +314,12 @@ def rows_to_csv(rows: Iterable[dict[str, object]]) -> str:
 __all__ = [
     "ROTEIROS_COLUMNS",
     "ScriptAuthoringError",
+    "clear_authoring_state",
     "compile_draft_rows",
     "package_id_from_title",
     "parse_draft",
     "rows_to_csv",
     "rows_to_tsv",
     "slugify",
+    "synchronized_package_id",
 ]

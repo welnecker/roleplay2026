@@ -8,10 +8,11 @@ import streamlit.components.v1 as components
 from platform_core.auth import AuthenticatedUser
 from services.script_authoring import (
     ScriptAuthoringError,
+    clear_authoring_state,
     compile_draft_rows,
-    package_id_from_title,
     rows_to_csv,
     rows_to_tsv,
+    synchronized_package_id,
 )
 
 
@@ -19,6 +20,9 @@ st.set_page_config(page_title="Auxiliar de Roteiros", page_icon="📝", layout="
 
 DRAFT_KEY = "script_authoring_draft"
 ROWS_KEY = "script_authoring_rows"
+STORY_TITLE_KEY = "script_authoring_story_title"
+PACKAGE_ID_KEY = "script_authoring_package_id"
+PACKAGE_SUGGESTION_KEY = "script_authoring_package_suggestion"
 _TAG_BUTTONS = (
     ("Cena", "[CENA {block_id}] ", "Abre um bloco narrativo. Ex.: [CENA supermercado] Eu caminho pelo corredor."),
     ("Beat", "[BEAT] ", "Define o acontecimento obrigatório. Ex.: [BEAT] Eu esbarro no usuário."),
@@ -57,8 +61,17 @@ def _append_tag(template: str, block_id: str) -> None:
 
 
 def _clear_draft() -> None:
-    st.session_state[DRAFT_KEY] = ""
-    st.session_state.pop(ROWS_KEY, None)
+    clear_authoring_state(st.session_state, draft_key=DRAFT_KEY, rows_key=ROWS_KEY)
+
+
+def _sync_package_id_from_title() -> None:
+    package_id, suggestion = synchronized_package_id(
+        st.session_state.get(STORY_TITLE_KEY, ""),
+        st.session_state.get(PACKAGE_ID_KEY, ""),
+        st.session_state.get(PACKAGE_SUGGESTION_KEY, ""),
+    )
+    st.session_state[PACKAGE_ID_KEY] = package_id
+    st.session_state[PACKAGE_SUGGESTION_KEY] = suggestion
 
 
 def _render_name_placeholder_button() -> None:
@@ -138,6 +151,8 @@ st.caption(
 )
 
 st.session_state.setdefault(DRAFT_KEY, "")
+st.session_state.setdefault(PACKAGE_ID_KEY, "")
+st.session_state.setdefault(PACKAGE_SUGGESTION_KEY, "")
 mode = st.radio(
     "Operação",
     ("Criar nova história", "Criar ou refazer bloco de uma história"),
@@ -148,13 +163,14 @@ left, right = st.columns(2)
 with left:
     story_title = st.text_input(
         "Nome da história",
+        key=STORY_TITLE_KEY,
         placeholder="Ex.: Encontro com Camilly",
         disabled=mode != "Criar nova história",
+        on_change=_sync_package_id_from_title,
     )
-    suggested_package = package_id_from_title(story_title) if story_title else ""
     package_id = st.text_input(
         "package_id",
-        value=suggested_package,
+        key=PACKAGE_ID_KEY,
         placeholder="roleplay2026.nome_da_historia",
         help="Identifica a história e o card. Não identifica o bloco.",
     )
