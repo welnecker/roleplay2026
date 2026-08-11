@@ -28,6 +28,13 @@ def _core_section(lines: list[str], title: str, values: Any) -> None:
     lines.extend(f"- {item}" for item in items)
 
 
+def _core_or_profile(core: Mapping[str, Any], core_key: str, profile: Any) -> Any:
+    """Prefere o núcleo especializado e usa a ficha como fallback por seção."""
+
+    core_values = _items(core.get(core_key))
+    return core_values if core_values else profile
+
+
 def _find_character_path_block(path: Mapping[str, Any], beat_id: str) -> Mapping[str, Any]:
     clean = str(beat_id or "").strip()
     for block in path.get("blocks", []) or []:
@@ -119,9 +126,29 @@ def render_character_core(document: dict[str, Any], *, beat_id: str = "", runtim
     if summary:
         lines.append(f"- essência: {summary}")
 
-    _core_section(lines, "APARÊNCIA FÍSICA", core.get("physical"))
+    _core_section(
+        lines,
+        "APARÊNCIA FÍSICA",
+        _core_or_profile(core, "physical", character.get("physical_profile")),
+    )
     _core_section(lines, "MOTOR DOMINANTE", core.get("dominant_drive"))
-    _core_section(lines, "PSICOLOGIA ESTÁVEL", core.get("psychological"))
+    _core_section(
+        lines,
+        "PSICOLOGIA ESTÁVEL",
+        _core_or_profile(
+            core, "psychological", character.get("psychological_profile")
+        ),
+    )
+    _core_section(
+        lines,
+        "ESTILO DE FALA",
+        _core_or_profile(core, "speech_style", character.get("speech_style")),
+    )
+    _core_section(lines, "INVARIANTES DA PERSONAGEM", core.get("invariants"))
+    _core_section(
+        lines, "REGRAS DE INTERPRETAÇÃO", core.get("interpretation_rules")
+    )
+    _core_section(lines, "REGRAS DO ROTEIRO", core.get("story_rules"))
     _core_section(lines, "REGRAS DO PENSAMENTO INTERNO", core.get("thought_rules"))
     _core_section(lines, "COMO ESTE NÚCLEO ORIENTA OS BEATS", core.get("beat_guidance"))
     _core_section(lines, "COMO ESTE NÚCLEO ORIENTA AS PONTES", core.get("bridge_guidance"))

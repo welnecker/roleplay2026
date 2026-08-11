@@ -13,6 +13,7 @@ from services.editorial_content import (
 from services.editorial_diagnostics import finalize_editorial_model_response
 from services.dialogue_presentation import render_dialogue_html, with_optional_thought_guidance
 from services.editorial_runtime import EditorialState, decide_editorial_turn
+from services.narrative_context import character_context
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,3 +109,24 @@ def test_prompt_e_apresentacao_da_camilly_nao_usam_identidade_da_mary() -> None:
     assert "Você é Camilly" in prompt
     assert "Mary" not in prompt
     assert '<div class="dialogue-speaker">Camilly</div>' in html
+
+
+def test_nucleo_da_camilly_inclui_ficha_e_regras_autorais_completas() -> None:
+    document = load_source_document("roleplay2026.camilly")
+    context = character_context(document)
+
+    assert "NÚCLEO VIVO E AUTORITATIVO DE CAMILLY" in context
+    assert "APARÊNCIA FÍSICA" in context
+    assert "cabelos loiros" in context
+    assert "corpo firme e bem cuidado" in context
+    assert "PSICOLOGIA ESTÁVEL" in context
+    assert "sente desejo sexual pelo usuário desde o início" in context
+    assert "ESTILO DE FALA" in context
+    assert "fala sexual, direta e espontânea" in context
+    assert "INVARIANTES DA PERSONAGEM" in context
+    assert "Pensamento e fala aparecem juntos na mesma resposta" in context
+    assert "REGRAS DE INTERPRETAÇÃO" in context
+    assert "Não antecipar o próximo beat" in context
+    assert "REGRAS DO ROTEIRO" in context
+    assert "O roteiro controla a ordem dos acontecimentos" in context
+    assert "Mary" not in context
