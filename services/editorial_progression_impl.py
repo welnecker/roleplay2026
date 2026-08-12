@@ -6,6 +6,7 @@ from typing import Any
 
 from services import editorial_runtime_impl as runtime_impl
 from services.editorial_bridge import (
+    advance_authored_bridge_turn,
     bridge_active,
     bridge_enabled_for_beat,
     bridge_policy,
@@ -250,6 +251,26 @@ def decide_editorial_progression_turn(
         script,
         state.node_id or script.first_beat_id,
     )
+    if releasing_bridge:
+        bridge_state = state_with_extracted_facts(state, user_text)
+        yard_turn = decide_terminal_yard_turn(
+            script,
+            bridge_state,
+            user_text,
+            base_decide=base_decide_turn,
+            classify_message=classify_contextual_editorial_message,
+        )
+        if yard_turn is not None:
+            return _finalize(script, yard_turn)
+        continuation = advance_authored_bridge_turn(
+            script,
+            bridge_state,
+            user_text,
+            engagement=classify_contextual_editorial_message(user_text),
+        )
+        if continuation is not None:
+            return _finalize(script, continuation)
+
     base_state = release_bridge_state(script, state) if releasing_bridge else state
     working_state = state_with_extracted_facts(base_state, user_text)
 

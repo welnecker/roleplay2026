@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import re
 from typing import Any, Mapping
 
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
@@ -13,6 +14,10 @@ _BRIDGE_ORIGIN_OBJECTIVE_KEY = "_bridge_origin_objective"
 _BRIDGE_ORIGIN_CANONICAL_KEY = "_bridge_origin_canonical"
 _BRIDGE_TARGET_OBJECTIVE_KEY = "_bridge_target_objective"
 _BRIDGE_TARGET_CANONICAL_KEY = "_bridge_target_canonical"
+_BRIDGE_STEP_INDEX_KEY = "_bridge_step_index"
+_BRIDGE_STEP_ID_KEY = "_bridge_step_id"
+_BRIDGE_STEP_INSTRUCTION_KEY = "_bridge_step_instruction"
+_BRIDGE_ALLOW_QUESTION_KEY = "_bridge_allow_question"
 _BRIDGE_FALLBACK = (
     "Ela reage ao que você disse sem apressar o próximo passo, sem repetir o que acabou de acontecer nem antecipar o destino."
 )
@@ -99,6 +104,81 @@ def _beat_semantics(beat: Mapping[str, object]) -> tuple[str, str, str]:
     return objective, canonical, direction
 
 
+def _authored_bridges(beat: Mapping[str, object]) -> list[dict[str, str]]:
+    bridges: list[dict[str, str]] = []
+    for position, item in enumerate(beat.get("authored_bridges", []) or []):  # type: ignore[union-attr]
+        if not isinstance(item, Mapping):
+            continue
+        instruction = str(item.get("instruction", "") or "").strip()
+        if not instruction:
+            continue
+        bridges.append(
+            {
+                "bridge_id": str(item.get("bridge_id", "") or f"bridge_{position + 1}"),
+                "instruction": instruction,
+            }
+        )
+    return bridges
+
+
+def _bridge_may_ask(instruction: str) -> bool:
+    return bool(
+        re.search(
+            r"\beu\s+(?:pergunt\w*|peç\w*|pec\w*|solicit\w*|question\w*)",
+            str(instruction or ""),
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _store_bridge_step(facts: dict[str, str], step: Mapping[str, str], index: int) -> None:
+    instruction = str(step.get("instruction", "") or "").strip()
+    facts[_BRIDGE_STEP_INDEX_KEY] = str(index)
+    facts[_BRIDGE_STEP_ID_KEY] = str(step.get("bridge_id", "") or "").strip()
+    facts[_BRIDGE_STEP_INSTRUCTION_KEY] = instruction
+    facts[_BRIDGE_ALLOW_QUESTION_KEY] = "true" if _bridge_may_ask(instruction) else "false"
+
+
+def _bridge_prompt(
+    *,
+    user_text: str,
+    origin_id: str,
+    target_id: str,
+    origin_objective: str,
+    origin_canonical: str,
+    target_objective: str,
+    target_canonical: str,
+    bridge_id: str,
+    bridge_instruction: str,
+    allow_question: bool,
+) -> str:
+    question_rule = (
+        "Esta etapa autoral pode fazer a pergunta indispensável à sua finalidade, no máximo uma."
+        if allow_question
+        else "Não crie pergunta, promessa, dúvida ou obstáculo que abra uma pendência artificial."
+    )
+    return "\n".join(
+        (
+            "FASE ESTRUTURAL: PONTE NARRATIVA AUTORAL SEQUENCIAL.",
+            f"ETAPA DE PONTE ATUAL: {bridge_id}",
+            f"FINALIDADE AUTORAL OBRIGATÓRIA DESTA ETAPA: {bridge_instruction}",
+            "Responda genuinamente à fala mais recente do usuário na voz da personagem e cumpra esta finalidade.",
+            "A ponte não é uma segunda versão do beat anterior nem uma prévia do seguinte.",
+            "Se o usuário já tiver satisfeito a finalidade, reconheça e aproveite o que ele declarou; não repita pedido, pergunta ou informação.",
+            "A ponte deve aproximar a conversa da meta global sem executar o beat de destino.",
+            question_rule,
+            "Não presuma ação, aceite, recusa, desejo, excitação ou decisão que o usuário não declarou.",
+            f"FALA ATUAL DO USUÁRIO: {str(user_text or '').strip()}",
+            f"BEAT DE ORIGEM: {origin_id}",
+            f"MOVIMENTO DE ORIGEM JÁ CONCLUÍDO — PROIBIDO REPETIR: {origin_objective}",
+            f"LINHA DE ORIGEM JÁ CONSUMIDA — PROIBIDO PARAFRASEAR: {origin_canonical}",
+            f"BEAT DE DESTINO: {target_id}",
+            f"OBJETIVO FUTURO RESERVADO AO DESTINO — PROIBIDO EXECUTAR: {target_objective}",
+            f"LINHA FUTURA PROIBIDA NESTA RESPOSTA: {target_canonical}",
+        )
+    )
+
+
 def _is_structural_destination(script: EditorialScript, target_id: str) -> bool:
     if target_id in script.endings:
         return True
@@ -178,7 +258,12 @@ def create_bridge_turn(
     origin = script.beats.get(origin_id) or {}
     target = script.beats.get(target_id) or {}
     origin_objective, origin_canonical, _origin_direction = _beat_semantics(origin)
-    target_objective, target_canonical, target_direction = _beat_semantics(target)
+    target_objective, target_canonical, _target_direction = _beat_semantics(target)
+    authored = _authored_bridges(origin)
+    first_step = authored[0] if authored else {
+        "bridge_id": f"{origin_id}__bridge",
+        "instruction": _BRIDGE_FALLBACK,
+    }
 
     updated = EditorialState.from_dict(proposed_turn.state.to_dict())
     updated.node_id = origin_id
@@ -192,28 +277,20 @@ def create_bridge_turn(
     updated.facts[_BRIDGE_ORIGIN_CANONICAL_KEY] = origin_canonical
     updated.facts[_BRIDGE_TARGET_OBJECTIVE_KEY] = target_objective
     updated.facts[_BRIDGE_TARGET_CANONICAL_KEY] = target_canonical
+    _store_bridge_step(updated.facts, first_step, 0)
     updated.facts["_organic_interstitial"] = "false"
 
-    prompt = "\n".join(
-        (
-            "FASE ESTRUTURAL: PONTE NARRATIVA.",
-            "Responda genuinamente à fala mais recente do usuário na voz da personagem.",
-            "A ponte deve acrescentar reação nova; não é uma segunda versão do beat anterior nem uma prévia do seguinte.",
-            "Não repita, reformule, confirme novamente ou prolongue o movimento já concluído no beat de origem.",
-            "Não execute, anuncie, pergunte, negocie ou combine nenhum elemento decisório pertencente ao beat de destino.",
-            "Quando o usuário já tiver fornecido algo necessário ao destino, apenas reconheça brevemente esse fato; não realize o restante do destino.",
-            "Não crie assunto pendente, nova promessa, nova pergunta ou novo obstáculo apenas para produzir mais um turno.",
-            "Não presuma ação, aceite, recusa, desejo ou decisão que o usuário não declarou.",
-            "Termine deixando espaço real para outra resposta somente quando houver conteúdo genuíno ainda aberto.",
-            f"FALA ATUAL DO USUÁRIO: {str(user_text or '').strip()}",
-            f"BEAT DE ORIGEM: {origin_id}",
-            f"MOVIMENTO DE ORIGEM JÁ CONCLUÍDO — PROIBIDO REPETIR: {origin_objective}",
-            f"LINHA DE ORIGEM JÁ CONSUMIDA — PROIBIDO PARAFRASEAR: {origin_canonical}",
-            f"BEAT DE DESTINO: {target_id}",
-            f"OBJETIVO FUTURO RESERVADO AO DESTINO — PROIBIDO EXECUTAR: {target_objective}",
-            f"DIREÇÃO FUTURA, APENAS COMO CONTEXTO: {target_direction}",
-            f"LINHA FUTURA PROIBIDA NESTA RESPOSTA: {target_canonical}",
-        )
+    prompt = _bridge_prompt(
+        user_text=user_text,
+        origin_id=origin_id,
+        target_id=target_id,
+        origin_objective=origin_objective,
+        origin_canonical=origin_canonical,
+        target_objective=target_objective,
+        target_canonical=target_canonical,
+        bridge_id=first_step["bridge_id"],
+        bridge_instruction=first_step["instruction"],
+        allow_question=_bridge_may_ask(first_step["instruction"]),
     )
     return replace(
         proposed_turn,
@@ -224,6 +301,51 @@ def create_bridge_turn(
         finished=False,
         run_status="active",
         ending_code="",
+    )
+
+
+def advance_authored_bridge_turn(
+    script: EditorialScript,
+    state: EditorialState,
+    user_text: str,
+    *,
+    engagement: str,
+) -> EditorialTurn | None:
+    """Executa a próxima [PONTE] do mesmo beat em um turno independente."""
+
+    if not bridge_active(state):
+        return None
+    origin_id = str(state.facts.get(_BRIDGE_ORIGIN_KEY, "") or "").strip()
+    target_id = bridge_target_id(state)
+    origin = script.beats.get(origin_id) or {}
+    authored = _authored_bridges(origin)
+    current_index = int(state.facts.get(_BRIDGE_STEP_INDEX_KEY, "0") or 0)
+    next_index = current_index + 1
+    if next_index >= len(authored):
+        return None
+
+    step = authored[next_index]
+    updated = EditorialState.from_dict(state.to_dict())
+    updated.facts[_BRIDGE_TURNS_KEY] = str(next_index + 1)
+    _store_bridge_step(updated.facts, step, next_index)
+    prompt = _bridge_prompt(
+        user_text=user_text,
+        origin_id=origin_id,
+        target_id=target_id,
+        origin_objective=str(updated.facts.get(_BRIDGE_ORIGIN_OBJECTIVE_KEY, "") or ""),
+        origin_canonical=str(updated.facts.get(_BRIDGE_ORIGIN_CANONICAL_KEY, "") or ""),
+        target_objective=str(updated.facts.get(_BRIDGE_TARGET_OBJECTIVE_KEY, "") or ""),
+        target_canonical=str(updated.facts.get(_BRIDGE_TARGET_CANONICAL_KEY, "") or ""),
+        bridge_id=step["bridge_id"],
+        bridge_instruction=step["instruction"],
+        allow_question=_bridge_may_ask(step["instruction"]),
+    )
+    return EditorialTurn(
+        engagement=engagement,  # type: ignore[arg-type]
+        target_id=origin_id,
+        visible_fallback=_BRIDGE_FALLBACK,
+        system_prompt=prompt,
+        state=updated,
     )
 
 
@@ -247,6 +369,10 @@ def release_bridge_state(script: EditorialScript, state: EditorialState) -> Edit
         _BRIDGE_ORIGIN_CANONICAL_KEY,
         _BRIDGE_TARGET_OBJECTIVE_KEY,
         _BRIDGE_TARGET_CANONICAL_KEY,
+        _BRIDGE_STEP_INDEX_KEY,
+        _BRIDGE_STEP_ID_KEY,
+        _BRIDGE_STEP_INSTRUCTION_KEY,
+        _BRIDGE_ALLOW_QUESTION_KEY,
     ):
         updated.facts.pop(key, None)
     return updated
@@ -254,6 +380,7 @@ def release_bridge_state(script: EditorialScript, state: EditorialState) -> Edit
 
 __all__ = [
     "bridge_active",
+    "advance_authored_bridge_turn",
     "bridge_enabled_for_beat",
     "bridge_policy",
     "bridge_target_id",

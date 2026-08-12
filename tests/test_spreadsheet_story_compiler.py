@@ -169,9 +169,14 @@ def test_ponte_e_orientacao_do_mesmo_beat() -> None:
     )
 
     beat = document["blocks"][0]["beats"][0]
-    assert beat["dramatic_direction"] == (
-        "PONTE: Eu reajo sem antecipar o próximo assunto."
-    )
+    assert beat["dramatic_direction"] == ""
+    assert beat["authored_bridges"] == [
+        {
+            "bridge_id": "ponte",
+            "instruction": "Eu reajo sem antecipar o próximo assunto.",
+            "order": 1,
+        }
+    ]
     assert beat["allowed_transitions"]["dismissive"] == "__generic_disagreement_warning"
     assert beat["has_authored_bridge"] is True
     assert document["bridge_policy"] == {"mode": "required", "beat_ids": ["beat"]}

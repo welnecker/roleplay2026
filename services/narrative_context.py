@@ -35,6 +35,25 @@ def _core_or_profile(core: Mapping[str, Any], core_key: str, profile: Any) -> An
     return core_values if core_values else profile
 
 
+def render_story_goal(document: dict[str, Any]) -> str:
+    """Expõe a direção global sem transformá-la em licença para antecipar beats."""
+
+    goals = _items(document.get("story_goal"))
+    if not goals:
+        return ""
+    lines = [
+        "META GLOBAL, PRIVADA E OBRIGATÓRIA DESTA HISTÓRIA:",
+        *(f"- {item}" for item in goals),
+        "HIERARQUIA DE EXECUÇÃO DA META:",
+        "- Conduza cada escolha de tom, iniciativa e reação na direção desta meta; não responda de modo neutro ou sem propósito.",
+        "- A meta não autoriza executar, anunciar ou insinuar como consumado nenhum beat futuro.",
+        "- O beat atual define o único acontecimento autorizado; as pontes aproximam a conversa da meta dentro desse limite.",
+        "- Nunca presuma desejo, excitação, aceite, consentimento, ação ou resultado do usuário.",
+        "- Diante de recusa ou ausência de reciprocidade, preserve a agência do usuário e siga o tratamento previsto pelo roteiro.",
+    ]
+    return "\n".join(lines)
+
+
 def _find_character_path_block(path: Mapping[str, Any], beat_id: str) -> Mapping[str, Any]:
     clean = str(beat_id or "").strip()
     for block in path.get("blocks", []) or []:
@@ -264,11 +283,12 @@ def build_narrative_context(
     beat_id: str = "",
     runtime_phase: str = "canonical",
 ) -> str:
-    return character_context(
-        document,
-        beat_id=beat_id,
-        runtime_phase=runtime_phase,
-    ) + "\n\n" + render_active_memories(document, memory_ids, facts)
+    sections = (
+        character_context(document, beat_id=beat_id, runtime_phase=runtime_phase),
+        render_story_goal(document),
+        render_active_memories(document, memory_ids, facts),
+    )
+    return "\n\n".join(section for section in sections if section)
 
 
 def validate_memory_references(document: dict[str, Any]) -> None:
@@ -339,6 +359,7 @@ __all__ = [
     "render_active_memories",
     "render_character_core",
     "render_character_core_path",
+    "render_story_goal",
     "validate_memory_references",
     "validate_terminal_yards",
 ]

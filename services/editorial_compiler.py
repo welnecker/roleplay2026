@@ -212,6 +212,7 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "authored_thought": str(source.get("authored_thought", "") or ""),
                     "exact_speech": str(source.get("exact_speech", "") or ""),
                     "has_authored_bridge": bool(source.get("has_authored_bridge", False)),
+                    "authored_bridges": deepcopy(source.get("authored_bridges") or []),
                     "block_id": block_id,
                     "block_type": block_type,
                     "position_in_block": position,

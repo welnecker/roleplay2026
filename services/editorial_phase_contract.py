@@ -54,35 +54,43 @@ def adapt_context_for_runtime_phase(
         origin_canonical = _fact(state, "_bridge_origin_canonical")
         target_objective = _fact(state, "_bridge_target_objective")
         target_canonical = _fact(state, "_bridge_target_canonical")
+        bridge_instruction = _fact(state, "_bridge_step_instruction")
+        bridge_id = _fact(state, "_bridge_step_id")
+        allow_question = _fact(state, "_bridge_allow_question") == "true"
+        required = [
+            "responder genuinamente ao conteúdo mais recente do usuário",
+            "cumprir a finalidade da etapa autoral de ponte sem executar o beat de destino",
+            "se a finalidade já tiver sido satisfeita pelo usuário, reconhecer e adaptar sem repeti-la",
+            "preservar integralmente para o beat de destino seus demais acontecimentos reservados",
+        ]
+        if bridge_instruction:
+            required.append(f"finalidade da ponte {bridge_id or 'atual'}: {bridge_instruction}")
+        forbidden = [
+            "executar o próximo beat total ou parcialmente",
+            f"repetir ou parafrasear o movimento de origem já concluído: {origin_objective}",
+            f"repetir ou parafrasear a linha de origem já consumida: {origin_canonical}",
+            f"executar total ou parcialmente o objetivo reservado ao destino: {target_objective}",
+            f"repetir ou parafrasear a linha canônica futura: {target_canonical}",
+            "reconfirmar informação que já foi confirmada no turno imediatamente anterior",
+            "presumir ação, aceite, recusa, desejo ou decisão do usuário",
+            "avançar local, tempo ou acontecimento futuro",
+        ]
+        if not allow_question:
+            forbidden.append("criar nova pergunta, promessa, dúvida ou obstáculo sem pendência real trazida pelo usuário")
         return replace(
             context,
             authored_thought="",
             exact_speech="",
-            max_questions=0,
-            forbid_new_questions=True,
+            max_questions=1 if allow_question else 0,
+            forbid_new_questions=not allow_question,
             forbidden_literal_texts=tuple(
                 dict.fromkeys(
                     (*_authored_parts(origin_canonical), *_authored_parts(target_canonical))
                 )
             ),
             transition_status="bridge_pending",
-            required_outcomes=(
-                "responder genuinamente ao conteúdo mais recente do usuário",
-                "acrescentar uma reação nova que não replique o beat de origem",
-                "preservar integralmente para o beat de destino suas decisões, perguntas, combinações e revelações",
-                "não criar pendência artificial apenas para prolongar a conversa",
-            ),
-            forbidden_outcomes=(
-                "executar o próximo beat total ou parcialmente",
-                f"repetir ou parafrasear o movimento de origem já concluído: {origin_objective}",
-                f"repetir ou parafrasear a linha de origem já consumida: {origin_canonical}",
-                f"executar total ou parcialmente o objetivo reservado ao destino: {target_objective}",
-                f"repetir ou parafrasear a linha canônica futura: {target_canonical}",
-                "reconfirmar informação que já foi confirmada no turno imediatamente anterior",
-                "criar nova pergunta, promessa, dúvida ou obstáculo sem pendência real trazida pelo usuário",
-                "presumir ação, aceite, recusa, desejo ou decisão do usuário",
-                "avançar local, tempo ou acontecimento futuro",
-            ),
+            required_outcomes=tuple(required),
+            forbidden_outcomes=tuple(forbidden),
             response_boundary=(
                 "Ponte narrativa semanticamente vazada é inválida: permaneça entre o movimento "
                 "já consumido da origem e o movimento ainda reservado ao destino "
