@@ -253,10 +253,17 @@ def build_semantic_evaluation_request(
     )
 
 
-def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
+def parse_semantic_evaluation(
+    raw: str,
+    *,
+    candidate: str | None = None,
+    context: BeatContext | None = None,
+) -> ResponseEvaluation:
     text = str(raw or "").strip()
-    context = _LAST_EVALUATION_CONTEXT.get()
-    candidate = _LAST_EVALUATED_CANDIDATE.get()
+    effective_context = context or _LAST_EVALUATION_CONTEXT.get()
+    effective_candidate = (
+        str(candidate) if candidate is not None else _LAST_EVALUATED_CANDIDATE.get()
+    )
     try:
         payload: Any = json.loads(text)
     except (TypeError, ValueError, json.JSONDecodeError):
@@ -289,7 +296,7 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
             if not code or not evidence:
                 violations.append("semantic_evaluator_invalid_violations")
                 continue
-            if _normalized(evidence) not in _normalized(candidate):
+            if _normalized(evidence) not in _normalized(effective_candidate):
                 violations.append("semantic_evaluator_invalid_violations")
                 continue
         else:
@@ -301,7 +308,7 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
         if code not in _ALLOWED_SEMANTIC_VIOLATIONS:
             violations.append("semantic_evaluator_invalid_violations")
             continue
-        if not _context_allows_violation(code, context):
+        if not _context_allows_violation(code, effective_context):
             discarded.append({"code": code, "reason": "non_blocking_or_incompatible_with_context"})
             continue
         violations.append(code)

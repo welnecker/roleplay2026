@@ -59,7 +59,12 @@ def test_player_usa_pipeline_editorial_transacional() -> None:
     assert "prepare_pending_editorial_turn(script, editorial_state, proposed_turn)" in source
     assert "clean_editorial_model_response(raw_model_response, \"\")" in source
     assert "evaluate_deterministic_response(candidate, pending.context)" in source
-    assert "parse_semantic_evaluation(semantic_raw)" in source
+    assert "semantic = parse_semantic_evaluation(" in source
+    assert "candidate=candidate" in source
+    assert "context=pending.context" in source
+    assert "previous_violations: tuple[str, ...] = ()" in source
+    assert "current_violations: tuple[str, ...] = ()" in source
+    assert "violations=previous_violations" in source
     assert "commit_editorial_turn(pending, assistant_text)" in source
     assert "editorial_opening_text(script)" in source
     assert "editorial_scene_opening_text(script)" in source

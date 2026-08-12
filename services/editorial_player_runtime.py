@@ -581,17 +581,19 @@ private_context = build_immersive_context(
 evaluation_prompt = build_semantic_evaluation_prompt(pending.context)
 raw_model_response = ""
 assistant_text = ""
-violations: tuple[str, ...] = ()
+previous_violations: tuple[str, ...] = ()
+final_violations: tuple[str, ...] = ()
 attempts = 0
 
 for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
     attempts = attempt
+    current_violations: tuple[str, ...] = ()
     generation_prompt = (
         base_prompt
         if attempt == 1
         else build_regeneration_prompt(
             base_prompt=base_prompt,
-            violations=violations,
+            violations=previous_violations,
         )
     )
     try:
@@ -615,7 +617,11 @@ for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
                 candidate=candidate,
             ),
         )
-        semantic = parse_semantic_evaluation(semantic_raw)
+        semantic = parse_semantic_evaluation(
+            semantic_raw,
+            candidate=candidate,
+            context=pending.context,
+        )
         combined = merge_evaluations(deterministic, semantic)
     except OpenRouterError as exc:
         log_editorial_exception(
@@ -632,9 +638,11 @@ for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
 
     if combined.valid:
         assistant_text = candidate
-        violations = ()
+        final_violations = ()
         break
-    violations = combined.violations
+    current_violations = combined.violations
+    previous_violations = current_violations
+    final_violations = current_violations
 
 if not assistant_text:
     log_editorial_exception(
@@ -645,7 +653,7 @@ if not assistant_text:
         node_id=editorial_state.node_id,
         target_id=proposed_turn.target_id,
         attempts=attempts,
-        violations=violations,
+        violations=final_violations,
     )
     st.error(OPERATIONAL_GENERATION_ERROR)
     st.stop()
@@ -667,7 +675,7 @@ diagnostics = build_editorial_turn_diagnostics(
     system_prompt=base_prompt,
 )
 diagnostics["generation_attempts"] = attempts
-diagnostics["evaluation_violations"] = list(violations)
+diagnostics["evaluation_violations"] = list(final_violations)
 diagnostics["state_committed_after_approval"] = True
 log_editorial_turn(diagnostics)
 

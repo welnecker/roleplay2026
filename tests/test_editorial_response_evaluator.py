@@ -132,6 +132,25 @@ def test_ponte_rejeita_pergunta_que_criaria_pendencia() -> None:
     assert closed_reaction.valid is True
 
 
+def test_avaliacao_semantica_usa_candidata_explicita_da_tentativa_atual() -> None:
+    first = "Gostei. Você não fica só no carinho, né?"
+    second = "Gostei do que você contou e senti um arrepio só de imaginar."
+    context = _context(forbid_new_questions=True, max_questions=0)
+
+    evaluate_deterministic_response(first, context)
+    semantic = parse_semantic_evaluation(
+        '{"valid": true, "violations": []}',
+        candidate=second,
+        context=context,
+    )
+    current = merge_evaluations(
+        evaluate_deterministic_response(second, context), semantic
+    )
+
+    assert current.valid is True
+    assert current.violations == ()
+
+
 def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
     rendered = render_beat_context(_context())
 
