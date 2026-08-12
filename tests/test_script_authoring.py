@@ -205,3 +205,52 @@ def test_fim_precisa_ser_ultima_instrucao() -> None:
             script_version="1.0.0",
             initial_block_id="teste",
         )
+
+
+@pytest.mark.parametrize(
+    "thought",
+    (
+        "Humm... tive uma ideia safada agora.",
+        "Percebi o jeito dele e decidi provocar.",
+        "Fiz uma escolha e vou manter o assunto.",
+        "Vi a reação dele e gostei.",
+        "Vamos ver se ele cai nessa, rsrsrs.",
+        "Tô ficando curiosa com essa aproximação.",
+    ),
+)
+def test_pensamento_aceita_verbos_naturais_com_pronome_oculto(thought: str) -> None:
+    draft = f"""
+[CENA encontro] Eu encontro o usuário.
+[BEAT] Eu começo a conversa.
+[PENSAMENTO] {thought}
+[FALA] Oi.
+[FIM story_complete] Encerrar.
+""".strip()
+
+    rows = compile_draft_rows(
+        draft,
+        package_id="roleplay2026.teste",
+        script_version="1.0.0",
+        initial_block_id="encontro",
+    )
+
+    assert rows[2]["instruction"] == f"[PENSAMENTO] {thought}"
+
+
+def test_pensamento_aceita_fragmento_interno_sem_pronome_ou_verbo() -> None:
+    rows = compile_draft_rows(
+        """
+[CENA encontro] Eu encontro o usuário.
+[BEAT] Eu começo a conversa.
+[PENSAMENTO] Que homem gostoso... olha ele de novo.
+[FALA] Oi.
+[FIM story_complete] Encerrar.
+""".strip(),
+        package_id="roleplay2026.teste",
+        script_version="1.0.0",
+        initial_block_id="encontro",
+    )
+
+    assert rows[2]["instruction"] == (
+        "[PENSAMENTO] Que homem gostoso... olha ele de novo."
+    )

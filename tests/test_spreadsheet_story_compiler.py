@@ -110,6 +110,43 @@ def test_beat_em_terceira_pessoa_e_rejeitado() -> None:
         )
 
 
+def test_compilador_aceita_pensamento_com_verbo_tive_sem_pronome() -> None:
+    document = compile_spreadsheet_story(
+        _base(),
+        [
+            _row("cena", 10, "[CENA encontro] Eu encontro o usuário."),
+            _row("beat", 20, "[BEAT] Eu começo a conversa."),
+            _row("pensamento", 30, "[PENSAMENTO] Tive uma ideia safada agora."),
+            _row("fala", 40, "[FALA] Oi."),
+            _row("fim", 50, "[FIM story_complete] Encerrar."),
+        ],
+        script_version="1.0.0",
+    )
+
+    assert document["blocks"][0]["beats"][0]["authored_thought"] == (
+        "Tive uma ideia safada agora."
+    )
+
+
+def test_compilador_rejeita_pensamento_em_terceira_pessoa() -> None:
+    with pytest.raises(SpreadsheetStoryError, match="primeira pessoa"):
+        compile_spreadsheet_story(
+            _base(),
+            [
+                _row("cena", 10, "[CENA encontro] Eu encontro o usuário."),
+                _row("beat", 20, "[BEAT] Eu começo a conversa."),
+                _row(
+                    "pensamento",
+                    30,
+                    "[PENSAMENTO] Mary observa o usuário e planeja uma provocação.",
+                ),
+                _row("fala", 40, "[FALA] Oi."),
+                _row("fim", 50, "[FIM story_complete] Encerrar."),
+            ],
+            script_version="1.0.0",
+        )
+
+
 def test_ponte_e_orientacao_do_mesmo_beat() -> None:
     document = compile_spreadsheet_story(
         _base(),

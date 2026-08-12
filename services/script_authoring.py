@@ -7,6 +7,8 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Any, Iterable, MutableMapping
 
+from services.first_person import has_first_person_voice
+
 
 ROTEIROS_COLUMNS = (
     "package_id",
@@ -21,13 +23,6 @@ _TAG_PATTERN = re.compile(
     r"(?ms)^[ \t]*\[([^\]\n]+)\][ \t]*(.*?)(?=^[ \t]*\[[^\]\n]+\]|\Z)"
 )
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
-_FIRST_PERSON = re.compile(
-    r"\b(eu|me|mim|meu|minha|meus|minhas|comigo|estou|sou|vou|quero|"
-    r"preciso|sinto|penso|percebo|acho|espero|posso|tenho|sei|fico|"
-    r"gosto|gostei|adoro|adorei|desejo|desejei|imagino|imaginei|"
-    r"noto|notei|reparo|reparei|senti|fiquei|achei)\b",
-    re.IGNORECASE,
-)
 _DEPENDENT_KINDS = {"PENSAMENTO", "FALA", "FALA_EXATA", "FALA_LIVRE", "PONTE"}
 _PROFILE_TAGS = {
     "HOMEM", "MULHER", "NEUTRO", "NEUTRA", "CORPO_MASCULINO",
@@ -185,8 +180,8 @@ def _validate_sequence(items: Iterable[ParsedInstruction]) -> list[str]:
         elif item.kind == "FIM":
             has_ending = True
 
-        if item.kind in {"BEAT", "PENSAMENTO", "PONTE", "PATIO_FINAL"}:
-            if item.text and not _FIRST_PERSON.search(item.text):
+        if item.kind in {"BEAT", "PONTE", "PATIO_FINAL"}:
+            if item.text and not has_first_person_voice(item.text):
                 errors.append(
                     f"Linha autoral {index}: [{item.header}] deve ser escrita em primeira pessoa."
                 )

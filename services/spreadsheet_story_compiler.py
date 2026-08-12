@@ -5,13 +5,10 @@ import unicodedata
 from copy import deepcopy
 from typing import Any, Iterable
 
+from services.first_person import has_first_person_voice
+
 
 _MARKER = re.compile(r"^\s*\[([^\]]+)\]\s*(.*)$", re.DOTALL)
-_FIRST_PERSON = re.compile(
-    r"\b(eu|me|mim|meu|minha|meus|minhas|comigo|estou|sou|vou|quero|"
-    r"preciso|sinto|penso|percebo|acho|espero|posso|tenho|sei|fico)\b",
-    re.IGNORECASE,
-)
 _PROFILE_TAGS = {
     "HOMEM",
     "MULHER",
@@ -71,7 +68,7 @@ def _validate_first_person(kind: str, text: str, *, line_id: str, character_name
         raise SpreadsheetStoryError(
             f"{line_id}: use primeira pessoa; não escreva o nome da personagem."
         )
-    if kind in {"BEAT", "PONTE", "PATIO_FINAL"} and not _FIRST_PERSON.search(text):
+    if kind in {"BEAT", "PONTE", "PATIO_FINAL"} and not has_first_person_voice(text):
         raise SpreadsheetStoryError(
             f"{line_id}: {kind} deve ser escrito em primeira pessoa."
         )
