@@ -45,6 +45,10 @@ from services.editorial_runtime import (
     editorial_scene_opening_text,
 )
 from services.editorial_scene_images import render_editorial_scene_image
+from services.editorial_script_snapshot import (
+    clear_script_snapshot as clear_script_snapshot_state,
+    load_script_snapshot,
+)
 from services.editorial_transaction import (
     commit_editorial_turn,
     prepare_pending_editorial_turn,
@@ -116,16 +120,35 @@ st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 
 def load_script(package_id: str) -> EditorialScript:
-    """Relê ROTEIROS em cada execução para refletir toda alteração autoral.
-
-    A conexão com a planilha continua reutilizada por ``runtime_repository``;
-    somente o conteúdo editorial deixa de ser congelado por ``package_id``.
-    """
+    """Lê e compila a versão vigente de ROTEIROS."""
 
     package = find_editorial_package(package_id)
     if package is None:
         raise RuntimeError(f"Pacote editorial não encontrado: {package_id}")
     return load_editorial_package(st.secrets, package)
+
+
+def clear_script_snapshot(user_id: str) -> None:
+    clear_script_snapshot_state(
+        st.session_state, user_id=user_id, package_id=PACKAGE_ID
+    )
+
+
+def session_script(user: AuthenticatedUser, *, refresh: bool = False) -> EditorialScript:
+    """Mantém um snapshot coerente durante a permanência na história.
+
+    Reruns comuns reutilizam o objeto compilado. Nova entrada, novo pagamento ou
+    encerramento removem a cópia e fazem a próxima abertura reler ROTEIROS.
+    """
+
+    return load_script_snapshot(
+        st.session_state,
+        user_id=user.user_id,
+        package_id=PACKAGE_ID,
+        loader=lambda: load_script(PACKAGE_ID),
+        expected_type=EditorialScript,
+        refresh=refresh,
+    )
 
 
 @st.cache_resource(show_spinner=False)
@@ -233,6 +256,7 @@ def clear_session(user: AuthenticatedUser) -> None:
     for key in session_keys(user.user_id):
         st.session_state.pop(key, None)
     st.session_state.pop(END_CONFIRMATION_KEY, None)
+    clear_script_snapshot(user.user_id)
     clear_immersive_profile(
         st.session_state, user_id=user.user_id, package_id=PACKAGE_ID
     )
@@ -241,6 +265,7 @@ def clear_session(user: AuthenticatedUser) -> None:
 def return_to_library() -> None:
     user = authenticated_user()
     if user is not None:
+        clear_script_snapshot(user.user_id)
         clear_immersive_profile(
             st.session_state, user_id=user.user_id, package_id=PACKAGE_ID
         )
@@ -315,7 +340,7 @@ fresh_start = prepare_after_payment(user)
 api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
 model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
 try:
-    script = load_script(PACKAGE_ID)
+    script = session_script(user, refresh=fresh_start)
 except Exception as exc:
     log_editorial_exception("load_editorial_script", exc, package_id=PACKAGE_ID)
     st.error(f"Não foi possível carregar o roteiro editorial: {exc}")

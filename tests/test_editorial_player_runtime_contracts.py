@@ -51,6 +51,10 @@ def test_player_usa_pipeline_editorial_transacional() -> None:
     )[0].rsplit("\n\n", 1)[-1]
     assert "@st.cache_resource" not in loader_prefix
     assert "load_editorial_package(st.secrets, package)" in source
+    assert "def session_script(user: AuthenticatedUser, *, refresh: bool = False)" in source
+    assert "return load_script_snapshot(" in source
+    assert "script = session_script(user, refresh=fresh_start)" in source
+    assert "clear_script_snapshot(user.user_id)" in source
     assert "decide_editorial_turn(script, editorial_state, user_text)" in source
     assert "prepare_pending_editorial_turn(script, editorial_state, proposed_turn)" in source
     assert "clean_editorial_model_response(raw_model_response, \"\")" in source
