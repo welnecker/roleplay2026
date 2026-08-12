@@ -46,6 +46,11 @@ def test_player_usa_pipeline_editorial_transacional() -> None:
     source = RUNTIME_PATH.read_text(encoding="utf-8")
 
     assert "def load_script(package_id: str) -> EditorialScript:" in source
+    loader_prefix = source.split(
+        "def load_script(package_id: str) -> EditorialScript:", 1
+    )[0].rsplit("\n\n", 1)[-1]
+    assert "@st.cache_resource" not in loader_prefix
+    assert "load_editorial_package(st.secrets, package)" in source
     assert "decide_editorial_turn(script, editorial_state, user_text)" in source
     assert "prepare_pending_editorial_turn(script, editorial_state, proposed_turn)" in source
     assert "clean_editorial_model_response(raw_model_response, \"\")" in source

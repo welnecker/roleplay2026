@@ -115,8 +115,13 @@ st.set_page_config(page_title=PACKAGE_TITLE, page_icon="📖", layout="centered"
 st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 
-@st.cache_resource(show_spinner=False)
 def load_script(package_id: str) -> EditorialScript:
+    """Relê ROTEIROS em cada execução para refletir toda alteração autoral.
+
+    A conexão com a planilha continua reutilizada por ``runtime_repository``;
+    somente o conteúdo editorial deixa de ser congelado por ``package_id``.
+    """
+
     package = find_editorial_package(package_id)
     if package is None:
         raise RuntimeError(f"Pacote editorial não encontrado: {package_id}")
