@@ -39,6 +39,7 @@ from services.editorial_runtime import (
     clean_editorial_model_response,
     decide_editorial_turn,
     editorial_opening_text,
+    editorial_scene_opening_text,
 )
 from services.editorial_scene_images import render_editorial_scene_image
 from services.editorial_transaction import (
@@ -400,21 +401,26 @@ st.title(PACKAGE_TITLE)
 st.caption(PACKAGE_SUBTITLE or "História editorial")
 
 if not messages:
-    opening = editorial_opening_text(script)
-    if isinstance(immersive_profile, dict):
+    scene_opening = editorial_scene_opening_text(script)
+    opening = scene_opening or editorial_opening_text(script)
+    if not scene_opening and isinstance(immersive_profile, dict):
         opening = opening_with_required_name(opening, immersive_profile)
     opening_editorial_state = EditorialState.from_dict(editorial_state.to_dict())
-    opening_editorial_state.node_id = script.first_beat_id
+    opening_editorial_state.node_id = "" if scene_opening else script.first_beat_id
+    opening_editorial_state.pending_next_beat_id = (
+        script.first_beat_id if scene_opening else ""
+    )
     opening_editorial_state.facts["_runtime_phase"] = "canonical"
     opening_metadata = build_editorial_metadata(
-        node_id=script.first_beat_id,
-        engagement="opening",
+        node_id="" if scene_opening else script.first_beat_id,
+        engagement="scene_opening" if scene_opening else "opening",
         state=opening_editorial_state.to_dict(),
         finished=False,
         run_status="active",
         ending_code="",
     )
-    opening_metadata["character_id"] = CHARACTER_ID
+    opening_metadata["character_id"] = "narrator" if scene_opening else CHARACTER_ID
+    opening_metadata["scene_opening"] = bool(scene_opening)
     opening_metadata["editorial_block"] = str(
         (script.beats.get(script.first_beat_id) or {}).get("block_id", "") or ""
     )
@@ -468,7 +474,12 @@ for message in messages:
                     package_id=PACKAGE_ID,
                     node_id=message_node_id,
                 )
-    render_message(str(message.get("role", "assistant")), str(message.get("content", "")))
+    presentation_role = (
+        "scene"
+        if bool(message.get("scene_opening", False))
+        else str(message.get("role", "assistant"))
+    )
+    render_message(presentation_role, str(message.get("content", "")))
 
 if editorial_state.finished or story_state.finished:
     if editorial_state.run_status == "completed":

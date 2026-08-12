@@ -359,7 +359,13 @@ def persist_opening_message(
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)
     persisted_metadata["opening_message"] = True
-    character_id = str(persisted_metadata.get("character_id", "") or "character")
+    scene_opening = bool(persisted_metadata.get("scene_opening", False))
+    character_id = str(
+        persisted_metadata.get("character_id", "")
+        or ("narrator" if scene_opening else "character")
+    )
+    if scene_opening:
+        node_id = ""
     sequence = max(1, int(context.next_sequence or 1))
 
     repository.append_interaction(
@@ -375,11 +381,12 @@ def persist_opening_message(
         beat_id=node_id,
         metadata=persisted_metadata,
     )
-    run = repository.update_run_progress(
-        run=run,
-        block_id=block_id,
-        beat_id=node_id,
-    )
+    if not scene_opening:
+        run = repository.update_run_progress(
+            run=run,
+            block_id=block_id,
+            beat_id=node_id,
+        )
     return RuntimePersistenceContext(
         package_id=context.package_id,
         package_version=context.package_version,

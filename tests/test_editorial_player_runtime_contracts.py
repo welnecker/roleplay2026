@@ -53,8 +53,11 @@ def test_player_usa_pipeline_editorial_transacional() -> None:
     assert "parse_semantic_evaluation(semantic_raw)" in source
     assert "commit_editorial_turn(pending, assistant_text)" in source
     assert "editorial_opening_text(script)" in source
+    assert "editorial_scene_opening_text(script)" in source
     assert "persist_opening_message(" in source
-    assert "opening_editorial_state.node_id = script.first_beat_id" in source
+    assert 'opening_editorial_state.node_id = "" if scene_opening else script.first_beat_id' in source
+    assert "script.first_beat_id if scene_opening else \"\"" in source
+    assert 'opening_metadata["scene_opening"] = bool(scene_opening)' in source
     assert 'opening_metadata["editorial_block"]' in source
     assert 'metadata["editorial_block"]' in source
     assert "build_editorial_turn_diagnostics(" in source

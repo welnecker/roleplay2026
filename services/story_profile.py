@@ -79,6 +79,9 @@ def personalize_editorial_script(
 
     raw = dict(script.raw)
     scene = dict(raw.get("scene") or {})
+    scene["introduction"] = resolve_profile_text(
+        str(scene.get("introduction", "") or ""), profile
+    )
     scene["beats"] = [
         {
             **dict(beat),

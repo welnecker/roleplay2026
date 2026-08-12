@@ -156,6 +156,12 @@ def opening_text(script: PilotScript) -> str:
     return _fallback_for_beat(beat_id, script.beats[beat_id])
 
 
+def scene_opening_text(script: PilotScript) -> str:
+    """Retorna a introdução narrativa declarada, sem consumir o primeiro beat."""
+
+    return str(script.scene.get("introduction", "") or "").strip()
+
+
 def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> PilotTurn:
     if state.finished:
         raise RuntimeError("O piloto já foi encerrado.")

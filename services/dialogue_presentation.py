@@ -72,11 +72,16 @@ def render_dialogue_html(
     dialogue = split_dialogue(content)
     role_name = str(role or "assistant").casefold()
     is_user = role_name == "user"
-    wrapper_class = "dialogue-message dialogue-user" if is_user else "dialogue-message dialogue-mary"
-    speaker = "Você" if is_user else character_name
+    is_scene = role_name == "scene"
+    wrapper_class = (
+        "dialogue-message dialogue-user"
+        if is_user
+        else "dialogue-message dialogue-mary"
+    )
+    speaker = "Você" if is_user else ("Cena" if is_scene else character_name)
 
     thought_html = ""
-    if not is_user and dialogue.thought:
+    if not is_user and not is_scene and dialogue.thought:
         thought_html = (
             '<div class="mary-thought">'
             '<div class="mary-thought-label"><span>✦</span> pensamento</div>'

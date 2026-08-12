@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from services.editorial_compiler import compile_editorial_document
-from services.editorial_runtime import EditorialScript, editorial_opening_text
+from services.editorial_runtime import (
+    EditorialScript,
+    editorial_opening_text,
+    editorial_scene_opening_text,
+)
 from services.spreadsheet_story_compiler import compile_spreadsheet_story
 from services.story_profile import (
     opening_with_required_name,
@@ -91,3 +95,18 @@ def test_abertura_inclui_nome_mesmo_quando_roteiro_nao_tem_placeholder() -> None
         {"preferred_name": "Janio"},
     )
     assert opening == "Oi, Janio... que prazer ter você aqui. Que bom ter você aqui."
+
+
+def test_cena_e_primeiro_beat_personalizam_nome_independentemente() -> None:
+    personalized = personalize_editorial_script(
+        _script(),
+        {
+            "preferred_name": "Doni",
+            "story_gender": "Como homem",
+            "body_route": "Corpo masculino",
+        },
+    )
+
+    assert editorial_scene_opening_text(personalized) == "Estou no quarto."
+    assert "Oi, Doni... meu lindo." in editorial_opening_text(personalized)
+    assert "{{nome}}" not in editorial_opening_text(personalized)

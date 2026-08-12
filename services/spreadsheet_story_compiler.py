@@ -187,6 +187,7 @@ def compile_spreadsheet_story(
                 "block_id": scene_id,
                 "order": len(blocks) + 1,
                 "title": text or scene_id.replace("_", " ").title(),
+                "scene_introduction": text,
                 "entry_beat_id": "",
                 "max_movements_per_response": 1,
                 "max_questions_per_response": 1,

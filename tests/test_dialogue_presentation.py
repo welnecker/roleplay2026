@@ -72,6 +72,18 @@ def test_renderizacao_escapa_html_do_usuario() -> None:
     assert "&lt;script&gt;" in html
 
 
+def test_cena_tem_rotulo_narrativo_sem_pensamento_de_personagem() -> None:
+    html = render_dialogue_html(
+        "scene",
+        "[PENSAMENTO]Texto de cena[/PENSAMENTO] Introdução.",
+        character_name="Camilly",
+    )
+
+    assert "Cena" in html
+    assert ">Camilly<" not in html
+    assert "mary-thought" not in html
+
+
 def test_orientacao_mantem_pensamento_opcional() -> None:
     prompt = with_optional_thought_guidance("PROMPT BASE")
 

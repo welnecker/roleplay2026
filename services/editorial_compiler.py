@@ -248,6 +248,7 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
     compiled["scene"] = {
         "scene_id": str(first_block.get("block_id", "")),
         "location": str(first_block.get("title", "")),
+        "introduction": str(first_block.get("scene_introduction", "") or ""),
         "objective": str(document.get("introduction", "")),
         "first_beat_id": first_beat_id,
         "beats": beats,

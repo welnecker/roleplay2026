@@ -51,6 +51,7 @@ def test_pensamento_e_fala_sao_compilados_na_mesma_resposta() -> None:
     )
 
     beat = document["blocks"][0]["beats"][0]
+    assert document["blocks"][0]["scene_introduction"] == "Estou fazendo compras."
     assert beat["beat_id"] == "supermercado_001"
     assert beat["canonical_line"] == (
         "[PENSAMENTO]\n"
@@ -62,6 +63,9 @@ def test_pensamento_e_fala_sao_compilados_na_mesma_resposta() -> None:
     assert document["script_version"] == "1.0.0"
     assert beat["authored_thought"] == "Merda... espero não ter machucado ele."
     assert beat["exact_speech"] == "Eita, caralho... desculpa!"
+
+    compiled = compile_editorial_document(document)
+    assert compiled["scene"]["introduction"] == "Estou fazendo compras."
 
 
 def test_transicao_entra_na_mesma_entrega_do_beat_seguinte() -> None:
