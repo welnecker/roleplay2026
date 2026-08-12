@@ -82,6 +82,16 @@ def test_texto_autoral_obrigatorio_e_validado_literalmente() -> None:
     )
 
 
+def test_pensamento_inventado_e_rejeitado_quando_beat_nao_o_declara() -> None:
+    result = evaluate_deterministic_response(
+        "[PENSAMENTO]\nJá estou imaginando o que faremos.\n[/PENSAMENTO]\n\nOi, Doni.",
+        _context(authored_thought=""),
+    )
+
+    assert result.valid is False
+    assert result.violations == ("unexpected_thought",)
+
+
 def test_ponte_rejeita_deja_vu_literal_do_beat_consumido() -> None:
     context = _context(
         forbidden_literal_texts=(
@@ -95,14 +105,13 @@ def test_ponte_rejeita_deja_vu_literal_do_beat_consumido() -> None:
         "Eu me chamo Camilly.",
         context,
     )
-    new_reaction = evaluate_deterministic_response(
-        "[PENSAMENTO]\nEle quer saber meu nome.\n[/PENSAMENTO]\n\n"
-        "Eu me chamo Camilly.",
-        context,
-    )
+    new_reaction = evaluate_deterministic_response("Eu me chamo Camilly.", context)
 
     assert repeated.valid is False
-    assert repeated.violations == ("forbidden_literal_text_repeated",)
+    assert repeated.violations == (
+        "unexpected_thought",
+        "forbidden_literal_text_repeated",
+    )
     assert new_reaction.valid is True
 
 

@@ -5,6 +5,7 @@ from services.dialogue_presentation import (
     render_dialogue_html,
     split_dialogue,
     with_optional_thought_guidance,
+    with_scripted_thought_guidance,
 )
 
 
@@ -106,3 +107,25 @@ def test_subtexto_reforca_desejo_sem_inventar_conflito_romantico() -> None:
 def test_marcadores_precisam_ser_balanceados() -> None:
     assert has_balanced_thought_markers("[PENSAMENTO]Oi[/PENSAMENTO]\nFala") is True
     assert has_balanced_thought_markers("[PENSAMENTO]Oi\nFala") is False
+
+
+def test_contrato_sem_pensamento_proibe_criacao_do_modelo() -> None:
+    prompt = with_scripted_thought_guidance(
+        "PROMPT BASE", authored_thought="", character_name="Camilly"
+    )
+
+    assert "não contém pensamento autoral" in prompt
+    assert "somente a fala audível de Camilly" in prompt
+    assert "Não crie pensamento" in prompt
+
+
+def test_contrato_com_pensamento_exige_texto_autoral_sem_ampliacao() -> None:
+    prompt = with_scripted_thought_guidance(
+        "PROMPT BASE",
+        authored_thought="Quero provocá-lo.",
+        character_name="Camilly",
+    )
+
+    assert "pensamento autoral obrigatório" in prompt
+    assert "Reproduza literalmente" in prompt
+    assert "Não substitua, amplie nem acrescente" in prompt

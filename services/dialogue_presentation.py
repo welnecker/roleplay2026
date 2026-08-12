@@ -46,6 +46,35 @@ def with_optional_thought_guidance(
     )
 
 
+def with_scripted_thought_guidance(
+    system_prompt: str,
+    *,
+    authored_thought: str,
+    character_name: str = "Mary",
+) -> str:
+    """Permite pensamento somente quando ele foi escrito no beat atual."""
+
+    thought = str(authored_thought or "").strip()
+    if not thought:
+        return (
+            f"{system_prompt.rstrip()}\n\n"
+            "CONTRATO DE PENSAMENTO:\n"
+            "- Este beat não contém pensamento autoral.\n"
+            f"- Escreva somente a fala audível de {character_name}.\n"
+            "- Não crie pensamento, monólogo interno ou subtexto oculto.\n"
+            "- Não escreva os marcadores [PENSAMENTO] e [/PENSAMENTO]."
+        )
+
+    return (
+        f"{system_prompt.rstrip()}\n\n"
+        "CONTRATO DE PENSAMENTO AUTORAL:\n"
+        "- Este beat contém pensamento autoral obrigatório.\n"
+        "- Reproduza literalmente o texto fornecido pelo contrato do beat.\n"
+        "- Não substitua, amplie nem acrescente outro pensamento.\n"
+        "- Use um único bloco [PENSAMENTO]...[/PENSAMENTO] antes da fala audível."
+    )
+
+
 def split_dialogue(content: str) -> PresentedDialogue:
     """Separa pensamento estruturado da fala, preservando mensagens antigas."""
 

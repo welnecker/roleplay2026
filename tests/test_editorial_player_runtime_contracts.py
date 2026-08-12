@@ -54,6 +54,9 @@ def test_player_usa_pipeline_editorial_transacional() -> None:
     assert "commit_editorial_turn(pending, assistant_text)" in source
     assert "editorial_opening_text(script)" in source
     assert "editorial_scene_opening_text(script)" in source
+    assert "with_scripted_thought_guidance(" in source
+    assert "authored_thought=pending.context.authored_thought" in source
+    assert "with_optional_thought_guidance" not in source
     assert "persist_opening_message(" in source
     assert 'opening_editorial_state.node_id = "" if scene_opening else script.first_beat_id' in source
     assert "script.first_beat_id if scene_opening else \"\"" in source

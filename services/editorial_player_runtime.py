@@ -9,7 +9,10 @@ from persistence.factory import build_google_sheets_repository
 from platform_core.auth import AuthenticatedUser
 from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
-from services.dialogue_presentation import render_dialogue_html, with_optional_thought_guidance
+from services.dialogue_presentation import (
+    render_dialogue_html,
+    with_scripted_thought_guidance,
+)
 from services.editorial_content import find_editorial_package, load_editorial_package
 from services.editorial_diagnostics import (
     build_editorial_turn_diagnostics,
@@ -537,8 +540,10 @@ history = [
     {"role": str(item.get("role", "assistant")), "content": str(item.get("content", ""))}
     for item in messages[-12:]
 ]
-base_prompt = with_optional_thought_guidance(
-    pending.prompt, character_name=CHARACTER_NAME
+base_prompt = with_scripted_thought_guidance(
+    pending.prompt,
+    authored_thought=pending.context.authored_thought,
+    character_name=CHARACTER_NAME,
 )
 private_context = build_immersive_context(
     st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
