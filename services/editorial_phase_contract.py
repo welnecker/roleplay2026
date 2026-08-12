@@ -5,6 +5,7 @@ import re
 
 from services.editorial_beat_context import BeatContext
 from services.editorial_runtime_types import EditorialState
+from services.editorial_semantic_reconciliation import reconciled_step
 
 
 def runtime_phase(state: EditorialState) -> str:
@@ -117,6 +118,48 @@ def adapt_context_for_runtime_phase(
             response_boundary=f"Pátio terminal ativo: {yard_id or 'declarado pelo runtime'}.",
         )
 
+    assessment = reconciled_step(state, context.target_beat_id)
+    if assessment.status == "partial":
+        suppress = tuple(
+            f"repetir finalidade já satisfeita pelo usuário: {item}"
+            for item in assessment.suppress
+        )
+        return replace(
+            context,
+            objective=assessment.remaining_intent or context.objective,
+            exact_speech="" if assessment.suppress else context.exact_speech,
+            required_outcomes=tuple(
+                dict.fromkeys(
+                    (
+                        *context.required_outcomes,
+                        f"reagir à evidência literal do usuário: {assessment.evidence}",
+                        f"executar somente a finalidade ainda pendente: {assessment.remaining_intent}",
+                    )
+                )
+            ),
+            forbidden_outcomes=tuple(
+                dict.fromkeys((*context.forbidden_outcomes, *suppress))
+            ),
+            response_boundary=(
+                "Reconciliação semântica parcial: adapte a fala autoral à conversa, "
+                "preserve apenas a finalidade pendente e não repita o que o usuário já resolveu."
+            ),
+        )
+    if assessment.status == "contradicted":
+        return replace(
+            context,
+            required_outcomes=tuple(
+                dict.fromkeys(
+                    (
+                        *context.required_outcomes,
+                        f"reagir sem insistir à declaração do usuário: {assessment.evidence}",
+                    )
+                )
+            ),
+            response_boundary=(
+                "Contradição recuperável: não insista na finalidade recusada e não invente rota alternativa."
+            ),
+        )
     return context
 
 

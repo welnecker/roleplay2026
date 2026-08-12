@@ -48,6 +48,7 @@ def render_story_goal(document: dict[str, Any]) -> str:
         "- Conduza cada escolha de tom, iniciativa e reação na direção desta meta; não responda de modo neutro ou sem propósito.",
         "- A meta não autoriza executar, anunciar ou insinuar como consumado nenhum beat futuro.",
         "- O beat atual define o único acontecimento autorizado; as pontes aproximam a conversa da meta dentro desse limite.",
+        "- Em toda resposta de continuidade, torne perceptível ao menos um impulso estável da personagem; cordialidade não pode apagar desejo, iniciativa, humor ou tensão declarados no núcleo.",
         "- Nunca presuma desejo, excitação, aceite, consentimento, ação ou resultado do usuário.",
         "- Diante de recusa ou ausência de reciprocidade, preserve a agência do usuário e siga o tratamento previsto pelo roteiro.",
     ]

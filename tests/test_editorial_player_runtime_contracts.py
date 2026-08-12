@@ -55,7 +55,8 @@ def test_player_usa_pipeline_editorial_transacional() -> None:
     assert "return load_script_snapshot(" in source
     assert "script = session_script(user, refresh=fresh_start)" in source
     assert "clear_script_snapshot(user.user_id)" in source
-    assert "decide_editorial_turn(script, editorial_state, user_text)" in source
+    assert "proposed_turn = decide_editorial_turn(" in source
+    assert "history=history" in source
     assert "prepare_pending_editorial_turn(script, editorial_state, proposed_turn)" in source
     assert "clean_editorial_model_response(raw_model_response, \"\")" in source
     assert "evaluate_deterministic_response(candidate, pending.context)" in source

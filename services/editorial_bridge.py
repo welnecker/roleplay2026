@@ -5,6 +5,7 @@ import re
 from typing import Any, Mapping
 
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
+from services.editorial_semantic_reconciliation import reconciled_step
 
 _PHASE_KEY = "_runtime_phase"
 _BRIDGE_ORIGIN_KEY = "_bridge_origin_beat_id"
@@ -116,6 +117,7 @@ def _authored_bridges(beat: Mapping[str, object]) -> list[dict[str, str]]:
             {
                 "bridge_id": str(item.get("bridge_id", "") or f"bridge_{position + 1}"),
                 "instruction": instruction,
+                "index": str(position),
             }
         )
     return bridges
@@ -151,14 +153,14 @@ def _bridge_prompt(
     bridge_id: str,
     bridge_instruction: str,
     allow_question: bool,
+    reconciliation: str = "",
 ) -> str:
     question_rule = (
         "Esta etapa autoral pode fazer a pergunta indispensável à sua finalidade, no máximo uma."
         if allow_question
         else "Não crie pergunta, promessa, dúvida ou obstáculo que abra uma pendência artificial."
     )
-    return "\n".join(
-        (
+    lines = [
             "FASE ESTRUTURAL: PONTE NARRATIVA AUTORAL SEQUENCIAL.",
             f"ETAPA DE PONTE ATUAL: {bridge_id}",
             f"FINALIDADE AUTORAL OBRIGATÓRIA DESTA ETAPA: {bridge_instruction}",
@@ -175,8 +177,40 @@ def _bridge_prompt(
             f"BEAT DE DESTINO: {target_id}",
             f"OBJETIVO FUTURO RESERVADO AO DESTINO — PROIBIDO EXECUTAR: {target_objective}",
             f"LINHA FUTURA PROIBIDA NESTA RESPOSTA: {target_canonical}",
-        )
-    )
+    ]
+    if reconciliation:
+        lines.extend(("RECONCILIAÇÃO COM A CONVERSA:", reconciliation))
+    return "\n".join(lines)
+
+
+def _pending_authored_bridges(
+    state: EditorialState,
+    authored: list[dict[str, str]],
+    *,
+    after_index: int = -1,
+) -> list[tuple[dict[str, str], str]]:
+    pending: list[tuple[dict[str, str], str]] = []
+    for step in authored:
+        index = int(step.get("index", "0") or 0)
+        if index <= after_index:
+            continue
+        assessment = reconciled_step(state, step["bridge_id"])
+        if assessment.status == "satisfied":
+            continue
+        detail = ""
+        if assessment.status == "partial":
+            detail = (
+                f"Parte já satisfeita por: {assessment.evidence}. "
+                f"Execute somente o restante: {assessment.remaining_intent}. "
+                f"Não repita: {', '.join(assessment.suppress)}."
+            )
+        elif assessment.status == "contradicted":
+            detail = (
+                f"O usuário contradisse esta finalidade por: {assessment.evidence}. "
+                "Reaja apenas de modo recuperável, sem insistir nem criar outra trajetória."
+            )
+        pending.append((step, detail))
+    return pending
 
 
 def _is_structural_destination(script: EditorialScript, target_id: str) -> bool:
@@ -217,7 +251,15 @@ def _is_resolved_runtime_transition(
 
     skipped = bool(str(facts.get("_declared_skip_applied", "") or "").strip())
     skip_origin = str(facts.get("_declared_skip_origin_beat_id", "") or "").strip()
-    return skipped and skip_origin == origin
+    semantic_skipped = bool(
+        str(facts.get("_semantic_skip_applied", "") or "").strip()
+    )
+    semantic_origin = str(
+        facts.get("_semantic_skip_origin_beat_id", "") or ""
+    ).strip()
+    return (skipped and skip_origin == origin) or (
+        semantic_skipped and semantic_origin == origin
+    )
 
 
 def should_create_bridge(
@@ -260,10 +302,14 @@ def create_bridge_turn(
     origin_objective, origin_canonical, _origin_direction = _beat_semantics(origin)
     target_objective, target_canonical, _target_direction = _beat_semantics(target)
     authored = _authored_bridges(origin)
-    first_step = authored[0] if authored else {
+    pending_authored = _pending_authored_bridges(proposed_turn.state, authored)
+    if authored and not pending_authored:
+        return proposed_turn
+    first_step, reconciliation = pending_authored[0] if pending_authored else ({
         "bridge_id": f"{origin_id}__bridge",
         "instruction": _BRIDGE_FALLBACK,
-    }
+        "index": "0",
+    }, "")
 
     updated = EditorialState.from_dict(proposed_turn.state.to_dict())
     updated.node_id = origin_id
@@ -277,7 +323,7 @@ def create_bridge_turn(
     updated.facts[_BRIDGE_ORIGIN_CANONICAL_KEY] = origin_canonical
     updated.facts[_BRIDGE_TARGET_OBJECTIVE_KEY] = target_objective
     updated.facts[_BRIDGE_TARGET_CANONICAL_KEY] = target_canonical
-    _store_bridge_step(updated.facts, first_step, 0)
+    _store_bridge_step(updated.facts, first_step, int(first_step.get("index", "0") or 0))
     updated.facts["_organic_interstitial"] = "false"
 
     prompt = _bridge_prompt(
@@ -291,6 +337,7 @@ def create_bridge_turn(
         bridge_id=first_step["bridge_id"],
         bridge_instruction=first_step["instruction"],
         allow_question=_bridge_may_ask(first_step["instruction"]),
+        reconciliation=reconciliation,
     )
     return replace(
         proposed_turn,
@@ -320,11 +367,16 @@ def advance_authored_bridge_turn(
     origin = script.beats.get(origin_id) or {}
     authored = _authored_bridges(origin)
     current_index = int(state.facts.get(_BRIDGE_STEP_INDEX_KEY, "0") or 0)
-    next_index = current_index + 1
-    if next_index >= len(authored):
+    pending_authored = _pending_authored_bridges(
+        state,
+        authored,
+        after_index=current_index,
+    )
+    if not pending_authored:
         return None
 
-    step = authored[next_index]
+    step, reconciliation = pending_authored[0]
+    next_index = int(step.get("index", "0") or 0)
     updated = EditorialState.from_dict(state.to_dict())
     updated.facts[_BRIDGE_TURNS_KEY] = str(next_index + 1)
     _store_bridge_step(updated.facts, step, next_index)
@@ -339,6 +391,7 @@ def advance_authored_bridge_turn(
         bridge_id=step["bridge_id"],
         bridge_instruction=step["instruction"],
         allow_question=_bridge_may_ask(step["instruction"]),
+        reconciliation=reconciliation,
     )
     return EditorialTurn(
         engagement=engagement,  # type: ignore[arg-type]

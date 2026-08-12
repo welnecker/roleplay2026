@@ -253,6 +253,11 @@ def decide_editorial_progression_turn(
     )
     if releasing_bridge:
         bridge_state = state_with_extracted_facts(state, user_text)
+        contextual = decide_contextual_destination_turn(
+            script, bridge_state, user_text
+        )
+        if contextual is not None:
+            return _finalize(script, contextual)
         yard_turn = decide_terminal_yard_turn(
             script,
             bridge_state,

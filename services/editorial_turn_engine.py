@@ -11,12 +11,25 @@ soberano sobre IDs, transições, pátios e encerramentos declarados pelo card.
 """
 
 from collections.abc import Callable
+from typing import Mapping, Sequence
 
 from services.editorial_contextual_orchestration import (
     classify_contextual_destination_for_turn,
 )
+from services.editorial_contextual_destination import (
+    ContextualDestination,
+    state_with_contextual_destination,
+)
 from services.editorial_progression import decide_editorial_progression_turn
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
+from services.editorial_semantic_reconciliation import (
+    build_reconciliation_prompt,
+    build_reconciliation_request,
+    immediate_reconciliation_steps,
+    parse_reconciliation,
+    reconciliation_terminal_destination,
+    state_with_reconciliation,
+)
 
 
 ClassifierCall = Callable[[str, str], str]
@@ -48,6 +61,7 @@ def decide_editorial_turn(
     user_text: str,
     *,
     classifier_call: ClassifierCall | None = None,
+    history: Sequence[Mapping[str, str]] = (),
 ) -> EditorialTurn:
     """Executa a ponte contextual antes da progressão editorial normal.
 
@@ -57,9 +71,40 @@ def decide_editorial_turn(
     """
 
     effective_classifier = classifier_call or _classifier_call
+    reconciled_state = EditorialState.from_dict(state.to_dict())
+    if str(state.facts.get("_runtime_phase", "") or "") != "terminal_yard":
+        steps = immediate_reconciliation_steps(script, state)
+        if steps:
+            raw = effective_classifier(
+                build_reconciliation_prompt(script, state),
+                build_reconciliation_request(user_text, history),
+            )
+            reconciliation = parse_reconciliation(
+                raw,
+                allowed_step_ids=(item["step_id"] for item in steps),
+                user_text=user_text,
+                history=history,
+            )
+            reconciled_state = state_with_reconciliation(state, reconciliation)
+            terminal, signal, reason = reconciliation_terminal_destination(
+                reconciled_state
+            )
+            if terminal:
+                reconciled_state = state_with_contextual_destination(
+                    reconciled_state,
+                    ContextualDestination(
+                        route="terminal_yard",
+                        signal=signal,
+                        reason=reason,
+                        confidence=1.0,
+                    ),
+                )
+                return decide_editorial_progression_turn(
+                    script, reconciled_state, user_text
+                )
     classified_state, _destination = classify_contextual_destination_for_turn(
         script,
-        state,
+        reconciled_state,
         user_text,
         classifier_call=effective_classifier,
     )

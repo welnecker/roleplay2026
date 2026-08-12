@@ -538,8 +538,18 @@ user_text = st.chat_input("Responda")
 if not user_text:
     st.stop()
 
+history = [
+    {"role": str(item.get("role", "assistant")), "content": str(item.get("content", ""))}
+    for item in messages[-12:]
+]
+
 try:
-    proposed_turn = decide_editorial_turn(script, editorial_state, user_text)
+    proposed_turn = decide_editorial_turn(
+        script,
+        editorial_state,
+        user_text,
+        history=history,
+    )
     pending = prepare_pending_editorial_turn(script, editorial_state, proposed_turn)
 except Exception as exc:
     log_editorial_exception(
@@ -566,10 +576,6 @@ if not api_key:
     st.error(OPERATIONAL_GENERATION_ERROR)
     st.stop()
 
-history = [
-    {"role": str(item.get("role", "assistant")), "content": str(item.get("content", ""))}
-    for item in messages[-12:]
-]
 base_prompt = with_scripted_thought_guidance(
     pending.prompt,
     authored_thought=pending.context.authored_thought,
