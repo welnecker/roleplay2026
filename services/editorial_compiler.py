@@ -198,6 +198,10 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "memory_writes": [str(item) for item in source.get("memory_writes", [])],
                     "max_questions": int(source.get("max_questions", 1) or 0),
                     "max_sentences": int(source.get("max_sentences", 1) or 1),
+                    "strict_response_economy": bool(
+                        source.get("strict_response_economy", False)
+                    ),
+                    "max_extra_words": int(source.get("max_extra_words", 0) or 0),
                     "skip_when_facts": deepcopy(source.get("skip_when_facts") or {}),
                     "response_boundary": str(source.get("response_boundary", "") or ""),
                     "topic_id": str(source.get("topic_id", "") or "").strip(),

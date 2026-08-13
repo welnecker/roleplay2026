@@ -99,6 +99,29 @@ def test_aceite_libera_proximo_beat_sem_ponte_escrita() -> None:
     assert "PONTE NARRATIVA" not in turn.system_prompt
 
 
+def test_fala_do_usuario_nao_pula_beat_autoral_ainda_nao_executado() -> None:
+    script = _script()
+    turn = decide_editorial_turn(
+        script,
+        PilotState(pending_next_beat_id="encontro_001"),
+        "Camilly, oi!",
+        classifier_call=_classifier(
+            {
+                "route": "continue",
+                "evidence": "",
+                "reason": "saudação antecipada",
+                "steps": [
+                    _step("encontro_001", "satisfied", "Camilly, oi!"),
+                ],
+            }
+        ),
+    )
+
+    assert turn.target_id == "encontro_001"
+    assert "Oi, {{nome}}! Tô indo aí..." in turn.system_prompt
+    assert turn.state.node_id == "encontro_001"
+
+
 def test_hesitacao_cria_uma_ponte_automatica_e_prende_o_destino() -> None:
     script = _script()
     turn = decide_editorial_turn(
@@ -124,6 +147,8 @@ def test_hesitacao_cria_uma_ponte_automatica_e_prende_o_destino() -> None:
     assert turn.state.facts["_automatic_gate_active"] == "true"
     assert "uma única vez" in turn.system_prompt
     assert "sem presumir aceite" in turn.system_prompt
+    assert "no máximo duas frases curtas" in turn.system_prompt
+    assert "Não acrescente promessa" in turn.system_prompt
 
 
 def test_aceite_depois_da_ponte_libera_o_destino() -> None:

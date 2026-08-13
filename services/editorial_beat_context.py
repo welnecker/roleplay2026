@@ -28,6 +28,8 @@ class BeatContext:
     max_sentences: int
     max_questions: int
     response_boundary: str
+    strict_response_economy: bool = False
+    max_extra_words: int = 0
     authored_thought: str = ""
     exact_speech: str = ""
     forbidden_literal_texts: tuple[str, ...] = ()
@@ -194,6 +196,10 @@ def build_beat_context(
         max_sentences=int(target.get("max_sentences", 0) or 0),
         max_questions=int(target.get("max_questions", 0) or 0),
         response_boundary=str(target.get("response_boundary", "") or "").strip(),
+        strict_response_economy=bool(
+            target.get("strict_response_economy", False)
+        ),
+        max_extra_words=max(0, int(target.get("max_extra_words", 0) or 0)),
         authored_thought=str(target.get("authored_thought", "") or "").strip(),
         exact_speech=str(target.get("exact_speech", "") or "").strip(),
         character_name=str(
@@ -268,6 +274,15 @@ def render_beat_context(context: BeatContext) -> str:
         lines.append(f"- Máximo de perguntas: {context.max_questions}")
     if context.response_boundary:
         lines.append(f"- Limite de resposta: {context.response_boundary}")
+    if context.strict_response_economy:
+        lines.append(
+            "- Economia estrita: responda de forma adulta, direta e mínima; não acrescente "
+            "justificativa genérica, promessa, nova provocação, nova pergunta ou detalhe ornamental."
+        )
+        if context.max_extra_words:
+            lines.append(
+                f"- Expansão máxima além da referência autoral: {context.max_extra_words} palavras."
+            )
     if context.authored_thought:
         lines.append(
             "- Pensamento autoral obrigatório — reproduza literalmente dentro de [PENSAMENTO]: "
@@ -277,6 +292,9 @@ def render_beat_context(context: BeatContext) -> str:
         lines.append(
             "- Fala autoral exata obrigatória — reproduza literalmente na parte audível: "
             + context.exact_speech
+        )
+        lines.append(
+            "- A fala exata é fechada: não escreva nenhuma palavra audível antes ou depois dela."
         )
     lines.extend(
         (

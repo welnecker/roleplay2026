@@ -181,6 +181,8 @@ def _bridge_prompt(
             "A ponte não é uma segunda versão do beat anterior nem uma prévia do seguinte.",
             "Se o usuário já tiver satisfeito a finalidade, reconheça e aproveite o que ele declarou; não repita pedido, pergunta ou informação.",
             "A ponte deve aproximar a conversa da meta global sem executar o beat de destino.",
+            "Use no máximo duas frases curtas: responda diretamente e, somente se necessário, retome a única pendência atual.",
+            "Não acrescente promessa, entusiasmo genérico, explicação ornamental, nova provocação ou gancho conversacional.",
             question_rule,
             "Não presuma ação, aceite, recusa, desejo, excitação ou decisão que o usuário não declarou.",
             f"FALA ATUAL DO USUÁRIO: {str(user_text or '').strip()}",

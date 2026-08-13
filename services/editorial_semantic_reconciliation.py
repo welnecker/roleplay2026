@@ -32,6 +32,36 @@ class SemanticReconciliation:
     reason: str = ""
 
 
+def preserve_character_owned_target_beats(
+    result: SemanticReconciliation,
+    steps: Sequence[Mapping[str, str]],
+) -> SemanticReconciliation:
+    """Impede que uma fala do usuário consuma integralmente um beat da personagem.
+
+    O usuário pode satisfazer antecipadamente uma condição dentro do próximo beat,
+    que permanece ``partial``. Porém, ``satisfied`` nunca elimina por completo a
+    fala ou o movimento autoral ainda não executado pela personagem.
+    """
+
+    target_ids = {
+        str(item.get("step_id", "") or "").strip()
+        for item in steps
+        if str(item.get("kind", "") or "") == "beat"
+    }
+    protected = tuple(
+        ReconciledStep(step_id=item.step_id)
+        if item.step_id in target_ids and item.status == "satisfied"
+        else item
+        for item in result.steps
+    )
+    return SemanticReconciliation(
+        steps=protected,
+        route=result.route,
+        evidence=result.evidence,
+        reason=result.reason,
+    )
+
+
 def _plain(value: Any) -> str:
     text = unicodedata.normalize("NFKD", str(value or ""))
     return "".join(char for char in text if not unicodedata.combining(char)).casefold()
@@ -302,6 +332,7 @@ __all__ = [
     "build_reconciliation_request",
     "immediate_reconciliation_steps",
     "parse_reconciliation",
+    "preserve_character_owned_target_beats",
     "reconciled_step",
     "reconciliation_terminal_destination",
     "state_with_reconciliation",

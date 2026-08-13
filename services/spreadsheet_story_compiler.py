@@ -154,6 +154,13 @@ def compile_spreadsheet_story(
             isinstance(automatic_policy, dict)
             and automatic_policy.get("enabled", False)
         )
+        if automatic_enabled:
+            current_beat["strict_response_economy"] = True
+            current_beat["max_extra_words"] = 10
+            current_beat["max_sentences"] = min(
+                2,
+                int(current_beat.get("max_sentences", 2) or 2),
+            )
         current_beat["interaction_context"] = {
             "relationship_stage": "scripted_interaction",
             "allowed_interactions": [

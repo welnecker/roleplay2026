@@ -82,6 +82,7 @@ def adapt_context_for_runtime_phase(
             context,
             authored_thought="",
             exact_speech="",
+            max_sentences=min(2, context.max_sentences or 2),
             max_questions=1 if allow_question else 0,
             forbid_new_questions=not allow_question,
             forbidden_literal_texts=tuple(
@@ -95,7 +96,9 @@ def adapt_context_for_runtime_phase(
             response_boundary=(
                 "Ponte narrativa semanticamente vazada é inválida: permaneça entre o movimento "
                 "já consumido da origem e o movimento ainda reservado ao destino "
-                f"{target or 'declarado pelo runtime'}."
+                f"{target or 'declarado pelo runtime'}. Responda em no máximo duas frases curtas: "
+                "uma reação direta e, somente se necessário, a retomada da única pendência atual. "
+                "Não crie promessa, explicação ornamental, nova provocação ou gancho adicional."
             ),
         )
 

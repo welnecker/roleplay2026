@@ -56,6 +56,10 @@ _VIOLATION_GUIDANCE = {
     "authored_thought_missing": "Inclua literalmente o pensamento autoral obrigatório dentro de um único bloco [PENSAMENTO].",
     "unexpected_thought": "Remova integralmente o pensamento: o beat atual não contém [PENSAMENTO] autoral.",
     "exact_speech_missing": "Inclua literalmente a fala autoral exata obrigatória na parte audível da resposta.",
+    "exact_speech_extension": "Use somente a fala autoral exata, sem nenhuma palavra audível antes ou depois.",
+    "max_sentences_exceeded": "Reduza para o limite de frases do contrato, removendo explicações e complementos.",
+    "unauthorized_extension": "Remova justificativas, promessas, perguntas, provocações e detalhes que excedem a fala autoral.",
+    "new_conversational_hook": "Remova a nova pergunta ou promessa; conclua somente o movimento autoral atual.",
     "forbidden_literal_text_repeated": "Remova o pensamento ou a fala autoral já consumida ou reservada a outro beat; produza apenas uma reação nova.",
     "bridge_question_created": "Remova a nova pergunta. A ponte deve reagir ao usuário sem criar assunto ou obrigação para o turno seguinte.",
     "invented_unconfirmed_detail": (
@@ -99,6 +103,10 @@ def _sentence_count(text: str) -> int:
         return 0
     chunks = re.split(r"(?<=[.!?])(?:\s+|$)", body)
     return sum(1 for chunk in chunks if chunk.strip())
+
+
+def _word_count(text: str) -> int:
+    return len(re.findall(r"\w+", str(text or ""), flags=re.UNICODE))
 
 
 def _normalized(value: str) -> str:
@@ -186,10 +194,21 @@ def evaluate_deterministic_response(
     visible = _visible_dialogue(text)
     if context.forbid_new_questions and "?" in visible:
         violations.append("bridge_question_created")
+    elif (
+        context.strict_response_economy
+        and context.canonical_line
+        and "?" not in _visible_dialogue(context.canonical_line)
+        and "?" in visible
+    ):
+        violations.append("new_conversational_hook")
     if context.exact_speech and _whitespace_normalized(
         context.exact_speech
     ) not in _whitespace_normalized(visible):
         violations.append("exact_speech_missing")
+    elif context.exact_speech and _whitespace_normalized(visible) != _whitespace_normalized(
+        context.exact_speech
+    ):
+        violations.append("exact_speech_extension")
 
     normalized_response = _whitespace_normalized(text)
     if any(
@@ -201,9 +220,20 @@ def evaluate_deterministic_response(
 
     style_advisories: list[str] = []
     if context.max_sentences and _sentence_count(visible) > context.max_sentences:
-        style_advisories.append("max_sentences_exceeded")
+        if context.strict_response_economy:
+            violations.append("max_sentences_exceeded")
+        else:
+            style_advisories.append("max_sentences_exceeded")
     if context.max_questions and visible.count("?") > context.max_questions:
         style_advisories.append("max_questions_exceeded")
+    if (
+        context.strict_response_economy
+        and context.canonical_line
+        and context.max_extra_words
+        and _word_count(visible)
+        > _word_count(_visible_dialogue(context.canonical_line)) + context.max_extra_words
+    ):
+        violations.append("unauthorized_extension")
 
     result = ResponseEvaluation(not violations, tuple(violations))
     _log_evaluation(

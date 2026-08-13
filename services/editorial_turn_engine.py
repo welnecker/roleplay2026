@@ -32,6 +32,7 @@ from services.editorial_semantic_reconciliation import (
     build_reconciliation_request,
     immediate_reconciliation_steps,
     parse_reconciliation,
+    preserve_character_owned_target_beats,
     reconciliation_terminal_destination,
     state_with_reconciliation,
 )
@@ -90,6 +91,11 @@ def decide_editorial_turn(
                 user_text=user_text,
                 history=history,
             )
+            if automatic_gate_enabled(script):
+                reconciliation = preserve_character_owned_target_beats(
+                    reconciliation,
+                    steps,
+                )
             reconciled_state = state_with_reconciliation(state, reconciliation)
             active_id = (
                 str(state.facts.get("_bridge_origin_beat_id", "") or "").strip()

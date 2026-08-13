@@ -63,9 +63,14 @@ def test_texto_autoral_obrigatorio_e_validado_literalmente() -> None:
         exact_speech="Pode chegar mais perto, Vini.",
     )
 
-    valid = evaluate_deterministic_response(
+    extended = evaluate_deterministic_response(
         "[PENSAMENTO]\nQuero sentir essa aproximação.\n[/PENSAMENTO]\n\n"
         "Pode chegar mais perto, Vini. Estou esperando.",
+        context,
+    )
+    valid = evaluate_deterministic_response(
+        "[PENSAMENTO]\nQuero sentir essa aproximação.\n[/PENSAMENTO]\n\n"
+        "Pode chegar mais perto, Vini.",
         context,
     )
     changed = evaluate_deterministic_response(
@@ -75,11 +80,53 @@ def test_texto_autoral_obrigatorio_e_validado_literalmente() -> None:
     )
 
     assert valid.valid is True
+    assert extended.valid is False
+    assert extended.violations == ("exact_speech_extension",)
     assert changed.valid is False
     assert changed.violations == (
         "authored_thought_missing",
         "exact_speech_missing",
     )
+
+
+def test_economia_estrita_rejeita_complemento_e_frases_excedentes() -> None:
+    context = _context(
+        canonical_line="Poxa... você me salvou.",
+        max_sentences=2,
+        strict_response_economy=True,
+        max_extra_words=6,
+    )
+
+    concise = evaluate_deterministic_response(
+        "Poxa... você me salvou, Janio.",
+        context,
+    )
+    padded = evaluate_deterministic_response(
+        "Poxa... você me salvou, Janio. Eu já estava desanimada. Agora meu dia começou de verdade com você.",
+        context,
+    )
+
+    assert concise.valid is True
+    assert padded.valid is False
+    assert "max_sentences_exceeded" in padded.violations
+    assert "unauthorized_extension" in padded.violations
+
+
+def test_economia_estrita_rejeita_pergunta_nova_ausente_da_fala_autoral() -> None:
+    context = _context(
+        canonical_line="Poxa... você me salvou.",
+        max_sentences=2,
+        strict_response_economy=True,
+        max_extra_words=10,
+    )
+
+    result = evaluate_deterministic_response(
+        "Poxa... você me salvou. O que achou do meu biquíni?",
+        context,
+    )
+
+    assert result.valid is False
+    assert "new_conversational_hook" in result.violations
 
 
 def test_pensamento_inventado_e_rejeitado_quando_beat_nao_o_declara() -> None:
