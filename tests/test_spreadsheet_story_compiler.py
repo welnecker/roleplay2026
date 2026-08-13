@@ -214,6 +214,29 @@ def test_fala_livre_e_marcada_sem_virar_fala_canonica() -> None:
     assert compiled["blocks"][0]["beats"][0]["free_speech"] is True
 
 
+def test_tags_interpretadas_preservam_nucleos_sem_exigir_literalidade() -> None:
+    document = compile_spreadsheet_story(
+        _base(),
+        [
+            _row("cena_i", 10, "[CENA encontro] Eu inicio a conversa."),
+            _row("beat_i", 20, "[BEAT] Eu expresso meu desejo e provoco o usuário."),
+            _row("pens_i", 30, "[PENSAMENTO INTERPRETADO] Caralho... meu desejo está me dominando."),
+            _row("fala_i", 40, "[FALA INTERPRETADA] Chega mais perto... quero sentir você aqui."),
+            _row("fim_i", 50, "[FIM story_complete] Eu encerro."),
+        ],
+        script_version="1",
+    )
+    beat = document["blocks"][0]["beats"][0]
+    compiled = compile_editorial_document(document)["blocks"][0]["beats"][0]
+
+    assert beat["authored_thought"] == "Caralho... meu desejo está me dominando."
+    assert beat["interpreted_thought"] is True
+    assert beat["interpreted_speech"] is True
+    assert beat["exact_speech"] == ""
+    assert compiled["interpreted_thought"] is True
+    assert compiled["interpreted_speech"] is True
+
+
 def test_fala_exata_intima_compila_checkpoint_e_encerramento_fixo() -> None:
     document = compile_spreadsheet_story(
         _base(),
