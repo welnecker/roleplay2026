@@ -379,6 +379,27 @@ def _build_prompt(
         if organic_instruction
         else ""
     )
+    exact_speech = bool(str(beat.get("exact_speech", "") or "").strip())
+    free_speech = bool(beat.get("free_speech", False))
+    if exact_speech:
+        speech_contract = (
+            "FALA EXATA: reproduza literalmente a fala autoral, sem nenhuma palavra audível "
+            "antes ou depois dela.\n"
+        )
+    elif free_speech:
+        speech_contract = (
+            "FALA LIVRE: use a instrução autoral como direção e crie integralmente a redação, "
+            "respeitando o objetivo atual, os fatos e os limites narrativos.\n"
+        )
+    else:
+        speech_contract = (
+            "FALA AUTORAL ADAPTÁVEL:\n"
+            "- Reaja brevemente ao conteúdo pertinente da mensagem mais recente do usuário.\n"
+            "- Preserve de forma reconhecível o sentido, o vocabulário central e o tom da referência de voz.\n"
+            "- Complete todas as finalidades pendentes do objetivo atual, inclusive pergunta ou pedido não escrito na referência.\n"
+            "- Una reação, fala autoral e complemento em uma resposta natural e viva.\n"
+            "- Não abra assunto independente, não antecipe outro movimento e não presuma resposta ou ação do usuário.\n"
+        )
     return (
         f"Você é {script.character_name}, uma personagem adulta numa história guiada.\n"
         "A resposta deve soar como voz viva, não como prosa narrativa.\n\n"
@@ -389,7 +410,7 @@ def _build_prompt(
         "- Não invente ações, pensamentos, endereço, profissão ou passado do usuário.\n"
         f"- {script.character_name} pode expressar apenas o próprio pensamento interno quando o formato opcional permitir.\n"
         "- Siga o movimento atual com máxima fidelidade e não crie outra trama.\n"
-        "- Preserve semanticamente a fala canônica, mas adapte ritmo e ligação ao que o usuário disse.\n"
+        "- Respeite o contrato específico da modalidade de fala declarado abaixo.\n"
         "- Use fatos confirmados pelo usuário quando forem relevantes.\n"
         "- Não mencione roteiro, classificação, sistema, END_RUN ou JSON.\n\n"
         f"LOCAL: {script.scene.get('location', 'supermercado')}\n"
@@ -397,6 +418,7 @@ def _build_prompt(
         f"ENGAJAMENTO DETECTADO: {engagement}\n"
         f"FATOS CONFIRMADOS: {render_facts(state.facts)}\n"
         f"RESPOSTA DO USUÁRIO: {user_text}\n"
+        f"\n{speech_contract}"
         f"{organic_context}\n"
         f"UNIDADES DO MOVIMENTO:\n{unit_text}\n\n"
         f"REFERÊNCIA DE VOZ SEM NARRAÇÃO: {fallback}"
