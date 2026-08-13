@@ -89,7 +89,11 @@ def finalize_editorial_turn(script: EditorialScript, turn: EditorialTurn) -> Edi
     inject_canonical_prompt = runtime_phase == "canonical" and canonical_member
     strict_policy = _strict_canonical_policy(script)
     state_fact = str(strict_policy.get("state_fact", "") or "").strip()
-    updated.facts["_force_fixed_response"] = "false"
+    updated.facts["_force_fixed_response"] = (
+        "true"
+        if turn.ending_code == "intimacy_correspondence_broken"
+        else "false"
+    )
     if state_fact:
         updated.facts[state_fact] = "true" if canonical_member else "false"
 

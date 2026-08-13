@@ -264,15 +264,22 @@ def decide_contextual_destination_turn(
         authorial_failure = destination.signal in {
             "required_outcome_refused",
             "required_outcome_unresolved",
+            "intimacy_correspondence_broken",
         }
         prompt_lines = [
             "Você é a personagem do card. Encerre imediatamente a interação, sem convite para continuar."
         ]
         if authorial_failure:
-            prompt_lines.append(
-                "Esta é uma frustração narrativa, não uma infração: respeite a decisão do usuário, "
-                "expresse somente a própria frustração e não use aviso disciplinar."
-            )
+            if destination.signal == "intimacy_correspondence_broken":
+                prompt_lines.append(
+                    "Esta é uma quebra de clima íntimo, não uma infração: respeite imediatamente "
+                    "a decisão do usuário, use literalmente a referência de voz e não tente persuadir."
+                )
+            else:
+                prompt_lines.append(
+                    "Esta é uma frustração narrativa, não uma infração: respeite a decisão do usuário, "
+                    "expresse somente a própria frustração e não use aviso disciplinar."
+                )
         prompt_lines.extend(
             (
                 f"FALA DO USUÁRIO: {user_text}",

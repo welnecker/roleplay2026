@@ -591,7 +591,15 @@ previous_violations: tuple[str, ...] = ()
 final_violations: tuple[str, ...] = ()
 attempts = 0
 
-for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
+force_fixed_response = (
+    str(pending.proposed_state.facts.get("_force_fixed_response", "") or "") == "true"
+)
+if force_fixed_response:
+    assistant_text = str(pending.turn.visible_fallback or "").strip()
+    raw_model_response = assistant_text
+    attempts = 0
+
+for attempt in range(1, 1 if force_fixed_response else MAX_GENERATION_ATTEMPTS + 1):
     attempts = attempt
     current_violations: tuple[str, ...] = ()
     generation_prompt = (

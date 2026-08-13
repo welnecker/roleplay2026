@@ -20,6 +20,14 @@ from services.editorial_contextual_destination import (
     ContextualDestination,
     state_with_contextual_destination,
 )
+from services.editorial_intimacy_checkpoint import (
+    BREAK_SIGNAL,
+    build_intimacy_checkpoint_prompt,
+    build_intimacy_checkpoint_request,
+    confirm_active_intimate_step,
+    intimate_exact_active,
+    parse_intimacy_correspondence,
+)
 from services.editorial_bridge import (
     automatic_gate_enabled,
     automatic_gate_policy,
@@ -78,6 +86,25 @@ def decide_editorial_turn(
 
     effective_classifier = classifier_call or _classifier_call
     reconciled_state = EditorialState.from_dict(state.to_dict())
+    intimate_corresponds = False
+    if intimate_exact_active(script, state):
+        raw_intimacy = effective_classifier(
+            build_intimacy_checkpoint_prompt(),
+            build_intimacy_checkpoint_request(user_text),
+        )
+        intimate_result = parse_intimacy_correspondence(raw_intimacy, user_text)
+        if intimate_result is False:
+            ended_state = state_with_contextual_destination(
+                state,
+                ContextualDestination(
+                    route="immediate_ending",
+                    signal=BREAK_SIGNAL,
+                    reason="quebra de correspondência no checkpoint íntimo",
+                    confidence=1.0,
+                ),
+            )
+            return decide_editorial_progression_turn(script, ended_state, user_text)
+        intimate_corresponds = intimate_result is True
     if str(state.facts.get("_runtime_phase", "") or "") != "terminal_yard":
         steps = immediate_reconciliation_steps(script, state)
         if steps:
@@ -100,6 +127,12 @@ def decide_editorial_turn(
                 reconciliation = preserve_character_owned_target_beats(
                     reconciliation,
                     steps,
+                )
+            if intimate_corresponds:
+                reconciliation = confirm_active_intimate_step(
+                    reconciliation,
+                    step_id=str(state.node_id or "").strip(),
+                    user_text=user_text,
                 )
             reconciled_state = state_with_reconciliation(state, reconciliation)
             active_id = (

@@ -203,6 +203,9 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     ),
                     "max_extra_words": int(source.get("max_extra_words", 0) or 0),
                     "free_speech": bool(source.get("free_speech", False)),
+                    "intimate_exact_speech": bool(
+                        source.get("intimate_exact_speech", False)
+                    ),
                     "authored_transition": str(
                         source.get("authored_transition", "") or ""
                     ).strip(),

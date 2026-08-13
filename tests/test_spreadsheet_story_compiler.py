@@ -214,6 +214,36 @@ def test_fala_livre_e_marcada_sem_virar_fala_canonica() -> None:
     assert compiled["blocks"][0]["beats"][0]["free_speech"] is True
 
 
+def test_fala_exata_intima_compila_checkpoint_e_encerramento_fixo() -> None:
+    document = compile_spreadsheet_story(
+        _base(),
+        [
+            _row("cena", 10, "[CENA quarto] Estamos em intimidade consentida."),
+            _row("intimo_001", 20, "[BEAT] Eu correspondo ao beijo consentido."),
+            _row("intimo_001_fala", 30, "[FALA EXATA ÍNTIMA] Humm... isso, gato!"),
+            _row("intimo_002", 40, "[BEAT] Eu intensifico meu próprio movimento."),
+            _row("intimo_002_fala", 50, "[FALA EXATA INTIMA] Não para agora..."),
+            _row("fim", 60, "[FIM story_complete] Eu encerro normalmente."),
+        ],
+        script_version="1.0.0",
+    )
+
+    first = document["blocks"][0]["beats"][0]
+    assert first["exact_speech"] == "Humm... isso, gato!"
+    assert first["intimate_exact_speech"] is True
+    assert first["interaction_context"]["immediate_ending_target"] == "__intimacy_break_end"
+
+    compiled = compile_editorial_document(document)
+    assert compiled["scene"]["beats"][0]["intimate_exact_speech"] is True
+    ending = next(
+        item for item in compiled["scene"]["endings"]
+        if item["ending_id"] == "__intimacy_break_end"
+    )
+    assert ending["visible_delivery"]["text"] == (
+        "Porra... você cortou meu tesão, gato. Já era!"
+    )
+
+
 def test_falas_e_pensamentos_condicionais_sao_preservados_para_o_runtime() -> None:
     document = compile_spreadsheet_story(
         _base(),
