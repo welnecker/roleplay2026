@@ -300,6 +300,35 @@ def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
     assert "não podem ser concretizados" in rendered
 
 
+def test_contexto_declara_fala_comum_como_adaptavel() -> None:
+    rendered = render_beat_context(
+        _context(
+            objective="Eu conto que vou à praia e peço uma carona.",
+            canonical_line="Vou pegar uma praia... esse sol tá demais...",
+            strict_response_economy=True,
+            max_extra_words=10,
+        )
+    )
+
+    assert "Fala autoral adaptável" in rendered
+    assert "reaja brevemente" in rendered
+    assert "perguntas ou pedidos que não estejam escritos na referência" in rendered
+    assert "não impede reagir ao usuário" in rendered
+    assert "Expansão máxima" not in rendered
+
+
+def test_contexto_nao_trata_fala_exata_como_adaptavel() -> None:
+    rendered = render_beat_context(
+        _context(
+            canonical_line="Oi, Janio.",
+            exact_speech="Oi, Janio.",
+        )
+    )
+
+    assert "Fala autoral adaptável" not in rendered
+    assert "A fala exata é fechada" in rendered
+
+
 def test_prompt_semantico_declara_contrato_integral_do_beat() -> None:
     prompt = build_semantic_evaluation_prompt(_context())
 
