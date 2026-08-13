@@ -182,6 +182,19 @@ def build_beat_context(
         target.get("interaction_context") or source.get("interaction_context") or {},
         turn.state.facts,
     )
+    exact_speech = str(target.get("exact_speech", "") or "").strip()
+    free_speech = bool(target.get("free_speech", False))
+    required_outcomes = effect.required_outcomes
+    if canonical_line and not exact_speech and not free_speech:
+        required_outcomes = tuple(
+            dict.fromkeys(
+                (
+                    *required_outcomes,
+                    "reagir brevemente ao sentido do conteúdo mais recente do usuário antes ou junto da fala autoral adaptada",
+                    "preservar reconhecivelmente a fala autoral e completar todas as finalidades pendentes do movimento obrigatório",
+                )
+            )
+        )
     return BeatContext(
         source_beat_id=source_id,
         target_beat_id=target_id,
@@ -190,7 +203,7 @@ def build_beat_context(
         dramatic_direction=dramatic_direction,
         user_intent=user_intent,
         transition_status=effect.status,
-        required_outcomes=effect.required_outcomes,
+        required_outcomes=required_outcomes,
         forbidden_outcomes=effect.forbidden_outcomes,
         allowed_topics=_declared_tuple(source, target, "allowed_topics", legacy_field="fact_scope"),
         confirmed_facts=tuple(dict.fromkeys((*declared_confirmed, *_state_facts(turn.state)))),
@@ -203,8 +216,8 @@ def build_beat_context(
         ),
         max_extra_words=max(0, int(target.get("max_extra_words", 0) or 0)),
         authored_thought=str(target.get("authored_thought", "") or "").strip(),
-        exact_speech=str(target.get("exact_speech", "") or "").strip(),
-        free_speech=bool(target.get("free_speech", False)),
+        exact_speech=exact_speech,
+        free_speech=free_speech,
         authored_transition=str(
             target.get("authored_transition", "") or ""
         ).strip(),
