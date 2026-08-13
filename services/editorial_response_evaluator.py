@@ -101,7 +101,11 @@ def _sentence_count(text: str) -> int:
     body = _visible_dialogue(text)
     if not body:
         return 0
-    chunks = re.split(r"(?<=[.!?])(?:\s+|$)", body)
+    # Reticências internas marcam pausa de voz, não encerramento autônomo.
+    # Substituí-las antes da divisão impede que "Você... vem comigo." conte
+    # como duas frases.
+    protected = re.sub(r"\.{2,}", "<ELLIPSIS>", body)
+    chunks = re.split(r"(?<=[.!?])(?:\s+|$)", protected)
     return sum(1 for chunk in chunks if chunk.strip())
 
 
