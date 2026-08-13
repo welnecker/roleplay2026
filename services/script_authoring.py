@@ -23,7 +23,7 @@ _TAG_PATTERN = re.compile(
     r"(?ms)^[ \t]*\[([^\]\n]+)\][ \t]*(.*?)(?=^[ \t]*\[[^\]\n]+\]|\Z)"
 )
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
-_DEPENDENT_KINDS = {"PENSAMENTO", "FALA", "FALA_EXATA", "FALA_LIVRE", "PONTE"}
+_DEPENDENT_KINDS = {"PENSAMENTO", "PENSAMENTO_INTERPRETADO", "FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_LIVRE", "PONTE"}
 _PROFILE_TAGS = {
     "HOMEM", "MULHER", "NEUTRO", "NEUTRA", "CORPO_MASCULINO",
     "CORPO_FEMININO", "CORPO_INTERSEXO",
@@ -92,6 +92,12 @@ def parse_instruction(header: str, text: str) -> ParsedInstruction:
             kind = "FALA_EXATA"
         elif normalized_argument == "livre" or normalized_argument.startswith("livre "):
             kind = "FALA_LIVRE"
+        elif (normalized_argument.split(maxsplit=1)[0] if normalized_argument else "") in {"interpretada", "interpretado", "interpretativa", "interpretativo"}:
+            kind = "FALA_INTERPRETADA"
+    elif first == "PENSAMENTO":
+        normalized_argument = _plain(argument).casefold()
+        if (normalized_argument.split(maxsplit=1)[0] if normalized_argument else "") in {"interpretado", "interpretada", "interpretativo", "interpretativa"}:
+            kind = "PENSAMENTO_INTERPRETADO"
     elif first == "PATIO":
         if not _plain(argument).casefold().startswith("final"):
             raise ScriptAuthoringError(
@@ -105,7 +111,9 @@ def parse_instruction(header: str, text: str) -> ParsedInstruction:
         "CENA",
         "BEAT",
         "PENSAMENTO",
+        "PENSAMENTO_INTERPRETADO",
         "FALA",
+        "FALA_INTERPRETADA",
         "FALA_EXATA",
         "FALA_LIVRE",
         "PONTE",
@@ -199,7 +207,7 @@ def _validate_sequence(items: Iterable[ParsedInstruction]) -> list[str]:
 
 def _profile_suffix(item: ParsedInstruction) -> str:
     argument = _plain(item.argument).upper().split()
-    if item.kind in {"FALA_EXATA", "FALA_LIVRE"} and argument:
+    if item.kind in {"FALA_EXATA", "FALA_LIVRE", "FALA_INTERPRETADA", "PENSAMENTO_INTERPRETADO"} and argument:
         argument = argument[1:]
     profile_tag = "_".join(argument)
     if profile_tag == "NEUTRO":
@@ -254,11 +262,11 @@ def compile_draft_rows(
             beat_number += 1
             current_beat = f"{current_block}_{beat_number:03d}"
             line_id = _unique_line_id(current_beat, used)
-        elif item.kind == "PENSAMENTO":
+        elif item.kind in {"PENSAMENTO", "PENSAMENTO_INTERPRETADO"}:
             suffix = _profile_suffix(item)
             base = f"{current_beat}_pensamento"
             line_id = _unique_line_id(f"{base}_{suffix}" if suffix else base, used)
-        elif item.kind in {"FALA", "FALA_EXATA", "FALA_LIVRE"}:
+        elif item.kind in {"FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_LIVRE"}:
             suffix = _profile_suffix(item)
             base = f"{current_beat}_fala"
             line_id = _unique_line_id(f"{base}_{suffix}" if suffix else base, used)
