@@ -121,6 +121,37 @@ def adapt_context_for_runtime_phase(
             response_boundary=f"Pátio terminal ativo: {yard_id or 'declarado pelo runtime'}.",
         )
 
+    if phase == "finished":
+        # Um ending é um contrato próprio. Ele não pode herdar pensamento, fala
+        # exata, pergunta ou limites rígidos do último beat canônico; caso
+        # contrário, a despedida fica impossível de aprovar justamente quando o
+        # runtime já decidiu encerrar.
+        return replace(
+            context,
+            objective="encerrar imediatamente a interação de forma coerente com a decisão do usuário",
+            canonical_line="",
+            dramatic_direction="",
+            transition_status="finished",
+            required_outcomes=(
+                "respeitar a decisão real do usuário",
+                "encerrar a interação sem convite para continuar",
+            ),
+            forbidden_outcomes=(
+                "retomar o beat anterior",
+                "insistir na finalidade recusada ou não resolvida",
+                "abrir nova pergunta, negociação ou acontecimento",
+            ),
+            max_sentences=0,
+            max_questions=0,
+            response_boundary="Encerramento definitivo: produza somente a despedida final.",
+            strict_response_economy=False,
+            max_extra_words=0,
+            authored_thought="",
+            exact_speech="",
+            forbid_new_questions=True,
+            forbidden_literal_texts=(),
+        )
+
     assessment = reconciled_step(state, context.target_beat_id)
     if assessment.status == "partial":
         suppress = tuple(

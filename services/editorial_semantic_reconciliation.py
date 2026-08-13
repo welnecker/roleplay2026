@@ -172,6 +172,8 @@ def build_reconciliation_prompt(
         "- satisfied: toda a finalidade já foi satisfeita e deve ser pulada ou adaptada;\n"
         "- contradicted: o usuário recusou ou tornou a finalidade incompatível.\n"
         "Em suppress, liste somente pedidos, perguntas ou afirmações que se tornariam redundantes.\n"
+        "Em evidence, cite exclusivamente um trecho literal da mensagem mais recente do usuário; "
+        "nunca cite uma fala anterior da personagem.\n"
         "Para kind active_beat_response ou active_automatic_gate_response, avalie se a resposta do usuário resolve o checkpoint aberto pelo movimento: reação pertinente resolve uma apresentação; resposta pertinente resolve uma pergunta; aceite ou iniciativa equivalente resolve uma solicitação indispensável. Dúvida, hesitação ou ausência de decisão mantém pending ou partial.\n"
         "Use route terminal_yard apenas quando a mensagem mais recente recusar explicitamente um objetivo indispensável, sem rota autoral alternativa, bloqueando a meta da história.\n"
         "Recusa opcional, dúvida, pergunta, provocação ou desvio recuperável mantém route continue.\n"
@@ -209,10 +211,14 @@ def parse_reconciliation(
     raw: str,
     *,
     allowed_step_ids: Iterable[str],
+    active_response_step_ids: Iterable[str] = (),
     user_text: str,
     history: Sequence[Mapping[str, str]] = (),
 ) -> SemanticReconciliation:
     allowed = {str(item).strip() for item in allowed_step_ids if str(item).strip()}
+    active_responses = {
+        str(item).strip() for item in active_response_step_ids if str(item).strip()
+    }
     corpus = "\n".join(
         [
             *(
@@ -242,8 +248,21 @@ def parse_reconciliation(
             continue
         seen.add(step_id)
         if status != "pending" and not _evidence_is_literal(evidence, corpus):
-            status = "pending"
-            evidence = ""
+            # ``status`` é a decisão semântica; ``evidence`` é apenas sua trilha de
+            # auditoria. Alguns provedores classificam corretamente uma resposta
+            # como suficiente, mas citam por engano a fala anterior da personagem.
+            # Rebaixar ``satisfied`` para ``pending`` nesse caso reabre um beat já
+            # consumido, cria uma ponte falsa e pode encerrar a história no turno
+            # seguinte. A mensagem atual é a evidência efetivamente avaliada.
+            if (
+                status == "satisfied"
+                and step_id in active_responses
+                and str(user_text or "").strip()
+            ):
+                evidence = str(user_text or "").strip()
+            else:
+                status = "pending"
+                evidence = ""
         suppress = item.get("suppress") or []
         if not isinstance(suppress, list):
             suppress = []

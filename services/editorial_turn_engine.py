@@ -88,6 +88,11 @@ def decide_editorial_turn(
             reconciliation = parse_reconciliation(
                 raw,
                 allowed_step_ids=(item["step_id"] for item in steps),
+                active_response_step_ids=(
+                    item["step_id"]
+                    for item in steps
+                    if item.get("kind") == "active_beat_response"
+                ),
                 user_text=user_text,
                 history=history,
             )

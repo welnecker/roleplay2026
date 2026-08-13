@@ -312,6 +312,35 @@ def test_fala_anterior_da_personagem_nao_serve_como_evidencia_do_usuario() -> No
     assert result.steps[0].status == "pending"
 
 
+def test_citacao_errada_nao_reabre_beat_ativo_corretamente_satisfeito() -> None:
+    result = parse_reconciliation(
+        json.dumps(
+            {
+                "route": "continue",
+                "steps": [
+                    {
+                        "step_id": "encontro_001",
+                        "status": "satisfied",
+                        "evidence": "Oi, Janio! Tô indo aí...",
+                        "remaining_intent": "",
+                        "suppress": [],
+                        "reason": "A pergunta do usuário respondeu à apresentação.",
+                    }
+                ],
+            }
+        ),
+        allowed_step_ids=["encontro_001"],
+        active_response_step_ids=["encontro_001"],
+        user_text="Tá indo pra praia?",
+        history=[
+            {"role": "assistant", "content": "Oi, Janio! Tô indo aí..."},
+        ],
+    )
+
+    assert result.steps[0].status == "satisfied"
+    assert result.steps[0].evidence == "Tá indo pra praia?"
+
+
 def test_motor_de_reconciliacao_nao_conhece_elementos_da_historia_camilly() -> None:
     source = Path("services/editorial_semantic_reconciliation.py").read_text(
         encoding="utf-8"

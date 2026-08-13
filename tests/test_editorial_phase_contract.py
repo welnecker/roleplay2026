@@ -85,3 +85,26 @@ def test_fase_ausente_preserva_contrato_canonico() -> None:
 
     assert adapted == original
     assert runtime_phase(PilotState()) == "canonical"
+
+
+def test_encerramento_nao_herda_fala_exata_do_beat_anterior() -> None:
+    original = replace(
+        _context(),
+        authored_thought="Preciso conseguir a carona.",
+        exact_speech="Oi, Nilo! Tô indo aí...",
+        strict_response_economy=True,
+        max_extra_words=10,
+    )
+
+    context = adapt_context_for_runtime_phase(
+        original,
+        PilotState(facts={"_runtime_phase": "finished"}),
+    )
+
+    assert context.transition_status == "finished"
+    assert context.authored_thought == ""
+    assert context.exact_speech == ""
+    assert context.canonical_line == ""
+    assert context.strict_response_economy is False
+    assert context.max_sentences == 0
+    assert context.forbid_new_questions is True

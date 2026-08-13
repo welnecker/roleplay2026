@@ -122,6 +122,48 @@ def test_fala_do_usuario_nao_pula_beat_autoral_ainda_nao_executado() -> None:
     assert turn.state.node_id == "encontro_001"
 
 
+def test_fluxo_da_abertura_avanca_ao_segundo_beat_sem_ponte_falsa() -> None:
+    script = _script()
+    opening = decide_editorial_turn(
+        script,
+        PilotState(pending_next_beat_id="encontro_001"),
+        "Camilly, oi!",
+        classifier_call=_classifier(
+            {
+                "route": "continue",
+                "steps": [_step("encontro_001", "satisfied", "Camilly, oi!")],
+            }
+        ),
+    )
+
+    assert opening.target_id == "encontro_001"
+    assert opening.state.facts.get("_runtime_phase") == "canonical"
+
+    following = decide_editorial_turn(
+        script,
+        opening.state,
+        "Tá indo pra praia?",
+        history=[
+            {"role": "assistant", "content": "Oi, Janio! Tô indo aí..."},
+        ],
+        classifier_call=_classifier(
+            {
+                "route": "continue",
+                "steps": [
+                    _step("encontro_001", "satisfied", "Oi, Janio! Tô indo aí..."),
+                    _step("encontro_002", "pending"),
+                ],
+            }
+        ),
+    )
+
+    assert following.target_id == "encontro_002"
+    assert following.state.node_id == "encontro_002"
+    assert following.state.facts.get("_runtime_phase") == "canonical"
+    assert following.finished is False
+    assert "PONTE NARRATIVA" not in following.system_prompt
+
+
 def test_abertura_nunca_cria_ponte_mesmo_se_primeiro_beat_ficar_pendente() -> None:
     script = _script()
     turn = decide_editorial_turn(
