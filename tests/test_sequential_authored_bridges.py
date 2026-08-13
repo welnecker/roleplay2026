@@ -97,3 +97,39 @@ def test_ponte_de_pedido_pode_criar_uma_pergunta_sem_ser_rejeitada() -> None:
     assert context.max_questions == 1
     assert context.forbid_new_questions is False
     assert any("finalidade da ponte encontro_001_pedido" in item for item in context.required_outcomes)
+
+
+def test_ponte_automatica_preserva_pergunta_da_pendencia_real() -> None:
+    base = {
+        "package_id": "roleplay2026.generica",
+        "character": {"name": "Ana", "age": 24},
+        "automatic_gate_policy": {"enabled": True, "max_redirects": 1},
+        "blocks": [],
+    }
+    document = compile_spreadsheet_story(
+        base,
+        [
+            _row("cena_auto", 10, "[CENA carro] Eu converso dentro do carro."),
+            _row("pedido_001", 20, "[BEAT] Eu peço que o usuário pare o carro e aguardo sua decisão."),
+            _row("pedido_001_fala", 30, "[FALA] Para um pouco ali para eu te mostrar melhor."),
+            _row("pedido_002", 40, "[BEAT] Depois que ele aceita, eu continuo."),
+            _row("pedido_002_fala", 50, "[FALA] Agora posso mostrar."),
+            _row("fim_auto", 60, "[FIM story_complete] Eu encerro."),
+        ],
+        script_version="100",
+    )
+    script = prepare_editorial_script(PilotScript(compile_editorial_document(document)))
+    turn = decide_editorial_progression_turn(
+        script,
+        PilotState(node_id="pedido_001"),
+        "Agora? Aqui mesmo?",
+    )
+    context = adapt_context_for_runtime_phase(
+        build_beat_context(script, PilotState(node_id="pedido_001"), turn),
+        turn.state,
+    )
+
+    assert turn.state.facts["_bridge_allow_question"] == "true"
+    assert context.forbid_new_questions is False
+    assert context.max_questions == 1
+    assert any("mesma pendência real" in item for item in context.required_outcomes)
