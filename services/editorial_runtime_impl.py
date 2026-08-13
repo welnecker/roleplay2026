@@ -381,6 +381,7 @@ def _build_prompt(
     )
     exact_speech = bool(str(beat.get("exact_speech", "") or "").strip())
     free_speech = bool(beat.get("free_speech", False))
+    interpreted_speech = bool(beat.get("interpreted_speech", False))
     if exact_speech:
         speech_contract = (
             "FALA EXATA: reproduza literalmente a fala autoral, sem nenhuma palavra audível "
@@ -390,6 +391,15 @@ def _build_prompt(
         speech_contract = (
             "FALA LIVRE: use a instrução autoral como direção e crie integralmente a redação, "
             "respeitando o objetivo atual, os fatos e os limites narrativos.\n"
+        )
+    elif interpreted_speech:
+        speech_contract = (
+            "FALA INTERPRETADA:\n"
+            "- Use a fala fornecida como núcleo autoral obrigatório e reconhecível, não como texto fechado.\n"
+            "- Reaja ao sentido da mensagem atual e desenvolva uma atuação humana, intensa e emocionalmente comprometida.\n"
+            "- Incorpore concretamente psicologia, desejo, estado corporal próprio, iniciativa e estágio da relação.\n"
+            "- Quando compatível, expresse prazer, tensão, humor, vulnerabilidade ou lascívia; não responda de modo tímido, neutro ou protocolar.\n"
+            "- Não invente ação, sensação, desejo ou consentimento do usuário e não antecipe outro movimento.\n"
         )
     else:
         speech_contract = (
