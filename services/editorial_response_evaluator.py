@@ -285,6 +285,7 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
             "Faça uma auditoria factual: compare cada afirmação concreta da candidata com o conteúdo autorizado pelo contrato.",
             "Avalie a autorização pelo conjunto Movimento obrigatório + Referência semântica, nunca apenas pela pontuação da referência.",
             "Uma pergunta, pedido ou complemento que realize uma finalidade ainda pendente do Movimento obrigatório é autorizado, mesmo ausente da Referência semântica.",
+            "Para Fala autoral adaptável, confira se a candidata reage ao sentido da mensagem mais recente do usuário; repetir interjeição ou seguir diretamente para a referência sem responder ao conteúdo é failed_required_outcome.",
             "Marque unauthorized_conversational_extension somente quando uma pergunta, pedido, promessa ou assunto não realizar finalidade do beat, abrir nova pendência ou exceder os assuntos permitidos.",
             "Em ponte, retomar uma única vez a mesma solicitação ou pergunta ainda sem decisão é autorizado quando constar nos resultados obrigatórios; nunca classifique essa retomada como unauthorized_conversational_extension.",
             "Não rejeite metáfora, flerte, humor, duplo sentido, opinião, reação emocional ou improviso plausível apenas por não aparecer literalmente no roteiro.",
