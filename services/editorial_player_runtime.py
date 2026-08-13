@@ -579,6 +579,7 @@ if not api_key:
 base_prompt = with_scripted_thought_guidance(
     pending.prompt,
     authored_thought=pending.context.authored_thought,
+    interpreted_thought=pending.context.interpreted_thought,
     character_name=CHARACTER_NAME,
 )
 private_context = build_immersive_context(
