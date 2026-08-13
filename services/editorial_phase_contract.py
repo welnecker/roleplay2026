@@ -89,12 +89,18 @@ def adapt_context_for_runtime_phase(
             )
         return replace(
             context,
+            # A fala canônica pertence ao beat de origem e já foi consumida.
+            # Mantê-la como referência ativa faz o gerador copiá-la novamente,
+            # embora a própria ponte a registre como literal proibido.
+            canonical_line="",
             authored_thought="",
             interpreted_thought=False,
             interpreted_speech=False,
             exact_speech="",
             free_speech=False,
             authored_transition="",
+            strict_response_economy=False,
+            max_extra_words=0,
             max_sentences=min(2, context.max_sentences or 2),
             max_questions=1 if allow_question else 0,
             forbid_new_questions=not allow_question,
