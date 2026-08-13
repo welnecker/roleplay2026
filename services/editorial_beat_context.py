@@ -282,17 +282,32 @@ def render_beat_context(context: BeatContext) -> str:
         lines.append(f"- Limite de resposta: {context.response_boundary}")
     if context.strict_response_economy:
         lines.append(
-            "- Economia estrita: responda de forma adulta, direta e mínima; não acrescente "
-            "justificativa genérica, promessa, nova provocação, nova pergunta ou detalhe ornamental."
+            "- Economia de estilo: seja breve e evite somente conteúdo sem função narrativa. "
+            "Esta orientação não impede reagir ao usuário nem acrescentar pergunta, pedido ou "
+            "complemento necessário para realizar o movimento obrigatório do beat."
         )
         if context.max_extra_words:
             lines.append(
-                f"- Expansão máxima além da referência autoral: {context.max_extra_words} palavras."
+                f"- Referência de concisão: prefira até {context.max_extra_words} palavras adicionais, "
+                "mas ultrapasse esse valor quando necessário para responder ao usuário e cumprir o beat."
             )
     if context.free_speech:
         lines.append(
             "- Fala livre autoral: concretize a direção dramática com liberdade de redação, "
             "respeitando os fatos e o máximo de frases, sem limite relativo de palavras."
+        )
+    elif context.canonical_line and not context.exact_speech:
+        lines.extend(
+            (
+                "- Fala autoral adaptável: preserve de forma reconhecível o sentido, o vocabulário "
+                "central e o tom da referência semântica; não precisa reproduzi-la literalmente.",
+                "- Antes ou junto da fala autoral, reaja brevemente ao conteúdo mais recente do "
+                "usuário quando houver algo pertinente a responder.",
+                "- Complete na mesma resposta todas as finalidades ainda pendentes do movimento "
+                "obrigatório, inclusive perguntas ou pedidos que não estejam escritos na referência.",
+                "- A adaptação não pode abrir assunto independente, antecipar outro beat nem "
+                "presumir resposta, decisão ou ação do usuário.",
+            )
         )
     if context.authored_thought:
         lines.append(
