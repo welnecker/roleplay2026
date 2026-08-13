@@ -89,6 +89,21 @@ def test_texto_autoral_obrigatorio_e_validado_literalmente() -> None:
     )
 
 
+def test_pensamento_interpretado_exige_bloco_mas_nao_texto_literal() -> None:
+    context = _context(
+        authored_thought="Caralho... meu desejo está me dominando.",
+        interpreted_thought=True,
+    )
+    interpreted = evaluate_deterministic_response(
+        "[PENSAMENTO]\nCaralho... meu desejo cresce e está tomando conta de mim.\n[/PENSAMENTO]\n\nChega mais perto.",
+        context,
+    )
+    missing = evaluate_deterministic_response("Chega mais perto.", context)
+
+    assert interpreted.valid is True
+    assert missing.violations == ("authored_thought_missing",)
+
+
 def test_economia_estrita_trata_complemento_e_frases_como_estilo() -> None:
     context = _context(
         canonical_line="Poxa... você me salvou.",
