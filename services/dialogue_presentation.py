@@ -50,6 +50,7 @@ def with_scripted_thought_guidance(
     system_prompt: str,
     *,
     authored_thought: str,
+    interpreted_thought: bool = False,
     character_name: str = "Mary",
 ) -> str:
     """Permite pensamento somente quando ele foi escrito no beat atual."""
@@ -65,6 +66,15 @@ def with_scripted_thought_guidance(
             "- Não escreva os marcadores [PENSAMENTO] e [/PENSAMENTO]."
         )
 
+    if interpreted_thought:
+        return (
+            f"{system_prompt.rstrip()}\n\n"
+            "CONTRATO DE PENSAMENTO INTERPRETADO:\n"
+            "- Use o pensamento autoral como núcleo psicológico obrigatório e reconhecível.\n"
+            "- Desenvolva-o em primeira pessoa como consciência íntima, incorporando desejo, conflito e sensações próprias compatíveis.\n"
+            "- Não seja neutro ou protocolar, não atribua estados ao usuário e não antecipe beats.\n"
+            "- Use um único bloco [PENSAMENTO]...[/PENSAMENTO] antes da fala audível."
+        )
     return (
         f"{system_prompt.rstrip()}\n\n"
         "CONTRATO DE PENSAMENTO AUTORAL:\n"
