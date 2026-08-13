@@ -156,6 +156,13 @@ def _context_allows_violation(code: str, context: BeatContext | None) -> bool:
 
     if code == "invented_unconfirmed_detail":
         return False
+    if code == "unauthorized_conversational_extension":
+        # Na ponte, responder ao conteúdo atual dentro do assunto vigente é a
+        # própria finalidade estrutural. Novos assuntos continuam protegidos
+        # por bridge_question_created; repetição literal e avanço futuro têm
+        # validadores próprios. Deixar este código semântico amplo bloquear a
+        # ponte cria falso positivo e força a regeneração a copiar a origem.
+        return context.transition_status != "bridge_pending"
     if code == "failed_to_answer_user_question":
         return context.user_intent == "question" or (
             "responder" in required and "pergunta" in required
@@ -288,6 +295,7 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
             "Para Fala autoral adaptável, confira se a candidata reage ao sentido da mensagem mais recente do usuário; repetir interjeição ou seguir diretamente para a referência sem responder ao conteúdo é failed_required_outcome.",
             "Marque unauthorized_conversational_extension somente quando uma pergunta, pedido, promessa ou assunto não realizar finalidade do beat, abrir nova pendência ou exceder os assuntos permitidos.",
             "Em ponte, retomar uma única vez a mesma solicitação ou pergunta ainda sem decisão é autorizado quando constar nos resultados obrigatórios; nunca classifique essa retomada como unauthorized_conversational_extension.",
+            "Em ponte, uma reação ao comando, pergunta, elogio ou provocação atual que permaneça na mesma ação e no mesmo assunto também não é unauthorized_conversational_extension; use anticipated_future_beat para avanço real e presumed_user_decision para ação não declarada.",
             "Não rejeite metáfora, flerte, humor, duplo sentido, opinião, reação emocional ou improviso plausível apenas por não aparecer literalmente no roteiro.",
             "A infração invented_unconfirmed_detail é informativa e não bloqueia a resposta.",
             "Limites de frases e perguntas são orientação de estilo, não motivo autônomo para rejeição.",
