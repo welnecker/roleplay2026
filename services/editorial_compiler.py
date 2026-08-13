@@ -203,6 +203,8 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     ),
                     "max_extra_words": int(source.get("max_extra_words", 0) or 0),
                     "free_speech": bool(source.get("free_speech", False)),
+                    "interpreted_speech": bool(source.get("interpreted_speech", False)),
+                    "interpreted_thought": bool(source.get("interpreted_thought", False)),
                     "intimate_exact_speech": bool(
                         source.get("intimate_exact_speech", False)
                     ),
