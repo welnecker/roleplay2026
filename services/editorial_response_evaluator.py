@@ -45,11 +45,27 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
         "failed_to_request_explicit_decision",
         "treated_postpone_as_refusal",
         "treated_question_as_acceptance",
+        "unauthorized_conversational_extension",
         "character_voice_broken",
         "semantic_evaluator_invalid_json",
         "semantic_evaluator_invalid_payload",
         "semantic_evaluator_invalid_violations",
         "semantic_rejection_without_reason",
+    }
+)
+_BLOCKING_SEMANTIC_VIOLATIONS = frozenset(
+    {
+        "contradicted_confirmed_fact",
+        "failed_required_outcome",
+        "performed_forbidden_outcome",
+        "presumed_user_decision",
+        "anticipated_future_beat",
+        "closed_pending_route",
+        "failed_to_answer_user_question",
+        "failed_to_request_explicit_decision",
+        "treated_postpone_as_refusal",
+        "treated_question_as_acceptance",
+        "unauthorized_conversational_extension",
     }
 )
 _VIOLATION_GUIDANCE = {
@@ -58,9 +74,6 @@ _VIOLATION_GUIDANCE = {
     "unexpected_thought": "Remova integralmente o pensamento: o beat atual não contém [PENSAMENTO] autoral.",
     "exact_speech_missing": "Inclua literalmente a fala autoral exata obrigatória na parte audível da resposta.",
     "exact_speech_extension": "Use somente a fala autoral exata, sem nenhuma palavra audível antes ou depois.",
-    "max_sentences_exceeded": "Reduza para o limite de frases do contrato, removendo explicações e complementos.",
-    "unauthorized_extension": "Remova justificativas, promessas, perguntas, provocações e detalhes que excedem a fala autoral.",
-    "new_conversational_hook": "Remova a nova pergunta ou promessa; conclua somente o movimento autoral atual.",
     "forbidden_literal_text_repeated": "Remova o pensamento ou a fala autoral já consumida ou reservada a outro beat; produza apenas uma reação nova.",
     "bridge_question_created": "Remova a nova pergunta. A ponte deve reagir ao usuário sem criar assunto ou obrigação para o turno seguinte.",
     "invented_unconfirmed_detail": (
@@ -77,6 +90,9 @@ _VIOLATION_GUIDANCE = {
     "failed_to_request_explicit_decision": "Ao final, peça uma decisão explícita sem pressão.",
     "treated_postpone_as_refusal": "Reconheça o adiamento sem convertê-lo em recusa.",
     "treated_question_as_acceptance": "Trate a pergunta como pedido de esclarecimento, não como aceite.",
+    "unauthorized_conversational_extension": (
+        "Remova a pergunta, pedido, promessa ou assunto que não realiza nenhuma finalidade pendente do beat atual."
+    ),
     "character_voice_broken": "Preserve a voz natural da personagem.",
 }
 
@@ -216,14 +232,6 @@ def evaluate_deterministic_response(
     )
     if context.forbid_new_questions and "?" in visible:
         violations.append("bridge_question_created")
-    elif (
-        context.strict_response_economy
-        and not context.free_speech
-        and context.canonical_line
-        and "?" not in canonical_visible
-        and "?" in visible
-    ):
-        violations.append("new_conversational_hook")
     if context.exact_speech and _whitespace_normalized(
         context.exact_speech
     ) not in _whitespace_normalized(visible):
@@ -243,10 +251,7 @@ def evaluate_deterministic_response(
 
     style_advisories: list[str] = []
     if context.max_sentences and _sentence_count(visible) > context.max_sentences:
-        if context.strict_response_economy:
-            violations.append("max_sentences_exceeded")
-        else:
-            style_advisories.append("max_sentences_exceeded")
+        style_advisories.append("max_sentences_exceeded")
     if context.max_questions and visible.count("?") > context.max_questions:
         style_advisories.append("max_questions_exceeded")
     if (
@@ -257,7 +262,7 @@ def evaluate_deterministic_response(
         and _word_count(visible)
         > _word_count(canonical_visible) + context.max_extra_words
     ):
-        violations.append("unauthorized_extension")
+        style_advisories.append("max_extra_words_exceeded")
 
     result = ResponseEvaluation(not violations, tuple(violations))
     _log_evaluation(
@@ -275,13 +280,16 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
     allowed = ", ".join(sorted(_ALLOWED_SEMANTIC_VIOLATIONS))
     return "\n".join(
         (
-            "Você é um avaliador editorial consultivo. Não reescreva a resposta.",
-            "Aponte riscos sem assumir autoridade para bloquear ou regenerar a fala.",
+            "Você é um avaliador editorial do contrato narrativo. Não reescreva a resposta.",
+            "Sua avaliação pode bloquear somente violações narrativas objetivas permitidas neste contrato.",
             "Faça uma auditoria factual: compare cada afirmação concreta da candidata com o conteúdo autorizado pelo contrato.",
+            "Avalie a autorização pelo conjunto Movimento obrigatório + Referência semântica, nunca apenas pela pontuação da referência.",
+            "Uma pergunta, pedido ou complemento que realize uma finalidade ainda pendente do Movimento obrigatório é autorizado, mesmo ausente da Referência semântica.",
+            "Marque unauthorized_conversational_extension somente quando uma pergunta, pedido, promessa ou assunto não realizar finalidade do beat, abrir nova pendência ou exceder os assuntos permitidos.",
             "Não rejeite metáfora, flerte, humor, duplo sentido, opinião, reação emocional ou improviso plausível apenas por não aparecer literalmente no roteiro.",
             "A infração invented_unconfirmed_detail é informativa e não bloqueia a resposta.",
             "Limites de frases e perguntas são orientação de estilo, não motivo autônomo para rejeição.",
-            "Concentre os apontamentos em contradição de fatos confirmados, ação ou decisão presumida do usuário, resultado proibido e antecipação de beat.",
+            "Concentre os apontamentos em contradição de fatos confirmados, finalidade obrigatória ausente, ação ou decisão presumida do usuário, resultado proibido, extensão conversacional não autorizada e antecipação de beat.",
             "Para cada risco, cite em evidence o menor trecho literal da candidata que demonstra o problema.",
             "Só marque failed_to_answer_user_question quando a intenção detectada for question ou quando responder à pergunta estiver nos resultados obrigatórios.",
             "Só marque presumed_user_decision ou closed_pending_route quando a transição estiver pendente.",
@@ -389,11 +397,12 @@ def parse_semantic_evaluation(
 
 
 def merge_evaluations(*evaluations: ResponseEvaluation) -> ResponseEvaluation:
-    """Mantém o determinístico soberano e registra os demais como consultivos.
+    """Combina integridade determinística e violações narrativas semânticas fechadas.
 
-    O primeiro resultado deve ser sempre o avaliador determinístico. Avaliações
-    posteriores podem apontar riscos para diagnóstico, mas não rejeitam nem
-    regeneram uma resposta por interpretação subjetiva isolada.
+    O primeiro resultado deve ser o avaliador determinístico. Avaliações
+    posteriores bloqueiam somente códigos narrativos explicitamente autorizados;
+    estilo, voz, detalhes informativos e falhas do próprio avaliador permanecem
+    consultivos para não derrubar uma resposta válida por julgamento subjetivo.
     """
 
     if not evaluations:
@@ -406,24 +415,35 @@ def merge_evaluations(*evaluations: ResponseEvaluation) -> ResponseEvaluation:
         )
         return result
 
-    authoritative = evaluations[0]
+    deterministic = evaluations[0]
+    semantic_blockers = tuple(
+        dict.fromkeys(
+            violation
+            for evaluation in evaluations[1:]
+            for violation in evaluation.violations
+            if violation in _BLOCKING_SEMANTIC_VIOLATIONS
+        )
+    )
     advisories = tuple(
         dict.fromkeys(
             violation
             for evaluation in evaluations[1:]
             for violation in evaluation.violations
+            if violation not in _BLOCKING_SEMANTIC_VIOLATIONS
         )
     )
+    blocking = tuple(dict.fromkeys((*deterministic.violations, *semantic_blockers)))
     result = ResponseEvaluation(
-        authoritative.valid and not authoritative.violations,
-        authoritative.violations,
+        not blocking,
+        blocking,
     )
     _log_evaluation(
         "combined_result",
         valid=result.valid,
         violations=result.violations,
         semantic_advisories=advisories,
-        semantic_authority="consultive",
+        semantic_blockers=semantic_blockers,
+        semantic_authority="closed_blocking_set",
     )
     return result
 
