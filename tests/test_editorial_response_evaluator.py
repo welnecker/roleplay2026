@@ -89,7 +89,7 @@ def test_texto_autoral_obrigatorio_e_validado_literalmente() -> None:
     )
 
 
-def test_economia_estrita_rejeita_complemento_e_frases_excedentes() -> None:
+def test_economia_estrita_trata_complemento_e_frases_como_estilo() -> None:
     context = _context(
         canonical_line="Poxa... você me salvou.",
         max_sentences=2,
@@ -107,26 +107,49 @@ def test_economia_estrita_rejeita_complemento_e_frases_excedentes() -> None:
     )
 
     assert concise.valid is True
-    assert padded.valid is False
-    assert "max_sentences_exceeded" in padded.violations
-    assert "unauthorized_extension" in padded.violations
+    assert padded.valid is True
+    assert padded.violations == ()
 
 
-def test_economia_estrita_rejeita_pergunta_nova_ausente_da_fala_autoral() -> None:
+def test_beat_autoriza_pergunta_ausente_da_fala_autoral() -> None:
     context = _context(
-        canonical_line="Poxa... você me salvou.",
+        objective="Eu conto que vou à praia e peço uma carona.",
+        canonical_line="Vou pegar uma praia... esse sol tá demais...",
         max_sentences=2,
         strict_response_economy=True,
         max_extra_words=10,
     )
 
     result = evaluate_deterministic_response(
-        "Poxa... você me salvou. O que achou do meu biquíni?",
+        "Vou pegar uma praia... esse sol tá demais. Você me dá uma carona?",
         context,
     )
 
+    assert result.valid is True
+    assert result.violations == ()
+
+
+def test_pergunta_ornamental_e_bloqueada_sem_finalidade_no_beat() -> None:
+    context = _context(
+        objective="Eu agradeço a carona.",
+        canonical_line="Obrigada pela carona, gato.",
+    )
+    candidate = "Obrigada pela carona, gato. Você mora sozinho?"
+
+    deterministic = evaluate_deterministic_response(candidate, context)
+    semantic = parse_semantic_evaluation(
+        '{"valid": false, "violations": '
+        '[{"code": "unauthorized_conversational_extension", '
+        '"evidence": "Você mora sozinho?"}]}',
+        candidate=candidate,
+        context=context,
+    )
+
+    result = merge_evaluations(deterministic, semantic)
+
+    assert deterministic.valid is True
     assert result.valid is False
-    assert "new_conversational_hook" in result.violations
+    assert result.violations == ("unauthorized_conversational_extension",)
 
 
 def test_reticencias_internas_nao_criam_frase_extra() -> None:
@@ -277,11 +300,12 @@ def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
     assert "não podem ser concretizados" in rendered
 
 
-def test_prompt_semantico_declara_papel_consultivo() -> None:
+def test_prompt_semantico_declara_contrato_integral_do_beat() -> None:
     prompt = build_semantic_evaluation_prompt(_context())
 
-    assert "avaliador editorial consultivo" in prompt
-    assert "sem assumir autoridade para bloquear" in prompt
+    assert "avaliador editorial do contrato narrativo" in prompt
+    assert "Movimento obrigatório + Referência semântica" in prompt
+    assert "finalidade ainda pendente" in prompt
     assert "compare cada afirmação concreta" in prompt
     assert "metáfora, flerte, humor, duplo sentido" in prompt
     assert "invented_unconfirmed_detail é informativa" in prompt
@@ -310,11 +334,9 @@ def test_avaliacao_semantica_rejeita_identificador_fora_do_contrato() -> None:
     assert result.violations == ("semantic_evaluator_invalid_violations",)
 
 
-def test_merge_mantem_deterministico_soberano() -> None:
+def test_merge_mantem_aviso_semantico_subjetivo_consultivo() -> None:
     deterministic = evaluate_deterministic_response("Tudo bem. Você pode me confirmar?", _context())
-    semantic = parse_semantic_evaluation(
-        '{"valid": false, "violations": ["treated_postpone_as_refusal"]}'
-    )
+    semantic = ResponseEvaluation(False, ("character_voice_broken",))
 
     merged = merge_evaluations(deterministic, semantic)
 
@@ -332,14 +354,14 @@ def test_merge_nao_esconde_violacao_deterministica() -> None:
     assert merged.violations == ("technical_marker_exposed",)
 
 
-def test_rejeicao_semantica_subjetiva_nao_dispara_regeneracao() -> None:
+def test_rejeicao_semantica_narrativa_dispara_regeneracao() -> None:
     deterministic = ResponseEvaluation(True, ())
     semantic = ResponseEvaluation(False, ("failed_required_outcome",))
 
     merged = merge_evaluations(deterministic, semantic)
 
-    assert merged.valid is True
-    assert merged.violations == ()
+    assert merged.valid is False
+    assert merged.violations == ("failed_required_outcome",)
 
 
 def test_regeneracao_recebe_motivos_objetivos() -> None:
