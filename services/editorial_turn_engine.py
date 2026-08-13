@@ -20,6 +20,11 @@ from services.editorial_contextual_destination import (
     ContextualDestination,
     state_with_contextual_destination,
 )
+from services.editorial_bridge import (
+    automatic_gate_enabled,
+    automatic_gate_policy,
+    bridge_active,
+)
 from services.editorial_progression import decide_editorial_progression_turn
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
 from services.editorial_semantic_reconciliation import (
@@ -86,6 +91,51 @@ def decide_editorial_turn(
                 history=history,
             )
             reconciled_state = state_with_reconciliation(state, reconciliation)
+            active_id = (
+                str(state.facts.get("_bridge_origin_beat_id", "") or "").strip()
+                if bridge_active(state)
+                else str(state.node_id or "").strip()
+            )
+            active_assessment = next(
+                (item for item in reconciliation.steps if item.step_id == active_id),
+                None,
+            )
+            if automatic_gate_enabled(script) and active_assessment is not None:
+                gate_policy = automatic_gate_policy(script)
+                automatic_retry = (
+                    bridge_active(state)
+                    and str(state.facts.get("_automatic_gate_active", "") or "") == "true"
+                )
+                attempts = int(state.facts.get("_automatic_gate_attempts", "0") or 0)
+                max_redirects = max(0, int(gate_policy.get("max_redirects", 1) or 0))
+                failure_signal = ""
+                if active_assessment.status == "contradicted":
+                    failure_signal = str(
+                        gate_policy.get("on_refusal", "required_outcome_refused")
+                        or "required_outcome_refused"
+                    )
+                elif (
+                    automatic_retry
+                    and attempts >= max_redirects
+                    and active_assessment.status in {"pending", "partial"}
+                ):
+                    failure_signal = str(
+                        gate_policy.get("on_unresolved", "required_outcome_unresolved")
+                        or "required_outcome_unresolved"
+                    )
+                if failure_signal:
+                    reconciled_state = state_with_contextual_destination(
+                        reconciled_state,
+                        ContextualDestination(
+                            route="immediate_ending",
+                            signal=failure_signal,
+                            reason=active_assessment.reason or failure_signal,
+                            confidence=1.0,
+                        ),
+                    )
+                    return decide_editorial_progression_turn(
+                        script, reconciled_state, user_text
+                    )
             terminal, signal, reason = reconciliation_terminal_destination(
                 reconciled_state
             )

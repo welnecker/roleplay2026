@@ -190,6 +190,11 @@ def contextual_target(
     context: ResolvedInteractionContext,
     destination: ContextualDestination,
 ) -> str:
+    if destination.signal in {
+        "required_outcome_refused",
+        "required_outcome_unresolved",
+    }:
+        return context.required_outcome_ending_target
     if destination.route == "terminal_yard":
         return context.terminal_yard_target
     if destination.route == "immediate_ending":
@@ -246,17 +251,38 @@ def decide_contextual_destination_turn(
         updated.node_id = target_id
         updated.finished = True
         updated.run_status = str(ending.get("run_status", "terminated") or "terminated")
-        updated.ending_code = str(ending.get("ending_code", target_id) or target_id)
+        updated.ending_code = (
+            destination.signal
+            if destination.signal in {
+                "required_outcome_refused",
+                "required_outcome_unresolved",
+            }
+            else str(ending.get("ending_code", target_id) or target_id)
+        )
         updated = state_for_target(script, updated, target_id)
         fallback = str((ending.get("visible_delivery") or {}).get("text", "") or "").strip()
-        prompt = (
-            "Você é a personagem do card. Encerre imediatamente a interação, sem convite para continuar.\n"
-            f"FALA DO USUÁRIO: {user_text}\n"
-            f"RUPTURA DETECTADA: {destination.signal}\n"
-            f"REFERÊNCIA DE VOZ: {fallback}"
+        authorial_failure = destination.signal in {
+            "required_outcome_refused",
+            "required_outcome_unresolved",
+        }
+        prompt_lines = [
+            "Você é a personagem do card. Encerre imediatamente a interação, sem convite para continuar."
+        ]
+        if authorial_failure:
+            prompt_lines.append(
+                "Esta é uma frustração narrativa, não uma infração: respeite a decisão do usuário, "
+                "expresse somente a própria frustração e não use aviso disciplinar."
+            )
+        prompt_lines.extend(
+            (
+                f"FALA DO USUÁRIO: {user_text}",
+                f"RUPTURA DETECTADA: {destination.signal}",
+                f"REFERÊNCIA DE VOZ: {fallback}",
+            )
         )
+        prompt = "\n".join(prompt_lines)
         return EditorialTurn(
-            engagement="hostile",
+            engagement="engaged" if authorial_failure else "hostile",
             target_id=target_id,
             visible_fallback=fallback,
             system_prompt=prompt,

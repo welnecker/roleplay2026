@@ -100,6 +100,11 @@ def immediate_reconciliation_steps(
         if active:
             active[0]["kind"] = "active_bridge_response"
             steps.append(active[0])
+        if not active:
+            origin_id = str(state.facts.get("_bridge_origin_beat_id", "") or "").strip()
+            origin = script.beats.get(origin_id) or {}
+            if origin:
+                steps.append(_beat_step(origin_id, origin, kind="active_automatic_gate_response"))
         steps.extend(_authored_bridges(current, start=index + 1))
         target_id = str(state.facts.get("_bridge_target_beat_id", "") or "").strip()
     else:
@@ -137,6 +142,7 @@ def build_reconciliation_prompt(
         "- satisfied: toda a finalidade já foi satisfeita e deve ser pulada ou adaptada;\n"
         "- contradicted: o usuário recusou ou tornou a finalidade incompatível.\n"
         "Em suppress, liste somente pedidos, perguntas ou afirmações que se tornariam redundantes.\n"
+        "Para kind active_beat_response ou active_automatic_gate_response, avalie se a resposta do usuário resolve o checkpoint aberto pelo movimento: reação pertinente resolve uma apresentação; resposta pertinente resolve uma pergunta; aceite ou iniciativa equivalente resolve uma solicitação indispensável. Dúvida, hesitação ou ausência de decisão mantém pending ou partial.\n"
         "Use route terminal_yard apenas quando a mensagem mais recente recusar explicitamente um objetivo indispensável, sem rota autoral alternativa, bloqueando a meta da história.\n"
         "Recusa opcional, dúvida, pergunta, provocação ou desvio recuperável mantém route continue.\n"
         "Responda exclusivamente em JSON válido:\n"

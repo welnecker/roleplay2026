@@ -74,6 +74,12 @@ runtime_contract:
   model_may_invent_user_actions: false
   canonical_line_required: true
 
+automatic_gate_policy:
+  enabled: true
+  max_redirects: 1
+  on_refusal: required_outcome_refused
+  on_unresolved: required_outcome_unresolved
+
 blocks:
   - block_id: abertura_fallback
     order: 1

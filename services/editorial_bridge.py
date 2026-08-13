@@ -36,8 +36,21 @@ def bridge_policy(script: EditorialScript) -> dict[str, Any]:
     return nested if isinstance(nested, dict) else {}
 
 
+def automatic_gate_policy(script: EditorialScript) -> dict[str, Any]:
+    policy = script.raw.get("automatic_gate_policy") or {}
+    return policy if isinstance(policy, dict) else {}
+
+
+def automatic_gate_enabled(script: EditorialScript) -> bool:
+    return bool(automatic_gate_policy(script).get("enabled", False))
+
+
 def bridge_enabled_for_beat(script: EditorialScript, beat_id: str) -> bool:
     """Ativa a ponte somente onde o card declarou a nova máquina de estados."""
+
+    if automatic_gate_enabled(script):
+        beat = script.beats.get(str(beat_id or "").strip()) or {}
+        return not bool(str(beat.get("terminal_yard_id", "") or "").strip())
 
     policy = bridge_policy(script)
     if str(policy.get("mode", "disabled") or "disabled").strip() != "required":
@@ -281,6 +294,9 @@ def should_create_bridge(
         return False
     origin_beat = script.beats.get(origin) or {}
     authored_bridge = bool(origin_beat.get("has_authored_bridge", False))
+    if automatic_gate_enabled(script) and not authored_bridge:
+        assessment = reconciled_step(turn.state, origin)
+        return assessment.status in {"pending", "partial"}
     return authored_bridge or not _is_structural_destination(script, target)
 
 
@@ -305,11 +321,21 @@ def create_bridge_turn(
     pending_authored = _pending_authored_bridges(proposed_turn.state, authored)
     if authored and not pending_authored:
         return proposed_turn
+    assessment = reconciled_step(proposed_turn.state, origin_id)
+    automatic_instruction = (
+        "Eu respondo ao conteúdo real de {{nome}} e resolvo a finalidade ainda pendente "
+        "deste movimento. Se houver uma solicitação ou pergunta sem decisão, eu a retomo "
+        "naturalmente uma única vez, sem presumir aceite e sem avançar ao próximo beat."
+    )
     first_step, reconciliation = pending_authored[0] if pending_authored else ({
         "bridge_id": f"{origin_id}__bridge",
-        "instruction": _BRIDGE_FALLBACK,
+        "instruction": automatic_instruction if automatic_gate_enabled(script) else _BRIDGE_FALLBACK,
         "index": "0",
-    }, "")
+    }, (
+        f"Finalidade ainda pendente: {assessment.remaining_intent or origin_objective}. "
+        f"Evidência do usuário: {assessment.evidence or 'nenhuma decisão suficiente'}."
+        if automatic_gate_enabled(script) else ""
+    ))
 
     updated = EditorialState.from_dict(proposed_turn.state.to_dict())
     updated.node_id = origin_id
@@ -325,6 +351,10 @@ def create_bridge_turn(
     updated.facts[_BRIDGE_TARGET_CANONICAL_KEY] = target_canonical
     _store_bridge_step(updated.facts, first_step, int(first_step.get("index", "0") or 0))
     updated.facts["_organic_interstitial"] = "false"
+    if automatic_gate_enabled(script) and not authored:
+        updated.facts["_automatic_gate_active"] = "true"
+        updated.facts["_automatic_gate_origin_id"] = origin_id
+        updated.facts["_automatic_gate_attempts"] = "1"
 
     prompt = _bridge_prompt(
         user_text=user_text,
@@ -336,7 +366,10 @@ def create_bridge_turn(
         target_canonical=target_canonical,
         bridge_id=first_step["bridge_id"],
         bridge_instruction=first_step["instruction"],
-        allow_question=_bridge_may_ask(first_step["instruction"]),
+        allow_question=(
+            True if automatic_gate_enabled(script) and not authored
+            else _bridge_may_ask(first_step["instruction"])
+        ),
         reconciliation=reconciliation,
     )
     return replace(
@@ -426,12 +459,17 @@ def release_bridge_state(script: EditorialScript, state: EditorialState) -> Edit
         _BRIDGE_STEP_ID_KEY,
         _BRIDGE_STEP_INSTRUCTION_KEY,
         _BRIDGE_ALLOW_QUESTION_KEY,
+        "_automatic_gate_active",
+        "_automatic_gate_origin_id",
+        "_automatic_gate_attempts",
     ):
         updated.facts.pop(key, None)
     return updated
 
 
 __all__ = [
+    "automatic_gate_enabled",
+    "automatic_gate_policy",
     "bridge_active",
     "advance_authored_bridge_turn",
     "bridge_enabled_for_beat",

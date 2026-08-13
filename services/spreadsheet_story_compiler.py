@@ -149,6 +149,11 @@ def compile_spreadsheet_story(
                 "speech_variants": speech_variants,
                 "speech_exact": speech_exact,
             }
+        automatic_policy = document.get("automatic_gate_policy") or {}
+        automatic_enabled = bool(
+            isinstance(automatic_policy, dict)
+            and automatic_policy.get("enabled", False)
+        )
         current_beat["interaction_context"] = {
             "relationship_stage": "scripted_interaction",
             "allowed_interactions": [
@@ -165,6 +170,10 @@ def compile_spreadsheet_story(
                 "attempt_to_impose_undeclared_actions_events_or_locations_as_facts",
             ],
             "terminal_yard_target": "__generic_disagreement_warning",
+            **(
+                {"required_outcome_ending_target": "__required_outcome_end"}
+                if automatic_enabled else {}
+            ),
         }
         current_beat = None
 
@@ -482,6 +491,54 @@ def compile_spreadsheet_story(
         ],
     }
     blocks.append(generic_yard)
+
+    automatic_policy = document.get("automatic_gate_policy") or {}
+    if isinstance(automatic_policy, dict) and automatic_policy.get("enabled", False):
+        required_ending_id = "__required_outcome_end"
+        if required_ending_id in seen_line_ids:
+            raise SpreadsheetStoryError(
+                f"line_id reservado para encerramento automático: {required_ending_id}"
+            )
+        blocks.append(
+            {
+                "block_id": "patio_requisito_frustrado",
+                "order": len(blocks) + 1,
+                "title": "Encerramento por requisito frustrado",
+                "entry_beat_id": "",
+                "max_movements_per_response": 1,
+                "max_questions_per_response": 0,
+                "rules": [],
+                "beats": [
+                    {
+                        "beat_id": required_ending_id,
+                        "order": 1,
+                        "type": "ending",
+                        "required_movement": (
+                            "Eu respeito a decisão de {{nome}}, expresso minha própria "
+                            "frustração sem acusá-lo e encerro a história."
+                        ),
+                        "canonical_line": (
+                            "Tudo bem, {{nome}}... acho que perdi o embalo. "
+                            "Vou seguir por aqui. Tchau!"
+                        ),
+                        "dramatic_direction": (
+                            "Despedida respeitosa e frustrada, sem aviso disciplinar, "
+                            "nova tentativa, convite ou promessa."
+                        ),
+                        "next_beat_id": "",
+                        "max_questions": 0,
+                        "max_sentences": 3,
+                        "memory_writes": [],
+                        "allowed_transitions": {},
+                        "ending": {
+                            "run_status": "terminated",
+                            "ending_code": "required_outcome_unresolved",
+                        },
+                        "status": "active",
+                    }
+                ],
+            }
+        )
 
     return document
 
