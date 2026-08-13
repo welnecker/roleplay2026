@@ -95,6 +95,18 @@ def test_editor_gera_colunas_ids_e_ordens_da_aba_roteiros() -> None:
     assert [row["order"] for row in rows] == list(range(10, 120, 10))
 
 
+def test_editor_aceita_tags_interpretadas() -> None:
+    rows = compile_draft_rows(
+        """[CENA teste] Eu inicio.\n[BEAT] Eu provoco o usuário.\n[PENSAMENTO INTERPRETADO] Meu desejo está crescendo.\n[FALA INTERPRETADA] Chega mais perto.\n[FIM story_complete] Eu encerro.""",
+        package_id="roleplay2026.teste",
+        script_version="1",
+        initial_block_id="teste",
+    )
+
+    assert rows[2]["instruction"] == "[PENSAMENTO INTERPRETADO] Meu desejo está crescendo."
+    assert rows[3]["instruction"] == "[FALA INTERPRETADA] Chega mais perto."
+
+
 def test_tsv_tem_cabecalho_oficial_e_preserva_placeholder() -> None:
     rows = compile_draft_rows(
         _draft(),
