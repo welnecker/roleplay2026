@@ -289,6 +289,34 @@ def test_avaliacao_semantica_usa_candidata_explicita_da_tentativa_atual() -> Non
     assert current.violations == ()
 
 
+def test_ponte_descarta_falso_novo_assunto_na_mesma_acao() -> None:
+    context = _context(
+        transition_status="bridge_pending",
+        required_outcomes=("responder genuinamente ao conteúdo mais recente do usuário",),
+        forbidden_outcomes=("executar o próximo beat",),
+        forbid_new_questions=False,
+    )
+    candidate = (
+        "É difícil demais, mas eu vou até o fim... "
+        "Olhar para você me deixa ainda mais excitada."
+    )
+    deterministic = evaluate_deterministic_response(candidate, context)
+    semantic = parse_semantic_evaluation(
+        '{"valid": false, "violations": '
+        '[{"code": "unauthorized_conversational_extension", '
+        '"evidence": "Olhar para você me deixa ainda mais excitada."}]}',
+        candidate=candidate,
+        context=context,
+    )
+
+    merged = merge_evaluations(deterministic, semantic)
+
+    assert semantic.valid is True
+    assert semantic.violations == ()
+    assert merged.valid is True
+    assert merged.violations == ()
+
+
 def test_contexto_separa_fatos_desconhecidos_e_assuntos() -> None:
     rendered = render_beat_context(_context())
 
