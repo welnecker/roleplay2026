@@ -90,6 +90,8 @@ def adapt_context_for_runtime_phase(
         return replace(
             context,
             authored_thought="",
+            interpreted_thought=False,
+            interpreted_speech=False,
             exact_speech="",
             free_speech=False,
             authored_transition="",
@@ -158,6 +160,8 @@ def adapt_context_for_runtime_phase(
             strict_response_economy=False,
             max_extra_words=0,
             authored_thought="",
+            interpreted_thought=False,
+            interpreted_speech=False,
             exact_speech="",
             free_speech=False,
             authored_transition="",
