@@ -33,6 +33,7 @@ class BeatContext:
     authored_thought: str = ""
     exact_speech: str = ""
     free_speech: bool = False
+    authored_transition: str = ""
     forbidden_literal_texts: tuple[str, ...] = ()
     forbid_new_questions: bool = False
     character_name: str = "Mary"
@@ -204,6 +205,9 @@ def build_beat_context(
         authored_thought=str(target.get("authored_thought", "") or "").strip(),
         exact_speech=str(target.get("exact_speech", "") or "").strip(),
         free_speech=bool(target.get("free_speech", False)),
+        authored_transition=str(
+            target.get("authored_transition", "") or ""
+        ).strip(),
         character_name=str(
             (script.raw.get("character") or {}).get("name", "Mary")
             or "Mary"
@@ -294,6 +298,12 @@ def render_beat_context(context: BeatContext) -> str:
         lines.append(
             "- Pensamento autoral obrigatório — reproduza literalmente dentro de [PENSAMENTO]: "
             + context.authored_thought
+        )
+    if context.authored_transition:
+        lines.append(
+            "- Salto temporal autoral obrigatório — escreva literalmente uma única vez, "
+            "na primeira linha da resposta, antes de pensamento e fala: "
+            + context.authored_transition
         )
     if context.exact_speech:
         lines.append(

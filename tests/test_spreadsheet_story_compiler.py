@@ -94,6 +94,14 @@ def test_transicao_entra_na_mesma_entrega_do_beat_seguinte() -> None:
     )
     assert "[PENSAMENTO]\nOlha ele de novo...\n[/PENSAMENTO]" in beat["canonical_line"]
     assert beat["canonical_line"].endswith("Você de novo?")
+    assert beat["authored_transition"] == (
+        "[MINUTOS DEPOIS — SUPERMERCADO, FILA DO CAIXA]"
+    )
+    compiled = compile_editorial_document(document)
+    compiled_beat = next(
+        item for item in compiled["scene"]["beats"] if item["beat_id"] == "segundo"
+    )
+    assert compiled_beat["authored_transition"] == beat["authored_transition"]
 
 
 def test_beat_em_terceira_pessoa_e_rejeitado() -> None:

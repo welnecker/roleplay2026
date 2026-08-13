@@ -53,6 +53,7 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
     }
 )
 _VIOLATION_GUIDANCE = {
+    "authored_transition_invalid": "Inclua literalmente o salto temporal autoral uma única vez na primeira linha, antes do pensamento e da fala.",
     "authored_thought_missing": "Inclua literalmente o pensamento autoral obrigatório dentro de um único bloco [PENSAMENTO].",
     "unexpected_thought": "Remova integralmente o pensamento: o beat atual não contém [PENSAMENTO] autoral.",
     "exact_speech_missing": "Inclua literalmente a fala autoral exata obrigatória na parte audível da resposta.",
@@ -95,6 +96,14 @@ def _log_evaluation(stage: str, **payload: object) -> None:
 
 def _visible_dialogue(text: str) -> str:
     return _THOUGHT_PATTERN.sub("", str(text or "")).strip()
+
+
+def _without_authored_transition(text: str, transition: str) -> str:
+    visible = _visible_dialogue(text)
+    expected = str(transition or "").strip()
+    if expected and visible.startswith(expected):
+        return visible[len(expected):].strip()
+    return visible
 
 
 def _sentence_count(text: str) -> int:
@@ -195,14 +204,23 @@ def evaluate_deterministic_response(
     elif thought_matches:
         violations.append("unexpected_thought")
 
-    visible = _visible_dialogue(text)
+    if context.authored_transition:
+        expected_transition = context.authored_transition.strip()
+        if not text.startswith(expected_transition) or text.count(expected_transition) != 1:
+            violations.append("authored_transition_invalid")
+
+    visible = _without_authored_transition(text, context.authored_transition)
+    canonical_visible = _without_authored_transition(
+        context.canonical_line,
+        context.authored_transition,
+    )
     if context.forbid_new_questions and "?" in visible:
         violations.append("bridge_question_created")
     elif (
         context.strict_response_economy
         and not context.free_speech
         and context.canonical_line
-        and "?" not in _visible_dialogue(context.canonical_line)
+        and "?" not in canonical_visible
         and "?" in visible
     ):
         violations.append("new_conversational_hook")
@@ -237,7 +255,7 @@ def evaluate_deterministic_response(
         and context.canonical_line
         and context.max_extra_words
         and _word_count(visible)
-        > _word_count(_visible_dialogue(context.canonical_line)) + context.max_extra_words
+        > _word_count(canonical_visible) + context.max_extra_words
     ):
         violations.append("unauthorized_extension")
 

@@ -140,9 +140,12 @@ def compile_spreadsheet_story(
         current_beat["authored_thought"] = thought
         current_beat["exact_speech"] = speech if speech_exact else ""
         current_beat["free_speech"] = speech_free
+        current_beat["authored_transition"] = (
+            f"[{transition.upper()}]" if transition else ""
+        )
         current_beat["authored_bridges"] = authored_bridges
         current_beat["has_authored_bridge"] = bool(authored_bridges)
-        if thought or speech or thought_variants or speech_variants:
+        if transition or thought or speech or thought_variants or speech_variants:
             current_beat["profile_delivery"] = {
                 "transition": transition,
                 "thought": thought,

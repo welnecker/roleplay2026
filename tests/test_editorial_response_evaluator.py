@@ -169,6 +169,34 @@ def test_fala_livre_nao_e_limitada_por_referencia_audivel_inexistente() -> None:
     assert result.violations == ()
 
 
+def test_transicao_autoral_e_obrigatoria_antes_da_fala() -> None:
+    transition = "[ALGUNS MINUTOS DEPOIS — DENTRO DO CARRO.]"
+    context = _context(
+        canonical_line=f"{transition}\n\nTá sabendo que eu terminei?",
+        authored_transition=transition,
+        exact_speech="Tá sabendo que eu terminei?",
+        strict_response_economy=True,
+        max_extra_words=10,
+    )
+
+    valid = evaluate_deterministic_response(
+        f"{transition}\n\nTá sabendo que eu terminei?",
+        context,
+    )
+    missing = evaluate_deterministic_response(
+        "Tá sabendo que eu terminei?",
+        context,
+    )
+    duplicated = evaluate_deterministic_response(
+        f"{transition}\n{transition}\n\nTá sabendo que eu terminei?",
+        context,
+    )
+
+    assert valid.valid is True
+    assert missing.violations == ("authored_transition_invalid",)
+    assert "authored_transition_invalid" in duplicated.violations
+
+
 def test_pensamento_inventado_e_rejeitado_quando_beat_nao_o_declara() -> None:
     result = evaluate_deterministic_response(
         "[PENSAMENTO]\nJá estou imaginando o que faremos.\n[/PENSAMENTO]\n\nOi, Doni.",

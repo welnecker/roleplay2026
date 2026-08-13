@@ -137,6 +137,9 @@ def personalize_editorial_script(
                 if bool(delivery.get("speech_exact", False))
                 else ""
             )
+        beat["authored_transition"] = resolve_profile_text(
+            str(beat.get("authored_transition", "") or ""), profile
+        )
         beat["objective"] = resolve_profile_text(
             str(beat.get("objective", "") or ""), profile
         )
