@@ -122,6 +122,31 @@ def test_fala_do_usuario_nao_pula_beat_autoral_ainda_nao_executado() -> None:
     assert turn.state.node_id == "encontro_001"
 
 
+def test_abertura_nunca_cria_ponte_mesmo_se_primeiro_beat_ficar_pendente() -> None:
+    script = _script()
+    turn = decide_editorial_turn(
+        script,
+        PilotState(pending_next_beat_id="encontro_001"),
+        "Camilly, oi!",
+        classifier_call=_classifier(
+            {
+                "route": "continue",
+                "evidence": "",
+                "reason": "o movimento da personagem ainda precisa acontecer",
+                "steps": [
+                    _step("encontro_001", "pending"),
+                ],
+            }
+        ),
+    )
+
+    assert turn.target_id == "encontro_001"
+    assert turn.state.facts.get("_runtime_phase") == "canonical"
+    assert turn.state.facts.get("_automatic_gate_active") is None
+    assert "PONTE NARRATIVA" not in turn.system_prompt
+    assert "Oi, {{nome}}! Tô indo aí..." in turn.system_prompt
+
+
 def test_hesitacao_cria_uma_ponte_automatica_e_prende_o_destino() -> None:
     script = _script()
     turn = decide_editorial_turn(

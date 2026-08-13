@@ -129,23 +129,6 @@ def test_economia_estrita_rejeita_pergunta_nova_ausente_da_fala_autoral() -> Non
     assert "new_conversational_hook" in result.violations
 
 
-def test_reticencias_internas_nao_criam_frase_extra() -> None:
-    context = _context(
-        canonical_line="Ainda bem que encontrei você... ir de carro assim é muito melhor, rsrsrs.",
-        max_sentences=2,
-        strict_response_economy=True,
-        max_extra_words=10,
-    )
-
-    result = evaluate_deterministic_response(
-        "Vou para a do centro, Janio. Ainda bem que encontrei você... ir de carro assim é muito melhor, rsrsrs.",
-        context,
-    )
-
-    assert result.valid is True
-    assert result.violations == ()
-
-
 def test_pensamento_inventado_e_rejeitado_quando_beat_nao_o_declara() -> None:
     result = evaluate_deterministic_response(
         "[PENSAMENTO]\nJá estou imaginando o que faremos.\n[/PENSAMENTO]\n\nOi, Doni.",

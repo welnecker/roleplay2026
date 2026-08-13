@@ -282,6 +282,11 @@ def should_create_bridge(
     previous_state: EditorialState,
     turn: EditorialTurn,
 ) -> bool:
+    # A cena deixa o primeiro beat em pending_next_beat_id, mas ele ainda não foi
+    # executado nem persistido. Sem node_id não existe beat de origem consumido e,
+    # portanto, não pode existir ponte entre origem e destino.
+    if automatic_gate_enabled(script) and not str(previous_state.node_id or "").strip():
+        return False
     origin = previous_state.node_id or script.first_beat_id
     target = str(turn.target_id or "").strip()
     if not bridge_enabled_for_beat(script, origin):
