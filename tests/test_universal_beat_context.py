@@ -29,6 +29,10 @@ def test_todo_turno_recebe_contrato_de_beat() -> None:
     assert "Movimento obrigatório" in rendered
     assert "FATOS CONFIRMADOS" in rendered
     assert "FATOS DESCONHECIDOS" in rendered
+    assert any(
+        "reagir brevemente ao sentido do conteúdo mais recente do usuário" in item
+        for item in context.required_outcomes
+    )
 
 
 def test_compilador_preserva_contrato_factual_estruturado() -> None:
