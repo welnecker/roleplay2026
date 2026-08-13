@@ -68,7 +68,11 @@ def adapt_context_for_runtime_phase(
             required.append(f"finalidade da ponte {bridge_id or 'atual'}: {bridge_instruction}")
         forbidden = [
             "executar o próximo beat total ou parcialmente",
-            f"repetir ou parafrasear o movimento de origem já concluído: {origin_objective}",
+            (
+                "repetir ou parafrasear o movimento de origem já concluído, "
+                "exceto retomar uma única vez a solicitação ou pergunta que continua sem decisão: "
+                f"{origin_objective}"
+            ),
             f"repetir ou parafrasear a linha de origem já consumida: {origin_canonical}",
             f"executar total ou parcialmente o objetivo reservado ao destino: {target_objective}",
             f"repetir ou parafrasear a linha canônica futura: {target_canonical}",
@@ -78,6 +82,11 @@ def adapt_context_for_runtime_phase(
         ]
         if not allow_question:
             forbidden.append("criar nova pergunta, promessa, dúvida ou obstáculo sem pendência real trazida pelo usuário")
+        else:
+            required.append(
+                "uma pergunta ou solicitação pode ser retomada uma única vez quando for a mesma "
+                "pendência real do movimento de origem; isso não é novo gancho conversacional"
+            )
         return replace(
             context,
             authored_thought="",
