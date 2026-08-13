@@ -312,6 +312,7 @@ def test_contexto_declara_fala_comum_como_adaptavel() -> None:
 
     assert "Fala autoral adaptável" in rendered
     assert "reaja brevemente" in rendered
+    assert "Resultados obrigatórios nesta resposta" in rendered
     assert "perguntas ou pedidos que não estejam escritos na referência" in rendered
     assert "não impede reagir ao usuário" in rendered
     assert "Expansão máxima" not in rendered
