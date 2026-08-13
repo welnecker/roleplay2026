@@ -209,7 +209,10 @@ def evaluate_deterministic_response(
     if "[PENSAMENTO]" in residual.upper() or "[/PENSAMENTO]" in residual.upper():
         violations.append("malformed_thought_block")
 
-    if context.authored_thought:
+    if context.authored_thought and context.interpreted_thought:
+        if not thought_matches:
+            violations.append("authored_thought_missing")
+    elif context.authored_thought:
         required_thought = _whitespace_normalized(context.authored_thought)
         rendered_thoughts = " ".join(
             _whitespace_normalized(
@@ -293,6 +296,8 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
             "Avalie a autorização pelo conjunto Movimento obrigatório + Referência semântica, nunca apenas pela pontuação da referência.",
             "Uma pergunta, pedido ou complemento que realize uma finalidade ainda pendente do Movimento obrigatório é autorizado, mesmo ausente da Referência semântica.",
             "Para Fala autoral adaptável, confira se a candidata reage ao sentido da mensagem mais recente do usuário; repetir interjeição ou seguir diretamente para a referência sem responder ao conteúdo é failed_required_outcome.",
+            "Para Fala interpretada, exija que o núcleo autoral permaneça reconhecível e que a atuação incorpore concretamente ao menos um impulso vigente da personagem; neutralidade protocolar é failed_required_outcome.",
+            "Para Pensamento interpretado, exija núcleo psicológico reconhecível em primeira pessoa, com desenvolvimento íntimo compatível; não exija reprodução literal.",
             "Marque unauthorized_conversational_extension somente quando uma pergunta, pedido, promessa ou assunto não realizar finalidade do beat, abrir nova pendência ou exceder os assuntos permitidos.",
             "Em ponte, retomar uma única vez a mesma solicitação ou pergunta ainda sem decisão é autorizado quando constar nos resultados obrigatórios; nunca classifique essa retomada como unauthorized_conversational_extension.",
             "Em ponte, uma reação ao comando, pergunta, elogio ou provocação atual que permaneça na mesma ação e no mesmo assunto também não é unauthorized_conversational_extension; use anticipated_future_beat para avanço real e presumed_user_decision para ação não declarada.",
