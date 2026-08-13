@@ -394,7 +394,8 @@ def _build_prompt(
     else:
         speech_contract = (
             "FALA AUTORAL ADAPTÁVEL:\n"
-            "- Reaja brevemente ao conteúdo pertinente da mensagem mais recente do usuário.\n"
+            "- A reação ao sentido da mensagem mais recente do usuário é obrigatória quando ela contém conteúdo pertinente.\n"
+            "- Não conte palavras, interjeições ou perguntas já presentes na referência de voz como essa reação; escreva uma ligação nova que demonstre compreensão do que o usuário acabou de dizer.\n"
             "- Preserve de forma reconhecível o sentido, o vocabulário central e o tom da referência de voz.\n"
             "- Complete todas as finalidades pendentes do objetivo atual, inclusive pergunta ou pedido não escrito na referência.\n"
             "- Una reação, fala autoral e complemento em uma resposta natural e viva.\n"
