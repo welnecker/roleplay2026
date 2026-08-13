@@ -33,6 +33,8 @@ class BeatContext:
     authored_thought: str = ""
     exact_speech: str = ""
     free_speech: bool = False
+    interpreted_speech: bool = False
+    interpreted_thought: bool = False
     authored_transition: str = ""
     forbidden_literal_texts: tuple[str, ...] = ()
     forbid_new_questions: bool = False
@@ -218,6 +220,8 @@ def build_beat_context(
         authored_thought=str(target.get("authored_thought", "") or "").strip(),
         exact_speech=exact_speech,
         free_speech=free_speech,
+        interpreted_speech=bool(target.get("interpreted_speech", False)),
+        interpreted_thought=bool(target.get("interpreted_thought", False)),
         authored_transition=str(
             target.get("authored_transition", "") or ""
         ).strip(),
@@ -309,6 +313,14 @@ def render_beat_context(context: BeatContext) -> str:
             "- Fala livre autoral: concretize a direção dramática com liberdade de redação, "
             "respeitando os fatos e o máximo de frases, sem limite relativo de palavras."
         )
+    elif context.interpreted_speech:
+        lines.extend(
+            (
+                "- Fala interpretada: use a fala autoral como núcleo obrigatório e reconhecível, mas desenvolva uma atuação intensa, humana e particular.",
+                "- Incorpore concretamente a psicologia, o desejo, o estado corporal próprio e o estágio relacional vigentes; não produza resposta tímida, neutra ou apenas protocolar.",
+                "- Expresse iniciativa, tensão, prazer, humor, vulnerabilidade ou lascívia compatíveis com o beat, sem inventar reação ou consentimento do usuário.",
+            )
+        )
     elif context.canonical_line and not context.exact_speech:
         lines.extend(
             (
@@ -322,7 +334,12 @@ def render_beat_context(context: BeatContext) -> str:
                 "presumir resposta, decisão ou ação do usuário.",
             )
         )
-    if context.authored_thought:
+    if context.authored_thought and context.interpreted_thought:
+        lines.append(
+            "- Pensamento interpretado obrigatório — preserve reconhecivelmente este núcleo psicológico e desenvolva-o em primeira pessoa, sem antecipar beats nem atribuir estados ao usuário: "
+            + context.authored_thought
+        )
+    elif context.authored_thought:
         lines.append(
             "- Pensamento autoral obrigatório — reproduza literalmente dentro de [PENSAMENTO]: "
             + context.authored_thought
