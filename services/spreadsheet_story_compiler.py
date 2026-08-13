@@ -49,6 +49,16 @@ def _marker(value: Any) -> tuple[str, str, str]:
                 kind = "FALA_EXATA_INTIMA"
                 argument_parts = argument_parts[1:]
             argument = " ".join(argument_parts).strip()
+        elif delivery in {"interpretada", "interpretado", "interpretativa", "interpretativo"}:
+            kind = "FALA_INTERPRETADA"
+            argument = " ".join(argument_parts[1:]).strip()
+    thought_delivery = _plain(argument).split(maxsplit=1)[0] if argument else ""
+    if kind == "PENSAMENTO" and thought_delivery in {
+        "interpretado", "interpretada", "interpretativo", "interpretativa"
+    }:
+        argument_parts = argument.split()
+        kind = "PENSAMENTO_INTERPRETADO"
+        argument = " ".join(argument_parts[1:]).strip()
     if kind == "PATIO" and _plain(argument).startswith("final"):
         kind = "PATIO_FINAL"
         argument = argument[5:].strip()
@@ -66,7 +76,7 @@ def _active_rows(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _validate_first_person(kind: str, text: str, *, line_id: str, character_name: str) -> None:
-    if kind not in {"BEAT", "PENSAMENTO", "PONTE", "PATIO_FINAL"} or not text:
+    if kind not in {"BEAT", "PENSAMENTO", "PENSAMENTO_INTERPRETADO", "PONTE", "PATIO_FINAL"} or not text:
         return
     if character_name and re.search(rf"\b{re.escape(character_name)}\b", text, re.IGNORECASE):
         raise SpreadsheetStoryError(
@@ -134,6 +144,8 @@ def compile_spreadsheet_story(
         speech_exact = bool(current_beat.pop("_speech_exact", False))
         speech_free = bool(current_beat.pop("_speech_free", False))
         speech_intimate = bool(current_beat.pop("_speech_intimate", False))
+        thought_interpreted = bool(current_beat.pop("_thought_interpreted", False))
+        speech_interpreted = bool(current_beat.pop("_speech_interpreted", False))
         has_intimate_exact = has_intimate_exact or speech_intimate
         authored_bridges = list(current_beat.pop("_authored_bridges", []) or [])
         visible: list[str] = []
@@ -145,8 +157,10 @@ def compile_spreadsheet_story(
             visible.append(speech)
         current_beat["canonical_line"] = "\n\n".join(visible)
         current_beat["authored_thought"] = thought
+        current_beat["interpreted_thought"] = thought_interpreted
         current_beat["exact_speech"] = speech if speech_exact else ""
         current_beat["free_speech"] = speech_free
+        current_beat["interpreted_speech"] = speech_interpreted
         current_beat["intimate_exact_speech"] = speech_intimate
         current_beat["authored_transition"] = (
             f"[{transition.upper()}]" if transition else ""
@@ -289,6 +303,8 @@ def compile_spreadsheet_story(
                 "_speech_exact": False,
                 "_speech_free": False,
                 "_speech_intimate": False,
+                "_thought_interpreted": False,
+                "_speech_interpreted": False,
                 "_authored_bridges": [],
             }
             pending_transition = ""
@@ -297,10 +313,11 @@ def compile_spreadsheet_story(
                 block["entry_beat_id"] = line_id
             continue
 
-        if kind in {"PENSAMENTO", "FALA", "FALA_EXATA", "FALA_EXATA_INTIMA", "FALA_LIVRE", "PONTE"}:
+        if kind in {"PENSAMENTO", "PENSAMENTO_INTERPRETADO", "FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_EXATA_INTIMA", "FALA_LIVRE", "PONTE"}:
             if current_beat is None:
                 raise SpreadsheetStoryError(f"{line_id}: {kind} sem [BEAT] anterior.")
-            if kind == "PENSAMENTO":
+            if kind in {"PENSAMENTO", "PENSAMENTO_INTERPRETADO"}:
+                current_beat["_thought_interpreted"] = kind == "PENSAMENTO_INTERPRETADO"
                 profile_tag = _plain(argument).upper() if argument else ""
                 if profile_tag and profile_tag not in _PROFILE_TAGS:
                     raise SpreadsheetStoryError(
@@ -314,7 +331,9 @@ def compile_spreadsheet_story(
                     current_beat["_thought"] = "\n".join(
                         part for part in (current_beat["_thought"], text) if part
                     )
-            elif kind in {"FALA", "FALA_EXATA", "FALA_EXATA_INTIMA"}:
+            elif kind in {"FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_EXATA_INTIMA"}:
+                if kind == "FALA_INTERPRETADA":
+                    current_beat["_speech_interpreted"] = True
                 if kind in {"FALA_EXATA", "FALA_EXATA_INTIMA"}:
                     current_beat["_speech_exact"] = True
                 if kind == "FALA_EXATA_INTIMA":
