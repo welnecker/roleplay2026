@@ -146,12 +146,19 @@ def _bridge_may_ask(instruction: str) -> bool:
     )
 
 
-def _store_bridge_step(facts: dict[str, str], step: Mapping[str, str], index: int) -> None:
+def _store_bridge_step(
+    facts: dict[str, str],
+    step: Mapping[str, str],
+    index: int,
+    *,
+    allow_question: bool | None = None,
+) -> None:
     instruction = str(step.get("instruction", "") or "").strip()
     facts[_BRIDGE_STEP_INDEX_KEY] = str(index)
     facts[_BRIDGE_STEP_ID_KEY] = str(step.get("bridge_id", "") or "").strip()
     facts[_BRIDGE_STEP_INSTRUCTION_KEY] = instruction
-    facts[_BRIDGE_ALLOW_QUESTION_KEY] = "true" if _bridge_may_ask(instruction) else "false"
+    may_ask = _bridge_may_ask(instruction) if allow_question is None else allow_question
+    facts[_BRIDGE_ALLOW_QUESTION_KEY] = "true" if may_ask else "false"
 
 
 def _bridge_prompt(
@@ -356,7 +363,16 @@ def create_bridge_turn(
     updated.facts[_BRIDGE_ORIGIN_CANONICAL_KEY] = origin_canonical
     updated.facts[_BRIDGE_TARGET_OBJECTIVE_KEY] = target_objective
     updated.facts[_BRIDGE_TARGET_CANONICAL_KEY] = target_canonical
-    _store_bridge_step(updated.facts, first_step, int(first_step.get("index", "0") or 0))
+    allow_question = (
+        True if automatic_gate_enabled(script) and not authored
+        else _bridge_may_ask(first_step["instruction"])
+    )
+    _store_bridge_step(
+        updated.facts,
+        first_step,
+        int(first_step.get("index", "0") or 0),
+        allow_question=allow_question,
+    )
     updated.facts["_organic_interstitial"] = "false"
     if automatic_gate_enabled(script) and not authored:
         updated.facts["_automatic_gate_active"] = "true"
@@ -373,10 +389,7 @@ def create_bridge_turn(
         target_canonical=target_canonical,
         bridge_id=first_step["bridge_id"],
         bridge_instruction=first_step["instruction"],
-        allow_question=(
-            True if automatic_gate_enabled(script) and not authored
-            else _bridge_may_ask(first_step["instruction"])
-        ),
+        allow_question=allow_question,
         reconciliation=reconciliation,
     )
     return replace(
