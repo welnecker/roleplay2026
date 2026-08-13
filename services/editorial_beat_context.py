@@ -32,6 +32,7 @@ class BeatContext:
     max_extra_words: int = 0
     authored_thought: str = ""
     exact_speech: str = ""
+    free_speech: bool = False
     forbidden_literal_texts: tuple[str, ...] = ()
     forbid_new_questions: bool = False
     character_name: str = "Mary"
@@ -202,6 +203,7 @@ def build_beat_context(
         max_extra_words=max(0, int(target.get("max_extra_words", 0) or 0)),
         authored_thought=str(target.get("authored_thought", "") or "").strip(),
         exact_speech=str(target.get("exact_speech", "") or "").strip(),
+        free_speech=bool(target.get("free_speech", False)),
         character_name=str(
             (script.raw.get("character") or {}).get("name", "Mary")
             or "Mary"
@@ -283,6 +285,11 @@ def render_beat_context(context: BeatContext) -> str:
             lines.append(
                 f"- Expansão máxima além da referência autoral: {context.max_extra_words} palavras."
             )
+    if context.free_speech:
+        lines.append(
+            "- Fala livre autoral: concretize a direção dramática com liberdade de redação, "
+            "respeitando os fatos e o máximo de frases, sem limite relativo de palavras."
+        )
     if context.authored_thought:
         lines.append(
             "- Pensamento autoral obrigatório — reproduza literalmente dentro de [PENSAMENTO]: "

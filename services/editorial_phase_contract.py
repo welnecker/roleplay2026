@@ -82,6 +82,7 @@ def adapt_context_for_runtime_phase(
             context,
             authored_thought="",
             exact_speech="",
+            free_speech=False,
             max_sentences=min(2, context.max_sentences or 2),
             max_questions=1 if allow_question else 0,
             forbid_new_questions=not allow_question,
@@ -148,6 +149,7 @@ def adapt_context_for_runtime_phase(
             max_extra_words=0,
             authored_thought="",
             exact_speech="",
+            free_speech=False,
             forbid_new_questions=True,
             forbidden_literal_texts=(),
         )

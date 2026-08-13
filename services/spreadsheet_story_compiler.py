@@ -127,6 +127,7 @@ def compile_spreadsheet_story(
         thought_variants = dict(current_beat.pop("_thought_variants", {}) or {})
         speech_variants = dict(current_beat.pop("_speech_variants", {}) or {})
         speech_exact = bool(current_beat.pop("_speech_exact", False))
+        speech_free = bool(current_beat.pop("_speech_free", False))
         authored_bridges = list(current_beat.pop("_authored_bridges", []) or [])
         visible: list[str] = []
         if transition:
@@ -138,6 +139,7 @@ def compile_spreadsheet_story(
         current_beat["canonical_line"] = "\n\n".join(visible)
         current_beat["authored_thought"] = thought
         current_beat["exact_speech"] = speech if speech_exact else ""
+        current_beat["free_speech"] = speech_free
         current_beat["authored_bridges"] = authored_bridges
         current_beat["has_authored_bridge"] = bool(authored_bridges)
         if thought or speech or thought_variants or speech_variants:
@@ -267,6 +269,7 @@ def compile_spreadsheet_story(
                 "_thought_variants": {},
                 "_speech_variants": {},
                 "_speech_exact": False,
+                "_speech_free": False,
                 "_authored_bridges": [],
             }
             pending_transition = ""
@@ -309,6 +312,7 @@ def compile_spreadsheet_story(
                         part for part in (current_beat["_speech"], text) if part
                     )
             elif kind == "FALA_LIVRE":
+                current_beat["_speech_free"] = True
                 direction = f"Crie em primeira pessoa a fala orientada por: {text}"
                 current_beat["dramatic_direction"] = "\n".join(
                     part for part in (current_beat["dramatic_direction"], direction) if part

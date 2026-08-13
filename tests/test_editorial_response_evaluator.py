@@ -146,6 +146,29 @@ def test_reticencias_internas_nao_criam_frase_extra() -> None:
     assert result.violations == ()
 
 
+def test_fala_livre_nao_e_limitada_por_referencia_audivel_inexistente() -> None:
+    context = _context(
+        canonical_line=(
+            "[PENSAMENTO]\nAgora vou descobrir se ele quer continuar.\n[/PENSAMENTO]"
+        ),
+        dramatic_direction="Agradecer e mostrar outra tatuagem de forma provocante.",
+        strict_response_economy=True,
+        max_extra_words=10,
+        max_sentences=2,
+        free_speech=True,
+        authored_thought="Agora vou descobrir se ele quer continuar.",
+    )
+
+    result = evaluate_deterministic_response(
+        "[PENSAMENTO]\nAgora vou descobrir se ele quer continuar.\n[/PENSAMENTO]\n\n"
+        "Obrigada por parar, Janio... olha só essa outra tatuagem aqui perto da minha virilha.",
+        context,
+    )
+
+    assert result.valid is True
+    assert result.violations == ()
+
+
 def test_pensamento_inventado_e_rejeitado_quando_beat_nao_o_declara() -> None:
     result = evaluate_deterministic_response(
         "[PENSAMENTO]\nJá estou imaginando o que faremos.\n[/PENSAMENTO]\n\nOi, Doni.",

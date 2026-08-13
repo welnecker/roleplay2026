@@ -182,6 +182,30 @@ def test_ponte_e_orientacao_do_mesmo_beat() -> None:
     assert document["bridge_policy"] == {"mode": "required", "beat_ids": ["beat"]}
 
 
+def test_fala_livre_e_marcada_sem_virar_fala_canonica() -> None:
+    document = compile_spreadsheet_story(
+        _base(),
+        [
+            _row("cena", 10, "[CENA carro] Estou dentro do carro."),
+            _row("beat", 20, "[BEAT] Eu reajo à decisão real do usuário."),
+            _row("pensamento", 30, "[PENSAMENTO] Agora vou provocar."),
+            _row(
+                "fala_livre",
+                40,
+                "[FALA LIVRE] Se ele aceitar, eu agradeço e mostro a tatuagem de forma provocante.",
+            ),
+            _row("fim", 50, "[FIM story_complete] Encerrar."),
+        ],
+        script_version="1.0.0",
+    )
+
+    beat = document["blocks"][0]["beats"][0]
+    assert beat["free_speech"] is True
+    assert beat["canonical_line"] == "[PENSAMENTO]\nAgora vou provocar.\n[/PENSAMENTO]"
+    compiled = compile_editorial_document(document)
+    assert compiled["blocks"][0]["beats"][0]["free_speech"] is True
+
+
 def test_falas_e_pensamentos_condicionais_sao_preservados_para_o_runtime() -> None:
     document = compile_spreadsheet_story(
         _base(),

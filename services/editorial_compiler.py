@@ -202,6 +202,7 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                         source.get("strict_response_economy", False)
                     ),
                     "max_extra_words": int(source.get("max_extra_words", 0) or 0),
+                    "free_speech": bool(source.get("free_speech", False)),
                     "skip_when_facts": deepcopy(source.get("skip_when_facts") or {}),
                     "response_boundary": str(source.get("response_boundary", "") or ""),
                     "topic_id": str(source.get("topic_id", "") or "").strip(),

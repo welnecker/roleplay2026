@@ -200,6 +200,7 @@ def evaluate_deterministic_response(
         violations.append("bridge_question_created")
     elif (
         context.strict_response_economy
+        and not context.free_speech
         and context.canonical_line
         and "?" not in _visible_dialogue(context.canonical_line)
         and "?" in visible
@@ -232,6 +233,7 @@ def evaluate_deterministic_response(
         style_advisories.append("max_questions_exceeded")
     if (
         context.strict_response_economy
+        and not context.free_speech
         and context.canonical_line
         and context.max_extra_words
         and _word_count(visible)
