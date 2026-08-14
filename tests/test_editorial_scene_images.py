@@ -9,10 +9,34 @@ import pytest
 from services import editorial_scene_images as scene_images
 from services.editorial_scene_images import (
     load_scene_image_map,
+    message_allows_beat_image,
     render_editorial_scene_image,
     resolve_editorial_scene_image,
     resolve_numbered_beat_image,
 )
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"automatic_bridge": True},
+        {"editorial_engagement": "automatic_bridge"},
+        {"editorial_state": {"facts": {"_runtime_phase": "bridge"}}},
+        {"editorial_diagnostics": {"runtime_phase": "bridge"}},
+    ],
+)
+def test_pontes_nao_disparam_imagem_do_beat(message: dict[str, object]) -> None:
+    assert message_allows_beat_image(message) is False
+
+
+def test_resposta_canonica_pode_exibir_imagem_do_beat() -> None:
+    message = {
+        "automatic_bridge": False,
+        "editorial_engagement": "engaged",
+        "editorial_state": {"facts": {"_runtime_phase": "canonical"}},
+    }
+
+    assert message_allows_beat_image(message) is True
 
 
 def _package(tmp_path: Path) -> Path:

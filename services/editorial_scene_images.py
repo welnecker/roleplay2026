@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import streamlit as st
@@ -20,6 +21,27 @@ _EDITORIAL_TO_SCENE_KEY = {
     "reencontro_fila_006": "fila_006",
     "reencontro_fila_007": "fila_007",
 }
+
+
+def message_allows_beat_image(message: Mapping[str, object]) -> bool:
+    """Retorna ``False`` para respostas de ponte que reutilizam o beat atual."""
+
+    if bool(message.get("automatic_bridge", False)):
+        return False
+    if str(message.get("editorial_engagement", "")).strip() == "automatic_bridge":
+        return False
+
+    state = message.get("editorial_state")
+    facts = state.get("facts") if isinstance(state, Mapping) else None
+    phase = facts.get("_runtime_phase") if isinstance(facts, Mapping) else ""
+    if str(phase or "").strip().casefold() == "bridge":
+        return False
+
+    diagnostics = message.get("editorial_diagnostics")
+    diagnostic_phase = (
+        diagnostics.get("runtime_phase") if isinstance(diagnostics, Mapping) else ""
+    )
+    return str(diagnostic_phase or "").strip().casefold() != "bridge"
 
 
 def load_scene_image_map(package_root: Path) -> dict[str, dict[str, object]]:
@@ -123,6 +145,7 @@ def render_editorial_scene_image(
 
 __all__ = [
     "load_scene_image_map",
+    "message_allows_beat_image",
     "render_editorial_scene_image",
     "resolve_editorial_scene_image",
     "resolve_numbered_beat_image",

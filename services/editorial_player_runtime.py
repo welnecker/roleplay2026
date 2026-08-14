@@ -44,7 +44,10 @@ from services.editorial_runtime import (
     editorial_opening_text,
     editorial_scene_opening_text,
 )
-from services.editorial_scene_images import render_editorial_scene_image
+from services.editorial_scene_images import (
+    message_allows_beat_image,
+    render_editorial_scene_image,
+)
 from services.editorial_script_snapshot import (
     clear_script_snapshot as clear_script_snapshot_state,
     load_script_snapshot,
@@ -493,7 +496,10 @@ if not messages:
     editorial_state = opening_editorial_state
     save_session(user, context, story_state, messages, editorial_state)
 for message in messages:
-    if str(message.get("role", "assistant")) == "assistant":
+    if (
+        str(message.get("role", "assistant")) == "assistant"
+        and message_allows_beat_image(message)
+    ):
         message_node_id = str(
             message.get("editorial_node") or message.get("beat_id") or ""
         ).strip()
