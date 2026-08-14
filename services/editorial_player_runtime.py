@@ -310,7 +310,11 @@ def render_current_scene(state: EditorialState) -> None:
     """Renderiza apoio visual sem interferir no input ou no motor narrativo."""
 
     try:
-        render_editorial_scene_image(PACKAGE_ID, state.node_id)
+        render_editorial_scene_image(
+            PACKAGE_ID,
+            state.node_id,
+            ordered_beat_ids=tuple(script.beats),
+        )
     except Exception as exc:
         log_editorial_exception(
             "render_editorial_scene_image",
@@ -499,6 +503,7 @@ for message in messages:
                     PACKAGE_ID,
                     message_node_id,
                     render_memory=False,
+                    ordered_beat_ids=tuple(script.beats),
                 )
             except Exception as exc:
                 log_editorial_exception(
@@ -533,7 +538,12 @@ if last_message_node_id != editorial_state.node_id:
     render_current_scene(editorial_state)
 else:
     # A imagem do beat já foi exibida junto da fala; mantém apenas o controle de memória.
-    render_editorial_scene_image(PACKAGE_ID, "", user.user_id)
+    render_editorial_scene_image(
+        PACKAGE_ID,
+        "",
+        user.user_id,
+        ordered_beat_ids=tuple(script.beats),
+    )
 user_text = st.chat_input("Responda")
 if not user_text:
     st.stop()

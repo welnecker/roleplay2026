@@ -62,12 +62,41 @@ def resolve_editorial_scene_image(package_root: Path, node_id: str) -> dict[str,
     return load_scene_image_map(package_root).get(scene_key)
 
 
+def resolve_numbered_beat_image(
+    package_root: Path,
+    node_id: str,
+    ordered_beat_ids: tuple[str, ...] | list[str],
+) -> dict[str, object] | None:
+    """Resolve ``<pacote><posição>.<ext>`` pela ordem dos beats ativos."""
+
+    normalized_ids = tuple(str(item or "").strip() for item in ordered_beat_ids)
+    try:
+        position = normalized_ids.index(str(node_id or "").strip()) + 1
+    except ValueError:
+        return None
+
+    image_dir = package_root.resolve() / "assets" / "scenes"
+    prefix = package_root.name.casefold()
+    for extension in ("png", "jpg", "jpeg", "webp"):
+        image_path = image_dir / f"{prefix}{position}.{extension}"
+        if image_path.is_file():
+            return {
+                "file": str(image_path.relative_to(package_root.resolve())),
+                "path": image_path,
+                "caption": "",
+                "alt": f"Imagem do beat {position}",
+                "expanded": False,
+            }
+    return None
+
+
 def render_editorial_scene_image(
     package_id: str,
     node_id: str,
     user_id: str = "",
     *,
     render_memory: bool = True,
+    ordered_beat_ids: tuple[str, ...] | list[str] = (),
 ) -> bool:
     """Renderiza a imagem do beat e, opcionalmente, o seletor de memória."""
 
@@ -75,6 +104,10 @@ def render_editorial_scene_image(
     package = find_editorial_package(package_id)
     if package is not None and node_id:
         image = resolve_editorial_scene_image(package.root, node_id)
+        if image is None and ordered_beat_ids:
+            image = resolve_numbered_beat_image(
+                package.root, node_id, ordered_beat_ids
+            )
         if image is not None:
             caption = str(image.get("caption", "")).strip()
             alt = str(image.get("alt", "")).strip()
@@ -88,4 +121,9 @@ def render_editorial_scene_image(
     return rendered
 
 
-__all__ = ["load_scene_image_map", "render_editorial_scene_image", "resolve_editorial_scene_image"]
+__all__ = [
+    "load_scene_image_map",
+    "render_editorial_scene_image",
+    "resolve_editorial_scene_image",
+    "resolve_numbered_beat_image",
+]

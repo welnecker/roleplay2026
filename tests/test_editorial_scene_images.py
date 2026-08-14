@@ -11,6 +11,7 @@ from services.editorial_scene_images import (
     load_scene_image_map,
     render_editorial_scene_image,
     resolve_editorial_scene_image,
+    resolve_numbered_beat_image,
 )
 
 
@@ -123,3 +124,54 @@ def test_imagem_ausente_falha_com_mensagem_explicita(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="Imagem não encontrada"):
         load_scene_image_map(package)
+
+
+def test_imagens_numeradas_seguem_posicao_dos_beats_nao_o_order(tmp_path: Path) -> None:
+    package = tmp_path / "camilly"
+    image_dir = package / "assets" / "scenes"
+    image_dir.mkdir(parents=True)
+    (image_dir / "camilly1.png").write_bytes(b"first")
+    (image_dir / "camilly2.png").write_bytes(b"second")
+
+    first = resolve_numbered_beat_image(
+        package, "encontro_001", ["encontro_001", "encontro_009"]
+    )
+    second = resolve_numbered_beat_image(
+        package, "encontro_009", ["encontro_001", "encontro_009"]
+    )
+
+    assert first is not None
+    assert Path(first["path"]).name == "camilly1.png"
+    assert second is not None
+    assert Path(second["path"]).name == "camilly2.png"
+
+
+def test_mapeamento_explicito_tem_prioridade_sobre_imagem_numerada(tmp_path: Path) -> None:
+    package = tmp_path / "camilly"
+    image_dir = package / "assets" / "scenes"
+    image_dir.mkdir(parents=True)
+    (image_dir / "camilly1.png").write_bytes(b"automatic")
+    (image_dir / "manual.png").write_bytes(b"manual")
+    (package / "scene_images.yaml").write_text(
+        "encontro_001:\n  file: assets/scenes/manual.png\n",
+        encoding="utf-8",
+    )
+
+    explicit = resolve_editorial_scene_image(package, "encontro_001")
+    automatic = resolve_numbered_beat_image(
+        package, "encontro_001", ["encontro_001"]
+    )
+
+    assert explicit is not None
+    assert Path(explicit["path"]).name == "manual.png"
+    assert automatic is not None
+    assert Path(automatic["path"]).name == "camilly1.png"
+
+
+def test_imagem_numerada_ausente_nao_quebra_o_beat(tmp_path: Path) -> None:
+    package = tmp_path / "camilly"
+    package.mkdir()
+
+    assert resolve_numbered_beat_image(
+        package, "encontro_004", ["encontro_001", "encontro_004"]
+    ) is None
