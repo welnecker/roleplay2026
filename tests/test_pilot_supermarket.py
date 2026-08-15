@@ -32,6 +32,13 @@ def test_classifica_respostas_minimas_e_debochadas() -> None:
     assert classify_user_message("Estou bem, foi só um susto") == "engaged"
 
 
+def test_comando_contextualizado_nao_e_reduzido_a_marcador_displicente() -> None:
+    assert classify_user_message("Vai... tira meu calção...") == "engaged"
+    assert classify_user_message("Continua chupando assim") == "engaged"
+    assert classify_user_message("vai") == "dismissive"
+    assert classify_user_message("continua") == "dismissive"
+
+
 def test_abertura_usa_pensamento_e_fala_sem_narrar_acao() -> None:
     opening = opening_text(script())
 

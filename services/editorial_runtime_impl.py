@@ -135,9 +135,10 @@ def classify_user_message(text: str) -> Engagement:
         return "hostile"
     if any(marker in value for marker in _MOCKING_MARKERS):
         return "mocking"
-    if value in _DISMISSIVE or (
-        len(value.split()) <= 3 and any(value.startswith(marker) for marker in _DISMISSIVE)
-    ):
+    # Marcadores displicentes só valem como enunciado completo. Usar
+    # ``startswith`` confundia comandos contextualizados (por exemplo,
+    # "Vai... tira meu calção") com uma ordem para o app apenas continuar.
+    if value in _DISMISSIVE:
         return "dismissive"
     if value in _MINIMAL or (len(value.split()) == 1 and len(value) <= 5):
         return "minimal"
