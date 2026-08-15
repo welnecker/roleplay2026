@@ -28,6 +28,8 @@ def message_allows_beat_image(message: Mapping[str, object]) -> bool:
 
     if bool(message.get("automatic_bridge", False)):
         return False
+    if bool(message.get("decision_message", False)):
+        return False
     if str(message.get("editorial_engagement", "")).strip() == "automatic_bridge":
         return False
 

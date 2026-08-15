@@ -26,6 +26,11 @@ class PilotState:
     finished: bool = False
     run_status: str = "active"
     ending_code: str = ""
+    decision_id: str = ""
+    decision_beat_id: str = ""
+    decision_attempts: int = 0
+    decision_status: str = ""
+    input_source: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -47,6 +52,11 @@ class PilotState:
             finished=bool(raw.get("finished", False)),
             run_status=str(raw.get("run_status", "active") or "active"),
             ending_code=str(raw.get("ending_code", "") or ""),
+            decision_id=str(raw.get("decision_id", "") or ""),
+            decision_beat_id=str(raw.get("decision_beat_id", "") or ""),
+            decision_attempts=int(raw.get("decision_attempts", 0) or 0),
+            decision_status=str(raw.get("decision_status", "") or ""),
+            input_source=str(raw.get("input_source", "") or ""),
         )
 
 

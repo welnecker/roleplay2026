@@ -19,6 +19,11 @@ from services.editorial_diagnostics import (
     log_editorial_exception,
     log_editorial_turn,
 )
+from services.editorial_decision_gate import (
+    activate_decision_for_beat,
+    evaluate_pending_decision,
+    pending_decision_gate,
+)
 from services.editorial_metadata import (
     build_editorial_bridge_metadata,
     build_editorial_metadata,
@@ -117,6 +122,7 @@ CHARACTER_NAME = (
 )
 CHARACTER_ID = CHARACTER_NAME.strip().casefold().replace(" ", "_") or "character"
 END_CONFIRMATION_KEY = f"confirm_end:{PACKAGE_ID}"
+DECISION_FREE_INPUT_KEY = f"decision_free_input:{PACKAGE_ID}"
 
 st.set_page_config(page_title=PACKAGE_TITLE, page_icon="📖", layout="centered")
 st.markdown(CARD_CSS, unsafe_allow_html=True)
@@ -451,6 +457,10 @@ if not messages:
         script.first_beat_id if scene_opening else ""
     )
     opening_editorial_state.facts["_runtime_phase"] = "canonical"
+    if not scene_opening:
+        opening_editorial_state = activate_decision_for_beat(
+            script, opening_editorial_state, script.first_beat_id
+        )
     opening_metadata = build_editorial_metadata(
         node_id="" if scene_opening else script.first_beat_id,
         engagement="scene_opening" if scene_opening else "opening",
@@ -550,9 +560,98 @@ else:
         user.user_id,
         ordered_beat_ids=tuple(script.beats),
     )
-user_text = st.chat_input("Responda")
+input_source = "typed"
+decision_gate = pending_decision_gate(script, editorial_state)
+user_text = ""
+if decision_gate is not None:
+    free_input = bool(st.session_state.get(DECISION_FREE_INPUT_KEY, False))
+    if free_input:
+        st.warning(str(decision_gate.get("try_your_luck", "") or ""))
+        user_text = st.chat_input("Escreva sua resposta") or ""
+    else:
+        st.info(str(decision_gate.get("suggested_response", "") or ""))
+        proceed_column, luck_column = st.columns(2)
+        with proceed_column:
+            if st.button("Prossiga", type="primary", use_container_width=True):
+                user_text = str(decision_gate["suggested_response"])
+                input_source = "suggested_response"
+        with luck_column:
+            if st.button("Tentar a sorte", use_container_width=True):
+                st.session_state[DECISION_FREE_INPUT_KEY] = True
+                st.rerun()
+else:
+    st.session_state.pop(DECISION_FREE_INPUT_KEY, None)
+    user_text = st.chat_input("Responda") or ""
 if not user_text:
     st.stop()
+
+if decision_gate is not None:
+    def _decision_classifier(system_prompt: str, request: str) -> str:
+        try:
+            return generate_response(
+                api_key=api_key,
+                model=model,
+                system_prompt=system_prompt,
+                history=[],
+                user_text=request,
+            )
+        except OpenRouterError:
+            st.error(OPERATIONAL_GENERATION_ERROR)
+            st.stop()
+            return '{"result":"not_accepted"}'
+
+    editorial_state, decision_outcome = evaluate_pending_decision(
+        script,
+        editorial_state,
+        user_text,
+        classifier=_decision_classifier,
+        input_source=input_source,
+    )
+    if decision_outcome.result in {"warning", "terminated"}:
+        fixed_story_state = advance_story_state(
+            story_state, finished=decision_outcome.result == "terminated"
+        )
+        fixed_metadata = build_editorial_metadata(
+            node_id=editorial_state.node_id,
+            engagement="decision_gate",
+            state=editorial_state.to_dict(),
+            finished=editorial_state.finished,
+            run_status=editorial_state.run_status,
+            ending_code=editorial_state.ending_code,
+        )
+        fixed_metadata.update(
+            {
+                "character_id": CHARACTER_ID,
+                "editorial_block": str(
+                    (script.beats.get(editorial_state.node_id) or {}).get("block_id", "")
+                ),
+                "decision_message": True,
+                "input_source": input_source,
+            }
+        )
+        repository = runtime_repository()
+        if repository is None:
+            st.error("Google Sheets ficou indisponível durante a decisão.")
+            st.stop()
+        context = persist_turn(
+            repository,
+            context=context,
+            user=user,
+            state=fixed_story_state,
+            user_text=user_text,
+            assistant_text=decision_outcome.response,
+            assistant_metadata=fixed_metadata,
+            input_source=input_source,
+        )
+        messages.extend(
+            [
+                {"role": "user", "content": user_text, "input_source": input_source},
+                {"role": "assistant", "content": decision_outcome.response, **fixed_metadata},
+            ]
+        )
+        st.session_state.pop(DECISION_FREE_INPUT_KEY, None)
+        save_session(user, context, fixed_story_state, messages, editorial_state)
+        st.rerun()
 
 history = [
     {"role": str(item.get("role", "assistant")), "content": str(item.get("content", ""))}
@@ -692,6 +791,10 @@ if not assistant_text:
 committed = commit_editorial_turn(pending, assistant_text)
 turn = committed.turn
 final_editorial_state = committed.state
+final_editorial_state.input_source = input_source
+final_editorial_state = activate_decision_for_beat(
+    script, final_editorial_state, turn.target_id
+)
 
 diagnostics = build_editorial_turn_diagnostics(
     user_text=user_text,
@@ -743,9 +846,10 @@ try:
         user_text=user_text,
         assistant_text=assistant_text,
         assistant_metadata=metadata,
+        input_source=input_source,
     )
 
-    messages.append({"role": "user", "content": user_text})
+    messages.append({"role": "user", "content": user_text, "input_source": input_source})
     messages.append({"role": "assistant", "content": assistant_text, **metadata})
 
     is_organic_interstitial = final_editorial_state.facts.get("_organic_interstitial") == "true"

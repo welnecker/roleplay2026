@@ -270,6 +270,7 @@ def persist_turn(
     assistant_text: str,
     assistant_metadata: dict[str, object],
     sequence_start: int | None = None,
+    input_source: str = "typed",
 ) -> RuntimePersistenceContext:
     del sequence_start
     run, session = _ensure_run_and_session(repository, context=context, user=user)
@@ -291,6 +292,7 @@ def persist_turn(
         sequence=persisted_sequence,
         block_id=block_id,
         beat_id=beat_id,
+        metadata={"input_source": str(input_source or "typed")},
     )
     repository.append_interaction(
         run_id=run.run_id,
