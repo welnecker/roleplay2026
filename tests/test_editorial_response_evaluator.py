@@ -355,6 +355,8 @@ def test_contexto_declara_fala_comum_como_adaptavel() -> None:
 
     assert "Fala autoral adaptável" in rendered
     assert "reaja brevemente" in rendered
+    assert "confirmação simples de continuidade não exige frase introdutória" in rendered
+    assert "a própria execução do movimento e da fala autoral já constitui reação suficiente" in rendered
     assert "Resultados obrigatórios nesta resposta" in rendered
     assert "perguntas ou pedidos que não estejam escritos na referência" in rendered
     assert "não impede reagir ao usuário" in rendered
@@ -383,6 +385,8 @@ def test_prompt_semantico_declara_contrato_integral_do_beat() -> None:
     assert "metáfora, flerte, humor, duplo sentido" in prompt
     assert "invented_unconfirmed_detail é informativa" in prompt
     assert "Limites de frases e perguntas são orientação de estilo" in prompt
+    assert "Confirmação simples de continuidade, autorização ou sustentação da ação" in prompt
+    assert "nunca deve ser failed_required_outcome apenas por não acrescentar outra frase" in prompt
     assert "um único objeto JSON" in prompt
 
 

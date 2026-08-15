@@ -192,7 +192,7 @@ def build_beat_context(
             dict.fromkeys(
                 (
                     *required_outcomes,
-                    "reagir brevemente ao sentido do conteúdo mais recente do usuário antes ou junto da fala autoral adaptada",
+                    "quando a mensagem trouxer pergunta, informação, correção, condição, pedido adicional ou provocação pertinente, reagir brevemente antes ou junto da fala autoral adaptada; confirmação simples de continuidade não exige frase introdutória",
                     "preservar reconhecivelmente a fala autoral e completar todas as finalidades pendentes do movimento obrigatório",
                 )
             )
@@ -326,8 +326,10 @@ def render_beat_context(context: BeatContext) -> str:
             (
                 "- Fala autoral adaptável: preserve de forma reconhecível o sentido, o vocabulário "
                 "central e o tom da referência semântica; não precisa reproduzi-la literalmente.",
-                "- Antes ou junto da fala autoral, reaja brevemente ao conteúdo mais recente do "
-                "usuário quando houver algo pertinente a responder.",
+                "- Antes ou junto da fala autoral, reaja brevemente quando a mensagem trouxer "
+                "pergunta, informação, correção, condição, pedido adicional ou provocação pertinente. "
+                "Se o usuário apenas confirmar ou sustentar a continuidade, a própria execução do "
+                "movimento e da fala autoral já constitui reação suficiente.",
                 "- Complete na mesma resposta todas as finalidades ainda pendentes do movimento "
                 "obrigatório, inclusive perguntas ou pedidos que não estejam escritos na referência.",
                 "- A adaptação não pode abrir assunto independente, antecipar outro beat nem "
