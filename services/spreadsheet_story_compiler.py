@@ -62,6 +62,11 @@ def _marker(value: Any) -> tuple[str, str, str]:
     if kind == "PATIO" and _plain(argument).startswith("final"):
         kind = "PATIO_FINAL"
         argument = argument[5:].strip()
+    elif kind == "PATIO" and _plain(argument).startswith("decisao"):
+        kind = "PATIO_DECISAO"
+        argument = argument[len(argument.split(maxsplit=1)[0]):].strip()
+    elif kind == "INTERPRETAR":
+        kind = "FALA_INTERPRETADA"
     return kind, argument, text
 
 
@@ -115,6 +120,8 @@ def compile_spreadsheet_story(
     has_intimate_exact = False
     endings: list[dict[str, Any]] = []
     seen_line_ids: set[str] = set()
+    seen_decision_ids: set[str] = set()
+    seen_ending_codes: set[str] = set()
 
     def ensure_block() -> dict[str, Any]:
         nonlocal current_block
@@ -148,6 +155,22 @@ def compile_spreadsheet_story(
         speech_interpreted = bool(current_beat.pop("_speech_interpreted", False))
         has_intimate_exact = has_intimate_exact or speech_intimate
         authored_bridges = list(current_beat.pop("_authored_bridges", []) or [])
+        decision_gate = current_beat.pop("_decision_gate", None)
+        if decision_gate is not None:
+            missing = [
+                name
+                for name in (
+                    "acceptance", "suggested_response", "try_your_luck",
+                    "warning", "ending_text",
+                )
+                if not str(decision_gate.get(name, "") or "").strip()
+            ]
+            if missing:
+                raise SpreadsheetStoryError(
+                    f"PÁTIO DECISÃO {decision_gate['decision_id']!r} incompleto: "
+                    + ", ".join(missing)
+                )
+            current_beat["decision_gate"] = decision_gate
         visible: list[str] = []
         if transition:
             visible.append(f"[{transition.upper()}]")
@@ -306,11 +329,65 @@ def compile_spreadsheet_story(
                 "_thought_interpreted": False,
                 "_speech_interpreted": False,
                 "_authored_bridges": [],
+                "_decision_gate": None,
             }
             pending_transition = ""
             block["beats"].append(current_beat)
             if not block["entry_beat_id"]:
                 block["entry_beat_id"] = line_id
+            continue
+
+        if kind == "PATIO_DECISAO":
+            if current_beat is None:
+                raise SpreadsheetStoryError(f"{line_id}: PÁTIO DECISÃO sem [BEAT] anterior.")
+            decision_id = argument.strip()
+            if not decision_id:
+                raise SpreadsheetStoryError(f"{line_id}: [PÁTIO DECISÃO] exige id.")
+            if current_beat.get("_decision_gate") is not None:
+                raise SpreadsheetStoryError(
+                    f"{line_id}: um beat não pode possuir dois pátios decisórios."
+                )
+            if decision_id in seen_decision_ids:
+                raise SpreadsheetStoryError(f"decision_id duplicado: {decision_id!r}")
+            seen_decision_ids.add(decision_id)
+            current_beat["_decision_gate"] = {
+                "decision_id": decision_id,
+                "acceptance": "",
+                "suggested_response": "",
+                "try_your_luck": "",
+                "warning": "",
+                "ending_code": "",
+                "ending_text": "",
+                "max_attempts": 2,
+            }
+            continue
+
+        if kind in {"ACEITE", "PROSSEGUIR", "TENTAR", "AVISO", "ENCERRAMENTO"}:
+            if current_beat is None or current_beat.get("_decision_gate") is None:
+                raise SpreadsheetStoryError(
+                    f"{line_id}: {kind} só pode existir dentro de [PÁTIO DECISÃO]."
+                )
+            gate = current_beat["_decision_gate"]
+            field = {
+                "ACEITE": "acceptance",
+                "PROSSEGUIR": "suggested_response",
+                "TENTAR": "try_your_luck",
+                "AVISO": "warning",
+                "ENCERRAMENTO": "ending_text",
+            }[kind]
+            if str(gate.get(field, "") or "").strip():
+                raise SpreadsheetStoryError(
+                    f"{line_id}: componente {kind} duplicado no pátio {gate['decision_id']!r}."
+                )
+            gate[field] = text
+            if kind == "ENCERRAMENTO":
+                ending_code = argument.strip()
+                if not ending_code:
+                    raise SpreadsheetStoryError(f"{line_id}: [ENCERRAMENTO] exige código.")
+                if ending_code in seen_ending_codes:
+                    raise SpreadsheetStoryError(f"código de encerramento duplicado: {ending_code!r}")
+                seen_ending_codes.add(ending_code)
+                gate["ending_code"] = ending_code
             continue
 
         if kind in {"PENSAMENTO", "PENSAMENTO_INTERPRETADO", "FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_EXATA_INTIMA", "FALA_LIVRE", "PONTE"}:

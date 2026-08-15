@@ -23,7 +23,8 @@ _TAG_PATTERN = re.compile(
     r"(?ms)^[ \t]*\[([^\]\n]+)\][ \t]*(.*?)(?=^[ \t]*\[[^\]\n]+\]|\Z)"
 )
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
-_DEPENDENT_KINDS = {"PENSAMENTO", "PENSAMENTO_INTERPRETADO", "FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_LIVRE", "PONTE"}
+_DEPENDENT_KINDS = {"PENSAMENTO", "PENSAMENTO_INTERPRETADO", "FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_EXATA_INTIMA", "FALA_LIVRE", "PONTE"}
+_DECISION_COMPONENTS = {"ACEITE", "PROSSEGUIR", "TENTAR", "AVISO", "ENCERRAMENTO"}
 _PROFILE_TAGS = {
     "HOMEM", "MULHER", "NEUTRO", "NEUTRA", "CORPO_MASCULINO",
     "CORPO_FEMININO", "CORPO_INTERSEXO",
@@ -89,7 +90,12 @@ def parse_instruction(header: str, text: str) -> ParsedInstruction:
     if first == "FALA":
         normalized_argument = _plain(argument).casefold()
         if normalized_argument == "exata" or normalized_argument.startswith("exata "):
-            kind = "FALA_EXATA"
+            kind = (
+                "FALA_EXATA_INTIMA"
+                if normalized_argument == "exata intima"
+                or normalized_argument.startswith("exata intima ")
+                else "FALA_EXATA"
+            )
         elif normalized_argument == "livre" or normalized_argument.startswith("livre "):
             kind = "FALA_LIVRE"
         elif (normalized_argument.split(maxsplit=1)[0] if normalized_argument else "") in {"interpretada", "interpretado", "interpretativa", "interpretativo"}:
@@ -99,11 +105,17 @@ def parse_instruction(header: str, text: str) -> ParsedInstruction:
         if (normalized_argument.split(maxsplit=1)[0] if normalized_argument else "") in {"interpretado", "interpretada", "interpretativo", "interpretativa"}:
             kind = "PENSAMENTO_INTERPRETADO"
     elif first == "PATIO":
-        if not _plain(argument).casefold().startswith("final"):
+        normalized_argument = _plain(argument).casefold()
+        if normalized_argument.startswith("decisao"):
+            kind = "PATIO_DECISAO"
+        elif normalized_argument.startswith("final"):
+            kind = "PATIO_FINAL"
+        else:
             raise ScriptAuthoringError(
-                f"Tag não reconhecida: [{raw_header}]. Use [PÁTIO FINAL id]."
+                f"Tag não reconhecida: [{raw_header}]."
             )
-        kind = "PATIO_FINAL"
+    elif first == "INTERPRETAR":
+        kind = "FALA_INTERPRETADA"
     elif first == "TRANSICAO":
         kind = "TRANSICAO"
 
@@ -115,10 +127,17 @@ def parse_instruction(header: str, text: str) -> ParsedInstruction:
         "FALA",
         "FALA_INTERPRETADA",
         "FALA_EXATA",
+        "FALA_EXATA_INTIMA",
         "FALA_LIVRE",
         "PONTE",
         "TRANSICAO",
         "PATIO_FINAL",
+        "PATIO_DECISAO",
+        "ACEITE",
+        "PROSSEGUIR",
+        "TENTAR",
+        "AVISO",
+        "ENCERRAMENTO",
         "FIM",
     }
     if kind not in allowed:
@@ -171,9 +190,26 @@ def _validate_sequence(items: Iterable[ParsedInstruction]) -> list[str]:
     yard_beat_count = 0
     in_final_yard = False
     has_ending = False
+    decision_open = False
+    decision_components: set[str] = set()
+    decision_ids: set[str] = set()
+    ending_codes: set[str] = set()
+
+    def close_decision() -> None:
+        nonlocal decision_open, decision_components
+        if not decision_open:
+            return
+        missing = _DECISION_COMPONENTS - decision_components
+        if missing:
+            errors.append(
+                "Pátio decisório incompleto: " + ", ".join(sorted(missing))
+            )
+        decision_open = False
+        decision_components = set()
 
     for index, item in enumerate(materialized, start=1):
         if item.kind == "BEAT":
+            close_decision()
             beat_count += 1
             current_beat = f"beat_{beat_count}"
             if in_final_yard:
@@ -181,11 +217,43 @@ def _validate_sequence(items: Iterable[ParsedInstruction]) -> list[str]:
         elif item.kind in _DEPENDENT_KINDS and not current_beat:
             errors.append(f"Linha autoral {index}: [{item.header}] precisa de [BEAT] anterior.")
         elif item.kind == "PATIO_FINAL":
+            close_decision()
             current_beat = ""
             in_final_yard = True
         elif item.kind == "CENA":
+            close_decision()
             current_beat = ""
+        elif item.kind == "TRANSICAO":
+            close_decision()
+            current_beat = ""
+        elif item.kind == "PATIO_DECISAO":
+            if not current_beat:
+                errors.append(f"Linha autoral {index}: [PÁTIO DECISÃO] precisa de [BEAT] anterior.")
+            if decision_open:
+                errors.append(f"Linha autoral {index}: um beat não pode possuir dois pátios decisórios.")
+            decision_id = " ".join(item.argument.split()[1:]).strip()
+            if not decision_id:
+                errors.append(f"Linha autoral {index}: [PÁTIO DECISÃO] exige id.")
+            elif decision_id in decision_ids:
+                errors.append(f"Linha autoral {index}: decision_id duplicado: {decision_id}.")
+            decision_ids.add(decision_id)
+            decision_open = True
+            decision_components = set()
+        elif item.kind in _DECISION_COMPONENTS:
+            if not decision_open:
+                errors.append(f"Linha autoral {index}: [{item.header}] exige [PÁTIO DECISÃO] anterior.")
+            elif item.kind in decision_components:
+                errors.append(f"Linha autoral {index}: [{item.header}] duplicado no pátio.")
+            decision_components.add(item.kind)
+            if item.kind == "ENCERRAMENTO":
+                code = item.argument.strip()
+                if not code:
+                    errors.append(f"Linha autoral {index}: [ENCERRAMENTO] exige código.")
+                elif code in ending_codes:
+                    errors.append(f"Linha autoral {index}: código duplicado: {code}.")
+                ending_codes.add(code)
         elif item.kind == "FIM":
+            close_decision()
             has_ending = True
 
         if item.kind in {"BEAT", "PONTE", "PATIO_FINAL"}:
@@ -194,6 +262,7 @@ def _validate_sequence(items: Iterable[ParsedInstruction]) -> list[str]:
                     f"Linha autoral {index}: [{item.header}] deve ser escrita em primeira pessoa."
                 )
 
+    close_decision()
     if beat_count == 0:
         errors.append("O roteiro precisa ter ao menos um [BEAT].")
     if not has_ending:
@@ -266,7 +335,7 @@ def compile_draft_rows(
             suffix = _profile_suffix(item)
             base = f"{current_beat}_pensamento"
             line_id = _unique_line_id(f"{base}_{suffix}" if suffix else base, used)
-        elif item.kind in {"FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_LIVRE"}:
+        elif item.kind in {"FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_EXATA_INTIMA", "FALA_LIVRE"}:
             suffix = _profile_suffix(item)
             base = f"{current_beat}_fala"
             line_id = _unique_line_id(f"{base}_{suffix}" if suffix else base, used)

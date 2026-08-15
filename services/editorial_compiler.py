@@ -226,6 +226,7 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "exact_speech": str(source.get("exact_speech", "") or ""),
                     "has_authored_bridge": bool(source.get("has_authored_bridge", False)),
                     "authored_bridges": deepcopy(source.get("authored_bridges") or []),
+                    "decision_gate": deepcopy(source.get("decision_gate") or {}),
                     "block_id": block_id,
                     "block_type": block_type,
                     "position_in_block": position,
