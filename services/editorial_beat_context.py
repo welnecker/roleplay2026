@@ -187,6 +187,14 @@ def build_beat_context(
     exact_speech = str(target.get("exact_speech", "") or "").strip()
     free_speech = bool(target.get("free_speech", False))
     required_outcomes = effect.required_outcomes
+    required_outcomes = tuple(
+        dict.fromkeys(
+            (
+                *required_outcomes,
+                "reagir brevemente ao sentido do conteúdo mais recente do usuário sem abandonar o contrato do beat atual",
+            )
+        )
+    )
     if canonical_line and not exact_speech and not free_speech:
         required_outcomes = tuple(
             dict.fromkeys(
@@ -328,6 +336,7 @@ def render_beat_context(context: BeatContext) -> str:
                 "central e o tom da referência semântica; não precisa reproduzi-la literalmente.",
                 "- Antes ou junto da fala autoral, reaja brevemente quando a mensagem trouxer "
                 "pergunta, informação, correção, condição, pedido adicional ou provocação pertinente. "
+                "Uma confirmação simples de continuidade não exige frase introdutória: "
                 "Se o usuário apenas confirmar ou sustentar a continuidade, a própria execução do "
                 "movimento e da fala autoral já constitui reação suficiente.",
                 "- Complete na mesma resposta todas as finalidades ainda pendentes do movimento "

@@ -156,7 +156,7 @@ def _recover_unqualified_ending(
     """Reavalia somente endings contraditos por sinais explícitos de continuidade."""
 
     policy = _runtime_policy(script).get("qualified_endings") or {}
-    if not isinstance(policy, dict) or not policy or not turn.finished:
+    if not isinstance(policy, dict) or not policy:
         return turn
 
     protected_codes = {
@@ -183,7 +183,7 @@ def _recover_unqualified_ending(
     facts = previous_state.facts
     intent = str(facts.get("_last_user_intent", "") or "").strip()
     route = str(facts.get("_contextual_route", "") or "").strip()
-    if protected_codes and turn.ending_code not in protected_codes:
+    if turn.finished and protected_codes and turn.ending_code not in protected_codes:
         return turn
     if ambiguous and turn.engagement not in ambiguous:
         return turn
@@ -191,6 +191,13 @@ def _recover_unqualified_ending(
         return turn
     if continue_routes and route not in continue_routes:
         return turn
+
+    if not turn.finished:
+        if not any(item in ambiguous for item in previous_state.recent_engagement):
+            return turn
+        recovered_state = EditorialState.from_dict(turn.state.to_dict())
+        recovered_state.facts["_qualified_ending_recovered"] = "true"
+        return replace(turn, state=recovered_state)
 
     retry_state = EditorialState.from_dict(previous_state.to_dict())
     retry_state.recent_engagement = [
@@ -209,6 +216,26 @@ def _recover_unqualified_ending(
 
 def _finalize(script: EditorialScript, turn: EditorialTurn, *, organic: bool = False) -> EditorialTurn:
     updated = EditorialState.from_dict(turn.state.to_dict())
+    qualified = _runtime_policy(script).get("qualified_endings") or {}
+    if isinstance(qualified, dict) and not turn.finished:
+        ambiguous = {
+            str(item).strip()
+            for item in qualified.get("ambiguous_engagements", []) or []
+        }
+        continue_intents = {
+            str(item).strip()
+            for item in qualified.get("continuation_intents", []) or []
+        }
+        continue_routes = {
+            str(item).strip()
+            for item in qualified.get("continuation_routes", []) or []
+        }
+        if (
+            any(item in ambiguous for item in updated.recent_engagement)
+            and (not continue_intents or updated.facts.get("_last_user_intent") in continue_intents)
+            and (not continue_routes or updated.facts.get("_contextual_route") in continue_routes)
+        ):
+            updated.facts["_qualified_ending_recovered"] = "true"
     if bridge_policy(script):
         updated.facts.pop("_organic_interstitial", None)
         updated.interstitial_turns = 0
