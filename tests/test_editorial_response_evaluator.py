@@ -452,3 +452,25 @@ def test_regeneracao_recebe_motivos_objetivos() -> None:
     assert "anticipated_future_beat" in prompt
     assert "não acrescente fatos" in prompt
     assert "Preserve metáforas, flerte, humor, duplo sentido" in prompt
+
+
+def test_regeneracao_identifica_e_remove_trecho_semantico_rejeitado() -> None:
+    candidate = (
+        "Pois é, eu estava me sentindo sufocada com o ciúme dele. "
+        "Você acredita que ele implicava com tudo?"
+    )
+    parse_semantic_evaluation(
+        '{"valid": false, "violations": [{"code": "anticipated_future_beat", '
+        '"evidence": "Você acredita que ele implicava com tudo?"}]}',
+        candidate=candidate,
+    )
+
+    prompt = build_regeneration_prompt(
+        base_prompt="Contrato base.",
+        violations=("anticipated_future_beat",),
+        rejected_candidate=candidate,
+    )
+
+    assert "TRECHOS EXATOS REJEITADOS" in prompt
+    assert "- Você acredita que ele implicava com tudo?" in prompt
+    assert "remova-os integralmente e não os reformule" in prompt
