@@ -123,11 +123,13 @@ def decide_editorial_turn(
                 user_text=user_text,
                 history=history,
             )
-            if automatic_gate_enabled(script):
-                reconciliation = preserve_character_owned_target_beats(
-                    reconciliation,
-                    steps,
-                )
+            # Um beat alvo ainda não executado pertence à personagem. Mesmo que a
+            # mensagem do usuário seja semanticamente parecida com seu objetivo,
+            # ela não pode consumir a fala ou o movimento autoral reservado.
+            reconciliation = preserve_character_owned_target_beats(
+                reconciliation,
+                steps,
+            )
             if intimate_corresponds:
                 reconciliation = confirm_active_intimate_step(
                     reconciliation,
