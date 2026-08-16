@@ -19,6 +19,10 @@ _LAST_EVALUATION_CONTEXT: ContextVar[BeatContext | None] = ContextVar(
     "editorial_last_evaluation_context",
     default=None,
 )
+_LAST_REJECTED_EVIDENCE: ContextVar[tuple[str, ...]] = ContextVar(
+    "editorial_last_rejected_evidence",
+    default=(),
+)
 _TECHNICAL_MARKERS = (
     "<end_run",
     "end_run",
@@ -366,6 +370,7 @@ def parse_semantic_evaluation(
         return result
 
     violations: list[str] = []
+    rejected_evidence: list[str] = []
     discarded: list[dict[str, str]] = []
     for item in raw_violations:
         if isinstance(item, dict):
@@ -390,8 +395,11 @@ def parse_semantic_evaluation(
             discarded.append({"code": code, "reason": "non_blocking_or_incompatible_with_context"})
             continue
         violations.append(code)
+        if evidence:
+            rejected_evidence.append(evidence)
 
     unique = tuple(dict.fromkeys(violations))
+    _LAST_REJECTED_EVIDENCE.set(tuple(dict.fromkeys(rejected_evidence)))
     declared_valid = payload["valid"] is True
     if declared_valid and unique:
         result = ResponseEvaluation(False, unique)
@@ -478,6 +486,7 @@ def build_regeneration_prompt(
     reasons = "\n".join(f"- {item}" for item in unique) or "- resposta_rejeitada"
     instructions = "\n".join(f"- {item}" for item in guidance)
     rejected = str(rejected_candidate or _LAST_EVALUATED_CANDIDATE.get() or "").strip()
+    rejected_evidence = _LAST_REJECTED_EVIDENCE.get()
     rejected_block = (
         "\nRESPOSTA REJEITADA — use apenas para identificar e remover os erros; não a parafraseie:\n"
         f"{rejected}\n"
@@ -485,6 +494,14 @@ def build_regeneration_prompt(
         else ""
     )
     _LAST_EVALUATED_CANDIDATE.set("")
+    _LAST_REJECTED_EVIDENCE.set(())
+    evidence_block = (
+        "\nTRECHOS EXATOS REJEITADOS — remova-os integralmente e não os reformule:\n"
+        + "\n".join(f"- {item}" for item in rejected_evidence)
+        + "\n"
+        if rejected_evidence
+        else ""
+    )
     return (
         f"{str(base_prompt or '').strip()}\n\n"
         "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
@@ -495,6 +512,7 @@ def build_regeneration_prompt(
         "Quando faltar um fato necessário, formule de modo neutro em vez de completar a lacuna.\n"
         "Não comente a avaliação e não repita nenhum detalhe realmente rejeitado.\n"
         f"{rejected_block}"
+        f"{evidence_block}"
         "MOTIVOS OBJETIVOS DA REJEIÇÃO:\n"
         f"{reasons}\n"
         "INSTRUÇÕES DE CORREÇÃO:\n"
