@@ -67,6 +67,15 @@ def test_prompt_declara_novela_continua_sem_confirmacao() -> None:
     assert "João" in prompt
 
 
+def test_prompt_proibe_perguntas_que_travam_o_avanco() -> None:
+    movement = movement_from_script(_script(), "m1")
+    prompt = build_novel_prompt(character_name="Camilly", user_name="João", movement=movement)
+    assert "Nunca termine a saída com pergunta" in prompt
+    assert "o próximo movimento poderá assumir que isso aconteceu" in prompt
+    assert "o que você acha?" in prompt
+    assert "Pronto, agora que você parou" in prompt
+
+
 def test_encerramento_antigo_vira_sentido_dramatico_nao_fala_obrigatoria() -> None:
     movement = movement_from_script(_script(), "fim")
     assert movement.is_ending is True
