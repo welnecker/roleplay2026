@@ -10,6 +10,7 @@ class NovelMovement:
     block_id: str
     instruction: str
     dramatic_direction: str = ""
+    authorial_impulse: str = ""
     is_ending: bool = False
 
 
@@ -35,6 +36,14 @@ def next_movement_id(script: Any, current_id: str) -> str:
     return target
 
 
+def _unit_kind(unit: dict[str, object]) -> str:
+    return str(unit.get("kind", "") or "").strip().casefold()
+
+
+def _is_private_impulse_kind(kind: str) -> bool:
+    return any(token in kind for token in ("thought", "pensamento", "impulse", "impulso", "motivation", "motivacao"))
+
+
 def movement_from_script(script: Any, movement_id: str) -> NovelMovement:
     movement_id = str(movement_id or "").strip()
     endings = getattr(script, "endings", {})
@@ -56,6 +65,7 @@ def movement_from_script(script: Any, movement_id: str) -> NovelMovement:
             block_id=str(ending.get("block_id", "") or ""),
             instruction=instruction,
             dramatic_direction="Feche naturalmente a conversa, sem narração externa.",
+            authorial_impulse="Quero encerrar este momento de forma coerente com tudo o que aconteceu.",
             is_ending=True,
         )
 
@@ -65,21 +75,34 @@ def movement_from_script(script: Any, movement_id: str) -> NovelMovement:
 
     objective = str(beat.get("objective", "") or "").strip()
     directions: list[str] = []
+    impulses: list[str] = []
     for unit in beat.get("units", []) or []:
         if not isinstance(unit, dict):
             continue
         instruction = str(unit.get("instruction", "") or "").strip()
-        if instruction:
+        if not instruction:
+            continue
+        if _is_private_impulse_kind(_unit_kind(unit)):
+            impulses.append(instruction)
+        else:
             directions.append(instruction)
 
     if not objective:
         objective = "Faça a história avançar pelo acontecimento previsto neste ponto do roteiro."
+
+    authorial_impulse = " ".join(dict.fromkeys(impulses)).strip()
+    if not authorial_impulse:
+        authorial_impulse = (
+            "Quero fazer este acontecimento avançar de um jeito que pareça consequência natural "
+            "do que eu já vinha querendo e fazendo."
+        )
 
     return NovelMovement(
         movement_id=movement_id,
         block_id=str(beat.get("block_id", "") or ""),
         instruction=objective,
         dramatic_direction=" ".join(dict.fromkeys(directions)),
+        authorial_impulse=authorial_impulse,
         is_ending=False,
     )
 
@@ -103,11 +126,21 @@ def build_novel_prompt(
 Você interpreta {character_name}. O protagonista com quem você fala é {protagonist}.
 O roteiro controla O QUE acontece. Você acrescenta somente o próximo avanço necessário à conversa já em andamento.
 
-MOVIMENTO ATUAL — cumpra o novo acontecimento deste ponto:
+MOVIMENTO ATUAL — novo acontecimento deste ponto:
 {movement.instruction}
+
+IMPULSO AUTORAL — desejo ou motivação que deve dar sentido humano ao movimento:
+{movement.authorial_impulse}
 
 DIREÇÃO DE INTERPRETAÇÃO:
 {direction}
+
+CONSCIÊNCIA PRIVADA — FAÇA ANTES DE ESCREVER, MAS NÃO MOSTRE:
+- Leia as falas recentes como memória viva da personagem, não como exemplos independentes.
+- Formule silenciosamente um único pensamento curto em primeira pessoa respondendo: "O que eu quero agora, por que quero isso e como isso nasce naturalmente do que acabou de acontecer?"
+- Esse pensamento deve combinar histórico + impulso autoral + movimento atual. Ele é a causa da fala seguinte.
+- Pense em intenção, não em resumo. Exemplo de forma mental: "Preciso de uma carona e quero aproveitar essa coincidência para ficar mais perto dele."
+- Nunca imprima, rotule ou revele esse pensamento. Mostre apenas a fala que ele naturalmente produziria.
 
 CONTINUIDADE É PRIORIDADE:
 - Trate tudo o que já apareceu no histórico como fato consumado. Não reabra, reexplique nem resuma beats anteriores.
@@ -116,7 +149,7 @@ CONTINUIDADE É PRIORIDADE:
 - Não repita motivos, justificativas, emoções ou informações já ditas apenas para dar corpo à resposta.
 - Se o movimento pressupõe uma ação do protagonista produzida pelo avanço anterior, considere essa ação já ocorrida e prossiga naturalmente.
 - Não invente uma fala intermediária do protagonista para justificar o movimento. Não escreva frases como "já que você perguntou", "agora que você disse" ou "fico feliz que você falou" quando isso não apareceu no histórico.
-- Evite conectores de recapitulação como "agora que", "já que", "como eu disse", "pois é" e "sabe" quando servirem apenas para reintroduzir contexto já estabelecido.
+- Evite conectores de recapitulação como "agora que", "já que", "como eu disse", "pois é" e "sabe" quando servirem apenas para reintroduzir contexto já estabelecido.
 
 FORMATO OBRIGATÓRIO DA SAÍDA:
 - Entregue somente a fala de {character_name}, em primeira pessoa, falando diretamente com {protagonist}.
@@ -132,7 +165,8 @@ FORMATO OBRIGATÓRIO DA SAÍDA:
 - Use linguagem oral brasileira, humana e espontânea. Evite frases solenes, explicativas ou de resumo.
 - Seja econômico: normalmente 1 ou 2 frases curtas; use uma terceira apenas se trouxer informação nova indispensável ao movimento.
 - Cada frase precisa acrescentar algo novo. Corte redundâncias, reforços, sinônimos em série e paráfrases do que acabou de ser dito.
-- Não transforme uma intenção simples em discurso. Se o beat cabe em uma frase, responda em uma frase.
+- Não transforme uma intenção simples em discurso. Se o movimento cabe em uma frase, responda em uma frase.
+- A fala deve soar como consequência do pensamento privado, não como tradução mecânica do texto do movimento.
 - Entregue apenas o texto falado, sem prefixo de personagem ou explicações externas.
 """.strip()
 
