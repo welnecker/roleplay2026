@@ -47,12 +47,15 @@ def movement_from_script(script: Any, movement_id: str) -> NovelMovement:
             "Entregue uma conclusão natural e emocionalmente satisfatória."
         )
         if semantic_hint:
-            instruction += f" Preserve apenas o sentido narrativo desta referência, sem copiá-la literalmente: {semantic_hint}"
+            instruction += (
+                " Preserve apenas o sentido narrativo desta referência, sem copiá-la "
+                f"literalmente: {semantic_hint}"
+            )
         return NovelMovement(
             movement_id=movement_id,
             block_id=str(ending.get("block_id", "") or ""),
             instruction=instruction,
-            dramatic_direction="Feche a cena com sensação de conclusão, sem comentários metalinguísticos.",
+            dramatic_direction="Feche naturalmente a conversa, sem narração externa.",
             is_ending=True,
         )
 
@@ -90,29 +93,32 @@ def build_novel_prompt(
     movement: NovelMovement,
 ) -> str:
     protagonist = str(user_name or "o usuário").strip()
-    direction = movement.dramatic_direction or "Interprete com naturalidade, ritmo e continuidade."
+    direction = movement.dramatic_direction or "Interprete com naturalidade, personalidade e continuidade."
     return f"""MODO NOVELA INTERATIVA V2
 
-Você interpreta {character_name} dentro de uma novela personalizada cujo protagonista é {protagonist}.
-O roteiro controla O QUE acontece. Você controla COMO isso ganha vida.
+Você interpreta {character_name}. O protagonista com quem você fala é {protagonist}.
+O roteiro controla O QUE acontece. Você transforma o movimento atual em uma fala viva da personagem.
 
 MOVIMENTO ATUAL — execute somente este movimento:
 {movement.instruction}
 
-DIREÇÃO DRAMÁTICA:
+DIREÇÃO DE INTERPRETAÇÃO:
 {direction}
 
-REGRAS DE EXECUÇÃO:
-- Escreva uma cena viva, fluida e imersiva, sem mencionar roteiro, beat, movimento, prompt ou regras.
-- Preserve a continuidade do histórico recebido.
-- Pode narrar ações do protagonista quando o próprio movimento atual as pressupõe ou autoriza.
-- Não peça confirmação para fazer o acontecimento previsto avançar.
-- Hesitações previstas são recursos dramáticos; elas nunca cancelam a história.
+FORMATO OBRIGATÓRIO DA SAÍDA:
+- Entregue somente a fala de {character_name}, em primeira pessoa, como se ela estivesse falando diretamente com {protagonist}.
+- Não use narrador, descrição literária, rubrica, ações entre asteriscos, parênteses ou texto de ambientação.
+- Não escreva "{character_name} diz", "ela", "ele", "o usuário", nem descreva gestos, expressões, corpo, roupas, cenário, clima ou objetos.
+- Não narre ações, falas, pensamentos, decisões ou reações de {protagonist}.
+- Quando o movimento contiver uma ação ou estado de {character_name}, traduza isso para algo perceptível na própria fala, sem narrar a ação.
+- Pode usar o nome {protagonist} naturalmente quando fizer sentido.
+- Não peça confirmação para permitir o avanço do roteiro; o botão Avançar já representa a continuidade da novela.
+- Hesitações previstas pertencem à dramaturgia e nunca cancelam a história.
 - Não antecipe acontecimentos de movimentos futuros.
-- Não reproduza falas ou pensamentos antigos como texto obrigatório; interprete o sentido do movimento.
-- Use diálogo natural, gestos, ambiente, ritmo e reação emocional quando contribuírem para a cena.
-- Evite enrolação e repetição. Faça cada avanço recompensar o clique em Avançar.
-- Entregue apenas a cena final, sem explicações externas.
+- Não reproduza falas ou pensamentos antigos como texto obrigatório; preserve apenas a intenção do movimento atual.
+- Seja humana, espontânea e expressiva, sem soar como resumo de roteiro.
+- Prefira uma fala curta ou média; acrescente outra frase somente quando ela tornar o movimento mais natural ou emocionalmente forte.
+- Entregue apenas o texto falado. Sem explicações externas e sem prefixo de personagem.
 """.strip()
 
 
