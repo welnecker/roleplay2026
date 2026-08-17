@@ -72,8 +72,6 @@ def movement_from_script(script: Any, movement_id: str) -> NovelMovement:
         if instruction:
             directions.append(instruction)
 
-    # O modo novela ignora deliberadamente anchors/canonical_line, falas exatas,
-    # pensamentos exatos, decision gates e waits do motor conversacional antigo.
     if not objective:
         objective = "Faça a história avançar pelo acontecimento previsto neste ponto do roteiro."
 
@@ -95,10 +93,10 @@ def build_novel_prompt(
 ) -> str:
     protagonist = str(user_name or "o usuário").strip()
     direction = movement.dramatic_direction or "Interprete com naturalidade, personalidade e continuidade."
-    name_rule = (
+    explicit_name_rule = (
         f"- Não use o nome {protagonist} nesta fala; ele já foi usado recentemente e repeti-lo soa artificial."
         if suppress_user_name and protagonist != "o usuário"
-        else f"- O nome {protagonist} é opcional. Use-o somente quando tiver função emocional real; nunca como vício de abertura."
+        else f"- O nome {protagonist} é opcional. Não o use se ele aparecer em qualquer uma das três falas mais recentes do histórico. Fora disso, use-o somente quando tiver função emocional real; nunca como vício de abertura."
     )
     return f"""MODO NOVELA INTERATIVA V2
 
@@ -118,6 +116,7 @@ CONTINUIDADE É PRIORIDADE:
 - Não repita motivos, justificativas, emoções ou informações já ditas apenas para dar corpo à resposta.
 - Se o movimento pressupõe uma ação do protagonista produzida pelo avanço anterior, considere essa ação já ocorrida e prossiga naturalmente.
 - Não invente uma fala intermediária do protagonista para justificar o movimento. Não escreva frases como "já que você perguntou", "agora que você disse" ou "fico feliz que você falou" quando isso não apareceu no histórico.
+- Evite conectores de recapitulação como "agora que", "já que", "como eu disse", "pois é" e "sabe" quando servirem apenas para reintroduzir contexto já estabelecido.
 
 FORMATO OBRIGATÓRIO DA SAÍDA:
 - Entregue somente a fala de {character_name}, em primeira pessoa, falando diretamente com {protagonist}.
@@ -125,14 +124,15 @@ FORMATO OBRIGATÓRIO DA SAÍDA:
 - Não escreva "{character_name} diz", "ela", "ele", "o usuário", nem descreva gestos, expressões, corpo, roupas, cenário, clima ou objetos como narração.
 - Não narre falas, pensamentos ou reações internas de {protagonist}.
 - Quando o movimento contiver uma ação ou estado de {character_name}, traduza isso para algo perceptível na própria fala.
-{name_rule}
+{explicit_name_rule}
 - Nunca termine com pergunta, pedido de opinião, escolha ou confirmação. Não existe turno de resposta do protagonista.
 - Quando precisar que o protagonista faça algo, diga isso como comando, convite ou incentivo afirmativo e encerre sem aguardar resposta. O próximo clique presume a continuidade necessária.
 - Não antecipe acontecimentos de movimentos futuros.
 - Preserve a intenção do movimento atual sem reproduzir texto antigo como obrigação literal.
 - Use linguagem oral brasileira, humana e espontânea. Evite frases solenes, explicativas ou de resumo.
-- Seja econômico: normalmente 1 a 3 frases curtas. Só ultrapasse isso quando o movimento realmente exigir nova informação essencial.
-- Cada frase precisa acrescentar algo novo. Corte redundâncias, reforços e paráfrases do que acabou de ser dito.
+- Seja econômico: normalmente 1 ou 2 frases curtas; use uma terceira apenas se trouxer informação nova indispensável ao movimento.
+- Cada frase precisa acrescentar algo novo. Corte redundâncias, reforços, sinônimos em série e paráfrases do que acabou de ser dito.
+- Não transforme uma intenção simples em discurso. Se o beat cabe em uma frase, responda em uma frase.
 - Entregue apenas o texto falado, sem prefixo de personagem ou explicações externas.
 """.strip()
 
