@@ -4,6 +4,8 @@ import importlib
 import sys
 from types import ModuleType
 
+from services.novel_frame_patch import install as install_novel_frame_v2
+
 
 _RUNTIME_MODULE = "services.novel_player_runtime"
 
@@ -11,6 +13,7 @@ _RUNTIME_MODULE = "services.novel_player_runtime"
 def _load_or_reload_runtime() -> ModuleType:
     """Executa exclusivamente o player da novela contínua nesta branch V2."""
 
+    install_novel_frame_v2()
     loaded = sys.modules.get(_RUNTIME_MODULE)
     if loaded is None:
         return importlib.import_module(_RUNTIME_MODULE)
@@ -29,7 +32,7 @@ def _load_or_reload_runtime() -> ModuleType:
 
 
 def run_editorial_player() -> None:
-    """Executa o player V2: cena dramatizada -> Avançar -> próximo movimento."""
+    """Executa o player V2: quadro dramatizado -> Avançar -> próximo quadro."""
 
     _load_or_reload_runtime()
 
