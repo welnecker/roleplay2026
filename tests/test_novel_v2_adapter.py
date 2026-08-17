@@ -58,22 +58,41 @@ def test_adaptador_ignora_anchor_e_fala_exata() -> None:
     assert "espontânea" in movement.dramatic_direction
 
 
-def test_prompt_declara_novela_continua_sem_confirmacao() -> None:
+def test_prompt_declara_continuidade_incremental() -> None:
     movement = movement_from_script(_script(), "m1")
     prompt = build_novel_prompt(character_name="Camilly", user_name="João", movement=movement)
     assert "O roteiro controla O QUE acontece" in prompt
-    assert "Não peça confirmação" in prompt
-    assert "Hesitações previstas" in prompt
-    assert "João" in prompt
+    assert "conversa já em andamento" in prompt
+    assert "Entregue o delta narrativo" in prompt
+    assert "Não reabra, reexplique nem resuma beats anteriores" in prompt
 
 
-def test_prompt_proibe_perguntas_que_travam_o_avanco() -> None:
+def test_prompt_proibe_perguntas_e_espera_do_usuario() -> None:
     movement = movement_from_script(_script(), "m1")
     prompt = build_novel_prompt(character_name="Camilly", user_name="João", movement=movement)
-    assert "Nunca termine a saída com pergunta" in prompt
-    assert "o próximo movimento poderá assumir que isso aconteceu" in prompt
-    assert "o que você acha?" in prompt
-    assert "Pronto, agora que você parou" in prompt
+    assert "Nunca termine com pergunta" in prompt
+    assert "Não existe turno de resposta do protagonista" in prompt
+    assert "O próximo clique presume a continuidade necessária" in prompt
+
+
+def test_prompt_reduz_nome_e_verborragia() -> None:
+    movement = movement_from_script(_script(), "m1")
+    prompt = build_novel_prompt(character_name="Camilly", user_name="João", movement=movement)
+    assert "três falas mais recentes" in prompt
+    assert "normalmente 1 ou 2 frases curtas" in prompt
+    assert "Se o beat cabe em uma frase" in prompt
+    assert "sinônimos em série" in prompt
+
+
+def test_prompt_pode_suprimir_nome_explicitamente() -> None:
+    movement = movement_from_script(_script(), "m1")
+    prompt = build_novel_prompt(
+        character_name="Camilly",
+        user_name="João",
+        movement=movement,
+        suppress_user_name=True,
+    )
+    assert "Não use o nome João nesta fala" in prompt
 
 
 def test_encerramento_antigo_vira_sentido_dramatico_nao_fala_obrigatoria() -> None:
