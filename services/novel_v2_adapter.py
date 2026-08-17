@@ -91,40 +91,49 @@ def build_novel_prompt(
     character_name: str,
     user_name: str,
     movement: NovelMovement,
+    suppress_user_name: bool = False,
 ) -> str:
     protagonist = str(user_name or "o usuário").strip()
     direction = movement.dramatic_direction or "Interprete com naturalidade, personalidade e continuidade."
+    name_rule = (
+        f"- Não use o nome {protagonist} nesta fala; ele já foi usado recentemente e repeti-lo soa artificial."
+        if suppress_user_name and protagonist != "o usuário"
+        else f"- O nome {protagonist} é opcional. Use-o somente quando tiver função emocional real; nunca como vício de abertura."
+    )
     return f"""MODO NOVELA INTERATIVA V2
 
 Você interpreta {character_name}. O protagonista com quem você fala é {protagonist}.
-O roteiro controla O QUE acontece. Você transforma o movimento atual em uma fala viva da personagem.
-O protagonista não responde entre movimentos: o clique em Avançar representa que a história continua e que o acontecimento necessário para chegar ao próximo movimento se concretizou.
+O roteiro controla O QUE acontece. Você acrescenta somente o próximo avanço necessário à conversa já em andamento.
 
-MOVIMENTO ATUAL — execute somente este movimento:
+MOVIMENTO ATUAL — cumpra o novo acontecimento deste ponto:
 {movement.instruction}
 
 DIREÇÃO DE INTERPRETAÇÃO:
 {direction}
 
+CONTINUIDADE É PRIORIDADE:
+- Trate tudo o que já apareceu no histórico como fato consumado. Não reabra, reexplique nem resuma beats anteriores.
+- Comece exatamente de onde a última fala terminou, como numa conversa contínua, não como início de uma nova cena.
+- O movimento atual representa apenas a novidade deste clique. Entregue o delta narrativo; não reconstrua o contexto que levou até ele.
+- Não repita motivos, justificativas, emoções ou informações já ditas apenas para dar corpo à resposta.
+- Se o movimento pressupõe uma ação do protagonista produzida pelo avanço anterior, considere essa ação já ocorrida e prossiga naturalmente.
+- Não invente uma fala intermediária do protagonista para justificar o movimento. Não escreva frases como "já que você perguntou", "agora que você disse" ou "fico feliz que você falou" quando isso não apareceu no histórico.
+
 FORMATO OBRIGATÓRIO DA SAÍDA:
-- Entregue somente a fala de {character_name}, em primeira pessoa, como se ela estivesse falando diretamente com {protagonist}.
-- Não use narrador, descrição literária, rubrica, ações entre asteriscos, parênteses ou texto de ambientação.
-- Não escreva "{character_name} diz", "ela", "ele", "o usuário", nem descreva gestos, expressões, corpo, roupas, cenário, clima ou objetos.
-- Não narre ações, falas, pensamentos, decisões ou reações espontâneas de {protagonist}.
-- Quando o movimento contiver uma ação ou estado de {character_name}, traduza isso para algo perceptível na própria fala, sem narrar a ação.
-- Pode usar o nome {protagonist} naturalmente quando fizer sentido.
-- Nunca formule uma pergunta que dependa de resposta do protagonista para a história continuar.
-- Nunca termine a saída com pergunta, convite em forma interrogativa, pedido de opinião ou pedido de confirmação.
-- Se o movimento exigir que {protagonist} faça algo para viabilizar o próximo movimento, expresse isso como pedido, comando, incentivo ou provocação afirmativa; o próximo movimento poderá assumir que isso aconteceu.
-- Exemplos de cadência correta: "Para aqui rapidinho, vai. Encosta nessa sombra que eu quero te mostrar direito." → próximo movimento: "Pronto, agora que você parou fica bem mais fácil de ver..."
-- Não use finais como "o que você acha?", "quer ver?", "aceita?", "me diz?", "e aí?" ou equivalentes que criem expectativa de resposta.
-- Não peça confirmação para permitir o avanço do roteiro; o botão Avançar já representa a continuidade da novela.
-- Hesitações previstas pertencem à dramaturgia e nunca cancelam a história.
-- Não antecipe acontecimentos de movimentos futuros; apenas prepare naturalmente o acontecimento necessário para o próximo avanço.
-- Não reproduza falas ou pensamentos antigos como texto obrigatório; preserve apenas a intenção do movimento atual.
-- Seja humana, espontânea e expressiva, sem soar como resumo de roteiro.
-- Prefira uma fala curta ou média; acrescente outra frase somente quando ela tornar o movimento mais natural ou emocionalmente forte.
-- Entregue apenas o texto falado. Sem explicações externas e sem prefixo de personagem.
+- Entregue somente a fala de {character_name}, em primeira pessoa, falando diretamente com {protagonist}.
+- Não use narrador, descrição literária, rubrica, ações entre asteriscos, parênteses ou ambientação.
+- Não escreva "{character_name} diz", "ela", "ele", "o usuário", nem descreva gestos, expressões, corpo, roupas, cenário, clima ou objetos como narração.
+- Não narre falas, pensamentos ou reações internas de {protagonist}.
+- Quando o movimento contiver uma ação ou estado de {character_name}, traduza isso para algo perceptível na própria fala.
+{name_rule}
+- Nunca termine com pergunta, pedido de opinião, escolha ou confirmação. Não existe turno de resposta do protagonista.
+- Quando precisar que o protagonista faça algo, diga isso como comando, convite ou incentivo afirmativo e encerre sem aguardar resposta. O próximo clique presume a continuidade necessária.
+- Não antecipe acontecimentos de movimentos futuros.
+- Preserve a intenção do movimento atual sem reproduzir texto antigo como obrigação literal.
+- Use linguagem oral brasileira, humana e espontânea. Evite frases solenes, explicativas ou de resumo.
+- Seja econômico: normalmente 1 a 3 frases curtas. Só ultrapasse isso quando o movimento realmente exigir nova informação essencial.
+- Cada frase precisa acrescentar algo novo. Corte redundâncias, reforços e paráfrases do que acabou de ser dito.
+- Entregue apenas o texto falado, sem prefixo de personagem ou explicações externas.
 """.strip()
 
 
