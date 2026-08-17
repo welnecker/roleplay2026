@@ -1,0 +1,210 @@
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+
+from services.editorial_compiler import compile_editorial_document
+from services.editorial_runtime import EditorialScript
+from services.novel_frame_patch import (
+    build_frame_prompt,
+    compile_novel_frame_story,
+    is_novel_frame_rows,
+    render_frame_html,
+)
+from services.novel_v2_adapter import movement_from_script, next_movement_id
+
+
+def _base_document() -> dict:
+    return {
+        "format_version": 3,
+        "package_id": "roleplay2026.camilly",
+        "script_version": "1",
+        "introduction": "",
+        "character": {"name": "Camilly"},
+        "blocks": [
+            {
+                "block_id": "legacy",
+                "order": 1,
+                "entry_beat_id": "legacy_001",
+                "beats": [],
+            }
+        ],
+    }
+
+
+def _rows() -> list[dict]:
+    return [
+        {
+            "line_id": "encontro_001_descricao",
+            "order": 10,
+            "instruction": "[DESCRIÇÃO] Camilly avista {{nome}} no carro e se aproxima.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_001_camilly_fala",
+            "order": 20,
+            "instruction": "[FALA camilly] Eu cumprimento {{nome}} com surpresa e entusiasmo.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_001_usuario_fala",
+            "order": 30,
+            "instruction": "[FALA usuario] Eu reconheço Camilly e a convido a se aproximar.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_001_camilly_pensamento",
+            "order": 40,
+            "instruction": "[PENSAMENTO camilly] Quero aproveitar a coincidência sem mostrar toda a minha intenção.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_001_usuario_pensamento",
+            "order": 50,
+            "instruction": "[PENSAMENTO usuario] Percebo que ela está especialmente animada.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_002_descricao",
+            "order": 60,
+            "instruction": "[DESCRIÇÃO] Camilly pede uma carona para a praia.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_002_camilly_fala",
+            "order": 70,
+            "instruction": "[FALA camilly] Eu peço a carona com naturalidade e confiança.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_002_usuario_fala",
+            "order": 80,
+            "instruction": "[FALA usuario] Eu aceito e a convido a entrar.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_002_camilly_pensamento",
+            "order": 90,
+            "instruction": "[PENSAMENTO camilly] A carona é útil, mas ficar sozinha com ele é ainda melhor.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_002_usuario_pensamento",
+            "order": 100,
+            "instruction": "[PENSAMENTO usuario] A companhia dela tornou o trajeto mais interessante.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_003_descricao",
+            "order": 110,
+            "instruction": "[DESCRIÇÃO] Camilly entra e os dois seguem para a praia.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_003_camilly_fala",
+            "order": 120,
+            "instruction": "[FALA camilly] Eu agradeço e noto como é bom estarmos sozinhos.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_003_usuario_fala",
+            "order": 130,
+            "instruction": "[FALA usuario] Eu demonstro estar à vontade com a companhia dela.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_003_camilly_pensamento",
+            "order": 140,
+            "instruction": "[PENSAMENTO camilly] Agora tenho alguns minutos sozinha com ele.",
+            "status": "active",
+        },
+        {
+            "line_id": "encontro_003_usuario_pensamento",
+            "order": 150,
+            "instruction": "[PENSAMENTO usuario] Ela parece mais solta e isso desperta minha curiosidade.",
+            "status": "active",
+        },
+    ]
+
+
+def test_detecta_formato_de_quadros_multipersonagem() -> None:
+    assert is_novel_frame_rows(_rows()) is True
+
+
+def test_compila_tres_quadros_na_ordem_da_planilha() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    block = document["blocks"][0]
+    assert document["script_version"] == "200"
+    assert block["entry_beat_id"] == "encontro_001"
+    assert [beat["beat_id"] for beat in block["beats"]] == [
+        "encontro_001",
+        "encontro_002",
+        "encontro_003",
+    ]
+    assert block["beats"][0]["next_beat_id"] == "encontro_002"
+    assert block["beats"][2]["next_beat_id"] == ""
+
+
+def test_documento_de_quadros_continua_compativel_com_editorial_script() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    script = EditorialScript(compile_editorial_document(document))
+    assert script.first_beat_id == "encontro_001"
+    assert next_movement_id(script, "") == "encontro_001"
+    assert next_movement_id(script, "encontro_001") == "encontro_002"
+    assert next_movement_id(script, "encontro_002") == "encontro_003"
+    assert next_movement_id(script, "encontro_003") == ""
+
+
+def test_payload_preserva_falas_e_pensamentos_dos_dois_personagens() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_001")
+    prefix = "NOVEL_FRAME_V2\n"
+    assert movement.instruction.startswith(prefix)
+    payload = json.loads(movement.instruction[len(prefix):])
+    assert payload["description"].startswith("Camilly avista")
+    assert [(item["kind"], item["actor"]) for item in payload["entries"]] == [
+        ("fala", "camilly"),
+        ("fala", "usuario"),
+        ("pensamento", "camilly"),
+        ("pensamento", "usuario"),
+    ]
+
+
+def test_prompt_personaliza_usuario_e_exige_quadro_completo() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_001")
+    prompt = build_frame_prompt(
+        character_name="Camilly",
+        user_name="Donisete",
+        movement=movement,
+    )
+    assert "Donisete" in prompt
+    assert "{{nome}}" not in prompt
+    assert "A fala do protagonista também é roteirizada" in prompt
+    assert "Cada PENSAMENTO é privado" in prompt
+    assert "Não omita nenhuma entry" in prompt
+
+
+def test_renderer_separa_cena_falas_e_pensamentos() -> None:
+    content = """[QUADRO encontro_001]
+[DESCRIÇÃO]
+Camilly reconhece Donisete no carro.
+[FALA camilly|Camilly]
+Oi, Donisete!
+[FALA usuario|Donisete]
+Oi, Camilly... chega mais.
+[PENSAMENTO camilly|Camilly]
+Essa coincidência pode render.
+[PENSAMENTO usuario|Donisete]
+Ela está animada demais para ser só simpatia.
+[/QUADRO]"""
+    rendered = render_frame_html(content, character_name="Camilly")
+    assert rendered is not None
+    assert ">Cena<" in rendered
+    assert ">Camilly<" in rendered
+    assert ">Donisete<" in rendered
+    assert "pensamento" in rendered
+    assert "Oi, Donisete!" in rendered
+    assert "Oi, Camilly... chega mais." in rendered
