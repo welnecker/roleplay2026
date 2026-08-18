@@ -4,13 +4,14 @@ import importlib
 import sys
 from types import ModuleType
 
+from services.novel_frame_layout_patch import install as install_novel_frame_layout
 from services.novel_frame_patch import install as install_novel_frame_v2
 from services.novel_frame_presentation import install as install_novel_frame_presentation
 from services.novel_frame_reveal_patch import install as install_novel_frame_reveal
 
 
 _RUNTIME_MODULE = "services.novel_player_runtime"
-NOVEL_FRAME_BUILD = "2026-08-18.1"
+NOVEL_FRAME_BUILD = "2026-08-18.2"
 _BUILD_LOGGED = False
 
 
@@ -21,8 +22,9 @@ def _load_or_reload_runtime() -> ModuleType:
     install_novel_frame_v2()
     install_novel_frame_reveal()
     install_novel_frame_presentation()
+    install_novel_frame_layout()
     if not _BUILD_LOGGED:
-        print(f"[NOVEL_FRAME_BUILD] {NOVEL_FRAME_BUILD} — revelação incremental ativa")
+        print(f"[NOVEL_FRAME_BUILD] {NOVEL_FRAME_BUILD} — painel 2:1 responsivo ativo")
         _BUILD_LOGGED = True
 
     loaded = sys.modules.get(_RUNTIME_MODULE)
@@ -43,7 +45,7 @@ def _load_or_reload_runtime() -> ModuleType:
 
 
 def run_editorial_player() -> None:
-    """Executa o player V2: quadro dramatizado -> revelação -> próximo quadro."""
+    """Executa o player V2: imagem + quadro incremental em painel responsivo."""
 
     _load_or_reload_runtime()
 
