@@ -6,6 +6,8 @@ from services import novel_frame_patch
 from services.novel_frame_reveal import frame_entry_count, frame_id, reveal_frame_content
 from services.novel_frame_reveal_patch import reveal_index, set_current_frame
 
+IMAGE_SLOT_MARKER = "<!-- NOVEL_FRAME_IMAGE_SLOT -->"
+
 
 def _render_paragraphs(value: str, *, italic: bool = False) -> str:
     blocks = [block.strip() for block in str(value or "").split("\n\n") if block.strip()]
@@ -15,6 +17,46 @@ def _render_paragraphs(value: str, *, italic: bool = False) -> str:
     return "".join(
         f'<p style="margin:0 0 0.45rem 0;{style}">{escape(block).replace(chr(10), "<br>")}</p>'
         for block in blocks
+    )
+
+
+def _description_html(body: str) -> str:
+    return (
+        '<article class="novel-frame-description" '
+        'style="padding:0.95rem 1.05rem;border-radius:14px;'
+        'border:1px solid rgba(127,127,127,.24);'
+        'background:rgba(127,127,127,.08);margin-bottom:.78rem;">'
+        '<div style="font-size:.72rem;font-weight:700;letter-spacing:.09em;'
+        'text-transform:uppercase;opacity:.62;margin-bottom:.42rem;">Cena</div>'
+        f'<div style="line-height:1.48;">{_render_paragraphs(body)}</div>'
+        '</article>'
+    )
+
+
+def _thought_card(actor: str, visible_name: str, body: str, *, character_name: str) -> str:
+    label = visible_name or actor or character_name
+    return (
+        '<article class="novel-frame-card novel-frame-thought" '
+        'style="box-sizing:border-box;padding:.8rem .9rem;border-radius:18px;'
+        'border:2px dotted rgba(127,127,127,.48);'
+        'background:rgba(127,127,127,.035);scroll-snap-align:start;">'
+        f'<div style="font-size:.72rem;font-weight:650;opacity:.62;margin-bottom:.36rem;">'
+        f'✦ pensamento · {escape(label)}</div>'
+        f'<div style="line-height:1.45;opacity:.92;">{_render_paragraphs(body, italic=True)}</div>'
+        '</article>'
+    )
+
+
+def _speech_card(actor: str, visible_name: str, body: str, *, character_name: str) -> str:
+    is_user = novel_frame_patch._plain(actor) in {"usuario", "user", "protagonista", "voce"}
+    wrapper = "dialogue-user" if is_user else "dialogue-mary"
+    label = visible_name or ("Você" if is_user else actor or character_name)
+    return (
+        f'<article class="novel-frame-card dialogue-message {wrapper}" '
+        'style="box-sizing:border-box;scroll-snap-align:start;margin:0;">'
+        f'<div class="dialogue-speaker">{escape(label)}</div>'
+        f'<div class="dialogue-speech">{novel_frame_patch._paragraphs(body)}</div>'
+        '</article>'
     )
 
 
@@ -33,53 +75,61 @@ def render_frame_html(content: str, *, character_name: str) -> str | None:
     if parts is None:
         return None
 
-    html: list[str] = [
-        '<section class="novel-frame-v2" style="display:flex;flex-direction:column;gap:0.72rem;">'
-    ]
+    description = ""
+    cards: list[str] = []
     for kind, actor, visible_name, body in parts:
         if not body:
             continue
-
         if kind == "descricao":
-            html.append(
-                '<article class="novel-frame-description" '
-                'style="padding:0.9rem 1rem;border-radius:14px;'
-                'border:1px solid rgba(127,127,127,.24);'
-                'background:rgba(127,127,127,.08);">'
-                '<div style="font-size:.72rem;font-weight:700;letter-spacing:.09em;'
-                'text-transform:uppercase;opacity:.62;margin-bottom:.42rem;">Cena</div>'
-                f'<div style="line-height:1.48;">{_render_paragraphs(body)}</div>'
-                '</article>'
-            )
+            description = _description_html(body)
             continue
-
         if kind == "pensamento":
-            label = visible_name or actor or character_name
-            html.append(
-                '<article class="novel-frame-thought" '
-                'style="padding:0.72rem 0.88rem;border-radius:18px;'
-                'border:2px dotted rgba(127,127,127,.48);'
-                'background:rgba(127,127,127,.035);margin-left:0.35rem;">'
-                f'<div style="font-size:.72rem;font-weight:650;opacity:.62;margin-bottom:.32rem;">'
-                f'✦ pensamento · {escape(label)}</div>'
-                f'<div style="line-height:1.45;opacity:.92;">{_render_paragraphs(body, italic=True)}</div>'
-                '</article>'
-            )
+            cards.append(_thought_card(actor, visible_name, body, character_name=character_name))
             continue
-
         if kind == "fala":
-            is_user = novel_frame_patch._plain(actor) in {"usuario", "user", "protagonista", "voce"}
-            wrapper = "dialogue-message dialogue-user" if is_user else "dialogue-message dialogue-mary"
-            label = visible_name or ("Você" if is_user else actor or character_name)
-            html.append(
-                f'<article class="{wrapper}">'
-                f'<div class="dialogue-speaker">{escape(label)}</div>'
-                f'<div class="dialogue-speech">{novel_frame_patch._paragraphs(body)}</div>'
-                '</article>'
-            )
+            cards.append(_speech_card(actor, visible_name, body, character_name=character_name))
 
-    html.append("</section>")
-    return "".join(html)
+    style = """
+<style>
+.novel-frame-v2{width:100%;}
+.novel-frame-track{
+  display:grid;
+  grid-auto-flow:column;
+  grid-auto-columns:calc((100% - 2.25rem)/4);
+  gap:.75rem;
+  overflow-x:auto;
+  overscroll-behavior-inline:contain;
+  scroll-snap-type:x proximity;
+  padding:.12rem .05rem .5rem .05rem;
+  margin-top:.78rem;
+  scrollbar-width:thin;
+}
+.novel-frame-track>.novel-frame-card{min-width:0;}
+@media (max-width:899px){
+  .novel-frame-track{
+    grid-auto-columns:minmax(78vw,78vw);
+    gap:.7rem;
+    scroll-snap-type:x mandatory;
+    padding-bottom:.55rem;
+  }
+}
+</style>
+"""
+    track = (
+        '<section class="novel-frame-track" aria-label="Falas e pensamentos do quadro">'
+        + "".join(cards)
+        + "</section>"
+        if cards
+        else '<section class="novel-frame-track novel-frame-track-empty" aria-hidden="true"></section>'
+    )
+    return (
+        style
+        + '<section class="novel-frame-v2">'
+        + description
+        + IMAGE_SLOT_MARKER
+        + track
+        + "</section>"
+    )
 
 
 def install() -> None:
@@ -88,4 +138,4 @@ def install() -> None:
     novel_frame_patch.render_frame_html = render_frame_html
 
 
-__all__ = ["install", "render_frame_html"]
+__all__ = ["IMAGE_SLOT_MARKER", "install", "render_frame_html"]
