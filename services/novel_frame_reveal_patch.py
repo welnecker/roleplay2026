@@ -44,9 +44,18 @@ def reveal_index(frame_id: str, entry_count: int) -> int:
 
 
 def start_frame_reveal(frame_id: str) -> None:
+    """Inicia um quadro novo já exibindo seu primeiro card.
+
+    O total real de cards só é conhecido na renderização. Guardar ``1`` aqui é
+    seguro porque ``reveal_index`` limita o valor ao ``entry_count``. Assim um
+    quadro com N cards exige exatamente N cliques em Avançar para chegar ao
+    próximo quadro: o primeiro card nasce com a cena, N-1 cliques revelam os
+    demais e o clique N avança a narrativa.
+    """
+
     clean = str(frame_id or "").strip()
     if clean:
-        st.session_state[reveal_key(clean)] = 0
+        st.session_state[reveal_key(clean)] = 1
 
 
 def _sequence(messages: list[dict[str, object]]) -> int:
