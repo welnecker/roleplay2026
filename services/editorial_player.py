@@ -12,7 +12,7 @@ from services.novel_frame_reveal_patch import install as install_novel_frame_rev
 
 
 _RUNTIME_MODULE = "services.novel_player_runtime"
-NOVEL_FRAME_BUILD = "2026-08-18.7"
+NOVEL_FRAME_BUILD = "2026-08-18.8"
 _BUILD_LOGGED = False
 
 
@@ -28,7 +28,7 @@ def _load_or_reload_runtime() -> ModuleType:
     if not _BUILD_LOGGED:
         print(
             f"[NOVEL_FRAME_BUILD] {NOVEL_FRAME_BUILD} — "
-            "imagem em proporcao natural e composicao deterministica ativas"
+            "paleta fixa, imagem natural e composicao deterministica ativas"
         )
         _BUILD_LOGGED = True
 
