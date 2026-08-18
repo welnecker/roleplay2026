@@ -16,8 +16,9 @@ _css_injected = False
 
 _PAGE_CSS = """
 <style>
+@import url("https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,500;0,600;0,700;0,800;1,500;1,600;1,700&display=swap");
 :root{
-  --novel-font:"Comic Sans MS","Comic Sans","Chalkboard SE","Marker Felt","Segoe Print",cursive;
+  --novel-font:"Nunito","Avenir Next Rounded","Trebuchet MS","Segoe UI",sans-serif;
 }
 section[data-testid="stMain"] .block-container{
   max-width:1480px;
@@ -41,11 +42,14 @@ section[data-testid="stMain"] .block-container .dialogue-speech{
   font-family:var(--novel-font) !important;
 }
 section[data-testid="stMain"] .block-container h1{
+  font-weight:800;
   letter-spacing:.01em;
 }
 section[data-testid="stMain"] .block-container .novel-frame-description,
 section[data-testid="stMain"] .block-container .novel-frame-card{
-  font-size:1.02rem;
+  font-size:1.04rem;
+  font-weight:600;
+  line-height:1.5;
 }
 @media (max-width:899px){
   section[data-testid="stMain"] .block-container{
@@ -54,7 +58,8 @@ section[data-testid="stMain"] .block-container .novel-frame-card{
   }
   section[data-testid="stMain"] .block-container .novel-frame-description,
   section[data-testid="stMain"] .block-container .novel-frame-card{
-    font-size:1rem;
+    font-size:1.05rem;
+    line-height:1.55;
   }
 }
 </style>
