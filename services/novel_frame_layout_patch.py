@@ -4,6 +4,7 @@ from typing import Any
 
 import streamlit as st
 
+from services.novel_frame_presentation import IMAGE_SLOT_MARKER
 from services.novel_frame_reveal import frame_id
 
 _installed = False
@@ -11,21 +12,20 @@ _original_button = None
 _original_render_dialogue_html = None
 _original_render_scene_image = None
 _original_set_page_config = None
-_pending_narrative_column = None
-_current_narrative_column = None
+_pending_image_call: tuple[tuple[Any, ...], dict[str, Any]] | None = None
 _css_injected = False
 
-_MOBILE_CSS = """
+_PAGE_CSS = """
 <style>
-@media (max-width: 899px) {
-  section[data-testid="stMain"] [data-testid="stHorizontalBlock"] {
-    flex-wrap: wrap !important;
-    gap: .8rem !important;
-  }
-  section[data-testid="stMain"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
-    flex: 1 1 100% !important;
-    width: 100% !important;
-    min-width: 100% !important;
+section[data-testid="stMain"] .block-container{
+  max-width:1480px;
+  padding-left:clamp(.8rem,2.2vw,2rem);
+  padding-right:clamp(.8rem,2.2vw,2rem);
+}
+@media (max-width:899px){
+  section[data-testid="stMain"] .block-container{
+    padding-left:.72rem;
+    padding-right:.72rem;
   }
 }
 </style>
@@ -33,7 +33,7 @@ _MOBILE_CSS = """
 
 
 def _set_page_config_wrapper(*args: Any, **kwargs: Any):
-    """Mantém a novela V2 ampla no desktop e injeta empilhamento no mobile."""
+    """Mantém a novela V2 ampla no desktop e confortável no mobile."""
 
     global _css_injected
     assert _original_set_page_config is not None
@@ -41,35 +41,37 @@ def _set_page_config_wrapper(*args: Any, **kwargs: Any):
     kwargs["layout"] = "wide"
     result = _original_set_page_config(*args, **kwargs)
     if not _css_injected:
-        st.markdown(_MOBILE_CSS, unsafe_allow_html=True)
+        st.markdown(_PAGE_CSS, unsafe_allow_html=True)
         _css_injected = True
     return result
 
 
 def _scene_image_wrapper(*args: Any, **kwargs: Any) -> bool:
-    """Abre um painel 2:1 e mantém a imagem sempre visível à esquerda."""
+    """Adia a imagem V2 para inseri-la entre CENA e trilho de entries."""
 
-    global _pending_narrative_column, _current_narrative_column
+    global _pending_image_call
     assert _original_render_scene_image is not None
 
-    # O player V2 chama as imagens com render_memory=False. Outros usos do
-    # renderer continuam com o comportamento legado e não recebem este layout.
+    # Fora do player V2, mantém exatamente o renderer legado.
     if bool(kwargs.get("render_memory", True)):
         return bool(_original_render_scene_image(*args, **kwargs))
 
-    image_column, narrative_column = st.columns(
-        [2, 1],
-        gap="large",
-        vertical_alignment="top",
-    )
     render_kwargs = dict(kwargs)
     render_kwargs["inline"] = True
-    with image_column:
-        rendered = bool(_original_render_scene_image(*args, **render_kwargs))
+    _pending_image_call = (tuple(args), render_kwargs)
+    # O retorno real será obtido no momento em que o quadro for renderizado.
+    return True
 
-    _pending_narrative_column = narrative_column
-    _current_narrative_column = narrative_column
-    return rendered
+
+def _render_pending_image() -> bool:
+    global _pending_image_call
+    assert _original_render_scene_image is not None
+    pending = _pending_image_call
+    _pending_image_call = None
+    if pending is None:
+        return False
+    args, kwargs = pending
+    return bool(_original_render_scene_image(*args, **kwargs))
 
 
 def _dialogue_wrapper(
@@ -78,37 +80,38 @@ def _dialogue_wrapper(
     *,
     character_name: str = "Mary",
 ) -> str:
-    """Envia quadros V2 para a terceira coluna criada pelo renderer da imagem."""
+    """Renderiza CENA -> IMAGEM -> cards horizontais no quadro V2."""
 
-    global _pending_narrative_column, _current_narrative_column
     assert _original_render_dialogue_html is not None
-
     rendered = _original_render_dialogue_html(
         role,
         content,
         character_name=character_name,
     )
+
     current_frame = frame_id(str(content or ""))
-    target = _pending_narrative_column
-    if current_frame and target is not None:
-        with target:
-            st.markdown(rendered, unsafe_allow_html=True)
-        _pending_narrative_column = None
-        _current_narrative_column = target
-        # O runtime ainda chamará st.markdown() com o retorno. Uma string vazia
-        # evita duplicar o quadro fora da coluna sem alterar seu contrato.
-        return ""
-    return rendered
+    if not current_frame or IMAGE_SLOT_MARKER not in rendered:
+        # Se uma imagem foi adiada por um conteúdo que não virou quadro, não a
+        # perde: renderiza antes de devolver o HTML legado.
+        _render_pending_image()
+        return rendered
+
+    before_image, after_image = rendered.split(IMAGE_SLOT_MARKER, maxsplit=1)
+    if before_image.strip():
+        st.markdown(before_image, unsafe_allow_html=True)
+    _render_pending_image()
+    if after_image.strip():
+        st.markdown(after_image, unsafe_allow_html=True)
+
+    # O runtime chamará st.markdown() novamente com o retorno. String vazia
+    # evita duplicação sem alterar o contrato de render_message().
+    return ""
 
 
 def _button_wrapper(*args: Any, **kwargs: Any) -> bool:
-    """Mantém Avançar no rodapé da coluna narrativa atual."""
+    """Mantém o botão abaixo do trilho e preserva a revelação incremental."""
 
     assert _original_button is not None
-    label = str(args[0] if args else kwargs.get("label", "") or "").strip()
-    if label == "Avançar" and _current_narrative_column is not None:
-        with _current_narrative_column:
-            return bool(_original_button(*args, **kwargs))
     return bool(_original_button(*args, **kwargs))
 
 
@@ -123,9 +126,8 @@ def install() -> None:
 
     from services import dialogue_presentation, editorial_scene_images
 
-    # Instalar este patch depois do reveal patch é intencional: ao capturar
-    # st.button aqui, _original_button já contém a lógica que revela uma entry
-    # por clique. O layout só decide onde o botão aparece.
+    # Instalado depois do reveal patch: _original_button já inclui a lógica de
+    # liberar exatamente uma entry por clique.
     _original_button = st.button
     _original_set_page_config = st.set_page_config
     _original_render_dialogue_html = dialogue_presentation.render_dialogue_html
