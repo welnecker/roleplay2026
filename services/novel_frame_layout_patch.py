@@ -16,15 +16,45 @@ _css_injected = False
 
 _PAGE_CSS = """
 <style>
+:root{
+  --novel-font:"Comic Sans MS","Comic Sans","Chalkboard SE","Marker Felt","Segoe Print",cursive;
+}
 section[data-testid="stMain"] .block-container{
   max-width:1480px;
   padding-left:clamp(.8rem,2.2vw,2rem);
   padding-right:clamp(.8rem,2.2vw,2rem);
+  font-family:var(--novel-font);
+}
+section[data-testid="stMain"] .block-container h1,
+section[data-testid="stMain"] .block-container h2,
+section[data-testid="stMain"] .block-container h3,
+section[data-testid="stMain"] .block-container p,
+section[data-testid="stMain"] .block-container span,
+section[data-testid="stMain"] .block-container label,
+section[data-testid="stMain"] .block-container button,
+section[data-testid="stMain"] .block-container input,
+section[data-testid="stMain"] .block-container textarea,
+section[data-testid="stMain"] .block-container .novel-frame-description,
+section[data-testid="stMain"] .block-container .novel-frame-card,
+section[data-testid="stMain"] .block-container .dialogue-speaker,
+section[data-testid="stMain"] .block-container .dialogue-speech{
+  font-family:var(--novel-font) !important;
+}
+section[data-testid="stMain"] .block-container h1{
+  letter-spacing:.01em;
+}
+section[data-testid="stMain"] .block-container .novel-frame-description,
+section[data-testid="stMain"] .block-container .novel-frame-card{
+  font-size:1.02rem;
 }
 @media (max-width:899px){
   section[data-testid="stMain"] .block-container{
     padding-left:.72rem;
     padding-right:.72rem;
+  }
+  section[data-testid="stMain"] .block-container .novel-frame-description,
+  section[data-testid="stMain"] .block-container .novel-frame-card{
+    font-size:1rem;
   }
 }
 </style>
