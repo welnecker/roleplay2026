@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 from services.editorial_compiler import compile_editorial_document
 from services.editorial_runtime import EditorialScript
@@ -19,7 +18,7 @@ def _base_document() -> dict:
         "format_version": 3,
         "package_id": "roleplay2026.camilly",
         "script_version": "1",
-        "introduction": "",
+        "introduction": "ABERTURA LEGADA QUE NÃO DEVE SER USADA",
         "character": {"name": "Camilly"},
         "blocks": [
             {
@@ -135,6 +134,7 @@ def test_compila_tres_quadros_na_ordem_da_planilha() -> None:
     document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
     block = document["blocks"][0]
     assert document["script_version"] == "200"
+    assert document["authoring_source"] == "spreadsheet_novel_frame_v2"
     assert block["entry_beat_id"] == "encontro_001"
     assert [beat["beat_id"] for beat in block["beats"]] == [
         "encontro_001",
@@ -143,6 +143,39 @@ def test_compila_tres_quadros_na_ordem_da_planilha() -> None:
     ]
     assert block["beats"][0]["next_beat_id"] == "encontro_002"
     assert block["beats"][2]["next_beat_id"] == ""
+
+
+def test_primeira_descricao_da_planilha_vira_abertura_e_substitui_introducao_legada() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    block = document["blocks"][0]
+    assert block["scene_introduction"] == "Camilly avista {{nome}} no carro e se aproxima."
+    compiled = compile_editorial_document(document)
+    assert compiled["scene"]["introduction"] == "Camilly avista {{nome}} no carro e se aproxima."
+    assert compiled["scene"]["introduction"] != document["introduction"]
+
+
+def test_primeiro_quadro_nao_repete_descricao_ja_exibida_na_abertura() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_001")
+    prefix = "NOVEL_FRAME_V2\n"
+    payload = json.loads(movement.instruction[len(prefix):])
+    assert payload["description"] == ""
+    assert [(item["kind"], item["actor"]) for item in payload["entries"]] == [
+        ("fala", "camilly"),
+        ("fala", "usuario"),
+        ("pensamento", "camilly"),
+        ("pensamento", "usuario"),
+    ]
+
+
+def test_descricoes_dos_quadros_seguintes_permanecem_no_fluxo() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_002")
+    prefix = "NOVEL_FRAME_V2\n"
+    payload = json.loads(movement.instruction[len(prefix):])
+    assert payload["description"] == "Camilly pede uma carona para a praia."
 
 
 def test_documento_de_quadros_continua_compativel_com_editorial_script() -> None:
@@ -155,23 +188,7 @@ def test_documento_de_quadros_continua_compativel_com_editorial_script() -> None
     assert next_movement_id(script, "encontro_003") == ""
 
 
-def test_payload_preserva_falas_e_pensamentos_dos_dois_personagens() -> None:
-    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
-    script = EditorialScript(compile_editorial_document(document))
-    movement = movement_from_script(script, "encontro_001")
-    prefix = "NOVEL_FRAME_V2\n"
-    assert movement.instruction.startswith(prefix)
-    payload = json.loads(movement.instruction[len(prefix):])
-    assert payload["description"].startswith("Camilly avista")
-    assert [(item["kind"], item["actor"]) for item in payload["entries"]] == [
-        ("fala", "camilly"),
-        ("fala", "usuario"),
-        ("pensamento", "camilly"),
-        ("pensamento", "usuario"),
-    ]
-
-
-def test_prompt_personaliza_usuario_e_exige_quadro_completo() -> None:
+def test_prompt_do_primeiro_quadro_nao_pede_descricao_repetida() -> None:
     document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
     script = EditorialScript(compile_editorial_document(document))
     movement = movement_from_script(script, "encontro_001")
@@ -182,13 +199,15 @@ def test_prompt_personaliza_usuario_e_exige_quadro_completo() -> None:
     )
     assert "Donisete" in prompt
     assert "{{nome}}" not in prompt
+    assert "A descrição deste quadro já foi exibida na abertura" in prompt
+    assert "Não gere [DESCRIÇÃO] neste quadro" in prompt
     assert "A fala do protagonista também é roteirizada" in prompt
     assert "Cada PENSAMENTO é privado" in prompt
     assert "Não omita nenhuma entry" in prompt
 
 
 def test_renderer_separa_cena_falas_e_pensamentos() -> None:
-    content = """[QUADRO encontro_001]
+    content = """[QUADRO encontro_002]
 [DESCRIÇÃO]
 Camilly reconhece Donisete no carro.
 [FALA camilly|Camilly]
