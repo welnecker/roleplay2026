@@ -4,6 +4,7 @@ import importlib
 import sys
 from types import ModuleType
 
+from services.novel_frame_image_patch import install as install_novel_frame_image
 from services.novel_frame_layout_patch import install as install_novel_frame_layout
 from services.novel_frame_patch import install as install_novel_frame_v2
 from services.novel_frame_presentation import install as install_novel_frame_presentation
@@ -11,7 +12,7 @@ from services.novel_frame_reveal_patch import install as install_novel_frame_rev
 
 
 _RUNTIME_MODULE = "services.novel_player_runtime"
-NOVEL_FRAME_BUILD = "2026-08-18.4"
+NOVEL_FRAME_BUILD = "2026-08-18.5"
 _BUILD_LOGGED = False
 
 
@@ -22,11 +23,12 @@ def _load_or_reload_runtime() -> ModuleType:
     install_novel_frame_v2()
     install_novel_frame_reveal()
     install_novel_frame_presentation()
+    install_novel_frame_image()
     install_novel_frame_layout()
     if not _BUILD_LOGGED:
         print(
             f"[NOVEL_FRAME_BUILD] {NOVEL_FRAME_BUILD} — "
-            "cena imagem e trilho horizontal ativos"
+            "imagem compacta, cena e trilho horizontal ativos"
         )
         _BUILD_LOGGED = True
 
