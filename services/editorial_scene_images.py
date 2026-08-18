@@ -142,10 +142,10 @@ def zoomable_image_html(path: Path, *, caption: str = "", alt: str = "") -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
 <style>
 html,body{{margin:0;padding:0;background:transparent;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}}
-.scene-image-shell{{position:relative;width:100%;}}
-.scene-thumb{{display:block;width:100%;max-height:430px;object-fit:contain;border-radius:14px;cursor:zoom-in;touch-action:manipulation;user-select:none;-webkit-user-drag:none;}}
+.scene-image-shell{{position:relative;width:100%;height:min(64vh,680px);min-height:360px;}}
+.scene-thumb{{display:block;width:100%;height:100%;object-fit:contain;border-radius:14px;cursor:zoom-in;touch-action:manipulation;user-select:none;-webkit-user-drag:none;}}
 .scene-hint{{position:absolute;right:10px;bottom:10px;padding:6px 9px;border-radius:999px;background:rgba(10,8,18,.76);color:#fff;font-size:12px;line-height:1;pointer-events:none;}}
-.scene-caption{{margin-top:7px;text-align:center;font-size:12px;opacity:.7;}}
+.scene-caption{{position:absolute;left:10px;bottom:10px;max-width:70%;padding:6px 9px;border-radius:10px;background:rgba(10,8,18,.64);color:#fff;font-size:12px;}}
 .viewer{{position:absolute;inset:0;display:none;z-index:999;background:rgba(8,5,15,.96);overflow:hidden;border-radius:14px;touch-action:none;}}
 .viewer.open{{display:block;}}
 .viewer-stage{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;}}
@@ -153,6 +153,7 @@ html,body{{margin:0;padding:0;background:transparent;font-family:system-ui,-appl
 .viewer-close,.viewer-reset{{position:absolute;z-index:1001;border:0;border-radius:999px;background:rgba(255,255,255,.14);color:#fff;backdrop-filter:blur(8px);font-weight:700;cursor:pointer;}}
 .viewer-close{{right:12px;top:12px;width:38px;height:38px;font-size:22px;}}
 .viewer-reset{{left:12px;top:12px;padding:10px 13px;font-size:12px;}}
+@media (max-width: 899px){{.scene-image-shell{{height:min(58vh,560px);min-height:280px;}}.scene-hint{{font-size:11px;}}}}
 </style>
 </head>
 <body>
@@ -210,7 +211,7 @@ def render_zoomable_image(path: Path, *, caption: str = "", alt: str = "") -> No
 
     components.html(
         zoomable_image_html(Path(path), caption=caption, alt=alt),
-        height=470 if caption else 448,
+        height=700,
         scrolling=False,
     )
 
@@ -222,8 +223,9 @@ def render_editorial_scene_image(
     *,
     render_memory: bool = True,
     ordered_beat_ids: tuple[str, ...] | list[str] = (),
+    inline: bool = False,
 ) -> bool:
-    """Renderiza a imagem do beat e, opcionalmente, o seletor de memória."""
+    """Renderiza a imagem do beat; ``inline=True`` a mantém aberta no painel."""
 
     rendered = False
     package = find_editorial_package(package_id)
@@ -236,13 +238,20 @@ def render_editorial_scene_image(
         if image is not None:
             caption = str(image.get("caption", "")).strip()
             alt = str(image.get("alt", "")).strip()
-            label = caption or alt or "Cena atual"
-            with st.expander(f"🖼️ {label}", expanded=False):
+            if inline:
                 render_zoomable_image(
                     Path(image["path"]),
                     caption=caption,
                     alt=alt,
                 )
+            else:
+                label = caption or alt or "Cena atual"
+                with st.expander(f"🖼️ {label}", expanded=False):
+                    render_zoomable_image(
+                        Path(image["path"]),
+                        caption=caption,
+                        alt=alt,
+                    )
             rendered = True
 
     if render_memory:
