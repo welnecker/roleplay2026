@@ -3,10 +3,13 @@ from __future__ import annotations
 from html import escape
 
 from services import novel_frame_patch
-from services.novel_frame_reveal import frame_entry_count, frame_id, reveal_frame_content
+from services.novel_frame_reveal import (
+    frame_entry_count,
+    frame_id,
+    normalize_frame_markers,
+    reveal_frame_content,
+)
 from services.novel_frame_reveal_patch import reveal_index, set_current_frame
-
-IMAGE_SLOT_MARKER = "<!-- NOVEL_FRAME_IMAGE_SLOT -->"
 
 
 def _render_paragraphs(value: str, *, italic: bool = False) -> str:
@@ -25,7 +28,7 @@ def _description_html(body: str) -> str:
         '<article class="novel-frame-description" '
         'style="padding:0.95rem 1.05rem;border-radius:14px;'
         'border:1px solid rgba(127,127,127,.24);'
-        'background:rgba(127,127,127,.08);margin-bottom:.78rem;">'
+        'background:rgba(127,127,127,.08);margin:0 0 .78rem 0;">'
         '<div style="font-size:.72rem;font-weight:700;letter-spacing:.09em;'
         'text-transform:uppercase;opacity:.62;margin-bottom:.42rem;">Cena</div>'
         f'<div style="line-height:1.48;">{_render_paragraphs(body)}</div>'
@@ -60,8 +63,38 @@ def _speech_card(actor: str, visible_name: str, body: str, *, character_name: st
     )
 
 
-def render_frame_html(content: str, *, character_name: str) -> str | None:
-    source = str(content or "")
+def _track_style() -> str:
+    return """
+<style>
+.novel-frame-track{
+  display:grid;
+  grid-auto-flow:column;
+  grid-auto-columns:calc((100% - 2.25rem)/4);
+  gap:.75rem;
+  overflow-x:auto;
+  overscroll-behavior-inline:contain;
+  scroll-snap-type:x proximity;
+  padding:.12rem .05rem .5rem .05rem;
+  margin:.72rem 0 0 0;
+  scrollbar-width:thin;
+}
+.novel-frame-track>.novel-frame-card{min-width:0;}
+@media (max-width:899px){
+  .novel-frame-track{
+    grid-auto-columns:minmax(78vw,78vw);
+    gap:.7rem;
+    scroll-snap-type:x mandatory;
+    padding-bottom:.55rem;
+  }
+}
+</style>
+"""
+
+
+def render_frame_sections(content: str, *, character_name: str) -> tuple[str, str] | None:
+    """Retorna CENA e trilho como dois documentos HTML independentes e fechados."""
+
+    source = normalize_frame_markers(str(content or ""))
     current_frame_id = frame_id(source)
     entry_count = frame_entry_count(source)
     if current_frame_id:
@@ -89,47 +122,25 @@ def render_frame_html(content: str, *, character_name: str) -> str | None:
         if kind == "fala":
             cards.append(_speech_card(actor, visible_name, body, character_name=character_name))
 
-    style = """
-<style>
-.novel-frame-v2{width:100%;}
-.novel-frame-track{
-  display:grid;
-  grid-auto-flow:column;
-  grid-auto-columns:calc((100% - 2.25rem)/4);
-  gap:.75rem;
-  overflow-x:auto;
-  overscroll-behavior-inline:contain;
-  scroll-snap-type:x proximity;
-  padding:.12rem .05rem .5rem .05rem;
-  margin-top:.78rem;
-  scrollbar-width:thin;
-}
-.novel-frame-track>.novel-frame-card{min-width:0;}
-@media (max-width:899px){
-  .novel-frame-track{
-    grid-auto-columns:minmax(78vw,78vw);
-    gap:.7rem;
-    scroll-snap-type:x mandatory;
-    padding-bottom:.55rem;
-  }
-}
-</style>
-"""
     track = (
-        '<section class="novel-frame-track" aria-label="Falas e pensamentos do quadro">'
+        _track_style()
+        + '<section class="novel-frame-track" aria-label="Falas e pensamentos do quadro">'
         + "".join(cards)
         + "</section>"
         if cards
-        else '<section class="novel-frame-track novel-frame-track-empty" aria-hidden="true"></section>'
+        else ""
     )
-    return (
-        style
-        + '<section class="novel-frame-v2">'
-        + description
-        + IMAGE_SLOT_MARKER
-        + track
-        + "</section>"
-    )
+    return description, track
+
+
+def render_frame_html(content: str, *, character_name: str) -> str | None:
+    """Compatibilidade: renderização fechada sem slots ou HTML partido."""
+
+    sections = render_frame_sections(content, character_name=character_name)
+    if sections is None:
+        return None
+    description, track = sections
+    return '<section class="novel-frame-v2">' + description + track + "</section>"
 
 
 def install() -> None:
@@ -138,4 +149,4 @@ def install() -> None:
     novel_frame_patch.render_frame_html = render_frame_html
 
 
-__all__ = ["IMAGE_SLOT_MARKER", "install", "render_frame_html"]
+__all__ = ["install", "render_frame_html", "render_frame_sections"]
