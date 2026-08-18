@@ -116,6 +116,10 @@ def compile_novel_frame_story(
         if not frame["entries"]:
             raise ValueError(f"{frame['frame_id']}: quadro sem falas ou pensamentos.")
 
+    first_description = str(frames[0].get("description", "") or "").strip()
+    if not first_description:
+        raise ValueError("A primeira [DESCRIÇÃO] do roteiro V2 não pode estar vazia.")
+
     document = deepcopy(base_document)
     document["script_version"] = str(script_version or document.get("script_version", ""))
     document["authoring_source"] = "spreadsheet_novel_frame_v2"
@@ -123,7 +127,7 @@ def compile_novel_frame_story(
         "block_id": "novel_v2_frames",
         "order": 1,
         "title": "Novela",
-        "scene_introduction": "",
+        "scene_introduction": first_description,
         "entry_beat_id": str(frames[0]["frame_id"]),
         "max_movements_per_response": 1,
         "max_questions_per_response": 0,
@@ -133,7 +137,13 @@ def compile_novel_frame_story(
 
     for index, frame in enumerate(frames):
         next_id = str(frames[index + 1]["frame_id"]) if index + 1 < len(frames) else ""
-        payload = json.dumps(frame, ensure_ascii=False, separators=(",", ":"))
+        payload_frame = deepcopy(frame)
+        if index == 0:
+            # A primeira descrição já é exibida como abertura da história.
+            # Mantemos o restante do primeiro quadro para o primeiro clique em Avançar,
+            # sem repetir a mesma descrição.
+            payload_frame["description"] = ""
+        payload = json.dumps(payload_frame, ensure_ascii=False, separators=(",", ":"))
         block["beats"].append(
             {
                 "beat_id": str(frame["frame_id"]),
@@ -214,6 +224,16 @@ def build_frame_prompt(
             )
 
     authored = json.dumps(normalized, ensure_ascii=False, indent=2)
+    description_contract = (
+        "- A descrição deste quadro já foi exibida na abertura. Não gere [DESCRIÇÃO] neste quadro."
+        if not str(normalized.get("description", "") or "").strip()
+        else "- Gere exatamente uma [DESCRIÇÃO] curta a partir da descrição autoral deste quadro."
+    )
+    description_format = (
+        ""
+        if not str(normalized.get("description", "") or "").strip()
+        else "[DESCRIÇÃO]\n<descrição encenada>\n\n"
+    )
     return f"""MODO NOVELA INTERATIVA V2 — QUADRO MULTIPERSONAGEM
 
 Você encena uma visual novel/HQ contínua. O roteiro abaixo define exatamente os elementos do quadro atual.
@@ -234,13 +254,11 @@ REGRAS DE CONTINUIDADE:
 - Não invente acontecimentos futuros nem personagens ausentes do quadro.
 - Evite verborragia: normalmente 1 frase por fala e 1 frase por pensamento; descrição em 1 ou 2 frases.
 - Use o nome {protagonist} com parcimônia; não o repita em todas as falas.
+{description_contract}
 
 FORMATO OBRIGATÓRIO — devolva somente isto, sem Markdown adicional:
 [QUADRO {normalized.get('frame_id', '')}]
-[DESCRIÇÃO]
-<descrição encenada>
-
-Depois, para CADA entry do roteiro, na MESMA ORDEM:
+{description_format}Depois, para CADA entry do roteiro, na MESMA ORDEM:
 - FALA: [FALA <actor>|<visible_name>] seguido da fala.
 - PENSAMENTO: [PENSAMENTO <actor>|<visible_name>] seguido do pensamento.
 
