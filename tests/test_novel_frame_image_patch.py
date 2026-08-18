@@ -18,7 +18,7 @@ def _legacy_html(_path: Path, *, caption: str = "", alt: str = "") -> str:
     )
 
 
-def test_html_compacto_remove_caixa_vertical_fixa(monkeypatch, tmp_path: Path) -> None:
+def test_html_v2_libera_proporcao_natural_da_imagem(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(image_patch, "_original_zoomable_image_html", _legacy_html)
     image = tmp_path / "cena.png"
     image.write_bytes(b"png")
@@ -28,8 +28,9 @@ def test_html_compacto_remove_caixa_vertical_fixa(monkeypatch, tmp_path: Path) -
     assert "height:min(64vh,680px);min-height:360px" not in html
     assert "height:min(58vh,560px);min-height:280px" not in html
     assert ".scene-image-shell{position:relative;width:100%;}" in html
-    assert "height:auto;max-height:min(64vh,680px)" in html
-    assert ".scene-thumb{max-height:min(58vh,560px);}" in html
+    assert "width:100%;max-width:100%;height:auto" in html
+    assert "max-height:min(64vh,680px)" not in html
+    assert "max-height:min(58vh,560px)" not in html
 
 
 def test_renderer_v2_usa_st_iframe_com_altura_do_conteudo(monkeypatch, tmp_path: Path) -> None:
