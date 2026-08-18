@@ -8,11 +8,13 @@ import pytest
 
 from services import editorial_scene_images as scene_images
 from services.editorial_scene_images import (
+    image_data_uri,
     load_scene_image_map,
     message_allows_beat_image,
     render_editorial_scene_image,
     resolve_editorial_scene_image,
     resolve_numbered_beat_image,
+    zoomable_image_html,
 )
 
 
@@ -94,7 +96,7 @@ def test_carregador_preserva_legenda_alt_e_forca_recolhimento(tmp_path: Path) ->
     assert image["expanded"] is False
 
 
-def test_renderizacao_explicita_mantem_imagem_recolhida(monkeypatch, tmp_path: Path) -> None:
+def test_renderizacao_explicita_usa_visualizador_com_zoom(monkeypatch, tmp_path: Path) -> None:
     package_root = _package(tmp_path)
     package = SimpleNamespace(root=package_root)
     observed: dict[str, object] = {}
@@ -107,19 +109,48 @@ def test_renderizacao_explicita_mantem_imagem_recolhida(monkeypatch, tmp_path: P
         observed["expanded"] = expanded
         yield
 
-    def fake_image(path: str, *, caption: str | None, use_container_width: bool) -> None:
+    def fake_zoom(path: Path, *, caption: str = "", alt: str = "") -> None:
         observed["path"] = path
         observed["caption"] = caption
-        observed["use_container_width"] = use_container_width
+        observed["alt"] = alt
 
     monkeypatch.setattr(scene_images.st, "expander", fake_expander)
-    monkeypatch.setattr(scene_images.st, "image", fake_image)
+    monkeypatch.setattr(scene_images, "render_zoomable_image", fake_zoom)
 
     assert render_editorial_scene_image("example.card", "reencontro_fila_001") is True
     assert observed["expanded"] is False
     assert observed["label"] == "🖼️ Mary reencontra Janio."
+    assert Path(observed["path"]).name == "reencontro_fila_001.jpg"
     assert observed["caption"] == "Mary reencontra Janio."
-    assert observed["use_container_width"] is True
+    assert observed["alt"] == "Reencontro no supermercado."
+
+
+def test_visualizador_de_imagem_suporta_toque_pinca_e_mouse(tmp_path: Path) -> None:
+    image = tmp_path / "cena.png"
+    image.write_bytes(b"png-bytes")
+
+    html = zoomable_image_html(
+        image,
+        caption="Cena de teste",
+        alt="Descrição acessível",
+    )
+
+    assert "toque para ampliar" in html
+    assert "touchstart" in html
+    assert "touchmove" in html
+    assert "touch-action:none" in html
+    assert "dblclick" in html
+    assert "wheel" in html
+    assert "maximum-scale=5" in html
+    assert "Descrição acessível" in html
+    assert "Cena de teste" in html
+
+
+def test_data_uri_preserva_tipo_da_imagem(tmp_path: Path) -> None:
+    image = tmp_path / "cena.webp"
+    image.write_bytes(b"webp")
+
+    assert image_data_uri(image).startswith("data:image/webp;base64,")
 
 
 def test_ids_da_planilha_reutilizam_imagens_do_roteiro_original(tmp_path: Path) -> None:
