@@ -50,14 +50,48 @@ def test_paleta_fixa_segue_posicao_e_repete_a_cada_quatro_cards() -> None:
     assert sections is not None
     _description, track = sections
     assert ".novel-frame-card:nth-child(4n+1)" in track
-    assert "background:#ED8BAE !important" in track
+    assert "--card-bg:#ED8BAE" in track
     assert ".novel-frame-card:nth-child(4n+2)" in track
-    assert "background:#F1B5CB !important" in track
+    assert "--card-bg:#F1B5CB" in track
     assert ".novel-frame-card:nth-child(4n+3)" in track
-    assert "background:#F0CFDD !important" in track
+    assert "--card-bg:#F0CFDD" in track
     assert ".novel-frame-card:nth-child(4n+4)" in track
-    assert "background:#F3D5E6 !important" in track
+    assert "--card-bg:#F3D5E6" in track
     assert "color:#2B1822 !important" in track
+
+
+def test_caudas_acompanham_posicao_real_dos_cards() -> None:
+    sections = render_frame_sections(CONTENT, character_name="Camilly")
+
+    assert sections is not None
+    _description, track = sections
+
+    assert 'novel-frame-speech dialogue-message dialogue-mary tail-left' in track
+    assert 'novel-frame-speech dialogue-message dialogue-user tail-center-left' in track
+    assert 'novel-frame-thought tail-center-right' in track
+    assert 'novel-frame-thought tail-right' in track
+
+    assert ".novel-frame-card.tail-left{--tail-x:16%;}" in track
+    assert ".novel-frame-card.tail-center-left{--tail-x:36%;}" in track
+    assert ".novel-frame-card.tail-center-right{--tail-x:64%;}" in track
+    assert ".novel-frame-card.tail-right{--tail-x:84%;}" in track
+
+
+def test_fala_usa_ponta_e_pensamento_usa_bolinhas_para_cima() -> None:
+    sections = render_frame_sections(CONTENT, character_name="Camilly")
+
+    assert sections is not None
+    _description, track = sections
+
+    assert ".novel-frame-speech::before" in track
+    assert "border-bottom:10px solid var(--card-bg)" in track
+    assert "top:-9px" in track
+
+    assert track.count('class="novel-thought-tail-dot"') == 2
+    assert ".novel-frame-thought::before" in track
+    assert ".novel-frame-thought::after" in track
+    assert ".novel-frame-thought>.novel-thought-tail-dot" in track
+    assert "top:-22px" in track
 
 
 def test_renderizacao_de_compatibilidade_nao_contem_slot_de_imagem() -> None:
