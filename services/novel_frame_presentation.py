@@ -12,6 +12,14 @@ from services.novel_frame_reveal import (
 from services.novel_frame_reveal_patch import reveal_index, set_current_frame
 
 
+_TAIL_CLASSES = (
+    "tail-left",
+    "tail-center-left",
+    "tail-center-right",
+    "tail-right",
+)
+
+
 def _render_paragraphs(value: str, *, italic: bool = False) -> str:
     blocks = [block.strip() for block in str(value or "").split("\n\n") if block.strip()]
     if not blocks and str(value or "").strip():
@@ -36,13 +44,21 @@ def _description_html(body: str) -> str:
     )
 
 
-def _thought_card(actor: str, visible_name: str, body: str, *, character_name: str) -> str:
+def _thought_card(
+    actor: str,
+    visible_name: str,
+    body: str,
+    *,
+    character_name: str,
+    tail_class: str,
+) -> str:
     label = visible_name or actor or character_name
     return (
-        '<article class="novel-frame-card novel-frame-thought" '
+        f'<article class="novel-frame-card novel-frame-thought {tail_class}" '
         'style="box-sizing:border-box;padding:.8rem .9rem;border-radius:18px;'
         'border:2px dotted rgba(70,36,52,.38);'
         'background:transparent;color:#2B1822;scroll-snap-align:start;">'
+        '<span class="novel-thought-tail-dot" aria-hidden="true"></span>'
         f'<div style="font-size:.72rem;font-weight:650;opacity:.68;margin-bottom:.36rem;">'
         f'✦ pensamento · {escape(label)}</div>'
         f'<div style="line-height:1.45;opacity:.92;">{_render_paragraphs(body, italic=True)}</div>'
@@ -50,12 +66,19 @@ def _thought_card(actor: str, visible_name: str, body: str, *, character_name: s
     )
 
 
-def _speech_card(actor: str, visible_name: str, body: str, *, character_name: str) -> str:
+def _speech_card(
+    actor: str,
+    visible_name: str,
+    body: str,
+    *,
+    character_name: str,
+    tail_class: str,
+) -> str:
     is_user = novel_frame_patch._plain(actor) in {"usuario", "user", "protagonista", "voce"}
     wrapper = "dialogue-user" if is_user else "dialogue-mary"
     label = visible_name or ("Você" if is_user else actor or character_name)
     return (
-        f'<article class="novel-frame-card dialogue-message {wrapper}" '
+        f'<article class="novel-frame-card novel-frame-speech dialogue-message {wrapper} {tail_class}" '
         'style="box-sizing:border-box;scroll-snap-align:start;margin:0;color:#2B1822;">'
         f'<div class="dialogue-speaker">{escape(label)}</div>'
         f'<div class="dialogue-speech">{novel_frame_patch._paragraphs(body)}</div>'
@@ -74,25 +97,37 @@ def _track_style() -> str:
   overflow-x:auto;
   overscroll-behavior-inline:contain;
   scroll-snap-type:x proximity;
-  padding:.12rem .05rem .5rem .05rem;
-  margin:.72rem 0 0 0;
+  padding:1.15rem .05rem .5rem .05rem;
+  margin:.18rem 0 0 0;
   scrollbar-width:thin;
 }
 .novel-frame-track>.novel-frame-card{
   min-width:0;
   color:#2B1822 !important;
+  position:relative !important;
+  overflow:visible !important;
+  --tail-x:50%;
+  --card-bg:#F1B5CB;
 }
+.novel-frame-track>.novel-frame-card.tail-left{--tail-x:16%;}
+.novel-frame-track>.novel-frame-card.tail-center-left{--tail-x:36%;}
+.novel-frame-track>.novel-frame-card.tail-center-right{--tail-x:64%;}
+.novel-frame-track>.novel-frame-card.tail-right{--tail-x:84%;}
 .novel-frame-track>.novel-frame-card:nth-child(4n+1){
-  background:#ED8BAE !important;
+  --card-bg:#ED8BAE;
+  background:var(--card-bg) !important;
 }
 .novel-frame-track>.novel-frame-card:nth-child(4n+2){
-  background:#F1B5CB !important;
+  --card-bg:#F1B5CB;
+  background:var(--card-bg) !important;
 }
 .novel-frame-track>.novel-frame-card:nth-child(4n+3){
-  background:#F0CFDD !important;
+  --card-bg:#F0CFDD;
+  background:var(--card-bg) !important;
 }
 .novel-frame-track>.novel-frame-card:nth-child(4n+4){
-  background:#F3D5E6 !important;
+  --card-bg:#F3D5E6;
+  background:var(--card-bg) !important;
 }
 .novel-frame-track>.dialogue-message,
 .novel-frame-track>.novel-frame-thought{
@@ -105,11 +140,60 @@ def _track_style() -> str:
 .novel-frame-track .dialogue-speech{
   color:#2B1822 !important;
 }
+
+/* Fala: micro-cauda triangular apontando para a imagem acima. */
+.novel-frame-track>.novel-frame-speech::before{
+  content:"";
+  position:absolute;
+  top:-9px;
+  left:var(--tail-x);
+  transform:translateX(-50%);
+  width:0;
+  height:0;
+  border-left:7px solid transparent;
+  border-right:7px solid transparent;
+  border-bottom:10px solid var(--card-bg);
+  pointer-events:none;
+  z-index:2;
+}
+
+/* Pensamento: três bolinhas pequenas subindo em direção à imagem. */
+.novel-frame-track>.novel-frame-thought::before,
+.novel-frame-track>.novel-frame-thought::after,
+.novel-frame-track>.novel-frame-thought>.novel-thought-tail-dot{
+  content:"";
+  position:absolute;
+  left:var(--tail-x);
+  transform:translateX(-50%);
+  border-radius:999px;
+  background:var(--card-bg);
+  border:1px solid rgba(70,36,52,.22);
+  box-sizing:border-box;
+  pointer-events:none;
+  z-index:2;
+}
+.novel-frame-track>.novel-frame-thought::before{
+  top:-8px;
+  width:9px;
+  height:9px;
+}
+.novel-frame-track>.novel-frame-thought::after{
+  top:-16px;
+  width:6px;
+  height:6px;
+}
+.novel-frame-track>.novel-frame-thought>.novel-thought-tail-dot{
+  top:-22px;
+  width:4px;
+  height:4px;
+}
+
 @media (max-width:899px){
   .novel-frame-track{
     grid-auto-columns:minmax(78vw,78vw);
     gap:.7rem;
     scroll-snap-type:x mandatory;
+    padding-top:1.15rem;
     padding-bottom:.55rem;
   }
 }
@@ -136,17 +220,38 @@ def render_frame_sections(content: str, *, character_name: str) -> tuple[str, st
 
     description = ""
     cards: list[str] = []
+    entry_index = 0
     for kind, actor, visible_name, body in parts:
         if not body:
             continue
         if kind == "descricao":
             description = _description_html(body)
             continue
+
+        tail_class = _TAIL_CLASSES[entry_index % len(_TAIL_CLASSES)]
         if kind == "pensamento":
-            cards.append(_thought_card(actor, visible_name, body, character_name=character_name))
+            cards.append(
+                _thought_card(
+                    actor,
+                    visible_name,
+                    body,
+                    character_name=character_name,
+                    tail_class=tail_class,
+                )
+            )
+            entry_index += 1
             continue
         if kind == "fala":
-            cards.append(_speech_card(actor, visible_name, body, character_name=character_name))
+            cards.append(
+                _speech_card(
+                    actor,
+                    visible_name,
+                    body,
+                    character_name=character_name,
+                    tail_class=tail_class,
+                )
+            )
+            entry_index += 1
 
     track = (
         _track_style()
