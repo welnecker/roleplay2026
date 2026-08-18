@@ -1,21 +1,11 @@
 from __future__ import annotations
 
 from services import novel_frame_layout_patch as layout
-from services.novel_frame_presentation import IMAGE_SLOT_MARKER
 
 
-def test_layout_insere_imagem_entre_cena_e_cards(monkeypatch) -> None:
+def test_layout_renderiza_cena_imagem_e_cards_nessa_ordem(monkeypatch) -> None:
     events: list[str] = []
 
-    monkeypatch.setattr(
-        layout,
-        "_original_render_dialogue_html",
-        lambda role, content, character_name="Mary": (
-            '<article class="novel-frame-description">Cena</article>'
-            + IMAGE_SLOT_MARKER
-            + '<section class="novel-frame-track">Cards</section>'
-        ),
-    )
     monkeypatch.setattr(layout, "frame_id", lambda _content: "encontro_001")
     monkeypatch.setattr(
         layout.st,
@@ -24,6 +14,17 @@ def test_layout_insere_imagem_entre_cena_e_cards(monkeypatch) -> None:
     )
     monkeypatch.setattr(layout, "_render_pending_image", lambda: events.append("IMAGE") or True)
 
+    from services import novel_frame_presentation
+
+    monkeypatch.setattr(
+        novel_frame_presentation,
+        "render_frame_sections",
+        lambda content, character_name: (
+            '<article class="novel-frame-description">Cena</article>',
+            '<section class="novel-frame-track">Cards</section>',
+        ),
+    )
+
     result = layout._dialogue_wrapper(
         "assistant",
         "[QUADRO encontro_001]...[/QUADRO]",
@@ -31,9 +32,11 @@ def test_layout_insere_imagem_entre_cena_e_cards(monkeypatch) -> None:
     )
 
     assert result == ""
-    assert "novel-frame-description" in events[0]
-    assert events[1] == "IMAGE"
-    assert "novel-frame-track" in events[2]
+    assert events == [
+        '<article class="novel-frame-description">Cena</article>',
+        "IMAGE",
+        '<section class="novel-frame-track">Cards</section>',
+    ]
 
 
 def test_imagem_v2_e_adiada_e_forcada_inline(monkeypatch) -> None:
