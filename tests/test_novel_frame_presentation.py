@@ -26,6 +26,8 @@ def test_cena_e_entries_sao_documentos_fechados_independentes() -> None:
     assert '>Cena<' in description
     assert "Oi, Donisete!" not in description
     assert "PENSAMENTO" not in description
+    assert "background:#D24369" in description
+    assert "color:#fff" in description
 
     assert 'class="novel-frame-track"' in track
     assert 'grid-auto-columns:calc((100% - 2.25rem)/4)' in track
@@ -34,12 +36,28 @@ def test_cena_e_entries_sao_documentos_fechados_independentes() -> None:
     assert 'scroll-snap-type:x mandatory' in track
     assert track.count('class="novel-frame-card') == 4
     assert 'novel-frame-thought' in track
-    assert 'border:2px dotted' in track
+    assert 'border-style:dotted !important' in track
     assert 'font-style:italic' in track
     assert 'pensamento · Camilly' in track
     assert 'pensamento · Donisete' in track
     assert 'dialogue-user' in track
     assert 'dialogue-mary' in track
+
+
+def test_paleta_fixa_segue_posicao_e_repete_a_cada_quatro_cards() -> None:
+    sections = render_frame_sections(CONTENT, character_name="Camilly")
+
+    assert sections is not None
+    _description, track = sections
+    assert ".novel-frame-card:nth-child(4n+1)" in track
+    assert "background:#ED8BAE !important" in track
+    assert ".novel-frame-card:nth-child(4n+2)" in track
+    assert "background:#F1B5CB !important" in track
+    assert ".novel-frame-card:nth-child(4n+3)" in track
+    assert "background:#F0CFDD !important" in track
+    assert ".novel-frame-card:nth-child(4n+4)" in track
+    assert "background:#F3D5E6 !important" in track
+    assert "color:#2B1822 !important" in track
 
 
 def test_renderizacao_de_compatibilidade_nao_contem_slot_de_imagem() -> None:
