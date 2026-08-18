@@ -27,10 +27,10 @@ def _description_html(body: str) -> str:
     return (
         '<article class="novel-frame-description" '
         'style="padding:0.95rem 1.05rem;border-radius:14px;'
-        'border:1px solid rgba(127,127,127,.24);'
-        'background:rgba(127,127,127,.08);margin:0 0 .78rem 0;">'
+        'border:1px solid rgba(255,255,255,.18);'
+        'background:#D24369;color:#fff;margin:0 0 .78rem 0;">'
         '<div style="font-size:.72rem;font-weight:700;letter-spacing:.09em;'
-        'text-transform:uppercase;opacity:.62;margin-bottom:.42rem;">Cena</div>'
+        'text-transform:uppercase;opacity:.82;margin-bottom:.42rem;">Cena</div>'
         f'<div style="line-height:1.48;">{_render_paragraphs(body)}</div>'
         '</article>'
     )
@@ -41,9 +41,9 @@ def _thought_card(actor: str, visible_name: str, body: str, *, character_name: s
     return (
         '<article class="novel-frame-card novel-frame-thought" '
         'style="box-sizing:border-box;padding:.8rem .9rem;border-radius:18px;'
-        'border:2px dotted rgba(127,127,127,.48);'
-        'background:rgba(127,127,127,.035);scroll-snap-align:start;">'
-        f'<div style="font-size:.72rem;font-weight:650;opacity:.62;margin-bottom:.36rem;">'
+        'border:2px dotted rgba(70,36,52,.38);'
+        'background:transparent;color:#2B1822;scroll-snap-align:start;">'
+        f'<div style="font-size:.72rem;font-weight:650;opacity:.68;margin-bottom:.36rem;">'
         f'✦ pensamento · {escape(label)}</div>'
         f'<div style="line-height:1.45;opacity:.92;">{_render_paragraphs(body, italic=True)}</div>'
         '</article>'
@@ -56,7 +56,7 @@ def _speech_card(actor: str, visible_name: str, body: str, *, character_name: st
     label = visible_name or ("Você" if is_user else actor or character_name)
     return (
         f'<article class="novel-frame-card dialogue-message {wrapper}" '
-        'style="box-sizing:border-box;scroll-snap-align:start;margin:0;">'
+        'style="box-sizing:border-box;scroll-snap-align:start;margin:0;color:#2B1822;">'
         f'<div class="dialogue-speaker">{escape(label)}</div>'
         f'<div class="dialogue-speech">{novel_frame_patch._paragraphs(body)}</div>'
         '</article>'
@@ -78,7 +78,33 @@ def _track_style() -> str:
   margin:.72rem 0 0 0;
   scrollbar-width:thin;
 }
-.novel-frame-track>.novel-frame-card{min-width:0;}
+.novel-frame-track>.novel-frame-card{
+  min-width:0;
+  color:#2B1822 !important;
+}
+.novel-frame-track>.novel-frame-card:nth-child(4n+1){
+  background:#ED8BAE !important;
+}
+.novel-frame-track>.novel-frame-card:nth-child(4n+2){
+  background:#F1B5CB !important;
+}
+.novel-frame-track>.novel-frame-card:nth-child(4n+3){
+  background:#F0CFDD !important;
+}
+.novel-frame-track>.novel-frame-card:nth-child(4n+4){
+  background:#F3D5E6 !important;
+}
+.novel-frame-track>.dialogue-message,
+.novel-frame-track>.novel-frame-thought{
+  border-color:rgba(70,36,52,.30) !important;
+}
+.novel-frame-track>.novel-frame-thought{
+  border-style:dotted !important;
+}
+.novel-frame-track .dialogue-speaker,
+.novel-frame-track .dialogue-speech{
+  color:#2B1822 !important;
+}
 @media (max-width:899px){
   .novel-frame-track{
     grid-auto-columns:minmax(78vw,78vw);
