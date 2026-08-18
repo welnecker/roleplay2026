@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from html import escape
 from typing import Any
 
 import streamlit as st
@@ -12,8 +13,10 @@ from services.script_authoring import (
     compile_draft_rows,
     rows_to_csv,
     rows_to_tsv,
+    slugify,
     synchronized_package_id,
 )
+from services.script_authoring_v2 import compile_v2_rows, preview_v2_frames
 
 
 st.set_page_config(page_title="Auxiliar de Roteiros", page_icon="📝", layout="wide")
@@ -23,27 +26,33 @@ ROWS_KEY = "script_authoring_rows"
 STORY_TITLE_KEY = "script_authoring_story_title"
 PACKAGE_ID_KEY = "script_authoring_package_id"
 PACKAGE_SUGGESTION_KEY = "script_authoring_package_suggestion"
-_TAG_BUTTONS = (
-    ("Cena", "[CENA {block_id}] ", "Abre um bloco narrativo. Ex.: [CENA supermercado] Eu caminho pelo corredor."),
-    ("Beat", "[BEAT] ", "Define o acontecimento obrigatório. Ex.: [BEAT] Eu esbarro no usuário."),
-    ("Pensamento", "[PENSAMENTO] ", "Pensamento interno da personagem. Ex.: [PENSAMENTO] Espero não ter machucado ele."),
-    ("Pensamento interpretado", "[PENSAMENTO INTERPRETADO] ", "Núcleo psicológico desenvolvido pelo modelo sem antecipar outro beat."),
-    ("Fala exata", "[FALA EXATA] ", "Texto autoral que deve aparecer. Ex.: [FALA EXATA] Eita... desculpa!"),
-    ("Fala", "[FALA] ", "Fala canônica da personagem. Ex.: [FALA] Tem certeza que está tudo bem?"),
-    ("Fala interpretada", "[FALA INTERPRETADA] ", "Fala intensa e livre que preserva o núcleo autoral."),
-    ("Fala exata íntima", "[FALA EXATA INTIMA] ", "Fala literal em etapa íntima já autorizada."),
-    ("Fala livre", "[FALA LIVRE] ", "Orienta o modelo sem fixar cada palavra. Ex.: [FALA LIVRE] Eu pergunto se ele está bem."),
-    ("Ponte", "[PONTE] ", "Orienta a reação dentro do beat. Ex.: [PONTE] Eu respondo sem mudar de assunto."),
-    ("Transição", "[TRANSIÇÃO] ", "Introduz tempo ou local antes do próximo beat. Ex.: [TRANSIÇÃO] MINUTOS DEPOIS — FILA."),
-    ("Pátio final", "[PÁTIO FINAL despedida] ", "Abre o encerramento normal. Depois dele, escreva pelo menos dois beats."),
-    ("Pátio decisão", "[PÁTIO DECISÃO decisao_id] ", "Abre uma decisão personalizada vinculada ao beat anterior."),
+AUTHORING_MODE_KEY = "script_authoring_mode"
+ACTORS_KEY = "script_authoring_v2_actors"
+SELECTED_ACTOR_KEY = "script_authoring_v2_selected_actor"
+
+LEGACY_TAG_BUTTONS = (
+    ("Cena", "[CENA {block_id}] ", "Abre um bloco narrativo."),
+    ("Beat", "[BEAT] ", "Define o acontecimento obrigatório."),
+    ("Pensamento", "[PENSAMENTO] ", "Pensamento interno da personagem."),
+    ("Pensamento interpretado", "[PENSAMENTO INTERPRETADO] ", "Núcleo psicológico desenvolvido pelo modelo."),
+    ("Fala exata", "[FALA EXATA] ", "Texto autoral literal."),
+    ("Fala", "[FALA] ", "Fala canônica da personagem."),
+    ("Fala interpretada", "[FALA INTERPRETADA] ", "Fala livre que preserva o núcleo autoral."),
+    ("Fala exata íntima", "[FALA EXATA INTIMA] ", "Fala literal em etapa íntima autorizada."),
+    ("Fala livre", "[FALA LIVRE] ", "Orienta o modelo sem fixar cada palavra."),
+    ("Ponte", "[PONTE] ", "Orienta a reação dentro do beat."),
+    ("Transição", "[TRANSIÇÃO] ", "Introduz tempo ou local antes do próximo beat."),
+    ("Pátio final", "[PÁTIO FINAL despedida] ", "Abre o encerramento normal."),
+    ("Pátio decisão", "[PÁTIO DECISÃO decisao_id] ", "Abre uma decisão vinculada ao beat anterior."),
     ("Aceite", "[ACEITE] ", "Critério semântico binário para avançar."),
     ("Prosseguir", "[PROSSEGUIR] ", "Mensagem sugerida enviada como fala normal do usuário."),
     ("Tentar a sorte", "[TENTAR A SORTE] ", "Aviso exibido antes do campo livre."),
-    ("Aviso", "[AVISO] ", "Resposta autoral após o primeiro não aceite."),
+    ("Aviso", "[AVISO] ", "Resposta após o primeiro não aceite."),
     ("Encerramento", "[ENCERRAMENTO codigo] ", "Fala final após o segundo não aceite."),
-    ("Fim", "[FIM story_complete] ", "Encerra a run. Deve ser a última instrução do roteiro."),
+    ("Fim", "[FIM story_complete] ", "Encerra a run."),
 )
+
+V2_PALETTE = ("#ED8BAE", "#F1B5CB", "#F0CFDD", "#F3D5E6")
 
 
 def _authenticated_user() -> AuthenticatedUser | None:
@@ -62,13 +71,6 @@ def _admin_emails(secrets: Any) -> set[str]:
     return {str(value).strip().casefold() for value in values if str(value).strip()}
 
 
-def _append_tag(template: str, block_id: str) -> None:
-    current = str(st.session_state.get(DRAFT_KEY, "") or "").rstrip()
-    tag = template.format(block_id=block_id.strip() or "novo_bloco")
-    st.session_state[DRAFT_KEY] = (current + "\n\n" + tag).lstrip()
-    st.session_state.pop(ROWS_KEY, None)
-
-
 def _clear_draft() -> None:
     clear_authoring_state(st.session_state, draft_key=DRAFT_KEY, rows_key=ROWS_KEY)
 
@@ -83,56 +85,125 @@ def _sync_package_id_from_title() -> None:
     st.session_state[PACKAGE_SUGGESTION_KEY] = suggestion
 
 
+def _append_text(text: str) -> None:
+    current = str(st.session_state.get(DRAFT_KEY, "") or "").rstrip()
+    st.session_state[DRAFT_KEY] = (current + "\n\n" + text).lstrip()
+    st.session_state.pop(ROWS_KEY, None)
+
+
+def _append_legacy_tag(template: str, block_id: str) -> None:
+    _append_text(template.format(block_id=block_id.strip() or "novo_bloco"))
+
+
+def _append_v2_tag(kind: str, actor: str = "") -> None:
+    if kind == "DESCRIÇÃO":
+        _append_text("[DESCRIÇÃO] ")
+        return
+    clean_actor = slugify(actor, fallback="usuario")
+    _append_text(f"[{kind} {clean_actor}] ")
+
+
+def _actor_options(raw: str) -> list[str]:
+    result: list[str] = []
+    for value in str(raw or "").replace(";", ",").split(","):
+        actor = slugify(value.strip(), fallback="")
+        if actor and actor not in result:
+            result.append(actor)
+    if "usuario" not in result:
+        result.append("usuario")
+    return result or ["usuario"]
+
+
 def _render_name_placeholder_button() -> None:
     components.html(
         """
         <style>
-          html, body { margin: 0; padding: 0; background: transparent; }
-          #copy-name {
-            width: 100%;
-            min-height: 40px;
-            padding: 0.55rem 0.75rem;
-            border: 1px solid #9b6cff;
-            border-radius: 0.5rem;
-            background: #6f3fc5;
-            color: #ffffff;
-            font: 600 14px sans-serif;
-            cursor: pointer;
-          }
-          #copy-name:hover { background: #8251db; }
-          #copy-name:active { transform: translateY(1px); }
-          #copy-name.copied { background: #237a57; border-color: #45b789; }
+          html, body { margin:0; padding:0; background:transparent; }
+          #copy-name { width:100%; min-height:40px; padding:.55rem .75rem;
+            border:1px solid #D24369; border-radius:.6rem; background:#D24369;
+            color:white; font:600 14px sans-serif; cursor:pointer; }
+          #copy-name.copied { background:#237a57; border-color:#45b789; }
         </style>
-        <textarea id="copy-helper" aria-hidden="true"
-          style="position:fixed;left:-9999px;top:-9999px;">{{nome}}</textarea>
+        <textarea id="copy-helper" aria-hidden="true" style="position:fixed;left:-9999px;">{{nome}}</textarea>
         <button id="copy-name" type="button" onclick="copyName()">Copiar {{nome}}</button>
         <script>
-          function copyName() {
-            const button = document.getElementById("copy-name");
-            const helper = document.getElementById("copy-helper");
-            helper.focus();
-            helper.select();
-            helper.setSelectionRange(0, helper.value.length);
-            let copied = false;
-            try {
-              copied = document.execCommand("copy");
-            } catch (error) {
-              copied = false;
-            }
-            if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(helper.value).catch(() => {});
-            }
-            button.textContent = "Copiado ✓";
-            button.classList.add("copied");
-            setTimeout(() => {
-              button.textContent = "Copiar {{nome}}";
-              button.classList.remove("copied");
-            }, 1600);
+          function copyName(){
+            const button=document.getElementById('copy-name');
+            const helper=document.getElementById('copy-helper');
+            helper.focus(); helper.select(); helper.setSelectionRange(0,helper.value.length);
+            let copied=false; try { copied=document.execCommand('copy'); } catch(e) {}
+            if(!copied && navigator.clipboard){ navigator.clipboard.writeText(helper.value).catch(()=>{}); }
+            button.textContent='Copiado ✓'; button.classList.add('copied');
+            setTimeout(()=>{button.textContent='Copiar {{nome}}';button.classList.remove('copied');},1400);
           }
         </script>
         """,
         height=44,
     )
+
+
+def _render_v2_preview(draft: str, frame_prefix: str, start_frame_number: int) -> None:
+    source = str(draft or "").strip()
+    if not source:
+        return
+    try:
+        frames = preview_v2_frames(
+            source,
+            frame_prefix=frame_prefix,
+            start_frame_number=int(start_frame_number),
+        )
+    except ScriptAuthoringError:
+        return
+
+    with st.expander("Prévia estrutural dos quadros", expanded=False):
+        st.caption("Prévia do roteiro autoral. O modelo ainda não interpretou as falas.")
+        for frame in frames:
+            st.markdown(f"**{escape(frame.frame_id)}**")
+            st.markdown(
+                '<div style="padding:.8rem 1rem;border-radius:14px;background:#D24369;color:white;'
+                'font-family:Comic Sans MS,Comic Sans,Chalkboard SE,Marker Felt,Segoe Print,cursive;">'
+                '<strong style="font-size:.75rem;">CENA</strong><br>'
+                f'{escape(frame.description)}</div>',
+                unsafe_allow_html=True,
+            )
+            entries = list(frame.entries)
+            for offset in range(0, len(entries), 4):
+                chunk = entries[offset : offset + 4]
+                columns = st.columns(4)
+                for position, entry in enumerate(chunk):
+                    with columns[position]:
+                        color = V2_PALETTE[(offset + position) % 4]
+                        label = (
+                            f"✦ pensamento · {entry.actor}"
+                            if entry.kind == "PENSAMENTO"
+                            else entry.actor
+                        )
+                        style = "font-style:italic;" if entry.kind == "PENSAMENTO" else ""
+                        border = "2px dotted rgba(70,36,52,.35)" if entry.kind == "PENSAMENTO" else "1px solid rgba(70,36,52,.20)"
+                        st.markdown(
+                            f'<div style="min-height:110px;padding:.75rem;border-radius:16px;background:{color};'
+                            f'color:#2B1822;border:{border};font-family:Comic Sans MS,Comic Sans,Chalkboard SE,Marker Felt,Segoe Print,cursive;">'
+                            f'<strong style="font-size:.72rem;">{escape(label)}</strong><br>'
+                            f'<span style="{style}">{escape(entry.text)}</span></div>',
+                            unsafe_allow_html=True,
+                        )
+            st.divider()
+
+
+def _render_legacy_controls(block_id: str) -> None:
+    st.subheader("Inserir tag — modo legado")
+    button_columns = st.columns(5)
+    for index, (label, template, description) in enumerate(LEGACY_TAG_BUTTONS):
+        with button_columns[index % len(button_columns)]:
+            if st.button(
+                label,
+                key=f"script_tag:{label}",
+                help=description,
+                width="stretch",
+            ):
+                _append_legacy_tag(template, block_id)
+                st.rerun()
+
 
 user = _authenticated_user()
 if user is None:
@@ -143,10 +214,7 @@ if user is None:
 
 allowed_emails = _admin_emails(st.secrets)
 if not allowed_emails:
-    st.error(
-        "O auxiliar está bloqueado até que SCRIPT_EDITOR_ADMIN_EMAILS seja "
-        "configurado nos Secrets do Streamlit."
-    )
+    st.error("O auxiliar está bloqueado até que SCRIPT_EDITOR_ADMIN_EMAILS seja configurado nos Secrets.")
     st.code('SCRIPT_EDITOR_ADMIN_EMAILS = ["seu-email@dominio.com"]', language="toml")
     st.stop()
 if user.email.strip().casefold() not in allowed_emails:
@@ -154,184 +222,162 @@ if user.email.strip().casefold() not in allowed_emails:
     st.stop()
 
 st.title("Auxiliar de Roteiros")
-st.caption(
-    "Produza o roteiro autoral, valide a estrutura e exporte linhas prontas "
-    "para a aba ROTEIROS. Esta página não altera a planilha automaticamente."
-)
+st.caption("Crie roteiros V2 multipersonagem ou mantenha roteiros legados; exportação continua pronta para a aba ROTEIROS.")
 
 st.session_state.setdefault(DRAFT_KEY, "")
 st.session_state.setdefault(PACKAGE_ID_KEY, "")
 st.session_state.setdefault(PACKAGE_SUGGESTION_KEY, "")
-mode = st.radio(
+st.session_state.setdefault(ACTORS_KEY, "camilly, usuario")
+
+authoring_mode = st.radio(
+    "Modo de roteiro",
+    ("V2 — Visual novel / multipersonagem", "Legado — Beats e pátios"),
+    key=AUTHORING_MODE_KEY,
+    horizontal=True,
+)
+is_v2 = authoring_mode.startswith("V2")
+
+operation = st.radio(
     "Operação",
-    ("Criar nova história", "Criar ou refazer bloco de uma história"),
+    ("Criar nova história", "Criar ou refazer bloco/quadro de uma história"),
     horizontal=True,
 )
 
 left, right = st.columns(2)
 with left:
-    story_title = st.text_input(
+    st.text_input(
         "Nome da história",
         key=STORY_TITLE_KEY,
         placeholder="Ex.: Encontro com Camilly",
-        disabled=mode != "Criar nova história",
+        disabled=operation != "Criar nova história",
         on_change=_sync_package_id_from_title,
     )
     package_id = st.text_input(
         "package_id",
         key=PACKAGE_ID_KEY,
         placeholder="roleplay2026.nome_da_historia",
-        help="Identifica a história e o card. Não identifica o bloco.",
+        help="Identifica a história e o card.",
     )
 with right:
-    script_version = st.text_input("script_version", value="1.0.0")
+    script_version = st.text_input("script_version", value="200" if is_v2 else "1.0.0")
     block_id = st.text_input(
-        "block_id",
-        value="primeiro_encontro",
-        help="Identifica o bloco/cena. Os line_id serão gerados automaticamente.",
+        "Prefixo dos quadros" if is_v2 else "block_id",
+        value="encontro" if is_v2 else "primeiro_encontro",
+        help=(
+            "V2: gera encontro_001, encontro_002... e seus line_id."
+            if is_v2
+            else "Identifica o bloco/cena legado."
+        ),
     )
 
-order_col, interval_col, action_col = st.columns([1, 1, 2])
+order_col, interval_col, frame_col = st.columns(3)
 with order_col:
     start_order = st.number_input("Primeira order", min_value=0, value=10, step=10)
 with interval_col:
     order_step = st.number_input("Intervalo", min_value=1, value=10, step=1)
-with action_col:
-    st.write("")
-    st.write("")
-    if st.button("Preparar bloco", use_container_width=True):
-        if not str(st.session_state.get(DRAFT_KEY, "") or "").strip():
-            st.session_state[DRAFT_KEY] = f"[CENA {block_id or 'novo_bloco'}] "
-        st.rerun()
+with frame_col:
+    start_frame_number = st.number_input(
+        "Primeiro nº do quadro",
+        min_value=1,
+        value=1,
+        step=1,
+        disabled=not is_v2,
+    )
 
-st.subheader("Inserir tag")
-button_columns = st.columns(5)
-for index, (label, template, description) in enumerate(_TAG_BUTTONS):
-    with button_columns[index % len(button_columns)]:
-        if st.button(
-            label,
-            key=f"script_tag:{label}",
-            help=description,
-            use_container_width=True,
-        ):
-            _append_tag(template, block_id)
+if is_v2:
+    st.subheader("Personagens e ações")
+    actors_raw = st.text_input(
+        "Personagens do roteiro",
+        key=ACTORS_KEY,
+        help="Separe por vírgulas. 'usuario' é reservado ao protagonista e é sempre disponibilizado.",
+        placeholder="camilly, usuario, renan",
+    )
+    actors = _actor_options(actors_raw)
+    if st.session_state.get(SELECTED_ACTOR_KEY) not in actors:
+        st.session_state[SELECTED_ACTOR_KEY] = actors[0]
+
+    actor_col, description_col, speech_col, thought_col = st.columns([2, 1, 1, 1])
+    with actor_col:
+        selected_actor = st.selectbox("Ator", actors, key=SELECTED_ACTOR_KEY)
+    with description_col:
+        st.write("")
+        st.write("")
+        if st.button("+ Novo quadro", width="stretch", type="secondary"):
+            _append_v2_tag("DESCRIÇÃO")
             st.rerun()
+    with speech_col:
+        st.write("")
+        st.write("")
+        if st.button("+ Fala", width="stretch"):
+            _append_v2_tag("FALA", selected_actor)
+            st.rerun()
+    with thought_col:
+        st.write("")
+        st.write("")
+        if st.button("+ Pensamento", width="stretch"):
+            _append_v2_tag("PENSAMENTO", selected_actor)
+            st.rerun()
+
+    st.info(
+        "Cada [DESCRIÇÃO] abre um novo quadro. Falas e pensamentos seguem a order da planilha. "
+        "Você pode repetir o mesmo personagem quantas vezes quiser dentro do quadro."
+    )
+else:
+    _render_legacy_controls(block_id)
 
 name_button, name_help = st.columns([1, 4])
 with name_button:
     _render_name_placeholder_button()
 with name_help:
-    st.caption(
-        "Posicione o cursor dentro do roteiro e cole para inserir o nome do usuário "
-        "em qualquer fala ou pensamento."
-    )
+    st.caption("Use {{nome}} quando quiser inserir o nome real do protagonista no roteiro.")
 
-with st.expander("Tags direcionadas por tratamento ou anatomia"):
-    st.info(
-        "Todos os pensamentos e falas abaixo pertencem à personagem. "
-        "O complemento HOMEM, MULHER ou NEUTRA escolhe qual variante será usada "
-        "conforme o tratamento selecionado pelo usuário."
-    )
-    directed = (
-        (
-            "Pensamento para homem",
-            "[PENSAMENTO HOMEM] ",
-            "Pensamento interno da personagem quando o usuário escolheu “Como homem”. "
-            "Ex.: [PENSAMENTO HOMEM] Humm... gostei do jeito dele.",
-        ),
-        (
-            "Pensamento para mulher",
-            "[PENSAMENTO MULHER] ",
-            "Pensamento interno da personagem quando o usuário escolheu “Como mulher”. "
-            "Ex.: [PENSAMENTO MULHER] Humm... gostei do jeito dela.",
-        ),
-        (
-            "Pensamento neutro",
-            "[PENSAMENTO NEUTRA] ",
-            "Pensamento interno da personagem para tratamento neutro. "
-            "Ex.: [PENSAMENTO NEUTRA] Humm... gostei dessa aproximação.",
-        ),
-        (
-            "Fala para homem",
-            "[FALA EXATA HOMEM] ",
-            "Fala da personagem dirigida ao usuário tratado como homem. "
-            "Ex.: [FALA EXATA HOMEM] Oi, {{nome}}... meu lindo.",
-        ),
-        (
-            "Fala para mulher",
-            "[FALA EXATA MULHER] ",
-            "Fala da personagem dirigida ao usuário tratado como mulher. "
-            "Ex.: [FALA EXATA MULHER] Oi, {{nome}}... minha linda.",
-        ),
-        (
-            "Fala neutra",
-            "[FALA EXATA NEUTRA] ",
-            "Fala da personagem sem flexão masculina ou feminina. "
-            "Ex.: [FALA EXATA NEUTRA] Oi, {{nome}}... que prazer.",
-        ),
-        (
-            "Pensamento — corpo masculino",
-            "[PENSAMENTO CORPO_MASCULINO] ",
-            "Pensamento da personagem usado somente quando o usuário informou anatomia masculina. "
-            "Use quando o conteúdo depende da anatomia, não apenas do tratamento.",
-        ),
-        (
-            "Pensamento — corpo feminino",
-            "[PENSAMENTO CORPO_FEMININO] ",
-            "Pensamento da personagem usado somente quando o usuário informou anatomia feminina. "
-            "Use quando o conteúdo depende da anatomia, não apenas do tratamento.",
-        ),
-        (
-            "Pensamento — corpo intersexo",
-            "[PENSAMENTO CORPO_INTERSEXO] ",
-            "Pensamento da personagem usado somente quando o usuário informou anatomia intersexo. "
-            "Use quando o conteúdo depende da anatomia, não apenas do tratamento.",
-        ),
-    )
-    directed_columns = st.columns(3)
-    for index, (label, template, description) in enumerate(directed):
-        with directed_columns[index % 3]:
-            if st.button(
-                label,
-                key=f"script_directed:{label}",
-                help=description,
-                use_container_width=True,
-            ):
-                _append_tag(template, block_id)
-                st.rerun()
-
-draft = st.text_area(
-    "Roteiro",
-    key=DRAFT_KEY,
-    height=460,
-    placeholder=(
+placeholder = (
+    "[DESCRIÇÃO] Camilly e {{nome}} chegam à praia e encontram Renan.\n\n"
+    "[FALA camilly] Eu cumprimento Renan com surpresa.\n\n"
+    "[FALA renan] Eu respondo naturalmente e observo quem está com ela.\n\n"
+    "[PENSAMENTO usuario] A reação dos dois parece mais íntima do que esperava.\n\n"
+    "[FALA usuario] Eu me apresento a Renan com naturalidade."
+    if is_v2
+    else (
         "[CENA primeiro_encontro] Eu encontro o usuário.\n\n"
         "[BEAT] Eu inicio a conversa.\n\n"
         "[PENSAMENTO] Quero descobrir como ele reage.\n\n"
         "[FALA EXATA] Oi, {{nome}}... que bom ter você aqui."
-    ),
+    )
 )
+
+draft = st.text_area("Roteiro", key=DRAFT_KEY, height=470, placeholder=placeholder)
+
+if is_v2:
+    _render_v2_preview(draft, block_id, int(start_frame_number))
 
 generate_column, clear_column = st.columns([3, 1])
 with generate_column:
-    generate = st.button("Validar e gerar", type="primary", use_container_width=True)
+    generate = st.button("Validar e gerar", type="primary", width="stretch")
 with clear_column:
-    st.button(
-        "Limpar",
-        use_container_width=True,
-        on_click=_clear_draft,
-    )
+    st.button("Limpar", width="stretch", on_click=_clear_draft)
 
 if generate:
     try:
-        st.session_state[ROWS_KEY] = compile_draft_rows(
-            draft,
-            package_id=package_id,
-            script_version=script_version,
-            initial_block_id=block_id,
-            start_order=int(start_order),
-            order_step=int(order_step),
-        )
+        if is_v2:
+            st.session_state[ROWS_KEY] = compile_v2_rows(
+                draft,
+                package_id=package_id,
+                script_version=script_version,
+                frame_prefix=block_id,
+                start_order=int(start_order),
+                order_step=int(order_step),
+                start_frame_number=int(start_frame_number),
+            )
+        else:
+            st.session_state[ROWS_KEY] = compile_draft_rows(
+                draft,
+                package_id=package_id,
+                script_version=script_version,
+                initial_block_id=block_id,
+                start_order=int(start_order),
+                order_step=int(order_step),
+            )
     except ScriptAuthoringError as exc:
         st.session_state.pop(ROWS_KEY, None)
         st.error("O roteiro precisa de correções:")
@@ -343,7 +389,7 @@ if generate:
 rows = st.session_state.get(ROWS_KEY)
 if isinstance(rows, list) and rows:
     st.subheader("Prévia das linhas")
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.dataframe(rows, width="stretch", hide_index=True)
 
     tsv = rows_to_tsv(rows)
     csv_text = rows_to_csv(rows)
@@ -356,7 +402,7 @@ if isinstance(rows, list) and rows:
             data=tsv.encode("utf-8"),
             file_name=f"{filename_base}.tsv",
             mime="text/tab-separated-values",
-            use_container_width=True,
+            width="stretch",
             type="primary",
         )
     with download_csv:
@@ -365,14 +411,11 @@ if isinstance(rows, list) and rows:
             data=csv_text.encode("utf-8"),
             file_name=f"{filename_base}.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
 
     with st.expander("Copiar manualmente para a aba ROTEIROS"):
-        st.caption(
-            "O conteúdo abaixo usa tabulações. Copie tudo e cole na primeira célula "
-            "da área de destino da planilha."
-        )
+        st.caption("Copie o conteúdo tabulado e cole na primeira célula da área de destino.")
         st.code(tsv, language=None)
 
 if st.button("Voltar aos cards"):
