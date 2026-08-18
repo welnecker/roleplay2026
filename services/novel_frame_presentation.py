@@ -3,6 +3,8 @@ from __future__ import annotations
 from html import escape
 
 from services import novel_frame_patch
+from services.novel_frame_reveal import frame_entry_count, frame_id, reveal_frame_content
+from services.novel_frame_reveal_patch import reveal_index, set_current_frame
 
 
 def _render_paragraphs(value: str, *, italic: bool = False) -> str:
@@ -17,7 +19,17 @@ def _render_paragraphs(value: str, *, italic: bool = False) -> str:
 
 
 def render_frame_html(content: str, *, character_name: str) -> str | None:
-    parts = novel_frame_patch._parse_output(content)
+    source = str(content or "")
+    current_frame_id = frame_id(source)
+    entry_count = frame_entry_count(source)
+    if current_frame_id:
+        set_current_frame(current_frame_id, entry_count)
+        source = reveal_frame_content(
+            source,
+            reveal_index(current_frame_id, entry_count),
+        )
+
+    parts = novel_frame_patch._parse_output(source)
     if parts is None:
         return None
 
