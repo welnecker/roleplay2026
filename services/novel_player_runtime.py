@@ -22,16 +22,9 @@ from services.immersive_onboarding import (
     render_immersive_onboarding,
     restore_profile_for_run,
 )
-from services.novel_v2_adapter import (
-    build_novel_prompt,
-    movement_from_script,
-    next_movement_id,
-)
-from services.paid_run_access import (
-    finish_active_run,
-    get_paid_run_access,
-    terminate_paid_access,
-)
+from services.novel_frame_runtime_support import first_frame_movement, is_frame_script
+from services.novel_v2_adapter import build_novel_prompt, movement_from_script, next_movement_id
+from services.paid_run_access import finish_active_run, get_paid_run_access, terminate_paid_access
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
@@ -242,6 +235,90 @@ def advance_story_state(state: StoryState, *, finished: bool = False) -> StorySt
     return updated
 
 
+def profile_user_name(profile: object) -> str:
+    if not isinstance(profile, dict):
+        return ""
+    return str(
+        profile.get("name")
+        or profile.get("user_name")
+        or profile.get("nome")
+        or profile.get("preferred_name")
+        or ""
+    ).strip()
+
+
+def generate_movement_text(*, movement, user_name: str, profile: object, messages: list[dict[str, object]]) -> str:
+    if not api_key:
+        raise RuntimeError(OPERATIONAL_GENERATION_ERROR)
+    system_prompt = build_novel_prompt(
+        character_name=CHARACTER_NAME,
+        user_name=user_name,
+        movement=movement,
+    )
+    private_context = build_immersive_context(profile)
+    history = [
+        {"role": "assistant", "content": str(item.get("content", ""))}
+        for item in messages[-8:]
+        if str(item.get("role", "")) == "assistant"
+    ]
+    return generate_response(
+        api_key=api_key,
+        model=model,
+        system_prompt=system_prompt + private_context,
+        history=history,
+        user_text="Avance a novela executando somente o movimento atual.",
+        debug_logging=not bool(private_context),
+    ).strip()
+
+
+def persist_movement(
+    *,
+    user: AuthenticatedUser,
+    context: RuntimePersistenceContext,
+    state: StoryState,
+    messages: list[dict[str, object]],
+    target_id: str,
+    movement,
+    assistant_text: str,
+    profile: object,
+    input_source: str,
+) -> tuple[RuntimePersistenceContext, StoryState]:
+    updated_state = advance_story_state(state, finished=movement.is_ending)
+    metadata: dict[str, object] = {
+        "character_id": CHARACTER_ID,
+        "editorial_node": target_id,
+        "editorial_block": movement.block_id,
+        "novel_v2": True,
+        "novel_movement": True,
+        "novel_frame": is_frame_script(script),
+        "input_source": input_source,
+    }
+    immersive_memory = persistent_profile_payload(profile)
+    if immersive_memory and recover_persistent_profile(messages) is None:
+        metadata["immersive_profile"] = immersive_memory
+    repository = runtime_repository()
+    if repository is None:
+        raise RuntimeError("Google Sheets ficou indisponível ao registrar a cena.")
+    updated_context = persist_assistant_message(
+        repository,
+        context=context,
+        user=user,
+        state=updated_state,
+        assistant_text=assistant_text,
+        assistant_metadata=metadata,
+    )
+    messages.append({"role": "assistant", "content": assistant_text, **metadata})
+    if movement.is_ending:
+        finish_active_run(
+            secrets=st.secrets,
+            user_id=user.user_id,
+            package_id=PACKAGE_ID,
+            status="completed",
+            ending_code="normal_completion",
+        )
+    return updated_context, updated_state
+
+
 user = authenticated_user()
 if user is None:
     st.error("Entre na sua conta antes de abrir a história.")
@@ -294,33 +371,47 @@ if not story_state.finished:
     if not access.allowed:
         return_to_library()
 
-with st.sidebar:
-    st.subheader(PACKAGE_TITLE)
-    st.caption(PACKAGE_SUBTITLE or "Novela interativa")
-    current_id = current_movement_id(messages)
-    st.write(f"Movimento: `{current_id or 'abertura'}`")
-    if st.button("Retornar aos cards", use_container_width=True):
-        return_to_library()
-    confirming_end = bool(st.session_state.get(END_CONFIRMATION_KEY, False))
-    if not story_state.finished and not confirming_end:
-        if st.button("Encerrar novela", use_container_width=True):
-            st.session_state[END_CONFIRMATION_KEY] = True
-            st.rerun()
-    elif not story_state.finished:
-        st.warning("Encerrar irá gerar a necessidade de um novo pagamento. Continuar?")
-        yes, no = st.columns(2)
-        with yes:
-            if st.button("Sim, encerrar", type="primary", use_container_width=True):
-                end_story_and_return(user)
-        with no:
-            if st.button("Cancelar", use_container_width=True):
-                st.session_state.pop(END_CONFIRMATION_KEY, None)
-                st.rerun()
-
 st.title(PACKAGE_TITLE)
 st.caption(PACKAGE_SUBTITLE or "Novela interativa")
 
-if not messages:
+# No roteiro de quadros, a abertura é o primeiro quadro completo. Ela percorre
+# exatamente o mesmo pipeline dos demais movimentos: geração, persistência,
+# imagem e renderer. Não existe mais uma scene_opening separada para esse modo.
+if not messages and is_frame_script(script):
+    try:
+        target_id, movement = first_frame_movement(script)
+        assistant_text = generate_movement_text(
+            movement=movement,
+            user_name=profile_user_name(immersive_profile),
+            profile=immersive_profile,
+            messages=messages,
+        )
+        if not assistant_text:
+            raise RuntimeError(OPERATIONAL_GENERATION_ERROR)
+        context, story_state = persist_movement(
+            user=user,
+            context=context,
+            state=story_state,
+            messages=messages,
+            target_id=target_id,
+            movement=movement,
+            assistant_text=assistant_text,
+            profile=immersive_profile,
+            input_source="opening_frame",
+        )
+        save_runtime(user, context, story_state, messages)
+        st.rerun()
+    except OpenRouterError as exc:
+        log_editorial_exception("novel_v2_opening_generation", exc, user_id=user.user_id, package_id=PACKAGE_ID)
+        st.error(OPERATIONAL_GENERATION_ERROR)
+        st.stop()
+    except Exception as exc:
+        log_editorial_exception("novel_v2_opening_frame", exc, user_id=user.user_id, package_id=PACKAGE_ID)
+        st.error(f"Não foi possível abrir a novela: {exc}")
+        st.stop()
+
+# Compatibilidade para roteiros V2 antigos que ainda usam abertura textual.
+if not messages and not is_frame_script(script):
     opening = str(script.scene.get("introduction", "") or "").strip()
     if not opening:
         opening = str(script.raw.get("introduction", "") or "").strip()
@@ -355,9 +446,31 @@ if not messages:
         messages.append({"role": "assistant", "content": opening, **opening_metadata})
         save_runtime(user, context, story_state, messages)
 
+with st.sidebar:
+    st.subheader(PACKAGE_TITLE)
+    st.caption(PACKAGE_SUBTITLE or "Novela interativa")
+    current_id = current_movement_id(messages)
+    st.write(f"Movimento: `{current_id or 'abertura'}`")
+    if st.button("Retornar aos cards", width="stretch"):
+        return_to_library()
+    confirming_end = bool(st.session_state.get(END_CONFIRMATION_KEY, False))
+    if not story_state.finished and not confirming_end:
+        if st.button("Encerrar novela", width="stretch"):
+            st.session_state[END_CONFIRMATION_KEY] = True
+            st.rerun()
+    elif not story_state.finished:
+        st.warning("Encerrar irá gerar a necessidade de um novo pagamento. Continuar?")
+        yes, no = st.columns(2)
+        with yes:
+            if st.button("Sim, encerrar", type="primary", width="stretch"):
+                end_story_and_return(user)
+        with no:
+            if st.button("Cancelar", width="stretch"):
+                st.session_state.pop(END_CONFIRMATION_KEY, None)
+                st.rerun()
+
 for message in messages:
-    role = str(message.get("role", "assistant"))
-    if role != "assistant":
+    if str(message.get("role", "assistant")) != "assistant":
         continue
     node = str(message.get("editorial_node") or message.get("beat_id") or "").strip()
     if node:
@@ -376,11 +489,11 @@ for message in messages:
 if story_state.finished:
     st.success("Fim da novela.")
     st.caption("Esta execução foi concluída normalmente.")
-    if st.button("Voltar à biblioteca", type="primary", use_container_width=True):
+    if st.button("Voltar à biblioteca", type="primary", width="stretch"):
         return_to_library()
     st.stop()
 
-if not st.button("Avançar", type="primary", use_container_width=True):
+if not st.button("Avançar", type="primary", width="stretch"):
     st.stop()
 
 current_id = current_movement_id(messages)
@@ -402,44 +515,14 @@ if not target_id:
 
 try:
     movement = movement_from_script(script, target_id)
-except Exception as exc:
-    log_editorial_exception("novel_v2_resolve_movement", exc, package_id=PACKAGE_ID, target_id=target_id)
-    st.error("O próximo movimento do roteiro não pôde ser resolvido.")
-    st.stop()
-
-if not api_key:
-    st.error(OPERATIONAL_GENERATION_ERROR)
-    st.stop()
-
-user_name = ""
-if isinstance(immersive_profile, dict):
-    user_name = str(
-        immersive_profile.get("name")
-        or immersive_profile.get("user_name")
-        or immersive_profile.get("nome")
-        or ""
-    ).strip()
-
-system_prompt = build_novel_prompt(
-    character_name=CHARACTER_NAME,
-    user_name=user_name,
-    movement=movement,
-)
-private_context = build_immersive_context(immersive_profile)
-history = [
-    {"role": "assistant", "content": str(item.get("content", ""))}
-    for item in messages[-8:]
-    if str(item.get("role", "")) == "assistant"
-]
-try:
-    assistant_text = generate_response(
-        api_key=api_key,
-        model=model,
-        system_prompt=system_prompt + private_context,
-        history=history,
-        user_text="Avance a novela executando somente o movimento atual.",
-        debug_logging=not bool(private_context),
-    ).strip()
+    assistant_text = generate_movement_text(
+        movement=movement,
+        user_name=profile_user_name(immersive_profile),
+        profile=immersive_profile,
+        messages=messages,
+    )
+    if not assistant_text:
+        raise RuntimeError(OPERATIONAL_GENERATION_ERROR)
 except OpenRouterError as exc:
     log_editorial_exception(
         "novel_v2_generation",
@@ -450,46 +533,23 @@ except OpenRouterError as exc:
     )
     st.error(OPERATIONAL_GENERATION_ERROR)
     st.stop()
-
-if not assistant_text:
+except Exception as exc:
+    log_editorial_exception("novel_v2_resolve_movement", exc, package_id=PACKAGE_ID, target_id=target_id)
     st.error(OPERATIONAL_GENERATION_ERROR)
     st.stop()
 
-updated_story_state = advance_story_state(story_state, finished=movement.is_ending)
-metadata: dict[str, object] = {
-    "character_id": CHARACTER_ID,
-    "editorial_node": target_id,
-    "editorial_block": movement.block_id,
-    "novel_v2": True,
-    "novel_movement": True,
-    "input_source": "advance_button",
-}
-immersive_memory = persistent_profile_payload(immersive_profile)
-if immersive_memory and recover_persistent_profile(messages) is None:
-    metadata["immersive_profile"] = immersive_memory
-
-repository = runtime_repository()
-if repository is None:
-    st.error("Google Sheets ficou indisponível ao registrar a cena.")
-    st.stop()
 try:
-    context = persist_assistant_message(
-        repository,
-        context=context,
+    context, story_state = persist_movement(
         user=user,
-        state=updated_story_state,
+        context=context,
+        state=story_state,
+        messages=messages,
+        target_id=target_id,
+        movement=movement,
         assistant_text=assistant_text,
-        assistant_metadata=metadata,
+        profile=immersive_profile,
+        input_source="advance_button",
     )
-    messages.append({"role": "assistant", "content": assistant_text, **metadata})
-    if movement.is_ending:
-        finish_active_run(
-            secrets=st.secrets,
-            user_id=user.user_id,
-            package_id=PACKAGE_ID,
-            status="completed",
-            ending_code="normal_completion",
-        )
 except Exception as exc:
     log_editorial_exception(
         "novel_v2_persist",
@@ -501,5 +561,5 @@ except Exception as exc:
     st.error(f"Não foi possível registrar a cena: {exc}")
     st.stop()
 
-save_runtime(user, context, updated_story_state, messages)
+save_runtime(user, context, story_state, messages)
 st.rerun()
