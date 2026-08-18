@@ -1,42 +1,18 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
-from types import SimpleNamespace
-
 from services import novel_frame_layout_patch as layout
 
 
-class _Column:
-    def __init__(self, name: str) -> None:
-        self.name = name
-        self.entered = 0
-
-    def __enter__(self):
-        self.entered += 1
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
-
-
-def test_imagem_v2_ocupa_painel_2_por_1_e_fica_aberta(monkeypatch) -> None:
-    left = _Column("image")
-    right = _Column("narrative")
+def test_imagem_v2_fica_aberta_e_aguarda_posicao_do_quadro(monkeypatch) -> None:
     observed: dict[str, object] = {}
 
-    def fake_columns(spec, **kwargs):
-        observed["spec"] = spec
-        observed["columns_kwargs"] = kwargs
-        return left, right
-
     def fake_render(*args, **kwargs):
-        observed["render_kwargs"] = kwargs
+        observed["args"] = args
+        observed["kwargs"] = kwargs
         return True
 
-    monkeypatch.setattr(layout.st, "columns", fake_columns)
     monkeypatch.setattr(layout, "_original_render_scene_image", fake_render)
-    layout._pending_narrative_column = None
-    layout._current_narrative_column = None
+    monkeypatch.setattr(layout, "_pending_image_call", None)
 
     assert layout._scene_image_wrapper(
         "roleplay2026.camilly",
@@ -45,45 +21,26 @@ def test_imagem_v2_ocupa_painel_2_por_1_e_fica_aberta(monkeypatch) -> None:
         ordered_beat_ids=("encontro_001",),
     ) is True
 
-    assert observed["spec"] == [2, 1]
-    assert observed["columns_kwargs"] == {
-        "gap": "large",
-        "vertical_alignment": "top",
-    }
-    assert observed["render_kwargs"]["inline"] is True
-    assert left.entered == 1
-    assert layout._pending_narrative_column is right
-    assert layout._current_narrative_column is right
+    assert observed == {}
+    assert layout._pending_image_call is not None
+    _args, pending_kwargs = layout._pending_image_call
+    assert pending_kwargs["inline"] is True
+
+    assert layout._render_pending_image() is True
+    assert observed["kwargs"]["inline"] is True
 
 
-def test_avancar_e_renderizacao_usam_coluna_narrativa(monkeypatch) -> None:
-    right = _Column("narrative")
+def test_avancar_preserva_wrapper_de_revelacao(monkeypatch) -> None:
     observed: dict[str, object] = {}
 
-    def fake_dialogue(role: str, content: str, *, character_name: str = "Mary") -> str:
-        observed["dialogue"] = (role, content, character_name)
-        return "<article>quadro</article>"
-
-    def fake_markdown(value: str, **kwargs) -> None:
-        observed["markdown"] = (value, kwargs, right.entered)
-
     def fake_button(*args, **kwargs) -> bool:
-        observed["button"] = (args, kwargs, right.entered)
+        observed["button"] = (args, kwargs)
         return True
 
-    monkeypatch.setattr(layout, "_original_render_dialogue_html", fake_dialogue)
     monkeypatch.setattr(layout, "_original_button", fake_button)
-    monkeypatch.setattr(layout.st, "markdown", fake_markdown)
-    layout._pending_narrative_column = right
-    layout._current_narrative_column = right
-
-    content = """[QUADRO encontro_001]\n[DESCRIÇÃO]\nCena.\n[/QUADRO]"""
-    assert layout._dialogue_wrapper("assistant", content, character_name="Camilly") == ""
-    assert observed["markdown"][0] == "<article>quadro</article>"
-    assert observed["markdown"][2] == 1
 
     assert layout._button_wrapper("Avançar", type="primary", width="stretch") is True
-    assert observed["button"][2] == 2
+    assert observed["button"] == (("Avançar",), {"type": "primary", "width": "stretch"})
 
 
 def test_page_config_v2_forca_wide(monkeypatch) -> None:
@@ -103,4 +60,4 @@ def test_page_config_v2_forca_wide(monkeypatch) -> None:
     layout._set_page_config_wrapper(page_title="Camilly", layout="centered")
 
     assert observed["config"]["layout"] == "wide"
-    assert "max-width: 899px" in observed["css"]
+    assert "max-width:899px" in observed["css"]
