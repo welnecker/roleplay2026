@@ -16,7 +16,7 @@ def compact_zoomable_image_html(
     caption: str = "",
     alt: str = "",
 ) -> str:
-    """Mantém o zoom existente sem reservar altura vazia abaixo da imagem."""
+    """Mantém o zoom V2 usando a proporção natural da imagem no quadro."""
 
     assert _original_zoomable_image_html is not None
     html = _original_zoomable_image_html(
@@ -30,11 +30,11 @@ def compact_zoomable_image_html(
     )
     html = html.replace(
         ".scene-thumb{display:block;width:100%;height:100%;object-fit:contain;",
-        ".scene-thumb{display:block;width:100%;height:auto;max-height:min(64vh,680px);object-fit:contain;object-position:center top;",
+        ".scene-thumb{display:block;width:100%;max-width:100%;height:auto;object-fit:contain;object-position:center top;",
     )
     html = html.replace(
         "@media (max-width: 899px){.scene-image-shell{height:min(58vh,560px);min-height:280px;}.scene-hint{font-size:11px;}}",
-        "@media (max-width: 899px){.scene-thumb{max-height:min(58vh,560px);}.scene-hint{font-size:11px;}}",
+        "@media (max-width: 899px){.scene-hint{font-size:11px;}}",
     )
     return html
 
@@ -45,7 +45,7 @@ def render_zoomable_image(
     caption: str = "",
     alt: str = "",
 ) -> None:
-    """Renderiza o zoom V2 com altura automática baseada no conteúdo real."""
+    """Renderiza o zoom V2 com altura derivada da proporção real da imagem."""
 
     st.iframe(
         compact_zoomable_image_html(Path(path), caption=caption, alt=alt),
