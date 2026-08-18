@@ -4,7 +4,6 @@ from typing import Any
 
 import streamlit as st
 
-from services.novel_frame_presentation import IMAGE_SLOT_MARKER
 from services.novel_frame_reveal import frame_id
 
 _installed = False
@@ -47,19 +46,17 @@ def _set_page_config_wrapper(*args: Any, **kwargs: Any):
 
 
 def _scene_image_wrapper(*args: Any, **kwargs: Any) -> bool:
-    """Adia a imagem V2 para inseri-la entre CENA e trilho de entries."""
+    """Guarda a chamada da imagem até o quadro definir sua posição visual."""
 
     global _pending_image_call
     assert _original_render_scene_image is not None
 
-    # Fora do player V2, mantém exatamente o renderer legado.
     if bool(kwargs.get("render_memory", True)):
         return bool(_original_render_scene_image(*args, **kwargs))
 
     render_kwargs = dict(kwargs)
     render_kwargs["inline"] = True
     _pending_image_call = (tuple(args), render_kwargs)
-    # O retorno real será obtido no momento em que o quadro for renderizado.
     return True
 
 
@@ -80,36 +77,43 @@ def _dialogue_wrapper(
     *,
     character_name: str = "Mary",
 ) -> str:
-    """Renderiza CENA -> IMAGEM -> cards horizontais no quadro V2."""
+    """Compõe o quadro V2 como CENA -> IMAGEM -> trilho, sem HTML fragmentado."""
 
     assert _original_render_dialogue_html is not None
-    rendered = _original_render_dialogue_html(
-        role,
-        content,
-        character_name=character_name,
-    )
-
     current_frame = frame_id(str(content or ""))
-    if not current_frame or IMAGE_SLOT_MARKER not in rendered:
-        # Se uma imagem foi adiada por um conteúdo que não virou quadro, não a
-        # perde: renderiza antes de devolver o HTML legado.
+    if not current_frame:
         _render_pending_image()
-        return rendered
+        return _original_render_dialogue_html(
+            role,
+            content,
+            character_name=character_name,
+        )
 
-    before_image, after_image = rendered.split(IMAGE_SLOT_MARKER, maxsplit=1)
-    if before_image.strip():
-        st.markdown(before_image, unsafe_allow_html=True)
+    from services.novel_frame_presentation import render_frame_sections
+
+    sections = render_frame_sections(content, character_name=character_name)
+    if sections is None:
+        _render_pending_image()
+        return _original_render_dialogue_html(
+            role,
+            content,
+            character_name=character_name,
+        )
+
+    description_html, track_html = sections
+    if description_html:
+        st.markdown(description_html, unsafe_allow_html=True)
     _render_pending_image()
-    if after_image.strip():
-        st.markdown(after_image, unsafe_allow_html=True)
+    if track_html:
+        st.markdown(track_html, unsafe_allow_html=True)
 
-    # O runtime chamará st.markdown() novamente com o retorno. String vazia
-    # evita duplicação sem alterar o contrato de render_message().
+    # render_message() ainda executará st.markdown() sobre o retorno; vazio
+    # impede duplicação do quadro já composto acima.
     return ""
 
 
 def _button_wrapper(*args: Any, **kwargs: Any) -> bool:
-    """Mantém o botão abaixo do trilho e preserva a revelação incremental."""
+    """Preserva a revelação incremental e mantém Avançar após o trilho."""
 
     assert _original_button is not None
     return bool(_original_button(*args, **kwargs))
@@ -126,8 +130,6 @@ def install() -> None:
 
     from services import dialogue_presentation, editorial_scene_images
 
-    # Instalado depois do reveal patch: _original_button já inclui a lógica de
-    # liberar exatamente uma entry por clique.
     _original_button = st.button
     _original_set_page_config = st.set_page_config
     _original_render_dialogue_html = dialogue_presentation.render_dialogue_html
