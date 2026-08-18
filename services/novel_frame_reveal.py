@@ -4,6 +4,9 @@ import re
 import unicodedata
 
 _OUTPUT_MARKER = re.compile(r"^\s*\[([^\]]+)\]\s*$", re.MULTILINE)
+_INLINE_MARKER = re.compile(
+    r"(?mi)^\s*(\[(?:QUADRO\s+[^\]]+|DESCRI(?:Ç|C)ÃO|FALA\s+[^\]]+|PENSAMENTO\s+[^\]]+|/QUADRO)\])\s+([^\r\n]+)$"
+)
 
 
 def _plain(value: object) -> str:
@@ -11,13 +14,24 @@ def _plain(value: object) -> str:
     return "".join(char for char in text if not unicodedata.combining(char)).casefold().strip()
 
 
-def is_frame_content(content: str) -> bool:
+def normalize_frame_markers(content: str) -> str:
+    """Normaliza tags que o modelo eventualmente devolve com texto na mesma linha."""
+
     value = str(content or "").strip()
+    previous = None
+    while value != previous:
+        previous = value
+        value = _INLINE_MARKER.sub(lambda match: f"{match.group(1)}\n{match.group(2).strip()}", value)
+    return value
+
+
+def is_frame_content(content: str) -> bool:
+    value = normalize_frame_markers(content)
     return value.startswith("[QUADRO ") and "[/QUADRO]" in value
 
 
 def _sections(content: str) -> list[tuple[str, str]]:
-    value = str(content or "").strip()
+    value = normalize_frame_markers(content)
     if not is_frame_content(value):
         return []
     matches = list(_OUTPUT_MARKER.finditer(value))
@@ -95,6 +109,7 @@ __all__ = [
     "frame_entry_count",
     "frame_id",
     "is_frame_content",
+    "normalize_frame_markers",
     "reveal_complete",
     "reveal_frame_content",
 ]
