@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import streamlit as st
@@ -8,6 +9,8 @@ from narrative_v2.repository import RuntimeConflictError
 
 _CURRENT_KEY = "novel_frame_reveal:current"
 _PREFIX = "novel_frame_reveal:index:"
+_ADVANCE_CLICK_KEY = "novel_frame_reveal:last_advance_click"
+_ADVANCE_DEBOUNCE_SECONDS = 0.8
 _installed = False
 _original_button = None
 _original_persist_assistant_message = None
@@ -147,6 +150,18 @@ def _button_wrapper(*args: Any, **kwargs: Any) -> bool:
     label = str(args[0] if args else kwargs.get("label", "") or "").strip()
     if label != "Avançar":
         return True
+
+    now = time.monotonic()
+    try:
+        last_click = float(st.session_state.get(_ADVANCE_CLICK_KEY, 0.0) or 0.0)
+    except (TypeError, ValueError):
+        last_click = 0.0
+    if last_click > 0.0 and 0.0 <= now - last_click < _ADVANCE_DEBOUNCE_SECONDS:
+        # Dois eventos do mesmo duplo clique podem chegar em reruns separados.
+        # A primeira ação permanece válida; a repetida não revela outro card
+        # nem avança um segundo quadro.
+        return False
+    st.session_state[_ADVANCE_CLICK_KEY] = now
 
     current = st.session_state.get(_CURRENT_KEY)
     if not isinstance(current, dict):

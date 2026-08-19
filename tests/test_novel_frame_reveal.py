@@ -60,6 +60,24 @@ def test_contagem_e_conclusao_do_quadro() -> None:
     assert reveal_complete(CONTENT, 3) is True
 
 
+def test_tag_sem_conteudo_nao_cria_clique_sem_balao() -> None:
+    content = """[QUADRO encontro_002]
+[DESCRIÇÃO]
+Camilly se aproxima do carro.
+[FALA camilly|Camilly]
+Oi!
+[PENSAMENTO usuario|Janio]
+[FALA usuario|Janio]
+Entra aí.
+[/QUADRO]"""
+
+    assert frame_entry_count(content) == 2
+    complete = reveal_frame_content(content, 2)
+    assert "Oi!" in complete
+    assert "Entra aí." in complete
+    assert "[PENSAMENTO" not in complete
+
+
 def test_tags_inline_sao_normalizadas_e_contadas_separadamente() -> None:
     normalized = normalize_frame_markers(INLINE_CONTENT)
 

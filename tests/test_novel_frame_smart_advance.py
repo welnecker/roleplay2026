@@ -23,6 +23,7 @@ def test_um_card_exige_um_clique_para_avancar_quadro(monkeypatch) -> None:
     monkeypatch.setattr(reveal_patch.st, "session_state", state)
     monkeypatch.setattr(reveal_patch, "_original_button", lambda *args, **kwargs: True)
     monkeypatch.setattr(reveal_patch, "_synchronize_remote_run", lambda **kwargs: False)
+    monkeypatch.setattr(reveal_patch.time, "monotonic", lambda: 10.0)
 
     assert reveal_patch._button_wrapper("Avançar") is True
 
@@ -37,6 +38,8 @@ def test_quatro_cards_revelam_restantes_antes_de_avancar(monkeypatch) -> None:
     monkeypatch.setattr(reveal_patch.st, "rerun", lambda: reruns.append(True))
     monkeypatch.setattr(reveal_patch, "_original_button", lambda *args, **kwargs: True)
     monkeypatch.setattr(reveal_patch, "_synchronize_remote_run", lambda **kwargs: False)
+    clock = iter((10.0, 11.0, 12.0, 13.0))
+    monkeypatch.setattr(reveal_patch.time, "monotonic", lambda: next(clock))
 
     key = reveal_patch.reveal_key("quadro_004")
 
@@ -51,3 +54,25 @@ def test_quatro_cards_revelam_restantes_antes_de_avancar(monkeypatch) -> None:
     # O quarto clique já encontra todos os cards visíveis e avança o runtime.
     assert reveal_patch._button_wrapper("Avançar") is True
     assert state[key] == 4
+
+
+def test_duplo_clique_em_avancar_e_ignorado(monkeypatch) -> None:
+    state: dict[str, object] = {
+        "novel_frame_reveal:current": {"frame_id": "quadro_001", "entry_count": 2},
+        reveal_patch.reveal_key("quadro_001"): 1,
+    }
+    reruns: list[bool] = []
+    clock = iter((10.0, 10.2))
+    monkeypatch.setattr(reveal_patch.st, "session_state", state)
+    monkeypatch.setattr(reveal_patch.st, "rerun", lambda: reruns.append(True))
+    monkeypatch.setattr(reveal_patch, "_original_button", lambda *args, **kwargs: True)
+    monkeypatch.setattr(reveal_patch, "_synchronize_remote_run", lambda **kwargs: False)
+    monkeypatch.setattr(reveal_patch.time, "monotonic", lambda: next(clock))
+
+    key = reveal_patch.reveal_key("quadro_001")
+    assert reveal_patch._button_wrapper("Avançar") is False
+    assert state[key] == 2
+
+    assert reveal_patch._button_wrapper("Avançar") is False
+    assert state[key] == 2
+    assert len(reruns) == 1

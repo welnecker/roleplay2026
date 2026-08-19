@@ -47,9 +47,12 @@ def _sections(content: str) -> list[tuple[str, str]]:
 
 def frame_entry_count(content: str) -> int:
     count = 0
-    for header, _body in _sections(content):
+    for header, body in _sections(content):
         first = _plain(header.split(maxsplit=1)[0] if header else "")
-        if first in {"fala", "pensamento"}:
+        # A apresentação ignora seções sem corpo. A contagem precisa espelhar
+        # exatamente esse comportamento para que uma tag vazia, eventualmente
+        # devolvida pelo modelo, não crie um clique sem balão novo.
+        if first in {"fala", "pensamento"} and bool(body.strip()):
             count += 1
     return count
 
@@ -85,7 +88,7 @@ def reveal_frame_content(content: str, revealed_entries: int) -> str:
         if first == "descricao":
             visible.append((header, body))
             continue
-        if first in {"fala", "pensamento"}:
+        if first in {"fala", "pensamento"} and bool(body.strip()):
             if entries_seen < limit:
                 visible.append((header, body))
             entries_seen += 1
