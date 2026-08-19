@@ -38,3 +38,10 @@ def test_telas_principais_instalam_metadados_da_pwa() -> None:
     for path in paths:
         source = path.read_text(encoding="utf-8")
         assert "install_pwa_metadata()" in source, path
+
+
+def test_bootstrap_pwa_usa_api_atual_do_streamlit() -> None:
+    source = (ROOT / "services" / "pwa.py").read_text(encoding="utf-8")
+    assert "st.html(" in source
+    assert "unsafe_allow_javascript=True" in source
+    assert "components.html(" not in source

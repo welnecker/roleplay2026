@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import streamlit.components.v1 as components
+import streamlit as st
 
 
 _PWA_BOOTSTRAP = """
@@ -53,7 +53,7 @@ _PWA_BOOTSTRAP = """
 def install_pwa_metadata() -> None:
     """Instala metadados públicos da PWA sem cachear conteúdo da sessão."""
 
-    components.html(_PWA_BOOTSTRAP, height=0, width=0)
+    st.html(_PWA_BOOTSTRAP, width="content", unsafe_allow_javascript=True)
 
 
 __all__ = ["install_pwa_metadata"]
