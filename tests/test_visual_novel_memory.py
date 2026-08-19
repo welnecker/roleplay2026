@@ -1,7 +1,7 @@
 from services.visual_novel_history import current_assistant_messages
 
 
-def test_player_exibe_apenas_quadro_atual_sem_apagar_historico() -> None:
+def test_player_exibe_ate_cinco_quadros_sem_apagar_historico() -> None:
     messages = [
         {"role": "assistant", "content": "quadro 1", "editorial_node": "q1"},
         {"role": "assistant", "content": "quadro 2", "editorial_node": "q2"},
@@ -11,7 +11,25 @@ def test_player_exibe_apenas_quadro_atual_sem_apagar_historico() -> None:
     visible = current_assistant_messages(messages)
 
     assert len(messages) == 3
-    assert visible == (messages[-1],)
+    assert visible == tuple(messages)
+
+
+def test_sexto_quadro_mais_antigo_sai_da_janela_visual() -> None:
+    messages = [
+        {"role": "assistant", "content": f"quadro {position}"}
+        for position in range(1, 7)
+    ]
+
+    visible = current_assistant_messages(messages)
+
+    assert len(visible) == 5
+    assert [item["content"] for item in visible] == [
+        "quadro 2",
+        "quadro 3",
+        "quadro 4",
+        "quadro 5",
+        "quadro 6",
+    ]
 
 
 def test_player_ignora_eventual_mensagem_nao_visual_apos_quadro() -> None:
