@@ -223,6 +223,19 @@ def test_mapeamento_explicito_tem_prioridade_sobre_imagem_numerada(tmp_path: Pat
     assert Path(automatic["path"]).name == "camilly1.png"
 
 
+def test_imagem_numerada_prefere_webp_e_preserva_png_como_fonte(tmp_path: Path) -> None:
+    package = tmp_path / "camilly"
+    image_dir = package / "assets" / "scenes"
+    image_dir.mkdir(parents=True)
+    (image_dir / "camilly1.png").write_bytes(b"original")
+    (image_dir / "camilly1.webp").write_bytes(b"optimized")
+
+    image = resolve_numbered_beat_image(package, "encontro_001", ["encontro_001"])
+
+    assert image is not None
+    assert Path(image["path"]).name == "camilly1.webp"
+
+
 def test_imagem_numerada_ausente_nao_quebra_o_beat(tmp_path: Path) -> None:
     package = tmp_path / "camilly"
     package.mkdir()

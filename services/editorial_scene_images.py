@@ -105,7 +105,9 @@ def resolve_numbered_beat_image(
 
     image_dir = package_root.resolve() / "assets" / "scenes"
     prefix = package_root.name.casefold()
-    for extension in ("png", "jpg", "jpeg", "webp"):
+    # WebP é preferido quando existe; os originais podem permanecer no pacote
+    # como fonte reversível sem serem enviados ao navegador.
+    for extension in ("webp", "png", "jpg", "jpeg"):
         image_path = image_dir / f"{prefix}{position}.{extension}"
         if image_path.is_file():
             return {
