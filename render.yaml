@@ -25,6 +25,8 @@ services:
     branch: agent/narrative-engine-v2
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: >-
+      mkdir -p .streamlit &&
+      cp /etc/secrets/secrets.toml .streamlit/secrets.toml &&
       streamlit run app.py
       --server.address 0.0.0.0
       --server.port $PORT
