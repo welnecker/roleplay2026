@@ -43,7 +43,7 @@ MODEL_DEFAULT = "google/gemini-3-flash-preview"
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent / "installed_stories"
 
 st.set_page_config(
-    page_title="Roleplay 2026",
+    page_title="EntreCenas",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="collapsed",
