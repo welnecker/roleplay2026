@@ -165,7 +165,7 @@ html,body{{margin:0;padding:0;background:transparent;font-family:system-ui,-appl
     <button id="reset" class="viewer-reset" type="button">100%</button>
     <button id="close" class="viewer-close" type="button" aria-label="Fechar">×</button>
     <div id="stage" class="viewer-stage">
-      <img id="zoomed" class="viewer-image" src="{src}" alt="{safe_alt}">
+      <img id="zoomed" class="viewer-image" alt="{safe_alt}">
     </div>
   </div>
 </div>
@@ -183,7 +183,7 @@ let startX = 0, startY = 0, originX = 0, originY = 0;
 function clamp(v,min,max){{ return Math.max(min,Math.min(max,v)); }}
 function apply(){{ zoomed.style.transform = `translate(${{tx}}px, ${{ty}}px) scale(${{scale}})`; }}
 function reset(){{ scale=1; tx=0; ty=0; apply(); }}
-function openViewer(){{ reset(); viewer.classList.add('open'); viewer.setAttribute('aria-hidden','false'); }}
+function openViewer(){{ if(!zoomed.src){{ zoomed.src=thumb.src; }} reset(); viewer.classList.add('open'); viewer.setAttribute('aria-hidden','false'); }}
 function closeViewer(){{ viewer.classList.remove('open'); viewer.setAttribute('aria-hidden','true'); reset(); }}
 function distance(t){{ const dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.hypot(dx,dy); }}
 

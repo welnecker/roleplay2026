@@ -82,6 +82,7 @@ from services.story_profile import (
     opening_with_required_name,
     personalize_editorial_script,
 )
+from services.visual_novel_history import current_assistant_messages
 from ui_components import CARD_CSS
 
 
@@ -505,7 +506,7 @@ if not messages:
     messages.append({"role": "assistant", "content": opening, **opening_metadata})
     editorial_state = opening_editorial_state
     save_session(user, context, story_state, messages, editorial_state)
-for message in messages:
+for message in current_assistant_messages(messages):
     if (
         str(message.get("role", "assistant")) == "assistant"
         and message_allows_beat_image(message)

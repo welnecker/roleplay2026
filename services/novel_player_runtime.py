@@ -33,6 +33,7 @@ from services.runtime_persistence import (
     persist_opening_message,
 )
 from services.story_profile import personalize_editorial_script
+from services.visual_novel_history import current_assistant_messages
 from ui_components import CARD_CSS
 
 
@@ -471,7 +472,7 @@ with st.sidebar:
                 st.session_state.pop(END_CONFIRMATION_KEY, None)
                 st.rerun()
 
-for message in messages:
+for message in current_assistant_messages(messages):
     if str(message.get("role", "assistant")) != "assistant":
         continue
     node = str(message.get("editorial_node") or message.get("beat_id") or "").strip()
