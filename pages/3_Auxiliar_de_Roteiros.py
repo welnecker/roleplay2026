@@ -17,9 +17,11 @@ from services.script_authoring import (
     synchronized_package_id,
 )
 from services.script_authoring_v2 import compile_v2_rows, preview_v2_frames
+from services.pwa import install_pwa_metadata
 
 
 st.set_page_config(page_title="Auxiliar de Roteiros", page_icon="📝", layout="wide")
+install_pwa_metadata()
 
 DRAFT_KEY = "script_authoring_draft"
 ROWS_KEY = "script_authoring_rows"

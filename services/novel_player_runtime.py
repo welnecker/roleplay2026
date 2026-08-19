@@ -25,6 +25,7 @@ from services.immersive_onboarding import (
 from services.novel_frame_runtime_support import first_frame_movement, is_frame_script
 from services.novel_v2_adapter import build_novel_prompt, movement_from_script, next_movement_id
 from services.paid_run_access import finish_active_run, get_paid_run_access, terminate_paid_access
+from services.pwa import install_pwa_metadata
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
@@ -73,6 +74,7 @@ CHARACTER_ID = CHARACTER_NAME.strip().casefold().replace(" ", "_") or "character
 END_CONFIRMATION_KEY = f"novel_v2:end:{PACKAGE_ID}"
 
 st.set_page_config(page_title=PACKAGE_TITLE, page_icon="📖", layout="centered")
+install_pwa_metadata()
 st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 

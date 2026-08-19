@@ -43,7 +43,7 @@ def test_avancar_preserva_wrapper_de_revelacao(monkeypatch) -> None:
     assert observed["button"] == (("Avançar",), {"type": "primary", "width": "stretch"})
 
 
-def test_page_config_v2_forca_wide_e_tipografia_comic(monkeypatch) -> None:
+def test_page_config_v2_forca_wide_e_tipografia_legivel(monkeypatch) -> None:
     observed: dict[str, object] = {}
 
     def fake_config(*args, **kwargs):
@@ -61,8 +61,7 @@ def test_page_config_v2_forca_wide_e_tipografia_comic(monkeypatch) -> None:
 
     assert observed["config"]["layout"] == "wide"
     assert "max-width:899px" in observed["css"]
-    assert '"Comic Sans MS"' in observed["css"]
-    assert '"Chalkboard SE"' in observed["css"]
-    assert '"Marker Felt"' in observed["css"]
+    assert '"Nunito"' in observed["css"]
+    assert '"Trebuchet MS"' in observed["css"]
     assert "--novel-font" in observed["css"]
     assert "font-family:var(--novel-font) !important" in observed["css"]

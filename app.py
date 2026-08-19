@@ -30,6 +30,7 @@ from services.immersive_onboarding import (
     render_immersive_onboarding,
     restore_profile_for_run,
 )
+from services.pwa import install_pwa_metadata
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
@@ -48,6 +49,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+install_pwa_metadata()
 inject_theme()
 
 
