@@ -194,10 +194,23 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "on_user": legacy_transitions,
                     "transition_rules": compile_transition_rules(source),
                     "intent_classifiers": deepcopy(source.get("intent_classifiers") or []),
-                    "terminal_transition": "",
+                    "terminal_transition": str(source.get("terminal_transition", "") or "").strip(),
                     "memory_writes": [str(item) for item in source.get("memory_writes", [])],
                     "max_questions": int(source.get("max_questions", 1) or 0),
                     "max_sentences": int(source.get("max_sentences", 1) or 1),
+                    "strict_response_economy": bool(
+                        source.get("strict_response_economy", False)
+                    ),
+                    "max_extra_words": int(source.get("max_extra_words", 0) or 0),
+                    "free_speech": bool(source.get("free_speech", False)),
+                    "interpreted_speech": bool(source.get("interpreted_speech", False)),
+                    "interpreted_thought": bool(source.get("interpreted_thought", False)),
+                    "intimate_exact_speech": bool(
+                        source.get("intimate_exact_speech", False)
+                    ),
+                    "authored_transition": str(
+                        source.get("authored_transition", "") or ""
+                    ).strip(),
                     "skip_when_facts": deepcopy(source.get("skip_when_facts") or {}),
                     "response_boundary": str(source.get("response_boundary", "") or ""),
                     "topic_id": str(source.get("topic_id", "") or "").strip(),
@@ -208,6 +221,12 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                     "unknown_facts": unknown_facts,
                     "factual_contract_mode": "explicit+derived",
                     "constraints": constraints,
+                    "profile_delivery": deepcopy(source.get("profile_delivery") or {}),
+                    "authored_thought": str(source.get("authored_thought", "") or ""),
+                    "exact_speech": str(source.get("exact_speech", "") or ""),
+                    "has_authored_bridge": bool(source.get("has_authored_bridge", False)),
+                    "authored_bridges": deepcopy(source.get("authored_bridges") or []),
+                    "decision_gate": deepcopy(source.get("decision_gate") or {}),
                     "block_id": block_id,
                     "block_type": block_type,
                     "position_in_block": position,
@@ -219,15 +238,32 @@ def compile_editorial_document(document: dict[str, Any]) -> dict[str, Any]:
                 }
             )
 
+    beat_ids = {item["beat_id"] for item in beats}
     first_block = blocks[0]
     first_beat_id = str(first_block.get("entry_beat_id", "") or "").strip()
-    if first_beat_id not in {item["beat_id"] for item in beats}:
-        raise ValueError(f"Primeiro beat inexistente: {first_beat_id!r}")
+    if first_beat_id not in beat_ids:
+        if str(document.get("authoring_source", "")) != "spreadsheet" or not beats:
+            raise ValueError(f"Primeiro beat inexistente: {first_beat_id!r}")
+        first_beat = beats[0]
+        first_beat_id = str(first_beat["beat_id"])
+        first_block = next(
+            (
+                block
+                for block in blocks
+                if str(block.get("block_id", "")) == str(first_beat.get("block_id", ""))
+            ),
+            blocks[0],
+        )
+        first_block["entry_beat_id"] = first_beat_id
+        blocks = [first_block, *(block for block in blocks if block is not first_block)]
+        for block_order, block in enumerate(blocks, start=1):
+            block["order"] = block_order
     compiled = deepcopy(document)
     compiled["blocks"] = blocks
     compiled["scene"] = {
         "scene_id": str(first_block.get("block_id", "")),
         "location": str(first_block.get("title", "")),
+        "introduction": str(first_block.get("scene_introduction", "") or ""),
         "objective": str(document.get("introduction", "")),
         "first_beat_id": first_beat_id,
         "beats": beats,

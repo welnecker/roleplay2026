@@ -21,11 +21,22 @@ from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
 from roleplay.prompt_builder import build_system_prompt
 from roleplay.validator import enforce_movement
+from services.immersive_onboarding import (
+    build_immersive_context,
+    clear_immersive_profile,
+    persistent_profile_payload,
+    profile_key,
+    recover_persistent_profile,
+    render_immersive_onboarding,
+    restore_profile_for_run,
+)
+from services.pwa import install_pwa_metadata
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
     persist_turn,
 )
+from services.story_profile import resolve_profile_text
 from ui_components import inject_theme, render_story_card
 
 
@@ -33,11 +44,12 @@ MODEL_DEFAULT = "google/gemini-3-flash-preview"
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent / "installed_stories"
 
 st.set_page_config(
-    page_title="Roleplay 2026",
+    page_title="EntreCenas",
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+install_pwa_metadata()
 inject_theme()
 
 
@@ -130,6 +142,11 @@ def catalog_for_user(user: AuthenticatedUser) -> list[StoryCard]:
                 chapter_label=story.chapter_label,
                 cover_url=story.cover_url,
                 is_tasting=story.is_tasting,
+                profile_name=story.profile_name,
+                profile_identity=story.profile_identity,
+                profile_personality=story.profile_personality,
+                profile_intention=story.profile_intention,
+                replay_requires_purchase=story.replay_requires_purchase,
             )
         )
     return result
@@ -137,6 +154,11 @@ def catalog_for_user(user: AuthenticatedUser) -> list[StoryCard]:
 
 def open_story(package_id: str, *, restart: bool = False) -> None:
     if restart:
+        user = current_user()
+        if user is not None:
+            clear_immersive_profile(
+                st.session_state, user_id=user.user_id, package_id=package_id
+            )
         st.session_state.restart_requests.add(package_id)
         st.session_state.story_states.pop(package_id, None)
         st.session_state.story_messages.pop(package_id, None)
@@ -240,10 +262,11 @@ def render_login() -> None:
 def render_library(user: AuthenticatedUser) -> None:
     header, actions = st.columns([4, 1])
     with header:
-        st.title("Mergulhe em uma história cheia de emoção e malícia")
+        st.title("Aprecie sem moderação")
         st.caption(f"Olá, {user.display_name}. Escolha seu card favorito e interaja com profundidade.")
     with actions:
         if st.button("Sair", use_container_width=True):
+            clear_immersive_profile(st.session_state)
             st.session_state.authenticated_user = None
             st.session_state.page = "library"
             st.session_state.selected_package_id = None
@@ -407,6 +430,25 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
             st.rerun()
         return
 
+    api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
+    model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
+    card_title = story_card.title if story_card is not None else "Sua história"
+    restore_profile_for_run(
+        st.session_state,
+        user_id=user.user_id,
+        package_id=package_id,
+        messages=messages,
+    )
+    if not render_immersive_onboarding(
+        user_id=user.user_id,
+        package_id=package_id,
+        title=card_title,
+        character_name=(story_card.profile_name if story_card is not None else card_title),
+        api_key=api_key,
+        model=model,
+    ):
+        return
+
     with st.sidebar:
         st.subheader(package.manifest.card.title)
         step = engine.current_step(state)
@@ -419,6 +461,9 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         if context is not None:
             st.caption(f"Save: `{context.save.save_id}` · versão {context.save.state_version}")
         if st.button("Voltar à biblioteca", use_container_width=True):
+            clear_immersive_profile(
+                st.session_state, user_id=user.user_id, package_id=package_id
+            )
             st.session_state.page = "library"
             st.rerun()
         if st.button("Reiniciar história", use_container_width=True):
@@ -449,9 +494,9 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         st.rerun()
 
     sequence_start = len(messages) + 1
-    api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
-    model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
-    raw_response = movement.content
+    immersive_profile = st.session_state.get(profile_key(user.user_id, package_id))
+    profile_mapping = immersive_profile if isinstance(immersive_profile, dict) else {}
+    raw_response = resolve_profile_text(movement.content, profile_mapping)
     generation_error = ""
 
     if api_key:
@@ -460,12 +505,18 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
             for item in messages[-12:]
         ]
         try:
+            private_context = build_immersive_context(
+                st.session_state.get(profile_key(user.user_id, package_id))
+            )
             raw_response = generate_response(
                 api_key=api_key,
                 model=model,
-                system_prompt=build_system_prompt(movement=movement),
+                system_prompt=resolve_profile_text(
+                    build_system_prompt(movement=movement), profile_mapping
+                ) + private_context,
                 history=history,
                 user_text=user_text,
+                debug_logging=not bool(private_context),
             )
         except OpenRouterError as exc:
             generation_error = str(exc)
@@ -478,6 +529,11 @@ def render_player(package_id: str, user: AuthenticatedUser) -> None:
         "screenplay_beat": movement.beat,
         "screenplay_fallback": used_fallback or bool(generation_error),
     }
+    immersive_memory = persistent_profile_payload(
+        st.session_state.get(profile_key(user.user_id, package_id))
+    )
+    if immersive_memory and recover_persistent_profile(messages) is None:
+        assistant_metadata["immersive_profile"] = immersive_memory
     if movement.scene_image is not None:
         assistant_metadata["scene_image"] = {
             "file": movement.scene_image.file,

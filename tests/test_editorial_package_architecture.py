@@ -35,10 +35,7 @@ commerce:
 """,
         encoding="utf-8",
     )
-    (package_root / "story.yaml").write_text(
-        "story_id: compatibility\n",
-        encoding="utf-8",
-    )
+    (package_root / "story.yaml").write_text("story_id: compatibility\n", encoding="utf-8")
     (package_root / "editorial.yaml").write_text(
         """
 format_version: 2
@@ -73,10 +70,7 @@ patch_beats:
 
 def test_manifesto_declara_runtime_editorial() -> None:
     root = Path(__file__).resolve().parent.parent
-    package = load_manifest(
-        root / "installed_stories" / "casada_frustrada" / "manifest.yaml"
-    )
-
+    package = load_manifest(root / "installed_stories" / "casada_frustrada" / "manifest.yaml")
     runtime = package.manifest.runtime
     assert runtime.kind == "editorial"
     assert runtime.editorial is not None
@@ -91,6 +85,7 @@ def test_manifesto_declara_runtime_editorial() -> None:
         "content/extensions/transitions.yaml",
         "content/extensions/parking_dialogue.yaml",
         "content/extensions/dynamic_endings.yaml",
+        "content/extensions/character_path.yaml",
         "content/extensions/runtime.yaml",
     )
 
@@ -100,7 +95,6 @@ def test_card_canonico_possui_conteudo_autocontido() -> None:
     package_root = root / "installed_stories" / "casada_frustrada"
     package = load_manifest(package_root / "manifest.yaml")
     editorial = package.manifest.runtime.editorial
-
     assert editorial is not None
     declared_files = (editorial.source, *editorial.extensions)
     assert all((package_root / relative_path).is_file() for relative_path in declared_files)
@@ -118,9 +112,7 @@ def test_card_canonico_possui_conteudo_autocontido() -> None:
 
 def test_carregador_aplica_extensoes_declaradas_no_manifesto(tmp_path: Path) -> None:
     package = _write_package(tmp_path)
-
     document = load_editorial_document(package)
-
     beat = document["blocks"][0]["beats"][0]
     assert beat["response_boundary"] == "integrated_canonical"
 
@@ -129,6 +121,5 @@ def test_carregador_rejeita_arquivo_fora_do_pacote(tmp_path: Path) -> None:
     outside = tmp_path / "outside.yaml"
     outside.write_text("{}", encoding="utf-8")
     package = _write_package(tmp_path, source="../outside.yaml")
-
     with pytest.raises(EditorialPackageError, match="fora da pasta"):
         load_editorial_document(package)

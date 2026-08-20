@@ -58,6 +58,19 @@ def test_nome_e_reconhecido_antes_do_proximo_beat() -> None:
     assert "você se chama Mary" in turn.system_prompt
 
 
+def test_apresentacao_natural_com_nome_solto_e_prazer_e_reconhecida() -> None:
+    evidence = extract_name_evidence("Janio....prazer, Mary..minha vizinha de porta, rsrsrs")
+
+    assert evidence is not None
+    assert evidence.value == "Janio"
+    assert evidence.source == "bare_presentation"
+    assert evidence.confidence == "contextual"
+
+    facts = extract_user_facts("Janio....prazer, Mary..minha vizinha de porta, rsrsrs", {})
+    assert facts["user_name"] == "Janio"
+    assert facts["user_introduced_himself"] == "true"
+
+
 def test_fato_pre_extraido_ainda_e_reconhecido_no_turno_atual() -> None:
     facts = extract_user_facts("Me chamo Janio. E você?", {})
     signal = detect_organic_signal("Me chamo Janio. E você?", facts)

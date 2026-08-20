@@ -51,7 +51,13 @@ class GoogleSheetsV2RuntimeRepository:
         credentials: dict[str, Any],
         spreadsheet_id: str,
     ) -> "GoogleSheetsV2RuntimeRepository":
-        client = gspread.service_account_from_dict(credentials)
+        # O cliente com backoff respeita Retry-After/429 do Google Sheets em
+        # picos breves, em vez de transformar imediatamente a cota transitória
+        # em erro visível para o usuário.
+        client = gspread.service_account_from_dict(
+            credentials,
+            http_client=gspread.BackOffHTTPClient,
+        )
         return cls(client.open_by_key(spreadsheet_id))
 
     def get_active_run(self, *, user_id: str, package_id: str) -> StoryRun | None:

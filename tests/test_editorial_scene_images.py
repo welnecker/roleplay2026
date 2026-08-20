@@ -8,10 +8,37 @@ import pytest
 
 from services import editorial_scene_images as scene_images
 from services.editorial_scene_images import (
+    image_data_uri,
     load_scene_image_map,
+    message_allows_beat_image,
     render_editorial_scene_image,
     resolve_editorial_scene_image,
+    resolve_numbered_beat_image,
+    zoomable_image_html,
 )
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"automatic_bridge": True},
+        {"editorial_engagement": "automatic_bridge"},
+        {"editorial_state": {"facts": {"_runtime_phase": "bridge"}}},
+        {"editorial_diagnostics": {"runtime_phase": "bridge"}},
+    ],
+)
+def test_pontes_nao_disparam_imagem_do_beat(message: dict[str, object]) -> None:
+    assert message_allows_beat_image(message) is False
+
+
+def test_resposta_canonica_pode_exibir_imagem_do_beat() -> None:
+    message = {
+        "automatic_bridge": False,
+        "editorial_engagement": "engaged",
+        "editorial_state": {"facts": {"_runtime_phase": "canonical"}},
+    }
+
+    assert message_allows_beat_image(message) is True
 
 
 def _package(tmp_path: Path) -> Path:
@@ -69,7 +96,7 @@ def test_carregador_preserva_legenda_alt_e_forca_recolhimento(tmp_path: Path) ->
     assert image["expanded"] is False
 
 
-def test_renderizacao_explicita_mantem_imagem_recolhida(monkeypatch, tmp_path: Path) -> None:
+def test_renderizacao_explicita_usa_visualizador_com_zoom(monkeypatch, tmp_path: Path) -> None:
     package_root = _package(tmp_path)
     package = SimpleNamespace(root=package_root)
     observed: dict[str, object] = {}
@@ -82,19 +109,64 @@ def test_renderizacao_explicita_mantem_imagem_recolhida(monkeypatch, tmp_path: P
         observed["expanded"] = expanded
         yield
 
-    def fake_image(path: str, *, caption: str | None, use_container_width: bool) -> None:
+    def fake_zoom(path: Path, *, caption: str = "", alt: str = "") -> None:
         observed["path"] = path
         observed["caption"] = caption
-        observed["use_container_width"] = use_container_width
+        observed["alt"] = alt
 
     monkeypatch.setattr(scene_images.st, "expander", fake_expander)
-    monkeypatch.setattr(scene_images.st, "image", fake_image)
+    monkeypatch.setattr(scene_images, "render_zoomable_image", fake_zoom)
 
     assert render_editorial_scene_image("example.card", "reencontro_fila_001") is True
     assert observed["expanded"] is False
     assert observed["label"] == "🖼️ Mary reencontra Janio."
+    assert Path(observed["path"]).name == "reencontro_fila_001.jpg"
     assert observed["caption"] == "Mary reencontra Janio."
-    assert observed["use_container_width"] is True
+    assert observed["alt"] == "Reencontro no supermercado."
+
+
+def test_visualizador_de_imagem_suporta_toque_pinca_e_mouse(tmp_path: Path) -> None:
+    image = tmp_path / "cena.png"
+    image.write_bytes(b"png-bytes")
+
+    html = zoomable_image_html(
+        image,
+        caption="Cena de teste",
+        alt="Descrição acessível",
+    )
+
+    assert "toque para ampliar" in html
+    assert "touchstart" in html
+    assert "touchmove" in html
+    assert "touch-action:none" in html
+    assert "dblclick" in html
+    assert "wheel" in html
+    assert "maximum-scale=5" in html
+    assert "Descrição acessível" in html
+    assert "Cena de teste" in html
+
+
+def test_data_uri_preserva_tipo_da_imagem(tmp_path: Path) -> None:
+    image = tmp_path / "cena.webp"
+    image.write_bytes(b"webp")
+
+    assert image_data_uri(image).startswith("data:image/webp;base64,")
+
+
+def test_ids_da_planilha_reutilizam_imagens_do_roteiro_original(tmp_path: Path) -> None:
+    package = _package(tmp_path)
+    image_dir = package / "assets" / "scenes" / "supermercado"
+    (image_dir / "encontro_acidental_001.jpg").write_bytes(b"fake-image")
+    with (package / "scene_images.yaml").open("a", encoding="utf-8") as target:
+        target.write(
+            "\nencontro_acidental_001:\n"
+            "  file: assets/scenes/supermercado/encontro_acidental_001.jpg\n"
+        )
+
+    image = resolve_editorial_scene_image(package, "supermercado_001")
+
+    assert image is not None
+    assert Path(image["path"]).name == "encontro_acidental_001.jpg"
 
 
 def test_imagem_ausente_falha_com_mensagem_explicita(tmp_path: Path) -> None:
@@ -107,3 +179,67 @@ def test_imagem_ausente_falha_com_mensagem_explicita(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="Imagem não encontrada"):
         load_scene_image_map(package)
+
+
+def test_imagens_numeradas_seguem_posicao_dos_beats_nao_o_order(tmp_path: Path) -> None:
+    package = tmp_path / "camilly"
+    image_dir = package / "assets" / "scenes"
+    image_dir.mkdir(parents=True)
+    (image_dir / "camilly1.png").write_bytes(b"first")
+    (image_dir / "camilly2.png").write_bytes(b"second")
+
+    first = resolve_numbered_beat_image(
+        package, "encontro_001", ["encontro_001", "encontro_009"]
+    )
+    second = resolve_numbered_beat_image(
+        package, "encontro_009", ["encontro_001", "encontro_009"]
+    )
+
+    assert first is not None
+    assert Path(first["path"]).name == "camilly1.png"
+    assert second is not None
+    assert Path(second["path"]).name == "camilly2.png"
+
+
+def test_mapeamento_explicito_tem_prioridade_sobre_imagem_numerada(tmp_path: Path) -> None:
+    package = tmp_path / "camilly"
+    image_dir = package / "assets" / "scenes"
+    image_dir.mkdir(parents=True)
+    (image_dir / "camilly1.png").write_bytes(b"automatic")
+    (image_dir / "manual.png").write_bytes(b"manual")
+    (package / "scene_images.yaml").write_text(
+        "encontro_001:\n  file: assets/scenes/manual.png\n",
+        encoding="utf-8",
+    )
+
+    explicit = resolve_editorial_scene_image(package, "encontro_001")
+    automatic = resolve_numbered_beat_image(
+        package, "encontro_001", ["encontro_001"]
+    )
+
+    assert explicit is not None
+    assert Path(explicit["path"]).name == "manual.png"
+    assert automatic is not None
+    assert Path(automatic["path"]).name == "camilly1.png"
+
+
+def test_imagem_numerada_prefere_webp_e_preserva_png_como_fonte(tmp_path: Path) -> None:
+    package = tmp_path / "camilly"
+    image_dir = package / "assets" / "scenes"
+    image_dir.mkdir(parents=True)
+    (image_dir / "camilly1.png").write_bytes(b"original")
+    (image_dir / "camilly1.webp").write_bytes(b"optimized")
+
+    image = resolve_numbered_beat_image(package, "encontro_001", ["encontro_001"])
+
+    assert image is not None
+    assert Path(image["path"]).name == "camilly1.webp"
+
+
+def test_imagem_numerada_ausente_nao_quebra_o_beat(tmp_path: Path) -> None:
+    package = tmp_path / "camilly"
+    package.mkdir()
+
+    assert resolve_numbered_beat_image(
+        package, "encontro_004", ["encontro_001", "encontro_004"]
+    ) is None

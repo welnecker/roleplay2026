@@ -18,6 +18,7 @@ from persistence.payments import GoogleSheetsPaymentRepository, StoredPaymentOrd
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from persistence.v2_google_sheets import GoogleSheetsStoryCreditRepository
 from services.paid_run_access import prime_paid_access_available
+from services.pwa import install_pwa_metadata
 
 ROOT = Path(__file__).resolve().parent.parent
 PROCESSING_COOLDOWN_SECONDS = 6.0
@@ -25,6 +26,7 @@ NEW_CHARGE_COOLDOWN_SECONDS = 65.0
 T = TypeVar("T")
 
 st.set_page_config(page_title="Pagamento Pix", page_icon="💠", layout="centered")
+install_pwa_metadata()
 st.title("Pagamento por Pix")
 
 
