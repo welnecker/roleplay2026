@@ -56,6 +56,46 @@ def test_processed_order_without_approved_payment_is_not_approved() -> None:
     assert order.approved is False
 
 
+def test_processed_and_accredited_order_is_approved() -> None:
+    order = parse_pix_order(
+        {
+            "id": "order-123",
+            "status": "processed",
+            "status_detail": "accredited",
+            "transactions": {
+                "payments": [
+                    {
+                        "status": "processed",
+                        "status_detail": "accredited",
+                        "payment_method": {},
+                    }
+                ]
+            },
+        }
+    )
+    assert order.approved is True
+
+
+def test_partially_refunded_processed_order_is_not_approved() -> None:
+    order = parse_pix_order(
+        {
+            "id": "order-123",
+            "status": "processed",
+            "status_detail": "partially_refunded",
+            "transactions": {
+                "payments": [
+                    {
+                        "status": "processed",
+                        "status_detail": "partially_refunded",
+                        "payment_method": {},
+                    }
+                ]
+            },
+        }
+    )
+    assert order.approved is False
+
+
 def test_validate_webhook_signature() -> None:
     secret = "segredo"
     data_id = "123456"

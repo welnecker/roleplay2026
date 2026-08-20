@@ -33,7 +33,15 @@ class PixOrder:
     def approved(self) -> bool:
         payment = _first_payment(self.raw)
         payment_status = str(payment.get("status", "")).lower()
-        return self.status.lower() == "approved" or payment_status == "approved"
+        payment_detail = str(payment.get("status_detail", "")).lower()
+        order_status = self.status.lower()
+        order_detail = self.status_detail.lower()
+        return (
+            order_status == "approved"
+            or payment_status == "approved"
+            or (order_status == "processed" and order_detail == "accredited")
+            or (payment_status == "processed" and payment_detail == "accredited")
+        )
 
 
 class MercadoPagoClient:
