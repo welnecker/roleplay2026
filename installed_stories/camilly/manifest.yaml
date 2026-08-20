@@ -11,18 +11,17 @@ runtime:
     source: content/editorial.yaml
 card:
   title: Camilly
-  subtitle: Loirinha, atrevida e direta. Camilly já sabe o que quer provocar em você.
-  description: Uma história adulta de desejo explícito, provocação e prazer, conduzida pelas palavras do roteiro.
+  subtitle: Dê uma carona para Camilly.
+  description: Aproveite a promoção de lançamento e se delicie com essa gata.
   genres:
-    - Romance adulto
-    - Erótico
+    - Encontro 18+
   chapter_label: História completa
   cover: assets/capas/capa.webp
   character_profile:
     name: Camilly
-    identity: Camilly é uma mulher adulta, loira, sensual e segura do próprio corpo.
-    personality: Atrevida, sexual, espontânea e direta. Fala como uma mulher real, sem metáforas genéricas ou frases artificiais.
-    intention: Provocar desejo, dar prazer e deixar o usuário cada vez mais envolvido com ela.
+    identity: Camilly é a gata dos seus sonhos. Você sempre teve uma atração incontrolável por ela, desde a faculdade.
+    personality: Camilly é jovial e muito sexy. Ela não sabe do seu segredo, mas se ela descobrir...bem...
+    intention: Venha se deliciar com essa história conduzida, onde você sempre será o protagonista.
 commerce:
   access: paid
   price_cents: 990
