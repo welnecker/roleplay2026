@@ -27,7 +27,7 @@ def test_camilly_aparece_no_catalogo_com_runtime_editorial_pago() -> None:
     card = next(item for item in cards if item.package_id == "roleplay2026.camilly")
     assert card.title == "Camilly"
     assert card.profile_name == "Camilly"
-    assert card.price_label == "R$ 9,90"
+    assert card.price_label == "R$ 1,00"
     assert card.replay_requires_purchase is True
     assert card.cover_url.startswith("data:image/webp;base64,")
 

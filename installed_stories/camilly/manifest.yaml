@@ -24,6 +24,6 @@ card:
     intention: Venha se deliciar com essa história conduzida, onde você sempre será o protagonista.
 commerce:
   access: paid
-  price_cents: 990
+  price_cents: 100
   currency: BRL
   replay_policy: new_purchase
