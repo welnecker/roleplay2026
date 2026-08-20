@@ -79,6 +79,47 @@ Cena de teste.
     assert column_rule in track
 
 
+def test_sufixo_balao_estiliza_somente_a_fala_marcada() -> None:
+    content = """[QUADRO impacto_001]
+[DESCRIÇÃO]
+Camilly se assusta.
+[FALA camilly_balao|Camilly]
+Porra, Donisete!!!
+[FALA camilly|Camilly]
+Você me assustou.
+[/QUADRO]"""
+
+    sections = render_frame_sections(content, character_name="Camilly")
+
+    assert sections is not None
+    _description, track = sections
+    assert track.count('class="novel-frame-card') == 2
+    assert track.count("dialogue-mary novel-frame-impact-balloon") == 1
+    assert 'dialogue-mary novel-frame-impact-balloon tail-left' in track
+    assert 'dialogue-mary tail-center-left' in track
+    assert ">Camilly<" in track
+    assert "Camilly Balao" not in track
+    assert "font-size:clamp(1.45rem,2.25vw,2.15rem)" in track
+    assert "border:4px solid #2B1822" in track
+
+
+def test_usuario_balao_preserva_nome_visivel_do_perfil() -> None:
+    content = """[QUADRO impacto_usuario]
+[DESCRIÇÃO]
+O susto interrompe a conversa.
+[FALA usuario_balao|Donisete]
+SAI DAÍ!!!
+[/QUADRO]"""
+
+    sections = render_frame_sections(content, character_name="Camilly")
+
+    assert sections is not None
+    _description, track = sections
+    assert "dialogue-user novel-frame-impact-balloon" in track
+    assert ">Donisete<" in track
+    assert "Usuario Balao" not in track
+
+
 def test_paleta_fixa_segue_posicao_e_repete_a_cada_quatro_cards() -> None:
     sections = render_frame_sections(CONTENT, character_name="Camilly")
 

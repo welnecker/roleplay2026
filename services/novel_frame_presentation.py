@@ -74,11 +74,17 @@ def _speech_card(
     character_name: str,
     tail_class: str,
 ) -> str:
-    is_user = novel_frame_patch._plain(actor) in {"usuario", "user", "protagonista", "voce"}
+    resolved_actor, impact_balloon = novel_frame_patch._actor_balloon_directive(actor)
+    is_user = novel_frame_patch._plain(resolved_actor) in {"usuario", "user", "protagonista", "voce"}
     wrapper = "dialogue-user" if is_user else "dialogue-mary"
-    label = visible_name or ("Você" if is_user else actor or character_name)
+    actor_was_used_as_label = novel_frame_patch._plain(visible_name) == novel_frame_patch._plain(actor)
+    resolved_visible_name = "" if actor_was_used_as_label else visible_name
+    label = resolved_visible_name or (
+        "Você" if is_user else resolved_actor or character_name
+    )
+    impact_class = " novel-frame-impact-balloon" if impact_balloon else ""
     return (
-        f'<article class="novel-frame-card novel-frame-speech dialogue-message {wrapper} {tail_class}" '
+        f'<article class="novel-frame-card novel-frame-speech dialogue-message {wrapper}{impact_class} {tail_class}" '
         'style="box-sizing:border-box;scroll-snap-align:start;margin:0;color:#2B1822;">'
         f'<div class="dialogue-speaker">{escape(label)}</div>'
         f'<div class="dialogue-speech">{novel_frame_patch._paragraphs(body)}</div>'
@@ -145,6 +151,32 @@ def _track_style() -> str:
   color:#2B1822 !important;
 }
 
+/* Balão editorial de impacto: ativado somente pelo sufixo de ator `_balao`. */
+.novel-frame-track>.novel-frame-impact-balloon{
+  border:4px solid #2B1822 !important;
+  border-radius:30px 38px 28px 42px !important;
+  padding:1.05rem 1.2rem 1.15rem !important;
+  box-shadow:0 0 0 5px rgba(255,255,255,.96),0 13px 24px rgba(43,24,34,.28) !important;
+  transform:rotate(-.35deg);
+}
+.novel-frame-track>.novel-frame-impact-balloon .dialogue-speaker{
+  color:#2B1822 !important;
+  font-size:.82rem !important;
+  font-weight:900 !important;
+  letter-spacing:.08em !important;
+  opacity:.76;
+}
+.novel-frame-track>.novel-frame-impact-balloon .dialogue-speech{
+  color:#2B1822 !important;
+  font-size:clamp(1.45rem,2.25vw,2.15rem) !important;
+  font-weight:900 !important;
+  line-height:1.12 !important;
+  letter-spacing:.01em;
+  text-align:center;
+  text-wrap:balance;
+  text-shadow:1px 1px 0 rgba(255,255,255,.72);
+}
+
 /* Fala: micro-cauda triangular apontando para a imagem acima. */
 .novel-frame-track>.novel-frame-speech::before{
   content:"";
@@ -159,6 +191,26 @@ def _track_style() -> str:
   border-bottom:10px solid var(--card-bg);
   pointer-events:none;
   z-index:2;
+}
+.novel-frame-track>.novel-frame-impact-balloon::before{
+  top:-17px;
+  border-left-width:12px;
+  border-right-width:12px;
+  border-bottom:18px solid #2B1822;
+}
+.novel-frame-track>.novel-frame-impact-balloon::after{
+  content:"";
+  position:absolute;
+  top:-10px;
+  left:var(--tail-x);
+  transform:translateX(-50%);
+  width:0;
+  height:0;
+  border-left:8px solid transparent;
+  border-right:8px solid transparent;
+  border-bottom:12px solid var(--card-bg);
+  pointer-events:none;
+  z-index:3;
 }
 
 /* Pensamento: três bolinhas pequenas subindo em direção à imagem. */

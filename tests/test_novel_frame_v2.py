@@ -206,6 +206,30 @@ def test_prompt_do_primeiro_quadro_nao_pede_descricao_repetida() -> None:
     assert "Não omita nenhuma entry" in prompt
 
 
+def test_sufixo_balao_e_preservado_com_nome_visivel_normal() -> None:
+    rows = _rows()
+    rows[1] = {
+        **rows[1],
+        "instruction": "[FALA camilly_balao] Porra, {{nome}}!!!",
+    }
+    document = compile_novel_frame_story(_base_document(), rows, script_version="201")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_001")
+    payload = json.loads(movement.instruction.removeprefix("NOVEL_FRAME_V2\n"))
+
+    assert payload["entries"][0]["actor"] == "camilly_balao"
+
+    prompt = build_frame_prompt(
+        character_name="Camilly",
+        user_name="Donisete",
+        movement=movement,
+    )
+    assert '"actor": "camilly_balao"' in prompt
+    assert '"visible_name": "Camilly"' in prompt
+    assert "Camilly Balao" not in prompt
+    assert "copie esse sufixo literalmente" in prompt
+
+
 def test_renderer_separa_cena_falas_e_pensamentos() -> None:
     content = """[QUADRO encontro_002]
 [DESCRIÇÃO]

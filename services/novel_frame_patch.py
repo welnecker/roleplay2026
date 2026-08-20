@@ -8,6 +8,7 @@ from html import escape
 from typing import Any, Iterable
 
 _FRAME_PREFIX = "NOVEL_FRAME_V2\n"
+_BALLOON_ACTOR_SUFFIX = "_balao"
 _MARKER = re.compile(r"^\s*\[([^\]]+)\]\s*(.*)$", re.DOTALL)
 _OUTPUT_MARKER = re.compile(r"^\s*\[([^\]]+)\]\s*$", re.MULTILINE)
 
@@ -20,6 +21,15 @@ _original_render_dialogue_html = None
 def _plain(value: Any) -> str:
     text = unicodedata.normalize("NFKD", str(value or ""))
     return "".join(char for char in text if not unicodedata.combining(char)).casefold().strip()
+
+
+def _actor_balloon_directive(actor: str) -> tuple[str, bool]:
+    """Separa a identidade do ator da diretiva visual ``_balao``."""
+
+    raw = str(actor or "").strip()
+    if _plain(raw).endswith(_BALLOON_ACTOR_SUFFIX):
+        return raw[: -len(_BALLOON_ACTOR_SUFFIX)].rstrip("_"), True
+    return raw, False
 
 
 def _tag(value: Any) -> tuple[str, str, str]:
@@ -188,12 +198,13 @@ def _frame_from_movement(movement: Any) -> dict[str, Any] | None:
 
 
 def _actor_visible_name(actor: str, *, character_name: str, user_name: str) -> str:
-    clean = _plain(actor)
+    resolved_actor, _impact_balloon = _actor_balloon_directive(actor)
+    clean = _plain(resolved_actor)
     if clean in {"usuario", "user", "protagonista", "voce"}:
         return str(user_name or "Você").strip() or "Você"
     if clean in {_plain(character_name), "personagem", "p1"}:
         return character_name
-    return str(actor or "Personagem").strip().replace("_", " ").title()
+    return str(resolved_actor or "Personagem").strip().replace("_", " ").title()
 
 
 def build_frame_prompt(
@@ -261,6 +272,7 @@ FORMATO OBRIGATÓRIO — devolva somente isto, sem Markdown adicional:
 {description_format}Depois, para CADA entry do roteiro, na MESMA ORDEM:
 - FALA: [FALA <actor>|<visible_name>] seguido da fala.
 - PENSAMENTO: [PENSAMENTO <actor>|<visible_name>] seguido do pensamento.
+- Quando o actor terminar em `_balao`, copie esse sufixo literalmente na tag de FALA; ele é uma diretiva visual do roteiro.
 
 Finalize com:
 [/QUADRO]
@@ -347,9 +359,16 @@ def render_frame_html(content: str, *, character_name: str) -> str | None:
             )
             continue
         if kind == "fala":
-            is_user = _plain(actor) in {"usuario", "user", "protagonista", "voce"}
+            resolved_actor, impact_balloon = _actor_balloon_directive(actor)
+            is_user = _plain(resolved_actor) in {"usuario", "user", "protagonista", "voce"}
             wrapper = "dialogue-message dialogue-user" if is_user else "dialogue-message dialogue-mary"
-            label = visible_name or ("Você" if is_user else actor or character_name)
+            if impact_balloon:
+                wrapper += " novel-frame-impact-balloon"
+            actor_was_used_as_label = _plain(visible_name) == _plain(actor)
+            resolved_visible_name = "" if actor_was_used_as_label else visible_name
+            label = resolved_visible_name or (
+                "Você" if is_user else resolved_actor or character_name
+            )
             html.append(
                 f'<article class="{wrapper}">'
                 f'<div class="dialogue-speaker">{escape(label)}</div>'
