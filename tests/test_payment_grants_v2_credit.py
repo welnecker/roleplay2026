@@ -32,6 +32,8 @@ def approved_provider() -> PixOrder:
         qr_code="",
         qr_code_base64="",
         ticket_url="",
+        amount_cents=990,
+        currency="BRL",
         raw={},
     )
 
@@ -41,6 +43,10 @@ def stored_order() -> SimpleNamespace:
         user_id="user_1",
         package_id="casada_frustrada",
         product_id="casada_frustrada",
+        provider_order_id="mp_123",
+        external_reference="rp26_test",
+        amount_cents=990,
+        currency="BRL",
     )
 
 

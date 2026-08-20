@@ -48,6 +48,10 @@ ACCOUNTS_BILLING_SCHEMAS: Final[dict[str, tuple[str, ...]]] = {
         "ticket_url",
         "created_at",
         "updated_at",
+        "payer_email_normalized",
+        "payment_mode",
+        "validation_status",
+        "approved_at",
     ),
     "PAYMENT_EVENTS": (
         "payment_event_id",

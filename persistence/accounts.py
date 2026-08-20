@@ -166,6 +166,20 @@ class GoogleSheetsAccountRepository:
             status=str(user_row["status"]),
         )
 
+    def get_user(self, *, user_id: str) -> AccountUser | None:
+        """Resolve a identidade autoritativa pelo id persistido no servidor."""
+
+        for row in self._records(USERS_SHEET):
+            if str(row.get("user_id", "")).strip() != user_id.strip():
+                continue
+            return AccountUser(
+                user_id=str(row.get("user_id", "")),
+                email=str(row.get("email", "")).strip().casefold(),
+                display_name=str(row.get("display_name", "")),
+                status=str(row.get("status", "")),
+            )
+        return None
+
     def has_entitlement(self, *, user_id: str, package_id: str, access: str) -> bool:
         if access == "free":
             return True

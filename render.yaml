@@ -16,6 +16,8 @@ services:
         sync: false
       - key: MERCADO_PAGO_WEBHOOK_SECRET
         sync: false
+      - key: PAYMENT_TEST_MASTER_EMAILS
+        sync: false
 
   - type: web
     name: roleplay2026-v2

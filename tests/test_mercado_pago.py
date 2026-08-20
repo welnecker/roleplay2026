@@ -45,6 +45,17 @@ def test_parse_approved_payment() -> None:
     assert order.approved is True
 
 
+def test_processed_order_without_approved_payment_is_not_approved() -> None:
+    order = parse_pix_order(
+        {
+            "id": "order-123",
+            "status": "processed",
+            "transactions": {"payments": [{"status": "rejected", "payment_method": {}}]},
+        }
+    )
+    assert order.approved is False
+
+
 def test_validate_webhook_signature() -> None:
     secret = "segredo"
     data_id = "123456"

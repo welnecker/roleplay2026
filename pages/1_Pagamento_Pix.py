@@ -12,8 +12,10 @@ import streamlit as st
 from gspread.exceptions import APIError
 
 from billing.mercado_pago import MercadoPagoClient, MercadoPagoError
+from billing.master_test import MasterTestPaymentService
 from billing.service import PixCheckoutService, read_secret
 from packages.loader import discover_packages
+from persistence.accounts import GoogleSheetsAccountRepository
 from persistence.payments import GoogleSheetsPaymentRepository, StoredPaymentOrder
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from persistence.v2_google_sheets import GoogleSheetsStoryCreditRepository
@@ -34,6 +36,7 @@ st.title("Pagamento por Pix")
 def payment_services() -> tuple[
     PixCheckoutService | None,
     GoogleSheetsStoryCreditRepository | None,
+    MasterTestPaymentService | None,
     str,
 ]:
     """Monta somente a infraestrutura de ROLEPLAY_ACCOUNTS_BILLING."""
@@ -41,7 +44,7 @@ def payment_services() -> tuple[
     try:
         credentials = st.secrets.get("gcp_service_account")
         if not credentials:
-            return None, None, "Google Sheets não está configurado."
+            return None, None, None, "Google Sheets não está configurado."
 
         access_token = read_secret(
             st.secrets,
@@ -50,22 +53,31 @@ def payment_services() -> tuple[
             "MP_ACCESS_TOKEN",
         )
         if not access_token:
-            return None, None, "Access Token do Mercado Pago não encontrado nos secrets."
+            return None, None, None, "Access Token do Mercado Pago não encontrado nos secrets."
 
         spreadsheet_ids = read_spreadsheet_ids(st.secrets)
         client = gspread.service_account_from_dict(dict(credentials))
         accounts_billing = client.open_by_key(spreadsheet_ids.accounts_billing)
 
         payments = GoogleSheetsPaymentRepository(accounts_billing)
+        payments.ensure_schema()
         story_credits = GoogleSheetsStoryCreditRepository(accounts_billing)
+        accounts = GoogleSheetsAccountRepository(accounts_billing)
         service = PixCheckoutService(
             client=MercadoPagoClient(access_token),
             payments=payments,
+            accounts=accounts,
             story_credits=story_credits,
         )
-        return service, story_credits, ""
+        master_test = MasterTestPaymentService(
+            accounts=accounts,
+            payments=payments,
+            story_credits=story_credits,
+            master_emails=str(st.secrets.get("PAYMENT_TEST_MASTER_EMAILS", "") or ""),
+        )
+        return service, story_credits, master_test, ""
     except Exception as exc:
-        return None, None, str(exc)
+        return None, None, None, str(exc)
 
 
 def is_quota_error(exc: BaseException) -> bool:
@@ -147,20 +159,6 @@ def finish_payment_transition(*, user_id: str, package_id: str, status: object) 
     st.switch_page("app.py")
 
 
-def is_sandbox_order(stored: StoredPaymentOrder) -> bool:
-    """Reconhece uma cobrança de teste usando apenas campos persistidos."""
-
-    evidence = " ".join(
-        (
-            str(getattr(stored, "qr_code", "") or ""),
-            str(getattr(stored, "ticket_url", "") or ""),
-            str(getattr(stored, "status_detail", "") or ""),
-            str(getattr(stored, "external_reference", "") or ""),
-        )
-    ).upper()
-    return "TESTUSER" in evidence or "@TESTUSER.COM" in evidence
-
-
 if st.button("← Voltar à biblioteca"):
     st.session_state.page = "library"
     st.session_state.checkout_package_id = None
@@ -183,8 +181,8 @@ if package is None:
         st.code("\n".join(errors))
     st.stop()
 
-service, story_credits, service_error = payment_services()
-if service is None or story_credits is None:
+service, story_credits, master_test, service_error = payment_services()
+if service is None or story_credits is None or master_test is None:
     st.error(service_error or "Não foi possível iniciar o pagamento.")
     st.stop()
 
@@ -200,6 +198,32 @@ st.metric(
     "Valor",
     f"R$ {commerce.price_cents / 100:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
 )
+
+is_master_test_user = master_test.is_authorized(user_id=str(user.user_id))
+if is_master_test_user:
+    st.caption("Ambiente interno de teste autorizado para esta conta.")
+    if st.button("Liberar pagamento de teste", type="primary", use_container_width=True):
+        try:
+            with st.status("Registrando pagamento interno de teste...", expanded=True) as status:
+                call_with_quota_backoff(
+                    lambda: master_test.approve_test_payment(
+                        user_id=str(user.user_id),
+                        package_id=manifest.package_id,
+                        amount_cents=commerce.price_cents,
+                        currency=commerce.currency,
+                    ),
+                    status=status,
+                    action_label="registrar o pagamento de teste",
+                )
+                status.write("Pagamento de teste auditado e crédito confirmado.")
+                finish_payment_transition(
+                    user_id=str(user.user_id),
+                    package_id=manifest.package_id,
+                    status=status,
+                )
+        except (APIError, PermissionError, ValueError, RuntimeError) as exc:
+            st.error(f"Não foi possível concluir o pagamento de teste: {exc}")
+    st.divider()
 
 session_key = f"pix_order:{manifest.package_id}"
 stored: StoredPaymentOrder | None = st.session_state.get(session_key)
@@ -227,7 +251,7 @@ if stored is None:
                     state="complete",
                     expanded=False,
                 )
-        except (MercadoPagoError, APIError, ValueError, RuntimeError) as exc:
+        except (MercadoPagoError, APIError, PermissionError, ValueError, RuntimeError) as exc:
             st.error(str(exc))
         else:
             stored = result.stored
@@ -243,34 +267,6 @@ else:
             pass
     if stored.qr_code:
         st.text_area("Pix Copia e Cola", stored.qr_code, height=120)
-
-    if is_sandbox_order(stored):
-        st.caption("Cobrança de sandbox detectada. Nenhum valor real será movimentado.")
-        if st.button("Simular pagamento aprovado", type="primary", use_container_width=True):
-            try:
-                with st.status(
-                    "Pagamento confirmado. Aguarde o processamento...",
-                    expanded=True,
-                ) as processing_status:
-                    processing_status.write("Liberando uma execução...")
-                    payment_id = stored.provider_order_id or stored.payment_order_id
-                    call_with_quota_backoff(
-                        lambda: story_credits.create_credit(
-                            user_id=str(user.user_id),
-                            package_id=manifest.package_id,
-                            payment_id=payment_id,
-                        ),
-                        status=processing_status,
-                        action_label="liberar a execução",
-                    )
-                    processing_status.write("Crédito confirmado.")
-                    finish_payment_transition(
-                        user_id=str(user.user_id),
-                        package_id=manifest.package_id,
-                        status=processing_status,
-                    )
-            except (APIError, ValueError, RuntimeError) as exc:
-                st.error(f"Não foi possível liberar a história: {exc}")
 
     if st.button("Já paguei — verificar agora", use_container_width=True):
         try:

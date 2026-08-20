@@ -25,13 +25,15 @@ class PixOrder:
     qr_code: str
     qr_code_base64: str
     ticket_url: str
+    amount_cents: int
+    currency: str
     raw: dict[str, Any]
 
     @property
     def approved(self) -> bool:
         payment = _first_payment(self.raw)
         payment_status = str(payment.get("status", "")).lower()
-        return self.status.lower() in {"processed", "approved"} or payment_status == "approved"
+        return self.status.lower() == "approved" or payment_status == "approved"
 
 
 class MercadoPagoClient:
@@ -124,6 +126,18 @@ class MercadoPagoClient:
 def parse_pix_order(data: dict[str, Any]) -> PixOrder:
     payment = _first_payment(data)
     method = payment.get("payment_method") if isinstance(payment.get("payment_method"), dict) else {}
+    raw_amount = payment.get("amount", data.get("total_amount", "0"))
+    try:
+        amount_cents = int((Decimal(str(raw_amount)) * Decimal(100)).quantize(Decimal("1")))
+    except Exception:
+        amount_cents = 0
+    currency = str(
+        payment.get("currency_id")
+        or payment.get("currency")
+        or data.get("currency_id")
+        or data.get("currency")
+        or "BRL"
+    ).upper()
     return PixOrder(
         order_id=str(data.get("id", "")),
         status=str(data.get("status", payment.get("status", ""))),
@@ -132,6 +146,8 @@ def parse_pix_order(data: dict[str, Any]) -> PixOrder:
         qr_code=str(method.get("qr_code", "")),
         qr_code_base64=str(method.get("qr_code_base64", "")),
         ticket_url=str(method.get("ticket_url", "")),
+        amount_cents=amount_cents,
+        currency=currency,
         raw=data,
     )
 

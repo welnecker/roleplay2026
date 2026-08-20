@@ -17,7 +17,8 @@ PAYMENT_ORDERS_HEADERS = (
     "payment_order_id", "user_id", "package_id", "product_id", "amount_cents",
     "currency", "provider", "provider_order_id", "external_reference",
     "idempotency_key", "status", "status_detail", "qr_code", "ticket_url",
-    "created_at", "updated_at",
+    "created_at", "updated_at", "payer_email_normalized", "payment_mode",
+    "validation_status", "approved_at",
 )
 PAYMENT_EVENTS_HEADERS = (
     "payment_event_id", "payment_order_id", "provider_order_id", "event_type",
@@ -37,6 +38,9 @@ class StoredPaymentOrder:
     product_id: str
     amount_cents: int
     currency: str
+    payer_email_normalized: str
+    payment_mode: str
+    provider: str
     provider_order_id: str
     external_reference: str
     idempotency_key: str
@@ -44,6 +48,8 @@ class StoredPaymentOrder:
     status_detail: str
     qr_code: str
     ticket_url: str
+    validation_status: str
+    approved_at: str
 
 
 class GoogleSheetsPaymentRepository:
@@ -68,6 +74,9 @@ class GoogleSheetsPaymentRepository:
             product_id=str(values["product_id"]),
             amount_cents=int(values["amount_cents"]),
             currency=str(values["currency"]),
+            payer_email_normalized=str(values.get("payer_email_normalized", "")).strip().casefold(),
+            payment_mode=str(values.get("payment_mode", "real_pix")),
+            provider=str(values.get("provider", "mercado_pago")),
             provider_order_id="",
             external_reference=str(values["external_reference"]),
             idempotency_key=str(values["idempotency_key"]),
@@ -75,15 +84,19 @@ class GoogleSheetsPaymentRepository:
             status_detail="",
             qr_code="",
             ticket_url="",
+            validation_status="pending",
+            approved_at="",
         )
         self._append(self._worksheet(PAYMENT_ORDERS_SHEET), {
-            **asdict(order), "provider": "mercado_pago", "created_at": now, "updated_at": now,
+            **asdict(order), "created_at": now, "updated_at": now,
         })
         return order
 
     def update_provider_order(self, *, payment_order_id: str, provider_order_id: str,
                               status: str, status_detail: str, qr_code: str,
-                              ticket_url: str, raw: dict[str, Any]) -> StoredPaymentOrder:
+                              ticket_url: str, raw: dict[str, Any],
+                              validation_status: str = "pending",
+                              approved_at: str = "") -> StoredPaymentOrder:
         row_number, row = self._find_row("payment_order_id", payment_order_id)
         row.update({
             "provider_order_id": provider_order_id,
@@ -91,6 +104,8 @@ class GoogleSheetsPaymentRepository:
             "status_detail": status_detail,
             "qr_code": qr_code,
             "ticket_url": ticket_url,
+            "validation_status": validation_status,
+            "approved_at": approved_at,
             "updated_at": utc_now_iso(),
         })
         self._update_row(self._worksheet(PAYMENT_ORDERS_SHEET), row_number, row)
@@ -165,7 +180,13 @@ class GoogleSheetsPaymentRepository:
         if not current:
             worksheet.append_row(list(headers), value_input_option="RAW")
         elif current != headers:
-            raise RuntimeError(f"Cabeçalhos incompatíveis na aba {name}.")
+            if headers[: len(current)] != current:
+                raise RuntimeError(f"Cabeçalhos incompatíveis na aba {name}.")
+            worksheet.update(
+                range_name="A1",
+                values=[list(headers)],
+                value_input_option="RAW",
+            )
 
     def _worksheet(self, name: str) -> Worksheet:
         if name not in self._worksheets:
@@ -195,6 +216,9 @@ class GoogleSheetsPaymentRepository:
             product_id=str(row.get("product_id", "")),
             amount_cents=int(row.get("amount_cents", 0) or 0),
             currency=str(row.get("currency", "BRL")),
+            payer_email_normalized=str(row.get("payer_email_normalized", "")).strip().casefold(),
+            payment_mode=str(row.get("payment_mode", "real_pix")),
+            provider=str(row.get("provider", "mercado_pago")),
             provider_order_id=str(row.get("provider_order_id", "")),
             external_reference=str(row.get("external_reference", "")),
             idempotency_key=str(row.get("idempotency_key", "")),
@@ -202,4 +226,6 @@ class GoogleSheetsPaymentRepository:
             status_detail=str(row.get("status_detail", "")),
             qr_code=str(row.get("qr_code", "")),
             ticket_url=str(row.get("ticket_url", "")),
+            validation_status=str(row.get("validation_status", "pending")),
+            approved_at=str(row.get("approved_at", "")),
         )
