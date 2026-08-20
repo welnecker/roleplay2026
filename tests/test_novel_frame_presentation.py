@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from services.novel_frame_presentation import render_frame_html, render_frame_sections
 
 
@@ -29,7 +31,7 @@ def test_cena_e_entries_sao_documentos_fechados_independentes() -> None:
     assert "background:#D24369" in description
     assert "color:#fff" in description
 
-    assert 'class="novel-frame-track"' in track
+    assert 'class="novel-frame-track cards-4"' in track
     assert 'grid-auto-columns:calc((100% - 2.25rem)/4)' in track
     assert 'grid-auto-columns:minmax(78vw,78vw)' in track
     assert 'overflow-x:auto' in track
@@ -42,6 +44,39 @@ def test_cena_e_entries_sao_documentos_fechados_independentes() -> None:
     assert 'pensamento · Donisete' in track
     assert 'dialogue-user' in track
     assert 'dialogue-mary' in track
+
+
+@pytest.mark.parametrize(
+    ("card_count", "track_class", "column_rule"),
+    [
+        (1, "cards-1", ".novel-frame-track.cards-1{grid-auto-columns:100%;}"),
+        (2, "cards-2", ".novel-frame-track.cards-2{grid-auto-columns:calc((100% - .75rem)/2);}"),
+        (3, "cards-3", ".novel-frame-track.cards-3{grid-auto-columns:calc((100% - 1.5rem)/3);}"),
+        (4, "cards-4", ".novel-frame-track.cards-4{grid-auto-columns:calc((100% - 2.25rem)/4);}"),
+    ],
+)
+def test_baloes_dividem_toda_a_linha_conforme_quantidade(
+    card_count: int,
+    track_class: str,
+    column_rule: str,
+) -> None:
+    entries = "\n".join(
+        f"[FALA camilly|Camilly]\nBalão {index}"
+        for index in range(1, card_count + 1)
+    )
+    content = f"""[QUADRO largura_{card_count}]
+[DESCRIÇÃO]
+Cena de teste.
+{entries}
+[/QUADRO]"""
+
+    sections = render_frame_sections(content, character_name="Camilly")
+
+    assert sections is not None
+    _description, track = sections
+    assert f'class="novel-frame-track {track_class}"' in track
+    assert track.count('class="novel-frame-card') == card_count
+    assert column_rule in track
 
 
 def test_paleta_fixa_segue_posicao_e_repete_a_cada_quatro_cards() -> None:

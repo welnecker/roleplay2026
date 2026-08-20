@@ -101,6 +101,10 @@ def _track_style() -> str:
   margin:.18rem 0 0 0;
   scrollbar-width:thin;
 }
+.novel-frame-track.cards-1{grid-auto-columns:100%;}
+.novel-frame-track.cards-2{grid-auto-columns:calc((100% - .75rem)/2);}
+.novel-frame-track.cards-3{grid-auto-columns:calc((100% - 1.5rem)/3);}
+.novel-frame-track.cards-4{grid-auto-columns:calc((100% - 2.25rem)/4);}
 .novel-frame-track>.novel-frame-card{
   min-width:0;
   color:#2B1822 !important;
@@ -196,6 +200,7 @@ def _track_style() -> str:
     padding-top:1.15rem;
     padding-bottom:.55rem;
   }
+  .novel-frame-track.cards-1{grid-auto-columns:100%;}
 }
 </style>
 """
@@ -253,9 +258,11 @@ def render_frame_sections(content: str, *, character_name: str) -> tuple[str, st
             )
             entry_index += 1
 
+    visible_columns = min(4, max(1, len(cards)))
     track = (
         _track_style()
-        + '<section class="novel-frame-track" aria-label="Falas e pensamentos do quadro">'
+        + f'<section class="novel-frame-track cards-{visible_columns}" '
+        + 'aria-label="Falas e pensamentos do quadro">'
         + "".join(cards)
         + "</section>"
         if cards

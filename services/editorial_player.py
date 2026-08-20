@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import importlib
-import sys
-from types import ModuleType
+import runpy
+from pathlib import Path
+from typing import Any
 
 from services.novel_frame_image_patch import install as install_novel_frame_image
 from services.novel_frame_layout_patch import install as install_novel_frame_layout
@@ -11,13 +11,20 @@ from services.novel_frame_presentation import install as install_novel_frame_pre
 from services.novel_frame_reveal_patch import install as install_novel_frame_reveal
 
 
-_RUNTIME_MODULE = "services.novel_player_runtime"
+_RUNTIME_PATH = Path(__file__).with_name("novel_player_runtime.py")
 NOVEL_FRAME_BUILD = "2026-08-18.11"
 _BUILD_LOGGED = False
 
 
-def _load_or_reload_runtime() -> ModuleType:
-    """Executa exclusivamente o player da novela contínua nesta branch V2."""
+def _execute_runtime() -> dict[str, Any]:
+    """Executa o player em namespace isolado para cada rerun do Streamlit.
+
+    ``importlib.reload`` modifica a entrada global de ``sys.modules`` enquanto
+    executa o arquivo. Dois reruns simultâneos podiam, portanto, remover ou
+    substituir o módulo um do outro e repetir a abertura da mesma run. O player
+    é um script Streamlit; executá-lo por caminho preserva esse contrato sem
+    compartilhar estado de importação entre sessões.
+    """
 
     global _BUILD_LOGGED
     install_novel_frame_v2()
@@ -32,27 +39,13 @@ def _load_or_reload_runtime() -> ModuleType:
         )
         _BUILD_LOGGED = True
 
-    loaded = sys.modules.get(_RUNTIME_MODULE)
-    if loaded is None:
-        return importlib.import_module(_RUNTIME_MODULE)
-
-    registered = sys.modules.get(_RUNTIME_MODULE)
-    if registered is None:
-        return importlib.import_module(_RUNTIME_MODULE)
-
-    try:
-        return importlib.reload(registered)
-    except ImportError:
-        current = sys.modules.get(_RUNTIME_MODULE)
-        if current is None or current is not registered:
-            return importlib.import_module(_RUNTIME_MODULE)
-        raise
+    return runpy.run_path(str(_RUNTIME_PATH), run_name="services.novel_player_runtime.__streamlit__")
 
 
 def run_editorial_player() -> None:
     """Executa o player V2: CENA -> imagem -> cards incrementais horizontais."""
 
-    _load_or_reload_runtime()
+    _execute_runtime()
 
 
 __all__ = ["NOVEL_FRAME_BUILD", "run_editorial_player"]

@@ -6,6 +6,7 @@ from services import novel_frame_layout_patch as layout
 def test_layout_renderiza_cena_imagem_e_cards_nessa_ordem(monkeypatch) -> None:
     events: list[str] = []
 
+    monkeypatch.setattr(layout, "_original_render_dialogue_html", lambda *args, **kwargs: "")
     monkeypatch.setattr(layout, "frame_id", lambda _content: "encontro_001")
     monkeypatch.setattr(
         layout.st,

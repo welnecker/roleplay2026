@@ -17,6 +17,7 @@ from services.v2_run_starter import start_v2_run_on_first_message
 
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
 RECOVERY_HISTORY_LIMIT = 500
+NOVEL_FRAME_PROGRESS_CHECKPOINT_INTERVAL = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +60,26 @@ def restore_story_state(raw: dict[str, object]) -> StoryState:
         consumed_orders=[int(item) for item in consumed] if isinstance(consumed, list) else [],
         finished=bool(raw.get("finished", False)),
     )
+
+
+def should_checkpoint_run_progress(
+    *,
+    state: StoryState,
+    assistant_metadata: dict[str, object],
+) -> bool:
+    """Limita leituras de STORY_RUNS sem enfraquecer a retomada da novela.
+
+    Cada interação já carrega o estado completo e é a fonte precisa da retomada.
+    Para quadros da visual novel, STORY_RUNS funciona como índice/checkpoint e
+    não precisa ser relido e atualizado em todo movimento.
+    """
+
+    if not bool(assistant_metadata.get("novel_frame", False)):
+        return True
+    if state.finished:
+        return True
+    step_index = max(0, int(state.step_index or 0))
+    return step_index > 0 and step_index % NOVEL_FRAME_PROGRESS_CHECKPOINT_INTERVAL == 0
 
 
 def _ordered_messages(messages: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -431,7 +452,11 @@ def persist_assistant_message(
         beat_id=beat_id,
         metadata=persisted_metadata,
     )
-    run = repository.update_run_progress(run=run, block_id=block_id, beat_id=beat_id)
+    if should_checkpoint_run_progress(
+        state=state,
+        assistant_metadata=persisted_metadata,
+    ):
+        run = repository.update_run_progress(run=run, block_id=block_id, beat_id=beat_id)
     return RuntimePersistenceContext(
         package_id=context.package_id,
         package_version=context.package_version,

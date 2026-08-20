@@ -22,10 +22,16 @@ def test_um_card_exige_um_clique_para_avancar_quadro(monkeypatch) -> None:
     }
     monkeypatch.setattr(reveal_patch.st, "session_state", state)
     monkeypatch.setattr(reveal_patch, "_original_button", lambda *args, **kwargs: True)
-    monkeypatch.setattr(reveal_patch, "_synchronize_remote_run", lambda **kwargs: False)
+    sync_calls: list[bool] = []
+    monkeypatch.setattr(
+        reveal_patch,
+        "_synchronize_remote_run",
+        lambda **kwargs: sync_calls.append(True) or False,
+    )
     monkeypatch.setattr(reveal_patch.time, "monotonic", lambda: 10.0)
 
     assert reveal_patch._button_wrapper("Avançar") is True
+    assert sync_calls == []
 
 
 def test_quatro_cards_revelam_restantes_antes_de_avancar(monkeypatch) -> None:

@@ -190,11 +190,10 @@ def _button_wrapper(*args: Any, **kwargs: Any) -> bool:
         st.rerun()
         return False
 
-    # Todas as entries já foram reveladas. Antes de gerar outro quadro, adota
-    # qualquer avanço que tenha acontecido em celular/desktop paralelo.
-    if _synchronize_remote_run():
-        st.rerun()
-        return False
+    # Todas as entries já foram reveladas. A verificação idempotente feita no
+    # momento da persistência continua protegendo celular/desktop paralelos.
+    # Evitar uma leitura preventiva integral da planilha em cada quadro mantém
+    # o player abaixo da cota por minuto do Google Sheets.
     return True
 
 

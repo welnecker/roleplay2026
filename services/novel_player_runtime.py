@@ -4,6 +4,7 @@ import time
 
 import streamlit as st
 
+from narrative_v2.repository import RuntimeConflictError
 from packages.models import InstalledStoryPackage
 from persistence.factory import build_google_sheets_repository
 from platform_core.auth import AuthenticatedUser
@@ -23,6 +24,7 @@ from services.immersive_onboarding import (
     restore_profile_for_run,
 )
 from services.novel_frame_runtime_support import first_frame_movement, is_frame_script
+from services.novel_runtime_conflict import persisted_movement_at_sequence
 from services.novel_v2_adapter import build_novel_prompt, movement_from_script, next_movement_id
 from services.paid_run_access import finish_active_run, get_paid_run_access, terminate_paid_access
 from services.pwa import install_pwa_metadata
@@ -302,14 +304,37 @@ def persist_movement(
     repository = runtime_repository()
     if repository is None:
         raise RuntimeError("Google Sheets ficou indisponível ao registrar a cena.")
-    updated_context = persist_assistant_message(
-        repository,
-        context=context,
-        user=user,
-        state=updated_state,
-        assistant_text=assistant_text,
-        assistant_metadata=metadata,
-    )
+    try:
+        updated_context = persist_assistant_message(
+            repository,
+            context=context,
+            user=user,
+            state=updated_state,
+            assistant_text=assistant_text,
+            assistant_metadata=metadata,
+        )
+    except RuntimeConflictError:
+        # Outra sessão pode ter persistido exatamente este movimento enquanto
+        # esta ainda gerava o texto. A resposta salva é a autoridade. Só adota
+        # o conflito quando sequência e movimento coincidem; colisões reais
+        # entre movimentos diferentes continuam sendo rejeitadas.
+        recovered_context, recovered_state, recovered_messages = open_persistent_runtime(
+            repository,
+            user=user,
+            package_id=PACKAGE_ID,
+            package_version=context.package_version,
+            restart=False,
+            instance_id=context.instance_id,
+        )
+        persisted = persisted_movement_at_sequence(
+            recovered_messages,
+            sequence=context.next_sequence,
+            target_id=target_id,
+        )
+        if persisted is None:
+            raise
+        messages[:] = recovered_messages
+        return recovered_context, recovered_state
     messages.append({"role": "assistant", "content": assistant_text, **metadata})
     if movement.is_ending:
         finish_active_run(
@@ -363,6 +388,28 @@ if not render_immersive_onboarding(
 immersive_profile = st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
 if isinstance(immersive_profile, dict):
     script = personalize_editorial_script(script, immersive_profile)
+
+# Uma segunda sessão pode ter aberto a mesma run depois que esta sessão montou
+# um contexto ainda vazio. Reconsulta somente nesse estado inicial, antes de
+# gastar uma nova geração do modelo.
+if not fresh_start and not messages and is_frame_script(script):
+    repository = runtime_repository()
+    if repository is not None:
+        refreshed_context, refreshed_state, refreshed_messages = open_persistent_runtime(
+            repository,
+            user=user,
+            package_id=PACKAGE_ID,
+            package_version=context.package_version,
+            restart=False,
+            instance_id=context.instance_id,
+        )
+        if refreshed_messages:
+            context, story_state, messages = (
+                refreshed_context,
+                refreshed_state,
+                refreshed_messages,
+            )
+            save_runtime(user, context, story_state, messages)
 
 if not story_state.finished:
     try:
