@@ -29,6 +29,20 @@ def test_camilly_aparece_no_catalogo_com_runtime_editorial_pago() -> None:
     assert card.profile_name == "Camilly"
     assert card.price_label == "R$ 9,90"
     assert card.replay_requires_purchase is True
+    assert card.cover_url.startswith("data:image/webp;base64,")
+
+
+def test_camilly_declara_capa_local_sem_compartilhar_assets_de_outro_pacote() -> None:
+    packages, errors = discover_packages(INSTALLED_STORIES)
+
+    assert errors == []
+    package = next(
+        item for item in packages if item.manifest.package_id == "roleplay2026.camilly"
+    )
+    assert package.manifest.card.cover == "assets/capas/capa.webp"
+    assert package.root / package.manifest.card.cover == (
+        INSTALLED_STORIES / "camilly" / "assets" / "capas" / "capa.webp"
+    )
 
 
 def test_camilly_compila_sem_depender_da_planilha() -> None:
