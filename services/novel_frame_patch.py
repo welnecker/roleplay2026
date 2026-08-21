@@ -133,6 +133,20 @@ def compile_novel_frame_story(
     document = deepcopy(base_document)
     document["script_version"] = str(script_version or document.get("script_version", ""))
     document["authoring_source"] = "spreadsheet_novel_frame_v2"
+    character = dict(document.get("character") or {})
+    character_core = dict(document.get("character_core") or {})
+    voice_contract = {
+        "speech_style": [
+            str(item).strip()
+            for item in character.get("speech_style", []) or []
+            if str(item).strip()
+        ],
+        "invariants": [
+            str(item).strip()
+            for item in character_core.get("invariants", []) or []
+            if str(item).strip()
+        ],
+    }
     block = {
         "block_id": "novel_v2_frames",
         "order": 1,
@@ -148,6 +162,8 @@ def compile_novel_frame_story(
     for index, frame in enumerate(frames):
         next_id = str(frames[index + 1]["frame_id"]) if index + 1 < len(frames) else ""
         payload_frame = deepcopy(frame)
+        if voice_contract["speech_style"] or voice_contract["invariants"]:
+            payload_frame["voice_contract"] = deepcopy(voice_contract)
         if index == 0:
             # A primeira descrição já é exibida como abertura da história.
             # Mantemos o restante do primeiro quadro para o primeiro clique em Avançar,
@@ -256,7 +272,7 @@ QUADRO AUTORAL:
 REGRAS DE CONTINUIDADE:
 - Leia o histórico como uma única cena em andamento. Este quadro começa exatamente onde o anterior terminou.
 - Não recapitule o que já aconteceu e não reinicie a relação entre os personagens.
-- Cada instrução de FALA descreve a intenção daquela fala; transforme-a em diálogo oral brasileiro, curto e natural.
+- Cada FALA contém texto autoral e intenção dramática. Preserve seu núcleo verbal, seu registro e suas expressões marcantes; ajuste somente o mínimo necessário para fluidez oral, concordância, nome personalizado e continuidade.
 - Cada PENSAMENTO é privado do personagem correspondente e pode revelar malícia, desejo, estratégia, dúvida ou interpretação que a fala esconde.
 - O pensamento deve acrescentar subtexto; não repita a fala com outras palavras.
 - Preserve a progressão psicológica dos personagens de um quadro para o seguinte.
@@ -266,6 +282,14 @@ REGRAS DE CONTINUIDADE:
 - Evite verborragia: normalmente 1 frase por fala e 1 frase por pensamento; descrição em 1 ou 2 frases.
 - Use o nome {protagonist} com parcimônia; não o repita em todas as falas.
 {description_contract}
+
+FIDELIDADE AO LINGUAJAR AUTORAL:
+- O campo voice_contract do QUADRO AUTORAL é obrigatório quando estiver presente. Aplique seu speech_style e seus invariants a todas as falas e pensamentos compatíveis.
+- Preserve o grau de informalidade, vulgaridade, erotismo, desejo, humor, provocação e intensidade emocional presente em cada entry.
+- Preserve palavrões, gírias, risadas, interjeições, reticências, duplo sentido e termos sexuais relevantes. Não os suprima nem os substitua por eufemismos, linguagem elegante, neutra, clínica ou romântica.
+- "Curto e natural" limita verborragia; não autoriza higienizar, moralizar, amenizar ou mudar a personalidade do texto.
+- Não aumente gratuitamente a explicitude de uma entry neutra. Reproduza a intensidade que o roteiro efetivamente forneceu naquele ponto.
+- Se houver conflito entre embelezar a frase e preservar a voz autoral, preserve a voz autoral.
 
 FORMATO OBRIGATÓRIO — devolva somente isto, sem Markdown adicional:
 [QUADRO {normalized.get('frame_id', '')}]
