@@ -34,6 +34,9 @@ def test_cena_e_entries_sao_documentos_fechados_independentes() -> None:
     assert 'class="novel-frame-track cards-4"' in track
     assert 'grid-auto-columns:calc((100% - 2.25rem)/4)' in track
     assert 'grid-auto-columns:minmax(78vw,78vw)' in track
+    assert ".novel-frame-track.cards-2," in track
+    assert ".novel-frame-track.cards-3," in track
+    assert ".novel-frame-track.cards-4{" in track
     assert 'overflow-x:auto' in track
     assert 'scroll-snap-type:x mandatory' in track
     assert track.count('class="novel-frame-card') == 4
@@ -44,6 +47,20 @@ def test_cena_e_entries_sao_documentos_fechados_independentes() -> None:
     assert 'pensamento · Donisete' in track
     assert 'dialogue-user' in track
     assert 'dialogue-mary' in track
+
+
+def test_mobile_sobrescreve_larguras_desktop_e_preserva_carrossel() -> None:
+    sections = render_frame_sections(CONTENT, character_name="Camilly")
+
+    assert sections is not None
+    _description, track = sections
+    mobile_override = """.novel-frame-track.cards-2,
+  .novel-frame-track.cards-3,
+  .novel-frame-track.cards-4{
+    grid-auto-columns:minmax(78vw,78vw);
+  }"""
+    assert mobile_override in track
+    assert "scroll-snap-type:x mandatory" in track
 
 
 @pytest.mark.parametrize(
