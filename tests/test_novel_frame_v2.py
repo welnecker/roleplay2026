@@ -19,7 +19,19 @@ def _base_document() -> dict:
         "package_id": "roleplay2026.camilly",
         "script_version": "1",
         "introduction": "ABERTURA LEGADA QUE NÃO DEVE SER USADA",
-        "character": {"name": "Camilly"},
+        "character": {
+            "name": "Camilly",
+            "speech_style": [
+                "português brasileiro natural",
+                "fala sexual, direta e espontânea",
+                "preserva as palavras e expressões fornecidas pelo roteiro",
+            ],
+        },
+        "character_core": {
+            "invariants": [
+                "Desejo, malícia e prazer fazem parte da personalidade.",
+            ],
+        },
         "blocks": [
             {
                 "block_id": "legacy",
@@ -178,6 +190,22 @@ def test_descricoes_dos_quadros_seguintes_permanecem_no_fluxo() -> None:
     assert payload["description"] == "Camilly pede uma carona para a praia."
 
 
+def test_quadro_carrega_contrato_editorial_de_voz_da_personagem() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_002")
+    payload = json.loads(movement.instruction.removeprefix("NOVEL_FRAME_V2\n"))
+
+    assert payload["voice_contract"]["speech_style"] == [
+        "português brasileiro natural",
+        "fala sexual, direta e espontânea",
+        "preserva as palavras e expressões fornecidas pelo roteiro",
+    ]
+    assert payload["voice_contract"]["invariants"] == [
+        "Desejo, malícia e prazer fazem parte da personalidade.",
+    ]
+
+
 def test_documento_de_quadros_continua_compativel_com_editorial_script() -> None:
     document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
     script = EditorialScript(compile_editorial_document(document))
@@ -204,6 +232,25 @@ def test_prompt_do_primeiro_quadro_nao_pede_descricao_repetida() -> None:
     assert "A fala do protagonista também é roteirizada" in prompt
     assert "Cada PENSAMENTO é privado" in prompt
     assert "Não omita nenhuma entry" in prompt
+    assert '"voice_contract"' in prompt
+    assert "fala sexual, direta e espontânea" in prompt
+    assert "Preserve palavrões, gírias, risadas" in prompt
+    assert "não autoriza higienizar, moralizar, amenizar" in prompt
+
+
+def test_prompt_preserva_intensidade_sem_ampliar_entry_neutra() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_001")
+    prompt = build_frame_prompt(
+        character_name="Camilly",
+        user_name="Donisete",
+        movement=movement,
+    )
+
+    assert "Preserve o grau de informalidade, vulgaridade, erotismo" in prompt
+    assert "Não aumente gratuitamente a explicitude de uma entry neutra" in prompt
+    assert "Se houver conflito entre embelezar a frase e preservar a voz autoral" in prompt
 
 
 def test_sufixo_balao_e_preservado_com_nome_visivel_normal() -> None:
