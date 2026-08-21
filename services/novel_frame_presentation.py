@@ -252,6 +252,11 @@ def _track_style() -> str:
     padding-top:1.15rem;
     padding-bottom:.55rem;
   }
+  .novel-frame-track.cards-2,
+  .novel-frame-track.cards-3,
+  .novel-frame-track.cards-4{
+    grid-auto-columns:minmax(78vw,78vw);
+  }
   .novel-frame-track.cards-1{grid-auto-columns:100%;}
 }
 </style>
