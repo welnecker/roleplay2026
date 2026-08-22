@@ -141,6 +141,19 @@ def compile_novel_frame_story(
             if str(item).strip()
         ],
     }
+    appearance_contract = {
+        "age": int(character.get("age", 0) or 0),
+        "physical_profile": [
+            str(item).strip()
+            for item in character.get("physical_profile", []) or []
+            if str(item).strip()
+        ],
+        "wardrobe": [
+            str(item).strip()
+            for item in character.get("wardrobe", []) or []
+            if str(item).strip()
+        ],
+    }
     block = {
         "block_id": "novel_v2_frames",
         "order": 1,
@@ -158,6 +171,12 @@ def compile_novel_frame_story(
         payload_frame = deepcopy(frame)
         if voice_contract["speech_style"]:
             payload_frame["voice_contract"] = deepcopy(voice_contract)
+        if (
+            appearance_contract["age"]
+            or appearance_contract["physical_profile"]
+            or appearance_contract["wardrobe"]
+        ):
+            payload_frame["appearance_contract"] = deepcopy(appearance_contract)
         if index == 0:
             # A primeira descrição já é exibida como abertura da história.
             # Mantemos o restante do primeiro quadro para o primeiro clique em Avançar,
@@ -288,6 +307,12 @@ FIDELIDADE AO LINGUAJAR AUTORAL:
 - Não aumente gratuitamente a explicitude de uma entry neutra. Reproduza a intensidade que o roteiro efetivamente forneceu naquele ponto.
 - Se houver conflito entre embelezar a frase e preservar a voz autoral, preserve a voz autoral.
 - Nas FALAS, faça somente ajustes mínimos e preserve de perto a redação autoral. Nos PENSAMENTOS, preserve o núcleo autoral e permita o desenvolvimento psicológico definido acima.
+
+CONTINUIDADE VISUAL:
+- O appearance_contract contém poucos fatos visuais autorais. Considere-os verdadeiros, mas mencione-os somente quando forem visíveis e relevantes à entry atual; nunca recite a ficha como uma lista.
+- Não contradiga nem substitua a fisionomia e a roupa declaradas por características inventadas.
+- A roupa representa o estado inicial. Ações já ocorridas nos quadros recentes, como abaixar, retirar ou reajustar uma peça, prevalecem sobre esse estado inicial.
+- O appearance_contract não limita detalhes criativos de cenário ou objetos que não alterem o acontecimento do roteiro.
 
 FORMATO OBRIGATÓRIO — devolva somente isto, sem Markdown adicional:
 [QUADRO {normalized.get('frame_id', '')}]
