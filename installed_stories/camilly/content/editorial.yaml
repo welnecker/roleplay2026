@@ -20,7 +20,8 @@ character:
   name: Camilly
   age: 28
   physical_profile:
-    - mulher adulta, loira e de olhos azuis
+    - mulher adulta
+    - cabelos loiros e olhos azuis
     - corpo escultural
   wardrobe:
     - calça legging de ginástica
