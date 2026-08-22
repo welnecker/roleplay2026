@@ -134,16 +134,10 @@ def compile_novel_frame_story(
     document["script_version"] = str(script_version or document.get("script_version", ""))
     document["authoring_source"] = "spreadsheet_novel_frame_v2"
     character = dict(document.get("character") or {})
-    character_core = dict(document.get("character_core") or {})
     voice_contract = {
         "speech_style": [
             str(item).strip()
             for item in character.get("speech_style", []) or []
-            if str(item).strip()
-        ],
-        "invariants": [
-            str(item).strip()
-            for item in character_core.get("invariants", []) or []
             if str(item).strip()
         ],
     }
@@ -162,7 +156,7 @@ def compile_novel_frame_story(
     for index, frame in enumerate(frames):
         next_id = str(frames[index + 1]["frame_id"]) if index + 1 < len(frames) else ""
         payload_frame = deepcopy(frame)
-        if voice_contract["speech_style"] or voice_contract["invariants"]:
+        if voice_contract["speech_style"]:
             payload_frame["voice_contract"] = deepcopy(voice_contract)
         if index == 0:
             # A primeira descrição já é exibida como abertura da história.
@@ -284,7 +278,7 @@ REGRAS DE CONTINUIDADE:
 {description_contract}
 
 FIDELIDADE AO LINGUAJAR AUTORAL:
-- O campo voice_contract do QUADRO AUTORAL é obrigatório quando estiver presente. Aplique seu speech_style e seus invariants a todas as falas e pensamentos compatíveis.
+- O campo voice_contract do QUADRO AUTORAL é obrigatório quando estiver presente. Aplique seu speech_style somente ao texto das entries existentes; ele nunca autoriza criar novas entries.
 - Preserve o grau de informalidade, vulgaridade, erotismo, desejo, humor, provocação e intensidade emocional presente em cada entry.
 - Preserve palavrões, gírias, risadas, interjeições, reticências, duplo sentido e termos sexuais relevantes. Não os suprima nem os substitua por eufemismos, linguagem elegante, neutra, clínica ou romântica.
 - "Curto e natural" limita verborragia; não autoriza higienizar, moralizar, amenizar ou mudar a personalidade do texto.
@@ -297,11 +291,14 @@ FORMATO OBRIGATÓRIO — devolva somente isto, sem Markdown adicional:
 - FALA: [FALA <actor>|<visible_name>] seguido da fala.
 - PENSAMENTO: [PENSAMENTO <actor>|<visible_name>] seguido do pensamento.
 - Quando o actor terminar em `_balao`, copie esse sufixo literalmente na tag de FALA; ele é uma diretiva visual do roteiro.
+- Existe correspondência exata de 1 para 1: cada entry do QUADRO AUTORAL gera exatamente um bloco na saída.
+- Se o roteiro possui quatro entries, devolva exatamente quatro blocos; se possui três, devolva exatamente três.
+- Nunca crie PENSAMENTO para acompanhar uma FALA e nunca crie FALA para acompanhar um PENSAMENTO. Só emita o tipo e o actor declarados naquela entry.
 
 Finalize com:
 [/QUADRO]
 
-Não omita nenhuma entry e não acrescente outras.
+Não omita, não duplique e não acrescente nenhuma entry.
 """.strip()
 
 
