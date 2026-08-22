@@ -29,6 +29,7 @@ def _base_document() -> dict:
         },
         "character_core": {
             "invariants": [
+                "Pensamento e fala aparecem juntos na mesma resposta.",
                 "Desejo, malícia e prazer fazem parte da personalidade.",
             ],
         },
@@ -201,9 +202,7 @@ def test_quadro_carrega_contrato_editorial_de_voz_da_personagem() -> None:
         "fala sexual, direta e espontânea",
         "preserva as palavras e expressões fornecidas pelo roteiro",
     ]
-    assert payload["voice_contract"]["invariants"] == [
-        "Desejo, malícia e prazer fazem parte da personalidade.",
-    ]
+    assert "invariants" not in payload["voice_contract"]
 
 
 def test_documento_de_quadros_continua_compativel_com_editorial_script() -> None:
@@ -231,11 +230,15 @@ def test_prompt_do_primeiro_quadro_nao_pede_descricao_repetida() -> None:
     assert "Não gere [DESCRIÇÃO] neste quadro" in prompt
     assert "A fala do protagonista também é roteirizada" in prompt
     assert "Cada PENSAMENTO é privado" in prompt
-    assert "Não omita nenhuma entry" in prompt
+    assert "Não omita, não duplique e não acrescente nenhuma entry" in prompt
     assert '"voice_contract"' in prompt
     assert "fala sexual, direta e espontânea" in prompt
+    assert "Pensamento e fala aparecem juntos" not in prompt
     assert "Preserve palavrões, gírias, risadas" in prompt
     assert "não autoriza higienizar, moralizar, amenizar" in prompt
+    assert "correspondência exata de 1 para 1" in prompt
+    assert "Nunca crie PENSAMENTO para acompanhar uma FALA" in prompt
+    assert "não duplique e não acrescente nenhuma entry" in prompt
 
 
 def test_prompt_preserva_intensidade_sem_ampliar_entry_neutra() -> None:
