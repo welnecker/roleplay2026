@@ -131,8 +131,10 @@ def test_nucleo_da_camilly_inclui_ficha_e_regras_autorais_completas() -> None:
 
     assert "NÚCLEO VIVO E AUTORITATIVO DE CAMILLY" in context
     assert "APARÊNCIA FÍSICA" in context
+    assert "idade: 28 anos" in context
     assert "cabelos loiros" in context
-    assert "corpo firme e bem cuidado" in context
+    assert "olhos azuis" in context
+    assert "corpo escultural" in context
     assert "PSICOLOGIA ESTÁVEL" in context
     assert "sente desejo sexual pelo usuário desde o início" in context
     assert "ESTILO DE FALA" in context
