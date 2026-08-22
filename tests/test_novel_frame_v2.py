@@ -21,6 +21,14 @@ def _base_document() -> dict:
         "introduction": "ABERTURA LEGADA QUE NÃO DEVE SER USADA",
         "character": {
             "name": "Camilly",
+            "age": 28,
+            "physical_profile": ["loira", "olhos azuis", "corpo escultural"],
+            "wardrobe": [
+                "calça legging de ginástica",
+                "top com alças",
+                "sandálias Melissa",
+                "calcinha fio dental",
+            ],
             "speech_style": [
                 "português brasileiro natural",
                 "fala sexual, direta e espontânea",
@@ -205,6 +213,26 @@ def test_quadro_carrega_contrato_editorial_de_voz_da_personagem() -> None:
     assert "invariants" not in payload["voice_contract"]
 
 
+def test_quadro_carrega_ficha_visual_compacta_sem_fatos_de_cenario() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_002")
+    payload = json.loads(movement.instruction.removeprefix("NOVEL_FRAME_V2\n"))
+
+    assert payload["appearance_contract"] == {
+        "age": 28,
+        "physical_profile": ["loira", "olhos azuis", "corpo escultural"],
+        "wardrobe": [
+            "calça legging de ginástica",
+            "top com alças",
+            "sandálias Melissa",
+            "calcinha fio dental",
+        ],
+    }
+    assert "vehicle" not in payload["appearance_contract"]
+    assert "location" not in payload["appearance_contract"]
+
+
 def test_documento_de_quadros_continua_compativel_com_editorial_script() -> None:
     document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
     script = EditorialScript(compile_editorial_document(document))
@@ -273,6 +301,24 @@ def test_prompt_da_vida_ao_pensamento_sem_alterar_fala_ou_inventar_fatos() -> No
     assert "Não invente fatos, ações, consentimento, excitação" in prompt
     assert "Nas FALAS, faça somente ajustes mínimos" in prompt
     assert "Nos PENSAMENTOS, preserve o núcleo autoral" in prompt
+
+
+def test_prompt_usa_ficha_visual_sem_obrigar_repeticao() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_001")
+    prompt = build_frame_prompt(
+        character_name="Camilly",
+        user_name="Donisete",
+        movement=movement,
+    )
+
+    assert '"appearance_contract"' in prompt
+    assert "calça legging de ginástica" in prompt
+    assert "mencione-os somente quando forem visíveis e relevantes" in prompt
+    assert "nunca recite a ficha como uma lista" in prompt
+    assert "prevalecem sobre esse estado inicial" in prompt
+    assert "não limita detalhes criativos de cenário ou objetos" in prompt
 
 
 def test_sufixo_balao_e_preservado_com_nome_visivel_normal() -> None:
