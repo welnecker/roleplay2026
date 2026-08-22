@@ -229,7 +229,7 @@ def test_prompt_do_primeiro_quadro_nao_pede_descricao_repetida() -> None:
     assert "A descrição deste quadro já foi exibida na abertura" in prompt
     assert "Não gere [DESCRIÇÃO] neste quadro" in prompt
     assert "A fala do protagonista também é roteirizada" in prompt
-    assert "Cada PENSAMENTO é privado" in prompt
+    assert "Cada PENSAMENTO contém um núcleo autoral obrigatório" in prompt
     assert "Não omita, não duplique e não acrescente nenhuma entry" in prompt
     assert '"voice_contract"' in prompt
     assert "fala sexual, direta e espontânea" in prompt
@@ -254,6 +254,25 @@ def test_prompt_preserva_intensidade_sem_ampliar_entry_neutra() -> None:
     assert "Preserve o grau de informalidade, vulgaridade, erotismo" in prompt
     assert "Não aumente gratuitamente a explicitude de uma entry neutra" in prompt
     assert "Se houver conflito entre embelezar a frase e preservar a voz autoral" in prompt
+
+
+def test_prompt_da_vida_ao_pensamento_sem_alterar_fala_ou_inventar_fatos() -> None:
+    document = compile_novel_frame_story(_base_document(), _rows(), script_version="200")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_001")
+    prompt = build_frame_prompt(
+        character_name="Camilly",
+        user_name="Donisete",
+        movement=movement,
+    )
+
+    assert "Cada PENSAMENTO contém um núcleo autoral obrigatório" in prompt
+    assert "bom humor, malícia, erotismo, desejo, provocação" in prompt
+    assert "não sexualize um pensamento neutro e não suavize um pensamento explícito" in prompt
+    assert "apenas sentimentos, desejos, conflitos e estratégias do próprio actor" in prompt
+    assert "Não invente fatos, ações, consentimento, excitação" in prompt
+    assert "Nas FALAS, faça somente ajustes mínimos" in prompt
+    assert "Nos PENSAMENTOS, preserve o núcleo autoral" in prompt
 
 
 def test_sufixo_balao_e_preservado_com_nome_visivel_normal() -> None:
