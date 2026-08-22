@@ -267,8 +267,11 @@ REGRAS DE CONTINUIDADE:
 - Leia o histórico como uma única cena em andamento. Este quadro começa exatamente onde o anterior terminou.
 - Não recapitule o que já aconteceu e não reinicie a relação entre os personagens.
 - Cada FALA contém texto autoral e intenção dramática. Preserve seu núcleo verbal, seu registro e suas expressões marcantes; ajuste somente o mínimo necessário para fluidez oral, concordância, nome personalizado e continuidade.
-- Cada PENSAMENTO é privado do personagem correspondente e pode revelar malícia, desejo, estratégia, dúvida ou interpretação que a fala esconde.
-- O pensamento deve acrescentar subtexto; não repita a fala com outras palavras.
+- Cada PENSAMENTO contém um núcleo autoral obrigatório. Dê vida a esse núcleo como consciência privada, preservando seu sentido, intenção e expressões marcantes.
+- Desenvolva o PENSAMENTO levemente, em uma única frase viva, acrescentando subtexto psicológico em vez de repetir a fala com outras palavras.
+- Quando sustentados pelo pensamento, pelo quadro ou pelo histórico, deixe aparecer com naturalidade bom humor, malícia, erotismo, desejo, provocação, conflito e tensão de traição.
+- Calibre a intensidade pelo estágio atual da história: não sexualize um pensamento neutro e não suavize um pensamento explícito.
+- O desenvolvimento do PENSAMENTO pode aprofundar apenas sentimentos, desejos, conflitos e estratégias do próprio actor. Não invente fatos, ações, consentimento, excitação, decisões, pensamentos ou reações de outro personagem.
 - Preserve a progressão psicológica dos personagens de um quadro para o seguinte.
 - A fala do protagonista também é roteirizada: escreva-a como participação real dele na cena, sem pedir input ao usuário.
 - Não crie perguntas que dependam de resposta fora do quadro. Se uma pergunta existir por estilo, a resposta necessária deve estar no próprio quadro.
@@ -284,6 +287,7 @@ FIDELIDADE AO LINGUAJAR AUTORAL:
 - "Curto e natural" limita verborragia; não autoriza higienizar, moralizar, amenizar ou mudar a personalidade do texto.
 - Não aumente gratuitamente a explicitude de uma entry neutra. Reproduza a intensidade que o roteiro efetivamente forneceu naquele ponto.
 - Se houver conflito entre embelezar a frase e preservar a voz autoral, preserve a voz autoral.
+- Nas FALAS, faça somente ajustes mínimos e preserve de perto a redação autoral. Nos PENSAMENTOS, preserve o núcleo autoral e permita o desenvolvimento psicológico definido acima.
 
 FORMATO OBRIGATÓRIO — devolva somente isto, sem Markdown adicional:
 [QUADRO {normalized.get('frame_id', '')}]
