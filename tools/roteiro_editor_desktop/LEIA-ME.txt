@@ -1,4 +1,5 @@
 EDITOR DE ROTEIROS ROLEPLAY2026 - WINDOWS
+VERSAO DE AUTORIA: IMAGEM PRIMEIRO
 
 Este programa e independente do Roleplay2026.
 Nao precisa instalar Python, Streamlit, venv ou Miniconda.
