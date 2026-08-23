@@ -10,7 +10,6 @@ on:
   pull_request:
     branches:
       - main
-      - agent/real-pix-payment
 
 permissions:
   contents: read
