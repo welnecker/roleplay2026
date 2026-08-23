@@ -13,6 +13,7 @@ from persistence.editorial import GoogleSheetsEditorialRepository
 from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from services import editorial_runtime_impl as runtime_impl
+from services.editorial_compiler import compile_editorial_document
 from services.editorial_package_loader import (
     compile_editorial_package,
     editorial_story_start,
@@ -21,12 +22,16 @@ from services.editorial_package_loader import (
 from services.editorial_progression import (
     clean_editorial_progression_response,
     decide_editorial_progression_turn,
+    prepare_editorial_script,
 )
 from services.editorial_runtime import EditorialScript
+from services.spreadsheet_story_compiler import compile_spreadsheet_story
 
 
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
+LEGACY_EDITORIAL_PACKAGE_ID = "roleplay2026.casada_frustrada"
 _EDITORIAL_REPOSITORY: GoogleSheetsEditorialRepository | None = None
+_SCRIPT_REPOSITORY: GoogleSheetsEditorialRepository | None = None
 _PUBLISHED_PACKAGES: set[str] = set()
 _FREE_TEXT_KEYS = {
     "introduction",
@@ -102,20 +107,36 @@ def find_editorial_package(package_id: str) -> InstalledStoryPackage | None:
     )
 
 
-def _default_editorial_package() -> InstalledStoryPackage:
-    packages = editorial_packages()
-    if len(packages) != 1:
+def require_editorial_package(package_id: str) -> InstalledStoryPackage:
+    """Resolve uma história sem depender da quantidade ou da ordem dos pacotes."""
+
+    clean = str(package_id or "").strip().lower()
+    if not clean:
+        raise ValueError("package_id da história é obrigatório")
+    package = find_editorial_package(clean)
+    if package is None:
+        available = [item.manifest.package_id for item in editorial_packages()]
         raise ValueError(
-            "Era esperado exatamente um pacote editorial para a fachada legada; "
-            f"encontrados: {[item.manifest.package_id for item in packages]}"
+            f"História editorial não encontrada: {clean!r}. Disponíveis: {available}"
         )
-    return packages[0]
+    return package
+
+
+def _default_editorial_package() -> InstalledStoryPackage:
+    """Compatibilidade determinística para chamadas antigas específicas da Mary."""
+
+    return require_editorial_package(LEGACY_EDITORIAL_PACKAGE_ID)
 
 
 def load_source_document(
-    package: InstalledStoryPackage | None = None,
+    package: InstalledStoryPackage | str | None = None,
 ) -> dict[str, Any]:
-    return load_editorial_document(package or _default_editorial_package())
+    selected = (
+        require_editorial_package(package)
+        if isinstance(package, str)
+        else package or _default_editorial_package()
+    )
+    return load_editorial_document(selected)
 
 
 def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
@@ -131,6 +152,25 @@ def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
         spreadsheet_id=ids.editorial,
     )
     return _EDITORIAL_REPOSITORY
+
+
+def build_runtime_script_repository(
+    secrets: Any,
+) -> GoogleSheetsEditorialRepository:
+    """Abre somente ROTEIROS na planilha ROLEPLAY_RUNTIME."""
+
+    global _SCRIPT_REPOSITORY
+    if _SCRIPT_REPOSITORY is not None:
+        return _SCRIPT_REPOSITORY
+    credentials = secrets.get("gcp_service_account")
+    if not credentials:
+        raise ValueError("[gcp_service_account] não está configurado")
+    ids = read_spreadsheet_ids(secrets)
+    _SCRIPT_REPOSITORY = GoogleSheetsEditorialRepository.from_service_account(
+        credentials=dict(credentials),
+        spreadsheet_id=ids.runtime,
+    )
+    return _SCRIPT_REPOSITORY
 
 
 def ensure_editorial_package(
@@ -153,12 +193,35 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
     return ensure_editorial_package(secrets, _default_editorial_package())
 
 
+def load_effective_editorial_document(
+    secrets: Any,
+    package: InstalledStoryPackage,
+) -> dict[str, Any]:
+    """Prefere ROTEIROS e preserva o YAML como fallback de migração."""
+
+    ensure_editorial_package(secrets, package)
+    script_repository = build_runtime_script_repository(secrets)
+    base_document = load_editorial_document(package)
+    script_version, rows = script_repository.load_active_story_lines(
+        package.manifest.package_id
+    )
+    if not rows:
+        return base_document
+    return compile_spreadsheet_story(
+        base_document,
+        rows,
+        script_version=script_version,
+    )
+
+
 def load_editorial_package(
     secrets: Any,
     package: InstalledStoryPackage,
 ) -> EditorialScript:
-    ensure_editorial_package(secrets, package)
-    return compile_editorial_package(package)
+    document = load_effective_editorial_document(secrets, package)
+    return prepare_editorial_script(
+        EditorialScript(compile_editorial_document(document))
+    )
 
 
 def load_editorial_pilot(secrets: Any) -> EditorialScript:
@@ -175,5 +238,13 @@ def load_editorial_story_start(
     package = find_editorial_package(package_id)
     if package is None:
         return None
-    ensure_editorial_package(secrets, package)
-    return editorial_story_start(package)
+    document = load_effective_editorial_document(secrets, package)
+    blocks = [item for item in document.get("blocks", []) if isinstance(item, dict)]
+    if not blocks:
+        return None
+    first = min(blocks, key=lambda item: int(item.get("order", 0) or 0))
+    return (
+        str(document.get("script_version", "")),
+        str(first.get("block_id", "")),
+        str(first.get("entry_beat_id", "")),
+    )

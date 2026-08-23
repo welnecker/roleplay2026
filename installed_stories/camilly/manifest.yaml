@@ -1,0 +1,29 @@
+format_version: 2
+package_id: roleplay2026.camilly
+version: 1.0.0
+author:
+  id: welnecker
+  name: Welnecker
+entrypoint: story.yaml
+runtime:
+  kind: editorial
+  editorial:
+    source: content/editorial.yaml
+card:
+  title: Camilly
+  subtitle: Dê uma carona para Camilly.
+  description: Aproveite a promoção de lançamento e se delicie com essa gata.
+  genres:
+    - Encontro 18+
+  chapter_label: História completa
+  cover: assets/capas/capa.webp
+  character_profile:
+    name: Camilly
+    identity: Camilly é a gata dos seus sonhos. Você sempre teve uma atração incontrolável por ela, desde a faculdade.
+    personality: Camilly é jovial e muito sexy. Ela não sabe do seu segredo, mas se ela descobrir...bem...
+    intention: Venha se deliciar com essa história conduzida, onde você sempre será o protagonista.
+commerce:
+  access: paid
+  price_cents: 100
+  currency: BRL
+  replay_policy: new_purchase

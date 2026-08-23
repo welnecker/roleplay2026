@@ -9,6 +9,7 @@ from typing import Any, Iterable
 
 
 LOGGER = logging.getLogger("roleplay2026.pilot")
+LEGACY_DIAGNOSTIC_PACKAGE_ID = "roleplay2026.casada_frustrada"
 _THOUGHT_PATTERN = re.compile(
     r"\[PENSAMENTO\].*?\[/PENSAMENTO\]",
     flags=re.IGNORECASE | re.DOTALL,
@@ -30,13 +31,14 @@ def finalize_model_response(
     cleaned_response: str,
     fallback: str,
     recent_assistant_messages: Iterable[str],
+    package_id: str = LEGACY_DIAGNOSTIC_PACKAGE_ID,
 ) -> GuardedResponse:
     raw = str(raw_response or "").strip()
     cleaned = str(cleaned_response or "").strip()
     safe_fallback = str(fallback or "").strip()
     recent = [str(item or "") for item in recent_assistant_messages]
 
-    if safe_fallback and _is_motel_canonical_line(safe_fallback):
+    if safe_fallback and _is_motel_canonical_line(safe_fallback, package_id):
         integrated = _reaction_before_canonical(
             response=raw or cleaned,
             fallback=safe_fallback,
@@ -49,7 +51,7 @@ def finalize_model_response(
             "motel_canonical_boundary",
         )
 
-    if safe_fallback and _is_integrated_boundary_line(safe_fallback):
+    if safe_fallback and _is_integrated_boundary_line(safe_fallback, package_id):
         integrated = _reaction_before_canonical(
             response=raw or cleaned,
             fallback=safe_fallback,
@@ -88,13 +90,13 @@ def finalize_model_response(
     return GuardedResponse(cleaned, repeated, used_fallback, "model_response_accepted")
 
 
-@lru_cache(maxsize=1)
-def _compiled_beats() -> tuple[dict[str, Any], ...]:
+@lru_cache(maxsize=128)
+def _compiled_beats(package_id: str) -> tuple[dict[str, Any], ...]:
     try:
         from services.editorial_compiler import compile_editorial_document
         from services.editorial_content import load_source_document
 
-        compiled = compile_editorial_document(load_source_document())
+        compiled = compile_editorial_document(load_source_document(package_id))
         scene = compiled.get("scene") or {}
         return tuple(item for item in scene.get("beats") or [] if isinstance(item, dict))
     except Exception:
@@ -102,10 +104,10 @@ def _compiled_beats() -> tuple[dict[str, Any], ...]:
         return ()
 
 
-@lru_cache(maxsize=1)
-def _motel_canonical_lines() -> frozenset[str]:
+@lru_cache(maxsize=128)
+def _motel_canonical_lines(package_id: str) -> frozenset[str]:
     result: set[str] = set()
-    for beat in _compiled_beats():
+    for beat in _compiled_beats(package_id):
         if not re.fullmatch(r"motel_\d+", str(beat.get("beat_id", "") or "")):
             continue
         line = _dialogue_line(beat)
@@ -114,10 +116,10 @@ def _motel_canonical_lines() -> frozenset[str]:
     return frozenset(result)
 
 
-@lru_cache(maxsize=1)
-def _integrated_boundary_lines() -> frozenset[str]:
+@lru_cache(maxsize=128)
+def _integrated_boundary_lines(package_id: str) -> frozenset[str]:
     result: set[str] = set()
-    for beat in _compiled_beats():
+    for beat in _compiled_beats(package_id):
         if str(beat.get("response_boundary", "") or "") != "integrated_canonical":
             continue
         line = _dialogue_line(beat)
@@ -134,14 +136,14 @@ def _dialogue_line(beat: dict[str, Any]) -> str:
     return ""
 
 
-def _is_motel_canonical_line(fallback: str) -> bool:
+def _is_motel_canonical_line(fallback: str, package_id: str) -> bool:
     normalized = _normalize(fallback)
-    return bool(normalized) and normalized in _motel_canonical_lines()
+    return bool(normalized) and normalized in _motel_canonical_lines(package_id)
 
 
-def _is_integrated_boundary_line(fallback: str) -> bool:
+def _is_integrated_boundary_line(fallback: str, package_id: str) -> bool:
     normalized = _normalize(fallback)
-    return bool(normalized) and normalized in _integrated_boundary_lines()
+    return bool(normalized) and normalized in _integrated_boundary_lines(package_id)
 
 
 def build_turn_diagnostics(

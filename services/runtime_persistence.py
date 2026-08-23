@@ -17,6 +17,7 @@ from services.v2_run_starter import start_v2_run_on_first_message
 
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
 RECOVERY_HISTORY_LIMIT = 500
+NOVEL_FRAME_PROGRESS_CHECKPOINT_INTERVAL = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +60,26 @@ def restore_story_state(raw: dict[str, object]) -> StoryState:
         consumed_orders=[int(item) for item in consumed] if isinstance(consumed, list) else [],
         finished=bool(raw.get("finished", False)),
     )
+
+
+def should_checkpoint_run_progress(
+    *,
+    state: StoryState,
+    assistant_metadata: dict[str, object],
+) -> bool:
+    """Limita leituras de STORY_RUNS sem enfraquecer a retomada da novela.
+
+    Cada interação já carrega o estado completo e é a fonte precisa da retomada.
+    Para quadros da visual novel, STORY_RUNS funciona como índice/checkpoint e
+    não precisa ser relido e atualizado em todo movimento.
+    """
+
+    if not bool(assistant_metadata.get("novel_frame", False)):
+        return True
+    if state.finished:
+        return True
+    step_index = max(0, int(state.step_index or 0))
+    return step_index > 0 and step_index % NOVEL_FRAME_PROGRESS_CHECKPOINT_INTERVAL == 0
 
 
 def _ordered_messages(messages: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -240,6 +261,26 @@ def _ensure_run_and_session(
     return run, session
 
 
+def _editorial_location(
+    metadata: dict[str, object],
+    run: StoryRun,
+) -> tuple[str, str]:
+    """Resolve o local efetivamente executado, sem reutilizar o início da run."""
+
+    beat_id = str(
+        metadata.get("editorial_node")
+        or metadata.get("screenplay_beat")
+        or metadata.get("pilot_node")
+        or run.current_beat_id
+    ).strip()
+    block_id = str(
+        metadata.get("editorial_block")
+        or metadata.get("screenplay_route")
+        or run.current_block_id
+    ).strip()
+    return block_id, beat_id
+
+
 def persist_turn(
     repository: GoogleSheetsV2RuntimeRepository,
     *,
@@ -250,22 +291,15 @@ def persist_turn(
     assistant_text: str,
     assistant_metadata: dict[str, object],
     sequence_start: int | None = None,
+    input_source: str = "typed",
 ) -> RuntimePersistenceContext:
     del sequence_start
     run, session = _ensure_run_and_session(repository, context=context, user=user)
 
-    block_id = str(
-        assistant_metadata.get("screenplay_route")
-        or assistant_metadata.get("pilot_node")
-        or run.current_block_id
-    )
-    beat_id = str(
-        assistant_metadata.get("screenplay_beat")
-        or assistant_metadata.get("pilot_node")
-        or run.current_beat_id
-    )
+    block_id, beat_id = _editorial_location(assistant_metadata, run)
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)
+    character_id = str(persisted_metadata.get("character_id", "") or "character")
 
     persisted_sequence = max(1, int(context.next_sequence or 1))
     repository.append_interaction(
@@ -279,6 +313,7 @@ def persist_turn(
         sequence=persisted_sequence,
         block_id=block_id,
         beat_id=beat_id,
+        metadata={"input_source": str(input_source or "typed")},
     )
     repository.append_interaction(
         run_id=run.run_id,
@@ -286,7 +321,7 @@ def persist_turn(
         user_id=user.user_id,
         package_id=context.package_id,
         role="assistant",
-        speaker_id="mary",
+        speaker_id=character_id,
         content=assistant_text,
         sequence=persisted_sequence + 1,
         block_id=block_id,
@@ -296,11 +331,14 @@ def persist_turn(
 
     if state.finished:
         requested_status = str(
-            assistant_metadata.get("pilot_run_status", "completed") or "completed"
+            assistant_metadata.get("editorial_run_status")
+            or assistant_metadata.get("pilot_run_status")
+            or "completed"
         )
         run_status = "terminated" if requested_status == "terminated" else "completed"
         ending_code = str(
-            assistant_metadata.get("pilot_ending_code", "normal_completion")
+            assistant_metadata.get("editorial_ending_code")
+            or assistant_metadata.get("pilot_ending_code")
             or "normal_completion"
         )
         finish_active_run(
@@ -323,6 +361,65 @@ def persist_turn(
     )
 
 
+def persist_opening_message(
+    repository: GoogleSheetsV2RuntimeRepository,
+    *,
+    context: RuntimePersistenceContext,
+    user: AuthenticatedUser,
+    state: StoryState,
+    assistant_text: str,
+    assistant_metadata: dict[str, object],
+) -> RuntimePersistenceContext:
+    """Persiste a abertura exibida, uma única vez por run.
+
+    A idempotência final pertence ao repositório: uma repetição causada por
+    rerun do Streamlit encontra a mesma sequência, papel e conteúdo e não cria
+    outra linha.
+    """
+
+    run, session = _ensure_run_and_session(repository, context=context, user=user)
+    block_id, node_id = _editorial_location(assistant_metadata, run)
+    persisted_metadata = dict(assistant_metadata)
+    persisted_metadata["_story_state"] = serialize_story_state(state)
+    persisted_metadata["opening_message"] = True
+    scene_opening = bool(persisted_metadata.get("scene_opening", False))
+    character_id = str(
+        persisted_metadata.get("character_id", "")
+        or ("narrator" if scene_opening else "character")
+    )
+    if scene_opening:
+        node_id = ""
+    sequence = max(1, int(context.next_sequence or 1))
+
+    repository.append_interaction(
+        run_id=run.run_id,
+        session_id=session.session_id,
+        user_id=user.user_id,
+        package_id=context.package_id,
+        role="assistant",
+        speaker_id=character_id,
+        content=assistant_text,
+        sequence=sequence,
+        block_id=block_id,
+        beat_id=node_id,
+        metadata=persisted_metadata,
+    )
+    if not scene_opening:
+        run = repository.update_run_progress(
+            run=run,
+            block_id=block_id,
+            beat_id=node_id,
+        )
+    return RuntimePersistenceContext(
+        package_id=context.package_id,
+        package_version=context.package_version,
+        run=run,
+        session=session,
+        instance_id=context.instance_id,
+        next_sequence=sequence + 1,
+    )
+
+
 def persist_assistant_message(
     repository: GoogleSheetsV2RuntimeRepository,
     *,
@@ -335,19 +432,11 @@ def persist_assistant_message(
     """Registra uma ponte automática de Mary sem inventar uma fala do usuário."""
 
     run, session = _ensure_run_and_session(repository, context=context, user=user)
-    block_id = str(
-        assistant_metadata.get("screenplay_route")
-        or assistant_metadata.get("pilot_node")
-        or run.current_block_id
-    )
-    beat_id = str(
-        assistant_metadata.get("screenplay_beat")
-        or assistant_metadata.get("pilot_node")
-        or run.current_beat_id
-    )
+    block_id, beat_id = _editorial_location(assistant_metadata, run)
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)
     persisted_metadata["automatic_bridge"] = True
+    character_id = str(persisted_metadata.get("character_id", "") or "character")
 
     sequence = max(1, int(context.next_sequence or 1))
     repository.append_interaction(
@@ -356,14 +445,18 @@ def persist_assistant_message(
         user_id=user.user_id,
         package_id=context.package_id,
         role="assistant",
-        speaker_id="mary",
+        speaker_id=character_id,
         content=assistant_text,
         sequence=sequence,
         block_id=block_id,
         beat_id=beat_id,
         metadata=persisted_metadata,
     )
-    run = repository.update_run_progress(run=run, block_id=block_id, beat_id=beat_id)
+    if should_checkpoint_run_progress(
+        state=state,
+        assistant_metadata=persisted_metadata,
+    ):
+        run = repository.update_run_progress(run=run, block_id=block_id, beat_id=beat_id)
     return RuntimePersistenceContext(
         package_id=context.package_id,
         package_version=context.package_version,

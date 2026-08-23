@@ -12,7 +12,7 @@ Nenhum secret deve ser salvo no GitHub.
 Crie ou atualize o app apontando para:
 
 - repositório: `welnecker/roleplay2026`;
-- branch: `main`;
+- branch: `agent/real-pix-payment` durante a homologação;
 - arquivo principal: `app.py`.
 
 Em **App settings > Secrets**, mantenha os valores já utilizados pelo projeto:
@@ -20,9 +20,12 @@ Em **App settings > Secrets**, mantenha os valores já utilizados pelo projeto:
 ```toml
 OPENROUTER_API_KEY = "..."
 OPENROUTER_MODEL = "google/gemini-3-flash-preview"
-GOOGLE_SHEETS_SPREADSHEET_ID = "..."
+ROLEPLAY_ACCOUNTS_BILLING_SPREADSHEET_ID = "..."
+ROLEPLAY_RUNTIME_SPREADSHEET_ID = "..."
+ROLEPLAY_EDITORIAL_SPREADSHEET_ID = "..."
 MERCADO_PAGO_ACCESS_TOKEN = "..."
 MERCADO_PAGO_WEBHOOK_SECRET = "..."
+PAYMENT_TEST_MASTER_EMAILS = "welnecker@hotmail.com"
 
 [gcp_service_account]
 type = "service_account"
@@ -45,17 +48,20 @@ No Render:
 
 1. escolha **New > Blueprint**;
 2. conecte o repositório `welnecker/roleplay2026`;
-3. selecione a branch `main`;
+3. selecione a branch/commit homologado conforme o fluxo de publicação;
 4. confirme o serviço `roleplay2026-webhook`;
 5. preencha as variáveis secretas solicitadas.
 
 Variáveis obrigatórias:
 
 ```text
-GOOGLE_SHEETS_SPREADSHEET_ID
+ROLEPLAY_ACCOUNTS_BILLING_SPREADSHEET_ID
+ROLEPLAY_RUNTIME_SPREADSHEET_ID
+ROLEPLAY_EDITORIAL_SPREADSHEET_ID
 GCP_SERVICE_ACCOUNT_JSON
 MERCADO_PAGO_ACCESS_TOKEN
 MERCADO_PAGO_WEBHOOK_SECRET
+PAYMENT_TEST_MASTER_EMAILS
 ```
 
 `GCP_SERVICE_ACCOUNT_JSON` deve receber o objeto JSON completo da conta de serviço do Google em uma única variável. Não envolva o objeto inteiro em aspas adicionais no painel do Render.
@@ -97,7 +103,7 @@ MERCADO_PAGO_WEBHOOK_SECRET
    - `PAYMENT_ORDERS`;
    - `PAYMENT_EVENTS`;
    - `WEBHOOK_EVENTS`;
-   - `USER_ENTITLEMENTS` após aprovação.
+   - `STORY_CREDITS` após aprovação.
 7. Volte à biblioteca e confirme que a história aparece liberada.
 
 ## Diagnóstico
@@ -106,3 +112,14 @@ MERCADO_PAGO_WEBHOOK_SECRET
 - HTTP 401 no webhook: confira `MERCADO_PAGO_WEBHOOK_SECRET`.
 - erro no Google Sheets: compartilhe a planilha com o `client_email` da conta de serviço.
 - cobrança criada sem liberação: consulte `PAYMENT_EVENTS` e o status da order no Mercado Pago.
+
+## Pagamento interno de teste
+
+O fluxo falso não usa token sandbox nem parâmetros enviados pelo navegador. A
+conta é resolvida pelo `user_id` na aba `USERS` e comparada, no servidor, com
+`PAYMENT_TEST_MASTER_EMAILS`. Pagamentos desse fluxo são registrados como
+`payment_mode=test_master` e `provider=test_master` antes da criação do crédito.
+
+Antes da homologação, execute uma vez o inicializador de schemas para acrescentar
+as colunas de auditoria ao final de `PAYMENT_ORDERS`. A migração é aditiva e não
+reposiciona as colunas nem os dados existentes.
