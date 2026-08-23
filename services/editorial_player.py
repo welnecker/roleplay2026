@@ -9,10 +9,11 @@ from services.novel_frame_layout_patch import install as install_novel_frame_lay
 from services.novel_frame_patch import install as install_novel_frame_v2
 from services.novel_frame_presentation import install as install_novel_frame_presentation
 from services.novel_frame_reveal_patch import install as install_novel_frame_reveal
+from services.novel_synced_image_carousel import install as install_synced_image_carousel
 
 
 _RUNTIME_PATH = Path(__file__).with_name("novel_player_runtime.py")
-NOVEL_FRAME_BUILD = "2026-08-18.11"
+NOVEL_FRAME_BUILD = "2026-08-23.synced-image-carousel.1"
 _BUILD_LOGGED = False
 
 
@@ -32,10 +33,11 @@ def _execute_runtime() -> dict[str, Any]:
     install_novel_frame_presentation()
     install_novel_frame_image()
     install_novel_frame_layout()
+    install_synced_image_carousel()
     if not _BUILD_LOGGED:
         print(
             f"[NOVEL_FRAME_BUILD] {NOVEL_FRAME_BUILD} — "
-            "avanco inteligente por cards e composicao visual v2 ativos"
+            "carrossel imagem+balão sincronizado opcional ativo"
         )
         _BUILD_LOGGED = True
 
@@ -43,7 +45,7 @@ def _execute_runtime() -> dict[str, Any]:
 
 
 def run_editorial_player() -> None:
-    """Executa o player V2: CENA -> imagem -> cards incrementais horizontais."""
+    """Executa o player V2 com compatibilidade para quadros legados."""
 
     _execute_runtime()
 
