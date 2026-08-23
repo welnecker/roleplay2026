@@ -8,10 +8,18 @@ on:
     paths:
       - "tools/roteiro_editor_desktop/**"
       - ".github/workflows/build-roteiro-editor-windows.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "tools/roteiro_editor_desktop/**"
+      - "tests/test_roteiro_editor_desktop_core.py"
+      - ".github/workflows/build-roteiro-editor-windows.yml"
 
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
