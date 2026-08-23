@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "roteiro_editor_desktop" / "core.py"
 spec = importlib.util.spec_from_file_location("roteiro_editor_desktop_core", MODULE_PATH)
 assert spec and spec.loader
 core = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = core
 spec.loader.exec_module(core)
 
 
