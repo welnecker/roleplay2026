@@ -179,7 +179,8 @@ Você ficou me devendo um ensaio.
 
     assert html is not None
     assert 'class="sync-mobile-track"' in html
-    assert html.count('class="sync-slide"') == 3
+    assert 'class="sync-desktop-track"' in html
+    assert html.count('class="sync-slide"') == 6
     assert 'class="sync-desktop"' in html
     assert html.count('class="sync-dot"') == 3
     assert "data-sync-prev" in html
