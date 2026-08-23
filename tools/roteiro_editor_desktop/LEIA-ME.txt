@@ -1,0 +1,32 @@
+EDITOR DE ROTEIROS ROLEPLAY2026 - WINDOWS
+
+Este programa e independente do Roleplay2026.
+Nao precisa instalar Python, Streamlit, venv ou Miniconda.
+
+USO
+1. Abra Editor_Roteiros_ROLEPLAY2026.exe.
+2. Informe package_id e script_version.
+3. Escreva o roteiro usando os botoes DESCRICAO, FALA e PENSAMENTO.
+4. Clique em Validar / atualizar linhas.
+5. Selecione as imagens do PC e atribua-as as DESCRICOES ou a uma linha especifica.
+6. Clique em EXPORTAR ROTEIRO + IMAGENS.
+
+SAIDA
+A pasta exportada contem:
+- roteiro.xlsx
+- roteiro.csv
+- roteiro.tsv
+- projeto_roteiro.json
+- imagens/*.webp
+
+CABECALHO OFICIAL
+package_id | script_version | line_id | order | instruction | status | image_id
+
+As imagens sao convertidas para WebP e recebem numeracao automatica, por exemplo:
+camilly1.webp
+camilly2.webp
+camilly3.webp
+
+O arquivo projeto_roteiro.json permite continuar a edicao posteriormente enquanto as imagens originais permanecerem acessiveis no PC.
+
+O programa nao envia nem altera arquivos no GitHub ou Google Sheets. A transferencia final continua manual e controlada por voce.
