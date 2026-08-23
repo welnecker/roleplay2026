@@ -6,6 +6,7 @@ on:
       - main
       - agent/streamlit-initial-skeleton
       - agent/narrative-engine-v2
+      - agent/synced-image-carousel
   pull_request:
     branches:
       - main
