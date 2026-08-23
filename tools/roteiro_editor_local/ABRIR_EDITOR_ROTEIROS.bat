@@ -4,13 +4,15 @@ cd /d "%~dp0\..\.."
 
 set "PYTHON_EXE="
 if exist ".venv\Scripts\python.exe" set "PYTHON_EXE=.venv\Scripts\python.exe"
+
 if not defined PYTHON_EXE (
   where py >nul 2>nul
-  if %ERRORLEVEL%==0 set "PYTHON_EXE=py -3"
+  if not errorlevel 1 set "PYTHON_EXE=py -3"
 )
+
 if not defined PYTHON_EXE (
   where python >nul 2>nul
-  if %ERRORLEVEL%==0 set "PYTHON_EXE=python"
+  if not errorlevel 1 set "PYTHON_EXE=python"
 )
 
 if not defined PYTHON_EXE (
@@ -21,10 +23,10 @@ if not defined PYTHON_EXE (
 )
 
 %PYTHON_EXE% -c "import streamlit, PIL" >nul 2>nul
-if not %ERRORLEVEL%==0 (
+if errorlevel 1 (
   echo Instalando dependencias locais do editor...
   %PYTHON_EXE% -m pip install -r "tools\roteiro_editor_local\requirements-local.txt"
-  if not %ERRORLEVEL%==0 (
+  if errorlevel 1 (
     echo Falha ao instalar Streamlit/Pillow.
     pause
     exit /b 1
