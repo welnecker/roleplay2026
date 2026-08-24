@@ -7,7 +7,30 @@ _original_track_style = None
 
 _EDITORIAL_CSS = r"""
 <style>
-/* Tipografia editorial dos balões: limpa, contemporânea e legível no carrossel. */
+/* Paleta progressiva dos balões. Vale tanto no trilho clássico quanto no
+   carrossel sincronizado imagem+balão. */
+.novel-frame-track>.novel-frame-card:nth-child(4n+1),
+.sync-slide:nth-child(4n+1) .sync-card-wrap>.novel-frame-card{
+  --card-bg:#ED8BAE;
+  background:linear-gradient(135deg,#ED8BAE 0%,#F1A6C0 100%) !important;
+}
+.novel-frame-track>.novel-frame-card:nth-child(4n+2),
+.sync-slide:nth-child(4n+2) .sync-card-wrap>.novel-frame-card{
+  --card-bg:#F1B5CB;
+  background:linear-gradient(135deg,#F1B5CB 0%,#F4C3D5 100%) !important;
+}
+.novel-frame-track>.novel-frame-card:nth-child(4n+3),
+.sync-slide:nth-child(4n+3) .sync-card-wrap>.novel-frame-card{
+  --card-bg:#F0CFDD;
+  background:linear-gradient(135deg,#F0CFDD 0%,#F5DCE6 100%) !important;
+}
+.novel-frame-track>.novel-frame-card:nth-child(4n+4),
+.sync-slide:nth-child(4n+4) .sync-card-wrap>.novel-frame-card{
+  --card-bg:#F3D5E6;
+  background:linear-gradient(135deg,#F3D5E6 0%,#F8E6EF 100%) !important;
+}
+
+/* Tipografia limpa e contemporânea. Evita o aspecto de redação/jornal. */
 .novel-frame-track .dialogue-speaker,
 .sync-card-wrap .dialogue-speaker{
   font-family:"Trebuchet MS","Segoe UI",Arial,sans-serif !important;
@@ -49,7 +72,17 @@ _EDITORIAL_CSS = r"""
   letter-spacing:.04em !important;
 }
 
-/* O _balao precisa ser imediatamente reconhecível: fonte claramente maior e mais forte. */
+/* _balao: forma e tipografia deliberadamente mais fortes. O seletor inclui
+   sync-card-wrap porque desktop e mobile sincronizados não ficam diretamente
+   dentro de .novel-frame-track. */
+.novel-frame-track>.novel-frame-impact-balloon,
+.sync-card-wrap>.novel-frame-impact-balloon{
+  border:4px solid #2B1822 !important;
+  border-radius:30px 38px 28px 42px !important;
+  padding:1.05rem 1.2rem 1.15rem !important;
+  box-shadow:0 0 0 5px rgba(255,255,255,.90),0 13px 24px rgba(43,24,34,.28) !important;
+  transform:rotate(-.35deg);
+}
 .novel-frame-track>.novel-frame-impact-balloon .dialogue-speaker,
 .sync-card-wrap>.novel-frame-impact-balloon .dialogue-speaker{
   font-family:"Trebuchet MS","Segoe UI",Arial,sans-serif !important;
