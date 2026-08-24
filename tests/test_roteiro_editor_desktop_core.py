@@ -54,6 +54,17 @@ def test_compile_rows_generates_v2_ids_and_orders() -> None:
     assert all(tuple(row.keys()) == core.COLUMNS for row in rows)
 
 
+def test_balloon_actor_suffix_is_preserved_in_export() -> None:
+    rows = core.compile_rows(
+        "[DESCRIÇÃO] Cena inicial.\n[FALA camilly_balao] Olha pra mim.",
+        package_id="roleplay2026.camilly",
+        script_version="200",
+        frame_prefix="encontro",
+    )
+    assert rows[1]["instruction"] == "[FALA camilly_balao] Olha pra mim."
+    assert rows[1]["line_id"] == "encontro_001_camilly_balao_fala_01"
+
+
 def test_image_map_is_applied_only_to_exact_line() -> None:
     rows = core.compile_rows(
         _draft(),
