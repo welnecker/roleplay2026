@@ -17,7 +17,7 @@ from persistence.v2_google_sheets import (
 
 
 MAX_RECOVERED_INTERACTIONS = 500
-RUNTIME_REPOSITORY_CONTRACT_VERSION = 4
+RUNTIME_REPOSITORY_CONTRACT_VERSION = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,15 +70,72 @@ class GoogleSheetsV2RuntimeRepository:
         _row_number, row = found
         return self.runs._from_row(row)
 
+    @staticmethod
+    def _assert_interaction_owner(
+        row: dict[str, Any],
+        *,
+        run_id: str,
+        user_id: str,
+        package_id: str,
+    ) -> None:
+        row_user_id = str(row.get("user_id", "") or "").strip()
+        row_package_id = str(row.get("package_id", "") or "").strip()
+        if row_user_id != user_id or row_package_id != package_id:
+            raise RuntimeConflictError(
+                "INTERACTIONS contém uma linha com run_id correto, mas proprietário "
+                "incompatível: "
+                f"run_id={run_id}, esperado=({user_id}, {package_id}), "
+                f"encontrado=({row_user_id}, {row_package_id})."
+            )
+
+    def _interaction_rows_for_owner(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        package_id: str,
+    ) -> list[dict[str, Any]]:
+        """Lê uma run usando a chave composta run + usuário + pacote e falha fechado.
+
+        ``run_id`` continua sendo o identificador principal da execução, porém a
+        recuperação nunca confia apenas nele. Toda linha correspondente precisa
+        pertencer também ao mesmo usuário autenticado e ao mesmo ``package_id``.
+        """
+
+        clean_run_id = str(run_id or "").strip()
+        clean_user_id = str(user_id or "").strip()
+        clean_package_id = str(package_id or "").strip()
+        if not clean_run_id or not clean_user_id or not clean_package_id:
+            raise RuntimeConflictError(
+                "Recuperação de INTERACTIONS exige run_id, user_id e package_id."
+            )
+
+        rows: list[dict[str, Any]] = []
+        for raw in self.interactions.table.records():
+            row = dict(raw)
+            if str(row.get("run_id", "") or "").strip() != clean_run_id:
+                continue
+            self._assert_interaction_owner(
+                row,
+                run_id=clean_run_id,
+                user_id=clean_user_id,
+                package_id=clean_package_id,
+            )
+            rows.append(row)
+        return rows
+
     def _was_false_message_ending(self, run: StoryRun) -> bool:
         if run.status != "terminated" or run.ending_code != "mary_lost_interest":
             return False
 
         rows = [
             row
-            for row in self.interactions.table.records()
-            if str(row.get("run_id", "")).strip() == run.run_id
-            and str(row.get("role", "")).strip() == "assistant"
+            for row in self._interaction_rows_for_owner(
+                run_id=run.run_id,
+                user_id=run.user_id,
+                package_id=run.package_id,
+            )
+            if str(row.get("role", "")).strip() == "assistant"
         ]
         rows.sort(key=lambda row: int(row.get("sequence", 0) or 0))
         nodes: list[str] = []
@@ -177,12 +234,21 @@ class GoogleSheetsV2RuntimeRepository:
         self,
         *,
         run_id: str,
+        user_id: str,
+        package_id: str,
         sequence: int,
         role: str,
     ) -> dict[str, Any] | None:
-        for row in self.interactions.table.records():
+        for raw in self.interactions.table.records():
+            row = dict(raw)
             if str(row.get("run_id", "")).strip() != run_id:
                 continue
+            self._assert_interaction_owner(
+                row,
+                run_id=run_id,
+                user_id=user_id,
+                package_id=package_id,
+            )
             if int(row.get("sequence", 0) or 0) != int(sequence):
                 continue
             if str(row.get("role", "")).strip() != role:
@@ -207,6 +273,8 @@ class GoogleSheetsV2RuntimeRepository:
     ) -> None:
         existing = self._existing_interaction(
             run_id=run_id,
+            user_id=user_id,
+            package_id=package_id,
             sequence=sequence,
             role=role,
         )
@@ -276,12 +344,18 @@ class GoogleSheetsV2RuntimeRepository:
         return sorted(values)
 
     def list_interactions(self, *, run_id: str, limit: int = 100) -> list[dict[str, object]]:
+        run = self.get_run(run_id=run_id)
+        if run is None:
+            raise RuntimeConflictError(
+                f"Não é possível recuperar INTERACTIONS de run inexistente: {run_id}."
+            )
+
         requested_limit = max(1, min(int(limit), MAX_RECOVERED_INTERACTIONS))
-        rows = [
-            row
-            for row in self.interactions.table.records()
-            if str(row.get("run_id", "")).strip() == run_id
-        ]
+        rows = self._interaction_rows_for_owner(
+            run_id=run.run_id,
+            user_id=run.user_id,
+            package_id=run.package_id,
+        )
         rows.sort(key=lambda row: int(row.get("sequence", 0) or 0))
         rows = rows[-requested_limit:]
 
@@ -307,7 +381,7 @@ class GoogleSheetsV2RuntimeRepository:
                 }
             )
 
-        active_ids = self.list_run_memory_ids(run_id=run_id)
+        active_ids = self.list_run_memory_ids(run_id=run.run_id)
         if active_ids:
             for message in reversed(result):
                 pilot_state = message.get("pilot_state")
