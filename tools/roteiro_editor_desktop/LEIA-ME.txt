@@ -1,18 +1,25 @@
 EDITOR DE ROTEIROS ROLEPLAY2026 - WINDOWS
-VERSAO DE AUTORIA: IMAGEM PRIMEIRO
+VERSAO DE AUTORIA: TIMELINE VISUAL / IMAGEM PRIMEIRO
 
 Este programa e independente do Roleplay2026.
-Nao precisa instalar Python, Streamlit, venv ou Miniconda.
+Nao precisa instalar Python, Streamlit, venv ou Miniconda depois de compilado.
 
 FLUXO: IMAGEM PRIMEIRO
 1. Abra Editor_Roteiros_ROLEPLAY2026.exe.
 2. No painel direito, clique em ABRIR IMAGEM ou ABRIR LOTE.
 3. Observe a imagem enquanto escreve o roteiro.
-4. Clique em + DESCRICAO DESTA IMAGEM para criar uma [DESCRICAO] ja ligada a imagem atual.
-5. Escreva a descricao, FALAS e PENSAMENTOS olhando para a referencia visual.
-6. Use Anterior / Proxima para navegar pelo lote de imagens.
-7. Clique em Validar / atualizar quando quiser conferir as linhas geradas.
-8. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
+4. Clique em + DESCRICAO DESTA IMAGEM para criar um novo quadro ligado a imagem atual.
+5. Escreva a DESCRICAO, FALAS e PENSAMENTOS olhando para a referencia visual.
+6. Use + FALA BALAO para gerar [FALA ator_balao].
+7. Na timeline, cada [DESCRICAO] abre um quadro expansivel com suas FALAS e PENSAMENTOS.
+8. A primeira imagem fica no image_id da [DESCRICAO] e e herdada pelas linhas seguintes ate aparecer outro image_id explicito.
+9. Para trocar a imagem durante o quadro, abra/avance para outra imagem, selecione a FALA, FALA BALAO ou PENSAMENTO desejado e clique em USAR IMAGEM ATUAL NESTA LINHA.
+10. Para editar uma linha ja gerada, selecione-a e clique em EDITAR LINHA SELECIONADA ou de duplo clique nela.
+11. Em linhas de dialogo, voce pode alternar entre FALA, PENSAMENTO e FALA BALAO e trocar o ator. Uma DESCRICAO permanece DESCRICAO para preservar a estrutura V2.
+12. Ao salvar a alteracao, line_id e order sao recompilados automaticamente e a imagem ja atribuida aquela linha e preservada.
+13. Use Anterior / Proxima para navegar pelo lote de imagens.
+14. Salve o projeto JSON para continuar outro dia.
+15. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
 
 SAIDA
 A pasta exportada contem:
@@ -29,8 +36,6 @@ As imagens sao convertidas para WebP e recebem numeracao automatica, por exemplo
 camilly1.webp
 camilly2.webp
 camilly3.webp
-
-A imagem aberta no painel direito e referencia de autoria. Ela so recebe image_id quando for associada a uma [DESCRICAO].
 
 O arquivo projeto_roteiro.json permite continuar a edicao posteriormente enquanto as imagens originais permanecerem acessiveis no PC.
 
