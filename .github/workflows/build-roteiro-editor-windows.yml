@@ -42,6 +42,7 @@ jobs:
           python -m py_compile tools/roteiro_editor_desktop/core.py
           python -m py_compile tools/roteiro_editor_desktop/app_image_first.py
           python -m py_compile tools/roteiro_editor_desktop/app_image_first_balao.py
+          python -m py_compile tools/roteiro_editor_desktop/app_image_first_timeline.py
           python -m pytest -q tests/test_roteiro_editor_desktop_core.py
 
       - name: Build single-file EXE
@@ -53,7 +54,7 @@ jobs:
             --hidden-import openpyxl `
             --hidden-import PIL.Image `
             --collect-all openpyxl `
-            tools/roteiro_editor_desktop/app_image_first_balao.py
+            tools/roteiro_editor_desktop/app_image_first_timeline.py
 
       - name: Create distribution ZIP
         shell: pwsh
