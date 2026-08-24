@@ -65,6 +65,30 @@ def test_balloon_actor_suffix_is_preserved_in_export() -> None:
     assert rows[1]["line_id"] == "encontro_001_camilly_balao_fala_01"
 
 
+def test_recompiled_edit_can_change_dialogue_kind_and_keep_position() -> None:
+    original = core.compile_rows(
+        _draft(),
+        package_id="roleplay2026.camilly",
+        script_version="200",
+        frame_prefix="encontro",
+        start_order=10,
+        order_step=10,
+    )
+    instructions = [str(row["instruction"]) for row in original]
+    instructions[1] = "[PENSAMENTO camilly] Agora eu observo em silêncio."
+    edited = core.compile_rows(
+        "\n\n".join(instructions),
+        package_id="roleplay2026.camilly",
+        script_version="200",
+        frame_prefix="encontro",
+        start_order=10,
+        order_step=10,
+    )
+    assert edited[1]["order"] == 20
+    assert edited[1]["line_id"] == "encontro_001_camilly_pensamento_01"
+    assert edited[1]["instruction"] == "[PENSAMENTO camilly] Agora eu observo em silêncio."
+
+
 def test_image_map_is_applied_only_to_exact_line() -> None:
     rows = core.compile_rows(
         _draft(),
