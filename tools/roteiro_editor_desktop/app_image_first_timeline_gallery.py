@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import re
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
 
-from app_image_first import Image, ImageTk
+from app_image_first import Image, ImageTk, slugify
 from app_image_first_timeline_thumbs import ScriptEditor as ThumbnailScriptEditor
 
 
@@ -20,7 +21,9 @@ class ScriptEditor(ThumbnailScriptEditor):
         self._gallery_canvas = None
         self._gallery_inner = None
         self._gallery_window = None
+        self._image_prefix_snapshot = ""
         super().__init__()
+        self._image_prefix_snapshot = slugify(self.image_prefix_var.get(), "imagem")
         self.title("Editor de Roteiros ROLEPLAY2026 — Timeline + Galeria")
         self._install_reference_gallery()
         self._refresh_reference_gallery()
@@ -146,6 +149,93 @@ class ScriptEditor(ThumbnailScriptEditor):
             self._gallery_canvas.update_idletasks()
             self._gallery_canvas.configure(scrollregion=self._gallery_canvas.bbox("all"))
 
+    def _migrate_existing_image_prefix(self) -> int:
+        current_prefix = slugify(self.image_prefix_var.get(), "imagem")
+        previous_prefix = self._image_prefix_snapshot or current_prefix
+        if current_prefix == previous_prefix:
+            return 0
+
+        referenced_ids = set(self.image_sources)
+        referenced_ids.update(str(value) for value in self.image_map.values() if value)
+        for binding in self.description_bindings.values():
+            image_id = str(binding.get("image_id", "") or "")
+            if image_id:
+                referenced_ids.add(image_id)
+
+        rename_map: dict[str, str] = {}
+        numbered = re.compile(r"^(.+?)(\d+)\.webp$", re.IGNORECASE)
+        for old_id in referenced_ids:
+            match = numbered.match(old_id)
+            if not match:
+                continue
+            new_id = f"{current_prefix}{match.group(2)}.webp"
+            if new_id != old_id:
+                rename_map[old_id] = new_id
+
+        if not rename_map:
+            self._image_prefix_snapshot = current_prefix
+            return 0
+
+        targets = list(rename_map.values())
+        if len(targets) != len(set(targets)):
+            raise ValueError("A troca do prefixo criaria image_id duplicado.")
+        untouched = referenced_ids.difference(rename_map)
+        collision = sorted(set(targets).intersection(untouched))
+        if collision:
+            raise ValueError(
+                "A troca do prefixo entraria em conflito com image_id existente: "
+                + ", ".join(collision[:5])
+            )
+
+        migrated_sources: dict[str, str] = {}
+        for image_id, source in self.image_sources.items():
+            migrated_sources[rename_map.get(image_id, image_id)] = source
+        self.image_sources = migrated_sources
+
+        self.image_map = {
+            line_id: rename_map.get(str(image_id), str(image_id))
+            for line_id, image_id in self.image_map.items()
+        }
+
+        for binding in self.description_bindings.values():
+            old_id = str(binding.get("image_id", "") or "")
+            if old_id in rename_map:
+                binding["image_id"] = rename_map[old_id]
+
+        self._image_prefix_snapshot = current_prefix
+        return len(rename_map)
+
+    def compile_current(self) -> bool:
+        backup_sources = dict(self.image_sources)
+        backup_map = dict(self.image_map)
+        backup_bindings = {
+            int(key): dict(value) for key, value in self.description_bindings.items()
+        }
+        backup_prefix = self._image_prefix_snapshot
+
+        try:
+            migrated = self._migrate_existing_image_prefix()
+        except Exception as exc:
+            from tkinter import messagebox
+
+            messagebox.showerror("Prefixo das imagens", str(exc))
+            return False
+
+        if not super().compile_current():
+            self.image_sources = backup_sources
+            self.image_map = backup_map
+            self.description_bindings = backup_bindings
+            self._image_prefix_snapshot = backup_prefix
+            return False
+
+        if migrated:
+            self.status_var.set(
+                f"Prefixo atualizado: {migrated} image_id(s) migrados para "
+                f"{self._image_prefix_snapshot}."
+            )
+            self._refresh_reference_gallery()
+        return True
+
     def open_reference_image(self):
         super().open_reference_image()
         self._refresh_reference_gallery()
@@ -164,10 +254,12 @@ class ScriptEditor(ThumbnailScriptEditor):
 
     def open_project_dialog(self):
         super().open_project_dialog()
+        self._image_prefix_snapshot = slugify(self.image_prefix_var.get(), "imagem")
         self._refresh_reference_gallery()
 
     def new_project(self):
         super().new_project()
+        self._image_prefix_snapshot = slugify(self.image_prefix_var.get(), "imagem")
         self._refresh_reference_gallery()
 
 
