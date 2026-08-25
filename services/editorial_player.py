@@ -13,11 +13,12 @@ from services.novel_frame_reveal_patch import install as install_novel_frame_rev
 from services.novel_frame_typography_patch import install as install_novel_frame_typography
 from services.novel_run_version_guard import install as install_novel_run_version_guard
 from services.novel_synced_image_carousel import install as install_synced_image_carousel
+from services.novel_synced_image_carousel_autoscroll import install as install_synced_carousel_autoscroll
 from services.novel_synced_image_carousel_desktop import install as install_synced_desktop_carousel
 
 
 _RUNTIME_PATH = Path(__file__).with_name("novel_player_runtime.py")
-NOVEL_FRAME_BUILD = "2026-08-25.synced-image-carousel.6"
+NOVEL_FRAME_BUILD = "2026-08-25.synced-image-carousel.7"
 _BUILD_LOGGED = False
 
 
@@ -42,10 +43,11 @@ def _execute_runtime() -> dict[str, Any]:
     install_novel_frame_layout()
     install_synced_image_carousel()
     install_synced_desktop_carousel()
+    install_synced_carousel_autoscroll()
     if not _BUILD_LOGGED:
         print(
             f"[NOVEL_FRAME_BUILD] {NOVEL_FRAME_BUILD} — "
-            "carrossel imagem+balão sincronizado, tipografia editorial, binding de versão e continuidade canônica autoritativa"
+            "carrossel imagem+balão sincronizado com avanço automático, tipografia editorial, binding de versão e continuidade canônica autoritativa"
         )
         _BUILD_LOGGED = True
 
