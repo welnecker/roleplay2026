@@ -86,3 +86,39 @@ def test_restore_supports_older_project_with_image_map_but_no_sources(tmp_path: 
     assert restored["image_sources"] == {"camilly2.webp": str(recovered)}
     assert restored["reference_files"] == [str(recovered)]
     assert restored["reference_index"] == 0
+
+
+def test_restore_keeps_managed_assigned_image_out_of_available_gallery(tmp_path: Path) -> None:
+    gallery = tmp_path / "referencias"
+    assigned_dir = gallery / "_atribuidas"
+    assigned_dir.mkdir(parents=True)
+    assigned = assigned_dir / "cena01.png"
+    assigned.write_bytes(b"imagem")
+    available = gallery / "cena02.png"
+    available.write_bytes(b"imagem")
+    project = tmp_path / "roteiro.json"
+
+    payload = {
+        "image_map": {"encontro_001_descricao": "camilly1.webp"},
+        "image_sources": {"camilly1.webp": str(assigned)},
+        "assigned_reference_origins": {
+            "camilly1.webp": str(gallery / "cena01.png")
+        },
+        # Mesmo que um projeto salvo antigo tenha deixado a atribuída nesta lista,
+        # a restauração deve mostrar apenas as referências ainda livres.
+        "reference_files": [str(assigned), str(available)],
+        "reference_index": 0,
+        "description_bindings": {
+            "1": {"source": str(assigned), "image_id": "camilly1.webp"}
+        },
+    }
+
+    restored = module.restore_project_image_state(payload, project_path=project)
+
+    assert restored["image_sources"]["camilly1.webp"] == str(assigned)
+    assert restored["assigned_reference_origins"]["camilly1.webp"] == str(
+        gallery / "cena01.png"
+    )
+    assert restored["reference_files"] == [str(available)]
+    assert restored["reference_index"] == 0
+    assert restored["description_bindings"]["1"]["source"] == str(assigned)
