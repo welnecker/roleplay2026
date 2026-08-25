@@ -39,11 +39,10 @@ _CARD_CONTRACT = """
 
 _SYNC_CONTRACT = """
 <style>
-/* Imagens narrativas: todas ocupam exatamente o mesmo quadro 16:9. */
+/* Imagens narrativas: preservam o enquadramento original, sem crop. */
 .sync-image-wrap,
 .sync-desktop-image{
   width:100%!important;
-  aspect-ratio:16 / 9;
   border-radius:14px;
   overflow:hidden;
   background:rgba(20,12,22,.04);
@@ -52,12 +51,12 @@ _SYNC_CONTRACT = """
 .sync-desktop-image img{
   display:block!important;
   width:100%!important;
-  height:100%!important;
+  height:auto!important;
   max-height:none!important;
-  object-fit:cover!important;
-  object-position:center center!important;
+  object-fit:contain!important;
+  object-position:center top!important;
 }
-.sync-image-empty{aspect-ratio:auto!important;}
+.sync-image-empty{min-height:0!important;}
 
 /* Mesmo corpo de balão no desktop e no mobile. */
 .sync-card-wrap{
