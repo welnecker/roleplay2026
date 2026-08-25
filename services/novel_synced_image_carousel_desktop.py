@@ -31,6 +31,35 @@ _DESKTOP_STYLE = """
 }
 """
 
+_DESKTOP_AUTOSCROLL = """
+<script>
+(() => {
+  const track = document.querySelector('.sync-desktop-track');
+  if (!track) return;
+
+  const scrollLatest = () => {
+    const latest = Math.max(0, track.scrollWidth - track.clientWidth);
+    track.scrollTo({left: latest, behavior: 'auto'});
+  };
+
+  // O iframe nasce novamente a cada reveal. Posiciona o slide recém-revelado
+  // como foco inicial, mas deixa a rolagem manual totalmente livre depois disso.
+  requestAnimationFrame(() => {
+    scrollLatest();
+    requestAnimationFrame(scrollLatest);
+  });
+
+  // Imagens podem terminar de carregar depois do primeiro layout e alterar
+  // scrollWidth. Corrige uma única vez por imagem, sem "prender" o usuário.
+  track.querySelectorAll('img').forEach((image) => {
+    if (!image.complete) {
+      image.addEventListener('load', scrollLatest, {once:true});
+    }
+  });
+})();
+</script>
+"""
+
 
 def desktop_accumulated_html(html: str) -> str:
     """Troca a apresentação desktop por uma faixa acumulativa imagem+balão.
@@ -38,6 +67,7 @@ def desktop_accumulated_html(html: str) -> str:
     O mobile continua usando exatamente o carrossel já existente. No desktop,
     cada slide já revelado permanece na faixa; novos slides são acrescentados
     sem substituir os anteriores e podem ser revisitados pela rolagem horizontal.
+    O foco inicial fica sempre no slide mais recente.
     """
 
     source = str(html or "")
@@ -66,6 +96,8 @@ def desktop_accumulated_html(html: str) -> str:
             _DESKTOP_STYLE + "\n</style>",
             1,
         )
+    if _DESKTOP_AUTOSCROLL not in transformed:
+        transformed += _DESKTOP_AUTOSCROLL
     return transformed
 
 
