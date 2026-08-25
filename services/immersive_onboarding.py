@@ -10,6 +10,7 @@ from roleplay.openrouter import OpenRouterError, describe_session_image
 
 ALLOWED_IMAGE_TYPES = ("jpg", "jpeg", "png", "webp")
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
+PHOTO_ONBOARDING_ENABLED = False
 PRIVACY_NOTICE = (
     "As fotos enviadas serão usadas somente durante esta sessão para personalizar "
     "a história. Os arquivos das fotos não serão salvos nem armazenados. A descrição "
@@ -25,6 +26,14 @@ def profile_key(user_id: str, package_id: str) -> str:
 
 def identity_is_complete(name: str, story_gender: Any) -> bool:
     return bool(str(name or "").strip() and str(story_gender or "").strip())
+
+
+def identity_completion_state(*, photos_enabled: bool = PHOTO_ONBOARDING_ENABLED) -> dict[str, object]:
+    """Define o próximo estado sem remover a infraestrutura opcional de fotos."""
+
+    if photos_enabled:
+        return {"stage": 1, "completed": False}
+    return {"stage": 3, "completed": True}
 
 
 def clear_immersive_profile(
@@ -239,9 +248,15 @@ def render_immersive_onboarding(
     if bool(profile.get("completed")):
         return True
 
-    st.title(title)
-    st.info(PRIVACY_NOTICE, icon="🔒")
     stage = int(profile.get("stage", 0) or 0)
+    # Runs que ficaram paradas nas antigas telas de foto também devem seguir direto.
+    if not PHOTO_ONBOARDING_ENABLED and stage in {1, 2}:
+        profile.update(completed=True, stage=3)
+        return True
+
+    st.title(title)
+    if PHOTO_ONBOARDING_ENABLED:
+        st.info(PRIVACY_NOTICE, icon="🔒")
 
     if stage == 0:
         st.subheader("Como você quer entrar nesta história?")
@@ -271,13 +286,14 @@ def render_immersive_onboarding(
                 preferred_name=name.strip(),
                 story_gender=str(story_gender),
                 body_route=str(body_route),
-                stage=1,
+                **identity_completion_state(),
             )
             st.rerun()
         if not name.strip():
             st.caption("O nome ou apelido é obrigatório.")
         return False
 
+    # A infraestrutura abaixo fica preservada para futura reativação.
     if stage == 1:
         st.subheader("Cole sua foto aqui, para que eu possa saber como você é")
         if profile.get("appearance"):
