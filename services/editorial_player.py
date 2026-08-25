@@ -17,7 +17,7 @@ from services.novel_synced_image_carousel_desktop import install as install_sync
 
 
 _RUNTIME_PATH = Path(__file__).with_name("novel_player_runtime.py")
-NOVEL_FRAME_BUILD = "2026-08-24.synced-image-carousel.5"
+NOVEL_FRAME_BUILD = "2026-08-25.synced-image-carousel.6"
 _BUILD_LOGGED = False
 
 
@@ -45,7 +45,7 @@ def _execute_runtime() -> dict[str, Any]:
     if not _BUILD_LOGGED:
         print(
             f"[NOVEL_FRAME_BUILD] {NOVEL_FRAME_BUILD} — "
-            "carrossel imagem+balão sincronizado, tipografia editorial, binding de versão e continuidade canônica"
+            "carrossel imagem+balão sincronizado, tipografia editorial, binding de versão e continuidade canônica autoritativa"
         )
         _BUILD_LOGGED = True
 
