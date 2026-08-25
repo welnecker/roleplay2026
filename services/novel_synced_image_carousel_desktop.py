@@ -42,15 +42,29 @@ _DESKTOP_AUTOSCROLL = """
     track.scrollTo({left: latest, behavior: 'auto'});
   };
 
+  const scrollPageToCarousel = () => {
+    try {
+      const frame = window.frameElement;
+      if (!frame) return;
+      frame.scrollIntoView({behavior: 'smooth', block: 'start', inline: 'nearest'});
+    } catch (_error) {
+      // A rolagem vertical e apenas um aprimoramento visual. Se o navegador
+      // restringir o acesso ao iframe pai, o carrossel continua funcionando.
+    }
+  };
+
   // O iframe nasce novamente a cada reveal. Posiciona o slide recém-revelado
-  // como foco inicial, mas deixa a rolagem manual totalmente livre depois disso.
+  // como foco inicial e, uma única vez, coloca o componente no topo da viewport
+  // para a nova interação já ficar pronta para leitura.
   requestAnimationFrame(() => {
     scrollLatest();
+    scrollPageToCarousel();
     requestAnimationFrame(scrollLatest);
   });
 
   // Imagens podem terminar de carregar depois do primeiro layout e alterar
-  // scrollWidth. Corrige uma única vez por imagem, sem "prender" o usuário.
+  // scrollWidth. Corrige uma única vez por imagem, sem "prender" o usuário e
+  // sem repetir a rolagem vertical após navegação manual.
   track.querySelectorAll('img').forEach((image) => {
     if (!image.complete) {
       image.addEventListener('load', scrollLatest, {once:true});
