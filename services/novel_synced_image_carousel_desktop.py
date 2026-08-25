@@ -10,6 +10,7 @@ _original_combined_html = None
 _DESKTOP_STYLE = """
 .sync-desktop-track{
   display:flex;
+  align-items:flex-start;
   gap:.9rem;
   overflow-x:auto;
   overflow-y:hidden;
@@ -17,6 +18,7 @@ _DESKTOP_STYLE = """
   overscroll-behavior-inline:contain;
   scrollbar-gutter:stable;
   padding:.15rem 0 .7rem;
+  transition:height .18s ease;
 }
 .sync-desktop-track .sync-slide{
   flex:0 0 clamp(420px,72vw,760px);
@@ -36,10 +38,39 @@ _DESKTOP_AUTOSCROLL = """
 (() => {
   const track = document.querySelector('.sync-desktop-track');
   if (!track) return;
+  const slides = [...track.querySelectorAll('.sync-slide')];
+  if (!slides.length) return;
 
   const scrollLatest = () => {
     const latest = Math.max(0, track.scrollWidth - track.clientWidth);
     track.scrollTo({left: latest, behavior: 'auto'});
+  };
+
+  const visibleSlideIndex = () => {
+    const center = track.scrollLeft + (track.clientWidth / 2);
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    slides.forEach((slide, index) => {
+      const slideCenter = slide.offsetLeft + (slide.offsetWidth / 2);
+      const distance = Math.abs(slideCenter - center);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    });
+    return bestIndex;
+  };
+
+  const fitTrackToSlide = (index = visibleSlideIndex()) => {
+    const slide = slides[Math.max(0, Math.min(slides.length - 1, index))];
+    if (!slide) return;
+    const styles = window.getComputedStyle(track);
+    const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+    const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
+    const targetHeight = Math.ceil(slide.getBoundingClientRect().height + paddingTop + paddingBottom);
+    if (targetHeight > 0) {
+      track.style.height = `${targetHeight}px`;
+    }
   };
 
   const scrollPageToCarousel = () => {
@@ -54,22 +85,42 @@ _DESKTOP_AUTOSCROLL = """
   };
 
   // O iframe nasce novamente a cada reveal. Posiciona o slide recém-revelado
-  // como foco inicial e, uma única vez, coloca o componente no topo da viewport
-  // para a nova interação já ficar pronta para leitura.
+  // como foco inicial, ajusta a altura ao conteudo realmente visivel e, uma
+  // unica vez, coloca o componente no topo da viewport para leitura.
   requestAnimationFrame(() => {
     scrollLatest();
+    fitTrackToSlide(slides.length - 1);
     scrollPageToCarousel();
-    requestAnimationFrame(scrollLatest);
+    requestAnimationFrame(() => {
+      scrollLatest();
+      fitTrackToSlide(slides.length - 1);
+    });
   });
 
+  // Ao revisar slides antigos com alturas diferentes, acompanha somente a
+  // altura do slide que esta efetivamente em leitura. Isso evita que um slide
+  // anterior, mais alto, mantenha um grande vazio antes do botao Avancar.
+  let scrollTimer = null;
+  track.addEventListener('scroll', () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => fitTrackToSlide(), 90);
+  }, {passive:true});
+
   // Imagens podem terminar de carregar depois do primeiro layout e alterar
-  // scrollWidth. Corrige uma única vez por imagem, sem "prender" o usuário e
-  // sem repetir a rolagem vertical após navegação manual.
+  // tanto a largura quanto a altura. Recalibra sem repetir a rolagem vertical.
   track.querySelectorAll('img').forEach((image) => {
     if (!image.complete) {
-      image.addEventListener('load', scrollLatest, {once:true});
+      image.addEventListener('load', () => {
+        scrollLatest();
+        fitTrackToSlide();
+      }, {once:true});
     }
   });
+
+  if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver(() => fitTrackToSlide());
+    slides.forEach((slide) => observer.observe(slide));
+  }
 })();
 </script>
 """
