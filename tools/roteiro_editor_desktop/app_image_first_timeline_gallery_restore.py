@@ -4,9 +4,26 @@ import os
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from app_image_first import load_project
+from app_image_first import IMAGE_TYPES, load_project
 from app_image_first_timeline_gallery import ScriptEditor as GalleryScriptEditor
 from project_image_restore import restore_project_image_state
+
+
+DEFAULT_REFERENCE_DIR = Path(r"C:\Users\welne\Downloads\PROJETO\IMAGENS")
+REFERENCE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+
+
+def reference_images_from_directory(directory: str | Path) -> list[str]:
+    """Lista imagens de referência do diretório sem alterar os arquivos no disco."""
+
+    root = Path(directory)
+    if not root.is_dir():
+        return []
+    return [
+        str(path)
+        for path in sorted(root.iterdir(), key=lambda item: item.name.casefold())
+        if path.is_file() and path.suffix.casefold() in REFERENCE_SUFFIXES
+    ]
 
 
 class ScriptEditor(GalleryScriptEditor):
@@ -15,11 +32,53 @@ class ScriptEditor(GalleryScriptEditor):
     def __init__(self) -> None:
         super().__init__()
         self._install_assignment_controls()
+        self._load_default_reference_directory()
         self._refresh_reference_gallery()
 
     @staticmethod
     def _path_key(value: str | Path) -> str:
         return os.path.normcase(os.path.abspath(str(value)))
+
+    @staticmethod
+    def _dialog_initial_directory() -> str:
+        if DEFAULT_REFERENCE_DIR.is_dir():
+            return str(DEFAULT_REFERENCE_DIR)
+        return str(Path.home())
+
+    def _load_default_reference_directory(self) -> None:
+        files = reference_images_from_directory(DEFAULT_REFERENCE_DIR)
+        if not files:
+            return
+        self.reference_files = files
+        self.reference_index = 0
+        self._select_first_available_reference()
+        self.status_var.set(
+            f"Galeria carregada de {DEFAULT_REFERENCE_DIR}: {len(files)} imagem(ns)."
+        )
+
+    def open_reference_image(self):
+        source = filedialog.askopenfilename(
+            title="Abrir imagem de referência",
+            initialdir=self._dialog_initial_directory(),
+            filetypes=IMAGE_TYPES,
+        )
+        if source:
+            self.reference_files = [str(source)]
+            self.reference_index = 0
+            self.show_reference()
+            self._refresh_reference_gallery()
+
+    def open_reference_batch(self):
+        files = filedialog.askopenfilenames(
+            title="Abrir imagens de referência",
+            initialdir=self._dialog_initial_directory(),
+            filetypes=IMAGE_TYPES,
+        )
+        if files:
+            self.reference_files = [str(item) for item in files]
+            self.reference_index = 0
+            self._select_first_available_reference()
+            self._refresh_reference_gallery()
 
     def _install_assignment_controls(self) -> None:
         # Mantém a experiência já conhecida do editor: um botão explícito
@@ -258,6 +317,7 @@ class ScriptEditor(GalleryScriptEditor):
 
     def new_project(self):
         super().new_project()
+        self._load_default_reference_directory()
         self._refresh_reference_gallery()
 
 
