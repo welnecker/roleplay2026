@@ -63,6 +63,24 @@ def test_desktop_focuses_newest_slide_when_iframe_renders() -> None:
     assert "requestAnimationFrame(scrollLatest)" in html
 
 
+def test_new_reveal_scrolls_component_vertically_into_reading_position() -> None:
+    html = desktop_accumulated_html(_sample_html())
+
+    assert "const scrollPageToCarousel = () =>" in html
+    assert "const frame = window.frameElement" in html
+    assert "frame.scrollIntoView({behavior: 'smooth', block: 'start', inline: 'nearest'})" in html
+    assert "scrollPageToCarousel();" in html
+
+
+def test_vertical_autoscroll_runs_only_during_initial_reveal() -> None:
+    html = desktop_accumulated_html(_sample_html())
+
+    image_load_block = html[html.index("track.querySelectorAll('img')") :]
+    assert "image.addEventListener('load', scrollLatest, {once:true})" in image_load_block
+    assert "scrollPageToCarousel" not in image_load_block
+    assert "addEventListener('scroll'" not in html[html.index("const scrollLatest = () =>") :]
+
+
 def test_desktop_rechecks_after_images_load_without_locking_manual_scroll() -> None:
     html = desktop_accumulated_html(_sample_html())
 
@@ -76,6 +94,7 @@ def test_transform_is_idempotent() -> None:
     twice = desktop_accumulated_html(once)
 
     assert twice.count("const scrollLatest = () =>") == 1
+    assert twice.count("const scrollPageToCarousel = () =>") == 1
 
 
 def test_transform_is_safe_when_synced_markup_is_absent() -> None:
