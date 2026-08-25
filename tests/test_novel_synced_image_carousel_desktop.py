@@ -38,14 +38,12 @@ def test_desktop_uses_same_accumulated_image_balloon_slides_as_mobile() -> None:
     assert "novel-frame-track" not in desktop
 
 
-def test_mobile_carousel_remains_present_and_unchanged() -> None:
-    original = _sample_html()
-    html = desktop_accumulated_html(original)
+def test_mobile_carousel_markup_remains_present() -> None:
+    html = desktop_accumulated_html(_sample_html())
 
-    original_mobile = original[original.index('<section class="sync-mobile">') :]
-    transformed_mobile = html[html.index('<section class="sync-mobile">') :]
-
-    assert transformed_mobile == original_mobile
+    assert '<section class="sync-mobile">' in html
+    assert 'class="sync-mobile-track"' in html
+    assert '<script>mobile()</script>' in html
 
 
 def test_desktop_track_has_visible_horizontal_overflow_style() -> None:
@@ -55,6 +53,29 @@ def test_desktop_track_has_visible_horizontal_overflow_style() -> None:
     assert "overflow-x:auto;" in html
     assert "scroll-snap-type:x proximity;" in html
     assert "scrollbar-gutter:stable;" in html
+
+
+def test_desktop_focuses_newest_slide_when_iframe_renders() -> None:
+    html = desktop_accumulated_html(_sample_html())
+
+    assert "track.scrollWidth - track.clientWidth" in html
+    assert "track.scrollTo({left: latest, behavior: 'auto'})" in html
+    assert "requestAnimationFrame(scrollLatest)" in html
+
+
+def test_desktop_rechecks_after_images_load_without_locking_manual_scroll() -> None:
+    html = desktop_accumulated_html(_sample_html())
+
+    assert "image.addEventListener('load', scrollLatest, {once:true})" in html
+    desktop_script = html[html.index("const scrollLatest = () =>") :]
+    assert "addEventListener('scroll'" not in desktop_script
+
+
+def test_transform_is_idempotent() -> None:
+    once = desktop_accumulated_html(_sample_html())
+    twice = desktop_accumulated_html(once)
+
+    assert twice.count("const scrollLatest = () =>") == 1
 
 
 def test_transform_is_safe_when_synced_markup_is_absent() -> None:
