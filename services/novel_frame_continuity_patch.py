@@ -22,15 +22,31 @@ def _items(value: object) -> list[str]:
 
 
 def continuity_contract_from_document(document: dict[str, Any]) -> dict[str, object]:
-    """Extrai apenas fatos canônicos necessários para impedir deriva entre quadros."""
+    """Extrai fatos canônicos já carregados no núcleo autoritativo do personagem."""
 
     core = document.get("character_core") or {}
     if not isinstance(core, dict):
         core = {}
+
     contract: dict[str, object] = {}
     summary = str(core.get("summary", "") or "").strip()
     if summary:
         contract["character_summary"] = summary
+
+    # O loader editorial já torna character_core autoritativo. O contrato V2
+    # precisa carregar também suas regras concretas; usar apenas o summary
+    # descartava justamente restrições de identidade, relações e continuidade.
+    for source_key, target_key in (
+        ("dominant_drive", "identity_rules"),
+        ("thought_rules", "thought_rules"),
+        ("response_rules", "response_rules"),
+    ):
+        values = _items(core.get(source_key))
+        if values:
+            contract[target_key] = values
+
+    # Compatibilidade com documentos que já declarem regras de runtime no
+    # documento mesclado. Nenhuma regra específica de personagem é criada aqui.
     runtime_rules = _items(document.get("runtime_rules"))
     if runtime_rules:
         contract["runtime_rules"] = runtime_rules
@@ -104,10 +120,10 @@ def _build_frame_prompt_with_continuity(
 CONTRATO CANÔNICO DE IDENTIDADE E RELAÇÕES — PREVALECE SOBRE O HISTÓRICO:
 {canonical}
 
-- O contrato acima é a autoridade para identidade, relações e nomes dos personagens.
-- O histórico serve apenas para continuidade dos acontecimentos da mesma versão; ele nunca pode renomear personagens nem contrariar o contrato canônico.
-- Nomes próprios presentes apenas no histórico, mas ausentes do roteiro atual e do contrato canônico, são resíduos não autoritativos e devem ser ignorados.
-- Se um personagem for identificado no roteiro apenas por função ou papel, como professor, médico, motorista ou vizinha, mantenha esse papel sem inventar nem recuperar um nome próprio.
+- O contrato acima é a autoridade para identidade, relações, nomes e fatos biográficos dos personagens.
+- O histórico serve apenas para continuidade dos acontecimentos da mesma run; ele nunca pode renomear personagens nem contrariar o contrato canônico.
+- Nomes próprios ou fatos biográficos presentes apenas no histórico, mas ausentes do roteiro atual e do contrato canônico, não têm autoridade e devem ser ignorados.
+- Se um personagem for identificado no roteiro apenas por função ou papel, mantenha esse papel até que o próprio roteiro lhe atribua outra identidade.
 - Nunca transforme um personagem terceiro no protagonista autenticado, nem o protagonista em um terceiro personagem.
 """.rstrip()
     return prompt + guard
