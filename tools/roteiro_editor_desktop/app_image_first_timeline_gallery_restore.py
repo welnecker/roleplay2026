@@ -22,6 +22,16 @@ class ScriptEditor(GalleryScriptEditor):
         return os.path.normcase(os.path.abspath(str(value)))
 
     def _install_assignment_controls(self) -> None:
+        # Mantém a experiência já conhecida do editor: um botão explícito
+        # para procurar/carregar um lote de imagens.
+        batch = self._find_button("ABRIR LOTE")
+        if batch is not None:
+            batch.configure(
+                text="BUSCAR IMAGENS",
+                command=self.open_reference_batch,
+                style="Big.TButton",
+            )
+
         assign = self._find_button("USAR IMAGEM ATUAL NESTA LINHA")
         if assign is not None:
             assign.configure(
@@ -84,7 +94,7 @@ class ScriptEditor(GalleryScriptEditor):
         if not self.reference_files:
             ttk.Label(
                 self._gallery_inner,
-                text="Abra um lote para visualizar as imagens disponíveis aqui.",
+                text="Clique em BUSCAR IMAGENS para carregar um lote.",
                 anchor="center",
             ).grid(row=0, column=0, padx=8, pady=24, sticky="ew")
             return
