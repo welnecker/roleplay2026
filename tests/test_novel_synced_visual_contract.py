@@ -3,11 +3,13 @@ from __future__ import annotations
 from services.novel_synced_visual_contract import apply_visual_contract
 
 
-def test_visual_contract_standardizes_images_to_16_9() -> None:
+def test_visual_contract_preserves_full_image_without_crop() -> None:
     html = apply_visual_contract('<section class="sync-mobile"></section>')
-    assert "aspect-ratio:16 / 9" in html
-    assert "object-fit:cover!important" in html
-    assert "height:100%!important" in html
+    assert "object-fit:contain!important" in html
+    assert "height:auto!important" in html
+    assert "object-position:center top!important" in html
+    assert "object-fit:cover!important" not in html
+    assert "aspect-ratio:16 / 9" not in html
 
 
 def test_visual_contract_standardizes_balloon_geometry() -> None:
