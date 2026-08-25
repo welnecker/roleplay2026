@@ -33,6 +33,16 @@ def restore_project_image_state(
     if not isinstance(raw_map, dict):
         raw_map = {}
 
+    raw_origins = restored.get("assigned_reference_origins") or {}
+    if not isinstance(raw_origins, dict):
+        raw_origins = {}
+    assigned_reference_origins = {
+        str(image_id): str(origin)
+        for image_id, origin in raw_origins.items()
+        if str(image_id or "").strip() and str(origin or "").strip()
+    }
+    restored["assigned_reference_origins"] = assigned_reference_origins
+
     image_ids: list[str] = []
     for value in raw_map.values():
         image_id = str(value or "").strip()
@@ -62,15 +72,32 @@ def restore_project_image_state(
 
     restored["image_sources"] = resolved_sources
 
+    # Projetos novos guardam a origem das referências que foram fisicamente
+    # movidas para ``_atribuidas``. Essas imagens precisam continuar disponíveis
+    # para exportação, mas não devem reaparecer na galeria de imagens livres.
+    assigned_sources = {
+        source
+        for image_id, source in resolved_sources.items()
+        if image_id in assigned_reference_origins
+    }
+
     references: list[str] = []
     raw_references = restored.get("reference_files") or []
     if isinstance(raw_references, (list, tuple)):
         for value in raw_references:
             existing = _existing_path(value)
-            if existing and existing not in references:
+            if (
+                existing
+                and existing not in assigned_sources
+                and existing not in references
+            ):
                 references.append(existing)
 
-    for source in resolved_sources.values():
+    # Mantém o comportamento de recuperação de projetos antigos/exportados.
+    # Para o novo formato, fontes gerenciadas como "atribuídas" ficam fora.
+    for image_id, source in resolved_sources.items():
+        if image_id in assigned_reference_origins:
+            continue
         if source not in references:
             references.append(source)
     restored["reference_files"] = references
