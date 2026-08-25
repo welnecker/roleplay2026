@@ -50,6 +50,7 @@ def test_desktop_track_has_visible_horizontal_overflow_style() -> None:
     html = desktop_accumulated_html(_sample_html())
 
     assert ".sync-desktop-track{" in html
+    assert "align-items:flex-start;" in html
     assert "overflow-x:auto;" in html
     assert "scroll-snap-type:x proximity;" in html
     assert "scrollbar-gutter:stable;" in html
@@ -60,7 +61,18 @@ def test_desktop_focuses_newest_slide_when_iframe_renders() -> None:
 
     assert "track.scrollWidth - track.clientWidth" in html
     assert "track.scrollTo({left: latest, behavior: 'auto'})" in html
-    assert "requestAnimationFrame(scrollLatest)" in html
+    assert "fitTrackToSlide(slides.length - 1);" in html
+
+
+def test_active_slide_controls_desktop_track_height() -> None:
+    html = desktop_accumulated_html(_sample_html())
+
+    assert "const visibleSlideIndex = () =>" in html
+    assert "const fitTrackToSlide = (index = visibleSlideIndex()) =>" in html
+    assert "slide.getBoundingClientRect().height" in html
+    assert "track.style.height = `${targetHeight}px`" in html
+    assert "track.addEventListener('scroll'" in html
+    assert "setTimeout(() => fitTrackToSlide(), 90)" in html
 
 
 def test_new_reveal_scrolls_component_vertically_into_reading_position() -> None:
@@ -72,21 +84,31 @@ def test_new_reveal_scrolls_component_vertically_into_reading_position() -> None
     assert "scrollPageToCarousel();" in html
 
 
-def test_vertical_autoscroll_runs_only_during_initial_reveal() -> None:
+def test_manual_carousel_scroll_only_recalibrates_height() -> None:
+    html = desktop_accumulated_html(_sample_html())
+
+    scroll_block = html[html.index("track.addEventListener('scroll'") : html.index("track.querySelectorAll('img')")]
+    assert "fitTrackToSlide" in scroll_block
+    assert "scrollPageToCarousel" not in scroll_block
+    assert "scrollLatest" not in scroll_block
+
+
+def test_image_load_rechecks_width_and_active_height_without_vertical_jump() -> None:
     html = desktop_accumulated_html(_sample_html())
 
     image_load_block = html[html.index("track.querySelectorAll('img')") :]
-    assert "image.addEventListener('load', scrollLatest, {once:true})" in image_load_block
+    assert "image.addEventListener('load', () =>" in image_load_block
+    assert "scrollLatest();" in image_load_block
+    assert "fitTrackToSlide();" in image_load_block
     assert "scrollPageToCarousel" not in image_load_block
-    assert "addEventListener('scroll'" not in html[html.index("const scrollLatest = () =>") :]
 
 
-def test_desktop_rechecks_after_images_load_without_locking_manual_scroll() -> None:
+def test_resize_observer_keeps_height_in_sync_with_late_layout_changes() -> None:
     html = desktop_accumulated_html(_sample_html())
 
-    assert "image.addEventListener('load', scrollLatest, {once:true})" in html
-    desktop_script = html[html.index("const scrollLatest = () =>") :]
-    assert "addEventListener('scroll'" not in desktop_script
+    assert "typeof ResizeObserver !== 'undefined'" in html
+    assert "new ResizeObserver(() => fitTrackToSlide())" in html
+    assert "slides.forEach((slide) => observer.observe(slide))" in html
 
 
 def test_transform_is_idempotent() -> None:
@@ -95,6 +117,7 @@ def test_transform_is_idempotent() -> None:
 
     assert twice.count("const scrollLatest = () =>") == 1
     assert twice.count("const scrollPageToCarousel = () =>") == 1
+    assert twice.count("const fitTrackToSlide =") == 1
 
 
 def test_transform_is_safe_when_synced_markup_is_absent() -> None:
