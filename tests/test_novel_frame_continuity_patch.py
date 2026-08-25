@@ -7,7 +7,7 @@ from services import novel_frame_continuity_patch as continuity
 from services import novel_frame_patch
 
 
-def test_frame_payload_carries_generic_canonical_continuity(monkeypatch) -> None:
+def test_frame_payload_carries_authoritative_core_rules(monkeypatch) -> None:
     frame = {"frame_id": "cena_001", "description": "", "entries": []}
     compiled = {
         "blocks": [
@@ -28,11 +28,19 @@ def test_frame_payload_carries_generic_canonical_continuity(monkeypatch) -> None
         lambda *_args, **_kwargs: compiled,
     )
     base_document = {
-        "character_core": {"summary": "Personagem casada com o protagonista."},
-        "runtime_rules": [
-            "O professor é um terceiro personagem e não possui nome canônico.",
-            "Nunca inventar um nome para o professor.",
-        ],
+        "character_core": {
+            "summary": "Personagem casada com o protagonista.",
+            "dominant_drive": [
+                "Um terceiro personagem permanece distinto do protagonista.",
+                "Um personagem sem nome canônico não recebe nome inventado.",
+            ],
+            "thought_rules": [
+                "Não inventar passado nem características ausentes de terceiros."
+            ],
+            "response_rules": [
+                "Preservar os papéis declarados pelo roteiro."
+            ],
+        }
     }
 
     result = continuity._compile_with_continuity(
@@ -42,24 +50,29 @@ def test_frame_payload_carries_generic_canonical_continuity(monkeypatch) -> None
     )
     movement = result["blocks"][0]["beats"][0]["required_movement"]
     payload = json.loads(movement[len(novel_frame_patch._FRAME_PREFIX) :])
+    contract = payload["continuity_contract"]
 
-    assert payload["continuity_contract"]["character_summary"] == (
-        "Personagem casada com o protagonista."
-    )
-    assert payload["continuity_contract"]["runtime_rules"] == [
-        "O professor é um terceiro personagem e não possui nome canônico.",
-        "Nunca inventar um nome para o professor.",
+    assert contract["character_summary"] == "Personagem casada com o protagonista."
+    assert contract["identity_rules"] == [
+        "Um terceiro personagem permanece distinto do protagonista.",
+        "Um personagem sem nome canônico não recebe nome inventado.",
+    ]
+    assert contract["thought_rules"] == [
+        "Não inventar passado nem características ausentes de terceiros."
+    ]
+    assert contract["response_rules"] == [
+        "Preservar os papéis declarados pelo roteiro."
     ]
 
 
-def test_frame_prompt_rejects_stale_names_from_history(monkeypatch) -> None:
+def test_frame_prompt_rejects_noncanonical_history_facts(monkeypatch) -> None:
     frame = {
         "frame_id": "cena_002",
         "description": "",
         "entries": [],
         "continuity_contract": {
-            "runtime_rules": [
-                "O professor é um terceiro personagem e não possui nome canônico."
+            "identity_rules": [
+                "Um personagem sem nome canônico não recebe nome inventado."
             ]
         },
     }
@@ -74,12 +87,12 @@ def test_frame_prompt_rejects_stale_names_from_history(monkeypatch) -> None:
     )
 
     prompt = continuity._build_frame_prompt_with_continuity(
-        character_name="Mary",
-        user_name="Janio",
+        character_name="Personagem",
+        user_name="Usuario",
         movement=movement,
     )
 
     assert "PREVALECE SOBRE O HISTÓRICO" in prompt
-    assert "Nomes próprios presentes apenas no histórico" in prompt
+    assert "fatos biográficos presentes apenas no histórico" in prompt
     assert "nunca pode renomear personagens" in prompt
-    assert "não possui nome canônico" in prompt
+    assert "sem nome canônico" in prompt
