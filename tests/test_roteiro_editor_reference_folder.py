@@ -44,4 +44,6 @@ def test_old_project_infers_common_reference_directory() -> None:
         "reference_files": ["C:/roteiro/imagens/cena1.png", "C:/roteiro/imagens/cena2.png"],
         "image_sources": {"cena3.webp": "C:/roteiro/imagens/cena3.png"},
     }
-    assert module.reference_directory_from_project(payload) == "C:/roteiro/imagens"
+    assert Path(module.reference_directory_from_project(payload)) == Path(
+        "C:/roteiro/imagens"
+    )
