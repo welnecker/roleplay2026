@@ -83,8 +83,14 @@ class ScriptEditor(TimelineScriptEditor):
             upper = instruction.upper()
             if upper.startswith("[PENSAMENTO"):
                 label = "PENSAMENTO"
+            elif upper.startswith("[FALA EXATA"):
+                label = "FALA EXATA"
+            elif upper.startswith("[FALA INTERPRETADA") or upper.startswith("[FALA INTERPRETATIVA"):
+                label = "FALA INTERPRETADA"
             elif "_BALAO]" in upper:
                 label = "FALA BALÃO"
+            if "_BALAO]" in upper and label != "FALA BALÃO":
+                label += " BALÃO"
             if image_id:
                 label += f"  •  {image_id}"
 

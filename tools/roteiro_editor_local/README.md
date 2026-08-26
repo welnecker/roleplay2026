@@ -13,7 +13,8 @@ O lançador usa primeiro `.venv\Scripts\python.exe`, quando existir. Caso Stream
 ## Fluxo
 
 1. Informe `package_id`, `script_version`, prefixo dos quadros e atores.
-2. Escreva o roteiro com `[DESCRIÇÃO]`, `[FALA ator]` e `[PENSAMENTO ator]`.
+2. Escreva o roteiro com `[DESCRIÇÃO]`, `[FALA ator]`, `[FALA EXATA ator]`,
+   `[FALA INTERPRETADA ator]` e `[PENSAMENTO ator]`.
 3. Clique em **Validar e atualizar estrutura**. O editor usa o compilador V2 oficial para gerar `line_id` e `order`.
 4. Importe várias imagens para atribuí-las, em sequência, às próximas `[DESCRIÇÃO]` sem imagem.
 5. Se necessário, habilite imagens em `[FALA]`/`[PENSAMENTO]` e faça uma atribuição individual.

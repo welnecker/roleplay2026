@@ -345,6 +345,38 @@ def test_sufixo_balao_e_preservado_com_nome_visivel_normal() -> None:
     assert "copie esse sufixo literalmente" in prompt
 
 
+def test_modalidades_de_fala_v2_chegam_ao_prompt_com_ator_correto() -> None:
+    rows = _rows()
+    rows[1] = {
+        **rows[1],
+        "instruction": "[FALA EXATA camilly] Oi, {{nome}}... cheguei.",
+    }
+    rows[2] = {
+        **rows[2],
+        "instruction": "[FALA INTERPRETADA usuario] Eu demonstro minha surpresa.",
+    }
+    document = compile_novel_frame_story(_base_document(), rows, script_version="202")
+    script = EditorialScript(compile_editorial_document(document))
+    movement = movement_from_script(script, "encontro_001")
+    payload = json.loads(movement.instruction.removeprefix("NOVEL_FRAME_V2\n"))
+
+    assert payload["entries"][0]["actor"] == "camilly"
+    assert payload["entries"][0]["delivery"] == "exata"
+    assert payload["entries"][1]["actor"] == "usuario"
+    assert payload["entries"][1]["delivery"] == "interpretada"
+
+    prompt = build_frame_prompt(
+        character_name="Camilly",
+        user_name="Donisete",
+        movement=movement,
+    )
+    assert '"instruction": "Oi, Donisete... cheguei."' in prompt
+    assert '"delivery": "exata"' in prompt
+    assert '"delivery": "interpretada"' in prompt
+    assert 'Quando delivery for "exata"' in prompt
+    assert 'Quando delivery for "interpretada"' in prompt
+
+
 def test_renderer_separa_cena_falas_e_pensamentos() -> None:
     content = """[QUADRO encontro_002]
 [DESCRIÇÃO]

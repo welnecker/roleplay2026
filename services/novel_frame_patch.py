@@ -39,10 +39,33 @@ def _tag(value: Any) -> tuple[str, str, str]:
         return "", "", raw
     header = match.group(1).strip()
     body = match.group(2).strip()
-    parts = header.split(maxsplit=1)
-    kind = _plain(parts[0])
-    actor = _plain(parts[1]) if len(parts) > 1 else ""
+    parts = header.split()
+    kind = _plain(parts[0]) if parts else ""
+    actor_parts = parts[1:]
+    if kind == "fala" and actor_parts and _plain(actor_parts[0]) in {
+        "exata", "interpretada", "interpretativa"
+    }:
+        actor_parts = actor_parts[1:]
+    actor = _plain(" ".join(actor_parts))
     return kind, actor, body
+
+
+def _speech_delivery(value: Any) -> str:
+    """Retorna a modalidade autoral de uma FALA V2."""
+
+    raw = str(value or "").strip()
+    match = _MARKER.match(raw)
+    if match is None:
+        return "adaptavel"
+    parts = match.group(1).strip().split()
+    if len(parts) < 2 or _plain(parts[0]) != "fala":
+        return "adaptavel"
+    mode = _plain(parts[1])
+    if mode == "exata":
+        return "exata"
+    if mode in {"interpretada", "interpretativa"}:
+        return "interpretada"
+    return "adaptavel"
 
 
 def is_novel_frame_rows(rows: Iterable[dict[str, Any]]) -> bool:
@@ -117,6 +140,11 @@ def compile_novel_frame_story(
                 "actor": actor,
                 "instruction": text,
                 "line_id": line_id,
+                **(
+                    {"delivery": _speech_delivery(row.get("instruction"))}
+                    if kind == "fala"
+                    else {}
+                ),
             }
         )
 
@@ -286,6 +314,9 @@ REGRAS DE CONTINUIDADE:
 - Leia o histórico como uma única cena em andamento. Este quadro começa exatamente onde o anterior terminou.
 - Não recapitule o que já aconteceu e não reinicie a relação entre os personagens.
 - Cada FALA contém texto autoral e intenção dramática. Preserve seu núcleo verbal, seu registro e suas expressões marcantes; ajuste somente o mínimo necessário para fluidez oral, concordância, nome personalizado e continuidade.
+- Quando delivery for "exata", reproduza integralmente o texto de instruction, sem acrescentar, retirar, reordenar ou substituir palavras. A troca do placeholder de nome pelo protagonista já foi feita no QUADRO AUTORAL.
+- Quando delivery for "interpretada", preserve o núcleo autoral reconhecível e desenvolva a fala com personalidade, emoção e subtexto coerentes com o actor, o quadro e o histórico. Não transforme o núcleo em texto fechado.
+- Quando delivery for "adaptavel", mantenha o comportamento padrão: preserve de perto a redação e faça somente ajustes mínimos de oralidade, concordância, nome e continuidade.
 - Cada PENSAMENTO contém um núcleo autoral obrigatório. Dê vida a esse núcleo como consciência privada, preservando seu sentido, intenção e expressões marcantes.
 - Desenvolva o PENSAMENTO levemente, em uma única frase viva, acrescentando subtexto psicológico em vez de repetir a fala com outras palavras.
 - Quando sustentados pelo pensamento, pelo quadro ou pelo histórico, deixe aparecer com naturalidade bom humor, malícia, erotismo, desejo, provocação, conflito e tensão de traição.
@@ -306,7 +337,7 @@ FIDELIDADE AO LINGUAJAR AUTORAL:
 - "Curto e natural" limita verborragia; não autoriza higienizar, moralizar, amenizar ou mudar a personalidade do texto.
 - Não aumente gratuitamente a explicitude de uma entry neutra. Reproduza a intensidade que o roteiro efetivamente forneceu naquele ponto.
 - Se houver conflito entre embelezar a frase e preservar a voz autoral, preserve a voz autoral.
-- Nas FALAS, faça somente ajustes mínimos e preserve de perto a redação autoral. Nos PENSAMENTOS, preserve o núcleo autoral e permita o desenvolvimento psicológico definido acima.
+- Nas FALAS, faça somente ajustes mínimos quando delivery for "adaptavel" e respeite rigorosamente as modalidades "exata" e "interpretada". Nos PENSAMENTOS, preserve o núcleo autoral e permita o desenvolvimento psicológico definido acima.
 
 CONTINUIDADE VISUAL:
 - O appearance_contract contém poucos fatos visuais autorais. Considere-os verdadeiros, mas mencione-os somente quando forem visíveis e relevantes à entry atual; nunca recite a ficha como uma lista.

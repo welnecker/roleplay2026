@@ -178,7 +178,15 @@ def _render_v2_preview(draft: str, frame_prefix: str, start_frame_number: int) -
                         label = (
                             f"✦ pensamento · {entry.actor}"
                             if entry.kind == "PENSAMENTO"
-                            else entry.actor
+                            else (
+                                f"fala exata · {entry.actor}"
+                                if entry.delivery == "exata"
+                                else (
+                                    f"fala interpretada · {entry.actor}"
+                                    if entry.delivery == "interpretada"
+                                    else entry.actor
+                                )
+                            )
                         )
                         style = "font-style:italic;" if entry.kind == "PENSAMENTO" else ""
                         border = "2px dotted rgba(70,36,52,.35)" if entry.kind == "PENSAMENTO" else "1px solid rgba(70,36,52,.20)"
@@ -298,7 +306,7 @@ if is_v2:
     if st.session_state.get(SELECTED_ACTOR_KEY) not in actors:
         st.session_state[SELECTED_ACTOR_KEY] = actors[0]
 
-    actor_col, description_col, speech_col, thought_col = st.columns([2, 1, 1, 1])
+    actor_col, description_col, speech_col, exact_col, interpreted_col, thought_col = st.columns([2, 1, 1, 1, 1, 1])
     with actor_col:
         selected_actor = st.selectbox("Ator", actors, key=SELECTED_ACTOR_KEY)
     with description_col:
@@ -313,6 +321,18 @@ if is_v2:
         if st.button("+ Fala", width="stretch"):
             _append_v2_tag("FALA", selected_actor)
             st.rerun()
+    with exact_col:
+        st.write("")
+        st.write("")
+        if st.button("+ Fala exata", width="stretch"):
+            _append_v2_tag("FALA EXATA", selected_actor)
+            st.rerun()
+    with interpreted_col:
+        st.write("")
+        st.write("")
+        if st.button("+ Fala interpretada", width="stretch"):
+            _append_v2_tag("FALA INTERPRETADA", selected_actor)
+            st.rerun()
     with thought_col:
         st.write("")
         st.write("")
@@ -321,7 +341,9 @@ if is_v2:
             st.rerun()
 
     st.info(
-        "Cada [DESCRIÇÃO] abre um novo quadro. Falas e pensamentos seguem a order da planilha. "
+        "Cada [DESCRIÇÃO] abre um novo quadro. Use [FALA EXATA ator] para texto literal, "
+        "[FALA ator] para ajustes mínimos e [FALA INTERPRETADA ator] para desenvolvimento do núcleo autoral. "
+        "Falas e pensamentos seguem a order da planilha. "
         "Você pode repetir o mesmo personagem quantas vezes quiser dentro do quadro."
     )
 else:

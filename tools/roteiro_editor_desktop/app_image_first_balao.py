@@ -20,6 +20,10 @@ class ScriptEditor(BaseScriptEditor):
             tagged_actor = f"{actor}_balao"
         self.insert_tag(f"[FALA {tagged_actor}] ")
 
+    def insert_speech_tag(self, delivery: str) -> None:
+        actor = slugify(self.actor_var.get(), "usuario")
+        self.insert_tag(f"[FALA {delivery} {actor}] ")
+
     def _install_balloon_button(self) -> None:
         fala_button = None
         for widget in self.winfo_children():
@@ -36,8 +40,20 @@ class ScriptEditor(BaseScriptEditor):
             return
 
         toolbar = fala_button.master
+        exact = ttk.Button(
+            toolbar,
+            text="+ FALA EXATA",
+            command=lambda: self.insert_speech_tag("EXATA"),
+        )
+        exact.pack(side="left", padx=3, after=fala_button)
+        interpreted = ttk.Button(
+            toolbar,
+            text="+ FALA INTERPRETADA",
+            command=lambda: self.insert_speech_tag("INTERPRETADA"),
+        )
+        interpreted.pack(side="left", padx=3, after=exact)
         balloon = ttk.Button(toolbar, text="+ FALA BALÃO", command=self.insert_balloon_tag)
-        balloon.pack(side="left", padx=3, after=fala_button)
+        balloon.pack(side="left", padx=3, after=interpreted)
 
 
 if __name__ == "__main__":

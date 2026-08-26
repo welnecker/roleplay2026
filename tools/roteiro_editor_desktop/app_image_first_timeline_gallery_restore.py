@@ -2,28 +2,18 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from app_image_first import IMAGE_TYPES, load_project
 from app_image_first_timeline_gallery import ScriptEditor as GalleryScriptEditor
 from project_image_restore import restore_project_image_state
-
-
-DEFAULT_REFERENCE_DIR = Path(r"C:\Users\welne\Downloads\PROJETO\IMAGENS")
-REFERENCE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
-
-
-def reference_images_from_directory(directory: str | Path) -> list[str]:
-    """Lista imagens de referência do diretório sem alterar os arquivos no disco."""
-
-    root = Path(directory)
-    if not root.is_dir():
-        return []
-    return [
-        str(path)
-        for path in sorted(root.iterdir(), key=lambda item: item.name.casefold())
-        if path.is_file() and path.suffix.casefold() in REFERENCE_SUFFIXES
-    ]
+from reference_folder import (
+    DEFAULT_REFERENCE_DIR,
+    existing_initial_directory,
+    reference_directory_from_project,
+    reference_images_from_directory,
+)
 
 
 class ScriptEditor(GalleryScriptEditor):
@@ -31,6 +21,7 @@ class ScriptEditor(GalleryScriptEditor):
 
     def __init__(self) -> None:
         super().__init__()
+        self.reference_directory_var = tk.StringVar(self, value="Nenhuma pasta informada")
         self._install_assignment_controls()
         self._load_default_reference_directory()
         self._refresh_reference_gallery()
@@ -39,22 +30,37 @@ class ScriptEditor(GalleryScriptEditor):
     def _path_key(value: str | Path) -> str:
         return os.path.normcase(os.path.abspath(str(value)))
 
-    @staticmethod
-    def _dialog_initial_directory() -> str:
-        if DEFAULT_REFERENCE_DIR.is_dir():
-            return str(DEFAULT_REFERENCE_DIR)
-        return str(Path.home())
+    def _dialog_initial_directory(self) -> str:
+        return existing_initial_directory(
+            self.reference_directory_var.get(),
+            fallbacks=(DEFAULT_REFERENCE_DIR,),
+        )
+
+    def _set_reference_directory(self, directory: str | Path) -> int:
+        root = Path(directory)
+        files = reference_images_from_directory(root)
+        self.reference_directory_var.set(str(root))
+        self.reference_files = files
+        self.reference_index = 0 if files else -1
+        self._select_first_available_reference()
+        self._refresh_reference_gallery()
+        self.status_var.set(
+            f"Pasta de imagens: {root} — {len(files)} imagem(ns) encontrada(s)."
+        )
+        return len(files)
+
+    def select_reference_directory(self) -> None:
+        directory = filedialog.askdirectory(
+            title="Informe a pasta onde estão as imagens do roteiro",
+            initialdir=self._dialog_initial_directory(),
+            mustexist=True,
+        )
+        if directory:
+            self._set_reference_directory(directory)
 
     def _load_default_reference_directory(self) -> None:
-        files = reference_images_from_directory(DEFAULT_REFERENCE_DIR)
-        if not files:
-            return
-        self.reference_files = files
-        self.reference_index = 0
-        self._select_first_available_reference()
-        self.status_var.set(
-            f"Galeria carregada de {DEFAULT_REFERENCE_DIR}: {len(files)} imagem(ns)."
-        )
+        if DEFAULT_REFERENCE_DIR.is_dir():
+            self._set_reference_directory(DEFAULT_REFERENCE_DIR)
 
     def open_reference_image(self):
         source = filedialog.askopenfilename(
@@ -63,6 +69,7 @@ class ScriptEditor(GalleryScriptEditor):
             filetypes=IMAGE_TYPES,
         )
         if source:
+            self.reference_directory_var.set(str(Path(source).parent))
             self.reference_files = [str(source)]
             self.reference_index = 0
             self.show_reference()
@@ -75,6 +82,10 @@ class ScriptEditor(GalleryScriptEditor):
             filetypes=IMAGE_TYPES,
         )
         if files:
+            parents = {str(Path(item).parent) for item in files}
+            self.reference_directory_var.set(
+                parents.pop() if len(parents) == 1 else "Seleção de várias pastas"
+            )
             self.reference_files = [str(item) for item in files]
             self.reference_index = 0
             self._select_first_available_reference()
@@ -86,8 +97,8 @@ class ScriptEditor(GalleryScriptEditor):
         batch = self._find_button("ABRIR LOTE")
         if batch is not None:
             batch.configure(
-                text="BUSCAR IMAGENS",
-                command=self.open_reference_batch,
+                text="INFORMAR PASTA DE IMAGENS",
+                command=self.select_reference_directory,
                 style="Big.TButton",
             )
 
@@ -108,6 +119,26 @@ class ScriptEditor(GalleryScriptEditor):
         for widget in self._walk_widgets(self):
             if isinstance(widget, ttk.LabelFrame) and widget.cget("text") == "Galeria de referencias":
                 widget.configure(text="Galeria de referências — disponíveis")
+                widget.rowconfigure(0, weight=0)
+                widget.rowconfigure(1, weight=1)
+                for child in widget.winfo_children():
+                    info = child.grid_info()
+                    if info:
+                        child.grid_configure(row=int(info.get("row", 0)) + 1)
+                folder_bar = ttk.Frame(widget)
+                folder_bar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 6))
+                folder_bar.columnconfigure(1, weight=1)
+                ttk.Label(folder_bar, text="Pasta das imagens:").grid(row=0, column=0, sticky="w")
+                ttk.Label(
+                    folder_bar,
+                    textvariable=self.reference_directory_var,
+                    anchor="w",
+                ).grid(row=0, column=1, sticky="ew", padx=(6, 8))
+                ttk.Button(
+                    folder_bar,
+                    text="ALTERAR PASTA",
+                    command=self.select_reference_directory,
+                ).grid(row=0, column=2, sticky="e")
                 break
 
     def _available_reference_indexes(self) -> list[int]:
@@ -153,7 +184,7 @@ class ScriptEditor(GalleryScriptEditor):
         if not self.reference_files:
             ttk.Label(
                 self._gallery_inner,
-                text="Clique em BUSCAR IMAGENS para carregar um lote.",
+                text="Clique em INFORMAR PASTA DE IMAGENS para carregar a galeria.",
                 anchor="center",
             ).grid(row=0, column=0, padx=8, pady=24, sticky="ew")
             return
@@ -272,6 +303,10 @@ class ScriptEditor(GalleryScriptEditor):
     def project_payload(self):
         payload = super().project_payload()
         payload["format"] = "roleplay2026-editor-desktop-image-first-v3"
+        directory = self.reference_directory_var.get().strip()
+        payload["reference_directory"] = (
+            "" if directory == "Nenhuma pasta informada" else directory
+        )
         return payload
 
     def apply_project(self, data):
@@ -279,7 +314,11 @@ class ScriptEditor(GalleryScriptEditor):
         # para mover arquivos. O novo fluxo não move nada no disco.
         data = dict(data)
         data.pop("assigned_reference_origins", None)
+        reference_directory = reference_directory_from_project(data)
         super().apply_project(data)
+        self.reference_directory_var.set(reference_directory or "Nenhuma pasta informada")
+        if reference_directory and Path(reference_directory).is_dir():
+            self.reference_files = reference_images_from_directory(reference_directory)
         self._select_first_available_reference()
         self._refresh_reference_gallery()
 
@@ -317,6 +356,7 @@ class ScriptEditor(GalleryScriptEditor):
 
     def new_project(self):
         super().new_project()
+        self.reference_directory_var.set("Nenhuma pasta informada")
         self._load_default_reference_directory()
         self._refresh_reference_gallery()
 

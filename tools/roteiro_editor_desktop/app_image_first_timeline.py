@@ -82,17 +82,26 @@ class ScriptEditor(BalloonScriptEditor):
             return "", "", str(instruction or "").strip()
         header = " ".join(match.group(1).strip().split())
         body = str(match.group(2) or "").strip()
-        parts = header.split(maxsplit=1)
+        parts = header.split()
         kind = parts[0].upper()
-        actor = parts[1].strip() if len(parts) > 1 else ""
+        arguments = parts[1:]
         if kind == "DESCRIÇÃO" or kind == "DESCRICAO":
             return "DESCRIÇÃO", "", body
+        delivery = ""
+        if kind == "FALA" and arguments and arguments[0].upper() in {
+            "EXATA", "INTERPRETADA", "INTERPRETATIVA"
+        }:
+            delivery = "EXATA" if arguments[0].upper() == "EXATA" else "INTERPRETADA"
+            arguments = arguments[1:]
+        actor = " ".join(arguments).strip()
         if kind == "PENSAMENTO":
             return "PENSAMENTO", actor, body
-        if kind == "FALA" and actor.lower().endswith("_balao"):
-            return "FALA BALÃO", actor[:-6].rstrip("_"), body
+        balloon = actor.lower().endswith("_balao")
+        if balloon:
+            actor = actor[:-6].rstrip("_")
         if kind == "FALA":
-            return "FALA", actor, body
+            label = "FALA" + (f" {delivery}" if delivery else "") + (" BALÃO" if balloon else "")
+            return label, actor, body
         return kind, actor, body
 
     def _instruction_from_editor(self, kind: str, actor: str, body: str) -> str:
@@ -104,11 +113,16 @@ class ScriptEditor(BalloonScriptEditor):
         clean_actor = slugify(actor, "")
         if not clean_actor:
             raise ValueError("Selecione um ator válido.")
-        if kind == "FALA BALÃO":
-            return f"[FALA {clean_actor}_balao] {clean_body}"
+        balloon = kind.endswith(" BALÃO")
+        base_kind = kind.removesuffix(" BALÃO")
+        tagged_actor = f"{clean_actor}_balao" if balloon else clean_actor
         if kind == "PENSAMENTO":
             return f"[PENSAMENTO {clean_actor}] {clean_body}"
-        return f"[FALA {clean_actor}] {clean_body}"
+        if base_kind == "FALA EXATA":
+            return f"[FALA EXATA {tagged_actor}] {clean_body}"
+        if base_kind == "FALA INTERPRETADA":
+            return f"[FALA INTERPRETADA {tagged_actor}] {clean_body}"
+        return f"[FALA {tagged_actor}] {clean_body}"
 
     def _replace_row_instruction(self, line_id: str, new_instruction: str) -> str:
         index = self._row_index(line_id)
@@ -193,7 +207,10 @@ class ScriptEditor(BalloonScriptEditor):
             dialog,
             textvariable=kind_var,
             state="readonly",
-            values=("DESCRIÇÃO",) if is_description else ("FALA", "PENSAMENTO", "FALA BALÃO"),
+            values=("DESCRIÇÃO",) if is_description else (
+                "FALA", "FALA EXATA", "FALA INTERPRETADA", "PENSAMENTO",
+                "FALA BALÃO", "FALA EXATA BALÃO", "FALA INTERPRETADA BALÃO",
+            ),
         )
         kind_combo.grid(row=1, column=0, sticky="ew", padx=14)
 
@@ -262,7 +279,7 @@ class ScriptEditor(BalloonScriptEditor):
         if not selection:
             messagebox.showinfo(
                 "Linha",
-                "Selecione uma DESCRIÇÃO, FALA, FALA BALÃO ou PENSAMENTO na timeline.",
+                "Selecione uma DESCRIÇÃO, FALA ou PENSAMENTO na timeline.",
             )
             return
 
@@ -336,8 +353,14 @@ class ScriptEditor(BalloonScriptEditor):
             upper = instruction.upper()
             if upper.startswith("[PENSAMENTO"):
                 label = "PENSAMENTO"
+            elif upper.startswith("[FALA EXATA"):
+                label = "FALA EXATA"
+            elif upper.startswith("[FALA INTERPRETADA") or upper.startswith("[FALA INTERPRETATIVA"):
+                label = "FALA INTERPRETADA"
             elif "_BALAO]" in upper:
                 label = "FALA BALÃO"
+            if "_BALAO]" in upper and label != "FALA BALÃO":
+                label += " BALÃO"
             if image_id:
                 label += f"  •  {image_id}"
 

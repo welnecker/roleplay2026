@@ -25,6 +25,7 @@ class V2Instruction:
     actor: str
     text: str
     instruction: str
+    delivery: str = "adaptavel"
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +33,7 @@ class V2PreviewEntry:
     kind: str
     actor: str
     text: str
+    delivery: str = "adaptavel"
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +43,7 @@ class V2PreviewFrame:
     entries: tuple[V2PreviewEntry, ...]
 
 
-def _parse_header(header: str) -> tuple[str, str]:
+def _parse_header(header: str) -> tuple[str, str, str]:
     raw = " ".join(str(header or "").strip().split())
     if not raw:
         raise ScriptAuthoringError("Tag vazia.")
@@ -52,17 +54,26 @@ def _parse_header(header: str) -> tuple[str, str]:
     if kind == "DESCRICAO":
         if actor:
             raise ScriptAuthoringError("[DESCRIÇÃO] não recebe personagem.")
-        return "DESCRICAO", ""
+        return "DESCRICAO", "", ""
     if kind not in {"FALA", "PENSAMENTO"}:
         raise ScriptAuthoringError(
-            f"Tag não reconhecida no modo V2: [{raw}]. Use [DESCRIÇÃO], [FALA ator] ou [PENSAMENTO ator]."
+            f"Tag não reconhecida no modo V2: [{raw}]. Use [DESCRIÇÃO], [FALA ator], "
+            "[FALA EXATA ator], [FALA INTERPRETADA ator] ou [PENSAMENTO ator]."
         )
+    delivery = "adaptavel"
+    if kind == "FALA":
+        actor_parts = actor.split(maxsplit=1)
+        mode = actor_parts[0].upper()
+        mode = mode.replace("Ç", "C").replace("Ã", "A").replace("É", "E")
+        if mode in {"EXATA", "INTERPRETADA", "INTERPRETATIVA"}:
+            delivery = "exata" if mode == "EXATA" else "interpretada"
+            actor = actor_parts[1].strip() if len(actor_parts) > 1 else ""
     if not actor:
         raise ScriptAuthoringError(f"[{kind}] exige um ator, por exemplo [{kind} camilly].")
     clean_actor = slugify(actor, fallback="")
     if not clean_actor:
         raise ScriptAuthoringError(f"Ator inválido em [{raw}].")
-    return kind, clean_actor
+    return kind, clean_actor, delivery
 
 
 def parse_v2_draft(draft: str) -> list[V2Instruction]:
@@ -78,17 +89,24 @@ def parse_v2_draft(draft: str) -> list[V2Instruction]:
     items: list[V2Instruction] = []
     for match in matches:
         raw_header = " ".join(match.group(1).strip().split())
-        kind, actor = _parse_header(raw_header)
+        kind, actor, delivery = _parse_header(raw_header)
         text = str(match.group(2) or "").strip()
         if not text:
             raise ScriptAuthoringError(f"[{raw_header}] precisa de conteúdo.")
-        canonical_header = "[DESCRIÇÃO]" if kind == "DESCRICAO" else f"[{kind} {actor}]"
+        if kind == "DESCRICAO":
+            canonical_header = "[DESCRIÇÃO]"
+        elif kind == "FALA" and delivery != "adaptavel":
+            mode = "EXATA" if delivery == "exata" else "INTERPRETADA"
+            canonical_header = f"[FALA {mode} {actor}]"
+        else:
+            canonical_header = f"[{kind} {actor}]"
         items.append(
             V2Instruction(
                 kind=kind,
                 actor=actor,
                 text=text,
                 instruction=f"{canonical_header} {text}",
+                delivery=delivery,
             )
         )
     return items
@@ -214,7 +232,7 @@ def preview_v2_frames(
             current_id = f"{prefix}_{frame_number:03d}"
             description = item.text
         else:
-            entries.append(V2PreviewEntry(item.kind, item.actor, item.text))
+            entries.append(V2PreviewEntry(item.kind, item.actor, item.text, item.delivery))
     flush()
     return frames
 

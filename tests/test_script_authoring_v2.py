@@ -86,6 +86,40 @@ def test_v2_aceita_quantidade_arbitraria_de_personagens() -> None:
     ]
 
 
+def test_v2_compila_modalidades_de_fala_sem_confundir_modalidade_com_ator() -> None:
+    rows = compile_v2_rows(
+        """[DESCRIÇÃO] Cena inicial.
+[FALA EXATA camilly] Oi, {{nome}}... cheguei.
+[FALA INTERPRETADA renan] Eu ainda não esperava encontrar vocês aqui.
+[FALA camilly_balao] Porra!!!
+""",
+        package_id="roleplay2026.teste",
+        script_version="202",
+        frame_prefix="teste",
+    )
+
+    assert rows[1]["instruction"] == "[FALA EXATA camilly] Oi, {{nome}}... cheguei."
+    assert rows[2]["instruction"].startswith("[FALA INTERPRETADA renan]")
+    assert rows[3]["instruction"] == "[FALA camilly_balao] Porra!!!"
+    assert [row["line_id"] for row in rows[1:]] == [
+        "teste_001_camilly_fala_01",
+        "teste_001_renan_fala_01",
+        "teste_001_camilly_balao_fala_01",
+    ]
+
+    items = parse_v2_draft("\n".join(str(row["instruction"]) for row in rows))
+    assert [(item.actor, item.delivery) for item in items[1:]] == [
+        ("camilly", "exata"),
+        ("renan", "interpretada"),
+        ("camilly_balao", "adaptavel"),
+    ]
+
+
+def test_v2_rejeita_modalidade_de_fala_sem_ator() -> None:
+    with pytest.raises(ScriptAuthoringError, match="exige um ator"):
+        parse_v2_draft("[DESCRIÇÃO] Cena.\n[FALA EXATA] Oi.")
+
+
 def test_v2_rejeita_entry_antes_da_primeira_descricao() -> None:
     with pytest.raises(ScriptAuthoringError, match="precisa de \[DESCRIÇÃO\] anterior"):
         compile_v2_rows(

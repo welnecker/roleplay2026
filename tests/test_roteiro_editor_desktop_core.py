@@ -65,6 +65,31 @@ def test_balloon_actor_suffix_is_preserved_in_export() -> None:
     assert rows[1]["line_id"] == "encontro_001_camilly_balao_fala_01"
 
 
+def test_exact_and_interpreted_speech_tags_are_preserved_in_export() -> None:
+    rows = core.compile_rows(
+        """[DESCRIÇÃO] Cena inicial.
+[FALA EXATA camilly] Oi, {{nome}}.
+[FALA INTERPRETADA usuario_balao] Eu reajo com intensidade.
+""",
+        package_id="roleplay2026.camilly",
+        script_version="202",
+        frame_prefix="encontro",
+    )
+    assert rows[1]["instruction"] == "[FALA EXATA camilly] Oi, {{nome}}."
+    assert rows[1]["line_id"] == "encontro_001_camilly_fala_01"
+    assert rows[2]["instruction"] == "[FALA INTERPRETADA usuario_balao] Eu reajo com intensidade."
+    assert rows[2]["line_id"] == "encontro_001_usuario_balao_fala_01"
+
+
+def test_speech_delivery_requires_actor() -> None:
+    try:
+        core.parse_draft("[DESCRIÇÃO] Cena.\n[FALA EXATA] Oi.")
+    except core.EditorError as exc:
+        assert "exige um ator" in str(exc)
+    else:
+        raise AssertionError("[FALA EXATA] sem ator deveria ser rejeitada")
+
+
 def test_recompiled_edit_can_change_dialogue_kind_and_keep_position() -> None:
     original = core.compile_rows(
         _draft(),

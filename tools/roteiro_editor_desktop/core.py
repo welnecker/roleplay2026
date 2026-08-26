@@ -39,6 +39,7 @@ class Item:
     actor: str
     text: str
     instruction: str
+    delivery: str = "adaptavel"
 
 
 def parse_draft(draft: str) -> list[Item]:
@@ -64,17 +65,29 @@ def parse_draft(draft: str) -> list[Item]:
         if kind_raw == "DESCRICAO":
             if actor:
                 raise EditorError("[DESCRIÇÃO] não recebe personagem.")
-            items.append(Item("DESCRICAO", "", text, f"[DESCRIÇÃO] {text}"))
+            items.append(Item("DESCRICAO", "", text, f"[DESCRIÇÃO] {text}", ""))
             continue
 
         if kind_raw not in {"FALA", "PENSAMENTO"}:
             raise EditorError(f"Tag não reconhecida: [{header}].")
+        delivery = "adaptavel"
+        if kind_raw == "FALA":
+            actor_parts = actor.split(maxsplit=1)
+            mode = slugify(actor_parts[0], "").upper() if actor_parts else ""
+            if mode in {"EXATA", "INTERPRETADA", "INTERPRETATIVA"}:
+                delivery = "exata" if mode == "EXATA" else "interpretada"
+                actor = actor_parts[1].strip() if len(actor_parts) > 1 else ""
         if not actor:
             raise EditorError(f"[{kind_raw}] exige um ator.")
         clean_actor = slugify(actor, fallback="")
         if not clean_actor:
             raise EditorError(f"Ator inválido em [{header}].")
-        items.append(Item(kind_raw, clean_actor, text, f"[{kind_raw} {clean_actor}] {text}"))
+        if kind_raw == "FALA" and delivery != "adaptavel":
+            mode = "EXATA" if delivery == "exata" else "INTERPRETADA"
+            instruction = f"[FALA {mode} {clean_actor}] {text}"
+        else:
+            instruction = f"[{kind_raw} {clean_actor}] {text}"
+        items.append(Item(kind_raw, clean_actor, text, instruction, delivery))
 
     if not any(item.kind == "DESCRICAO" for item in items):
         raise EditorError("O roteiro precisa ter ao menos uma [DESCRIÇÃO].")
