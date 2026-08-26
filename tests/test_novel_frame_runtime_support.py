@@ -7,6 +7,7 @@ from services.editorial_runtime import EditorialScript
 from services.novel_frame_patch import compile_novel_frame_story
 from services.novel_frame_runtime_support import first_frame_movement, is_frame_script
 from services.novel_v2_adapter import next_movement_id
+from services.story_profile import personalize_editorial_script
 
 
 def _script() -> EditorialScript:
@@ -22,13 +23,13 @@ def _script() -> EditorialScript:
         {
             "line_id": "encontro_001_descricao",
             "order": 10,
-            "instruction": "[DESCRIÇÃO] Camilly avista {{nome}} no carro.",
+            "instruction": "[DESCRIÇÃO] Camilly avista {{*nome}} no carro.",
             "status": "active",
         },
         {
             "line_id": "encontro_001_camilly_fala",
             "order": 20,
-            "instruction": "[FALA camilly] Eu cumprimento {{nome}}.",
+            "instruction": "[FALA camilly] Eu cumprimento {{nome}} e noto que {{**nome}} sorri.",
             "status": "active",
         },
         {
@@ -64,7 +65,7 @@ def test_primeiro_quadro_recompoe_descricao_na_abertura() -> None:
     prefix = "NOVEL_FRAME_V2\n"
     assert movement.instruction.startswith(prefix)
     payload = json.loads(movement.instruction[len(prefix):])
-    assert payload["description"] == "Camilly avista {{nome}} no carro."
+    assert payload["description"] == "Camilly avista {{*nome}} no carro."
     assert [entry["kind"] for entry in payload["entries"]] == ["fala", "fala"]
 
 
@@ -81,3 +82,41 @@ def test_abertura_v2_nao_usa_introducao_antiga_do_pacote() -> None:
 
     assert "INTRODUÇÃO ANTIGA" not in movement.instruction
     assert "Camilly avista" in movement.instruction
+
+
+def test_quadro_v2_personaliza_artigo_e_pronome_sem_mutar_snapshot() -> None:
+    source = _script()
+    personalized = personalize_editorial_script(
+        source,
+        {"preferred_name": "Ana", "story_gender": "Como mulher"},
+    )
+
+    _, movement = first_frame_movement(personalized)
+    payload = json.loads(movement.instruction.removeprefix("NOVEL_FRAME_V2\n"))
+    assert payload["description"] == "Camilly avista a Ana no carro."
+    assert payload["entries"][0]["instruction"] == (
+        "Eu cumprimento Ana e noto que ela sorri."
+    )
+
+    _, original_movement = first_frame_movement(source)
+    assert "{{*nome}}" in original_movement.instruction
+    assert "{{**nome}}" in original_movement.instruction
+
+
+def test_personalizacao_de_quadros_fica_isolada_por_usuario() -> None:
+    source = _script()
+    male = personalize_editorial_script(
+        source,
+        {"preferred_name": "Janio", "story_gender": "Como homem"},
+    )
+    neutral = personalize_editorial_script(
+        source,
+        {"preferred_name": "Alex", "story_gender": "De forma neutra"},
+    )
+
+    _, male_movement = first_frame_movement(male)
+    _, neutral_movement = first_frame_movement(neutral)
+    assert "o Janio" in male_movement.instruction
+    assert "ele sorri" in male_movement.instruction
+    assert "Alex no carro" in neutral_movement.instruction
+    assert "Alex sorri" in neutral_movement.instruction

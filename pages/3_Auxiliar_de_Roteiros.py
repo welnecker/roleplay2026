@@ -121,23 +121,31 @@ def _render_name_placeholder_button() -> None:
         """
         <style>
           html, body { margin:0; padding:0; background:transparent; }
-          #copy-name { width:100%; min-height:40px; padding:.55rem .75rem;
+          .buttons { display:grid; grid-template-columns:repeat(3,1fr); gap:.4rem; }
+          .copy-name { width:100%; min-height:40px; padding:.55rem .5rem;
             border:1px solid #D24369; border-radius:.6rem; background:#D24369;
             color:white; font:600 14px sans-serif; cursor:pointer; }
-          #copy-name.copied { background:#237a57; border-color:#45b789; }
+          .copy-name.copied { background:#237a57; border-color:#45b789; }
         </style>
-        <textarea id="copy-helper" aria-hidden="true" style="position:fixed;left:-9999px;">{{nome}}</textarea>
-        <button id="copy-name" type="button" onclick="copyName()">Copiar {{nome}}</button>
+        <div class="buttons">
+          <button class="copy-name" type="button" data-token="{{nome}}">Copiar {{nome}}</button>
+          <button class="copy-name" type="button" data-token="{{*nome}}">Copiar {{*nome}}</button>
+          <button class="copy-name" type="button" data-token="{{**nome}}">Copiar {{**nome}}</button>
+        </div>
         <script>
-          function copyName(){
-            const button=document.getElementById('copy-name');
-            const helper=document.getElementById('copy-helper');
-            helper.focus(); helper.select(); helper.setSelectionRange(0,helper.value.length);
-            let copied=false; try { copied=document.execCommand('copy'); } catch(e) {}
-            if(!copied && navigator.clipboard){ navigator.clipboard.writeText(helper.value).catch(()=>{}); }
-            button.textContent='Copiado ✓'; button.classList.add('copied');
-            setTimeout(()=>{button.textContent='Copiar {{nome}}';button.classList.remove('copied');},1400);
-          }
+          document.querySelectorAll('.copy-name').forEach((button) => {
+            button.addEventListener('click', () => {
+              const token=button.dataset.token;
+              const helper=document.createElement('textarea');
+              helper.value=token; helper.style.position='fixed'; helper.style.left='-9999px';
+              document.body.appendChild(helper); helper.focus(); helper.select();
+              let copied=false; try { copied=document.execCommand('copy'); } catch(e) {}
+              if(!copied && navigator.clipboard){ navigator.clipboard.writeText(token).catch(()=>{}); }
+              helper.remove(); const original=button.textContent;
+              button.textContent='Copiado ✓'; button.classList.add('copied');
+              setTimeout(()=>{button.textContent=original;button.classList.remove('copied');},1400);
+            });
+          });
         </script>
         """,
         height=44,
@@ -349,11 +357,14 @@ if is_v2:
 else:
     _render_legacy_controls(block_id)
 
-name_button, name_help = st.columns([1, 4])
+name_button, name_help = st.columns([3, 2])
 with name_button:
     _render_name_placeholder_button()
 with name_help:
-    st.caption("Use {{nome}} quando quiser inserir o nome real do protagonista no roteiro.")
+    st.caption(
+        "{{nome}} usa o nome; {{*nome}} usa o/a + nome; "
+        "{{**nome}} usa ele/ela. No tratamento neutro, os três usam somente o nome."
+    )
 
 placeholder = (
     "[DESCRIÇÃO] Camilly e {{nome}} chegam à praia e encontram Renan.\n\n"

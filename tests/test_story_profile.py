@@ -11,6 +11,7 @@ from services.story_profile import (
     opening_with_required_name,
     personalize_editorial_script,
     profile_tags,
+    resolve_profile_text,
 )
 
 
@@ -55,6 +56,41 @@ def test_profile_tags_separa_tratamento_de_anatomia() -> None:
     assert profile_tags(
         {"story_gender": "Como mulher", "body_route": "Corpo masculino"}
     ) == ("MULHER", "CORPO_MASCULINO")
+
+
+def test_placeholders_de_tratamento_masculino() -> None:
+    rendered = resolve_profile_text(
+        "{{nome}} viu {{*nome}}; depois, {{**nome}} entrou.",
+        {"preferred_name": "Janio", "story_gender": "Como homem"},
+    )
+    assert rendered == "Janio viu o Janio; depois, ele entrou."
+
+
+def test_placeholders_de_tratamento_feminino() -> None:
+    rendered = resolve_profile_text(
+        "{{nome}} viu {{*nome}}; depois, {{**nome}} entrou.",
+        {"preferred_name": "Ana", "story_gender": "Como mulher"},
+    )
+    assert rendered == "Ana viu a Ana; depois, ela entrou."
+
+
+def test_placeholders_neutros_usam_somente_o_nome() -> None:
+    rendered = resolve_profile_text(
+        "{{nome}} viu {{*nome}}; depois, {{**nome}} entrou.",
+        {"preferred_name": "Alex", "story_gender": "De forma neutra"},
+    )
+    assert rendered == "Alex viu Alex; depois, Alex entrou."
+
+
+def test_genero_ausente_tem_fallback_neutro_e_perfis_antigos_sao_aceitos() -> None:
+    assert resolve_profile_text(
+        "{{*nome}} disse que {{**nome}} volta.",
+        {"preferred_name": "Dani"},
+    ) == "Dani disse que Dani volta."
+    assert resolve_profile_text(
+        "{{*nome}} disse que {{**nome}} volta.",
+        {"preferred_name": "Bia", "gender": "Mulher"},
+    ) == "a Bia disse que ela volta."
 
 
 def test_variante_corporal_e_mais_especifica_que_tratamento() -> None:

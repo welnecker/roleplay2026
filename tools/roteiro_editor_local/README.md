@@ -15,11 +15,13 @@ O lançador usa primeiro `.venv\Scripts\python.exe`, quando existir. Caso Stream
 1. Informe `package_id`, `script_version`, prefixo dos quadros e atores.
 2. Escreva o roteiro com `[DESCRIÇÃO]`, `[FALA ator]`, `[FALA EXATA ator]`,
    `[FALA INTERPRETADA ator]` e `[PENSAMENTO ator]`.
-3. Clique em **Validar e atualizar estrutura**. O editor usa o compilador V2 oficial para gerar `line_id` e `order`.
-4. Importe várias imagens para atribuí-las, em sequência, às próximas `[DESCRIÇÃO]` sem imagem.
-5. Se necessário, habilite imagens em `[FALA]`/`[PENSAMENTO]` e faça uma atribuição individual.
-6. Defina prefixo e primeiro número da imagem. Exemplo: `camilly` + `1` gera `camilly1.webp`, `camilly2.webp` etc.
-7. Exporte para Excel/TSV/CSV ou salve o pacote completo numa pasta do PC.
+3. Use `{{nome}}` para o nome, `{{*nome}}` para o/a + nome e `{{**nome}}`
+   para ele/ela. No tratamento neutro, os três resultam somente no nome.
+4. Clique em **Validar e atualizar estrutura**. O editor usa o compilador V2 oficial para gerar `line_id` e `order`.
+5. Importe várias imagens para atribuí-las, em sequência, às próximas `[DESCRIÇÃO]` sem imagem.
+6. Se necessário, habilite imagens em `[FALA]`/`[PENSAMENTO]` e faça uma atribuição individual.
+7. Defina prefixo e primeiro número da imagem. Exemplo: `camilly` + `1` gera `camilly1.webp`, `camilly2.webp` etc.
+8. Exporte para Excel/TSV/CSV ou salve o pacote completo numa pasta do PC.
 
 ## Pasta exportada
 

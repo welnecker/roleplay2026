@@ -19,7 +19,7 @@ from services.novel_synced_visual_contract import install as install_synced_visu
 
 
 _RUNTIME_PATH = Path(__file__).with_name("novel_player_runtime.py")
-NOVEL_FRAME_BUILD = "2026-08-25.synced-image-carousel.11"
+NOVEL_FRAME_BUILD = "2026-08-26.synced-image-carousel.12"
 _BUILD_LOGGED = False
 
 
@@ -49,7 +49,9 @@ def _execute_runtime() -> dict[str, Any]:
     if not _BUILD_LOGGED:
         print(
             f"[NOVEL_FRAME_BUILD] {NOVEL_FRAME_BUILD} — "
-            "carrossel imagem+balão sincronizado com foco automático no slide mais recente, enquadramento integral sem crop, balões padronizados com caudas consistentes, onboarding direto após nome e gênero, tipografia editorial, binding de versão e continuidade canônica autoritativa"
+            "carrossel imagem+balão sincronizado, falas exatas/interpretadas, "
+            "placeholders de nome e gênero resolvidos pelo perfil, onboarding direto, "
+            "binding de versão e continuidade canônica autoritativa"
         )
         _BUILD_LOGGED = True
 

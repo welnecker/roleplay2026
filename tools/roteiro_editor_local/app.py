@@ -135,7 +135,7 @@ with st.expander("1. Configuração do roteiro", expanded=True):
 actors = _actors(actors_raw)
 
 st.subheader("2. Escrever roteiro")
-actor_col, desc_col, fala_col, pensamento_col, nome_col = st.columns([2.3, 1, 1, 1, 1])
+actor_col, desc_col, fala_col, pensamento_col = st.columns([2.3, 1, 1, 1])
 with actor_col:
     selected_actor = st.selectbox("Ator para a próxima tag", actors)
 with desc_col:
@@ -156,13 +156,20 @@ with pensamento_col:
     if st.button("+ PENSAMENTO", width="stretch"):
         _append_tag(f"[PENSAMENTO {selected_actor}] ")
         st.rerun()
-with nome_col:
-    st.write("")
-    st.write("")
-    if st.button("+ {{nome}}", width="stretch"):
-        current = str(st.session_state.get(DRAFT_KEY, "") or "")
-        st.session_state[DRAFT_KEY] = current + "{{nome}}"
-        st.rerun()
+
+name_col, article_col, pronoun_col, name_help_col = st.columns([1, 1, 1, 2.3])
+for column, token in (
+    (name_col, "{{nome}}"),
+    (article_col, "{{*nome}}"),
+    (pronoun_col, "{{**nome}}"),
+):
+    with column:
+        if st.button(f"+ {token}", width="stretch"):
+            current = str(st.session_state.get(DRAFT_KEY, "") or "")
+            st.session_state[DRAFT_KEY] = current + token
+            st.rerun()
+with name_help_col:
+    st.caption("nome · o/a + nome · ele/ela; no neutro, somente o nome")
 
 st.text_area(
     "Roteiro",

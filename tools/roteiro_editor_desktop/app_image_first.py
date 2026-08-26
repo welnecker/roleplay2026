@@ -108,7 +108,12 @@ class ScriptEditor(tk.Tk):
         self.actor_combo.pack(side="left", padx=(0, 4))
         ttk.Button(toolbar, text="+ FALA", command=lambda: self.insert_actor_tag("FALA")).pack(side="left", padx=3)
         ttk.Button(toolbar, text="+ PENSAMENTO", command=lambda: self.insert_actor_tag("PENSAMENTO")).pack(side="left", padx=3)
-        ttk.Button(toolbar, text="+ {{nome}}", command=lambda: self.insert_tag("{{nome}}", spacing=False)).pack(side="left", padx=7)
+        for token in ("{{nome}}", "{{*nome}}", "{{**nome}}"):
+            ttk.Button(
+                toolbar,
+                text=f"+ {token}",
+                command=lambda value=token: self.insert_tag(value, spacing=False),
+            ).pack(side="left", padx=3)
         ttk.Button(toolbar, text="Validar / atualizar", command=self.compile_current).pack(side="right")
 
         text_frame = ttk.Frame(left)

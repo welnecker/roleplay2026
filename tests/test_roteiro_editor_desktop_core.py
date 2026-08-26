@@ -81,6 +81,21 @@ def test_exact_and_interpreted_speech_tags_are_preserved_in_export() -> None:
     assert rows[2]["line_id"] == "encontro_001_usuario_balao_fala_01"
 
 
+def test_gendered_name_placeholders_are_preserved_in_export() -> None:
+    rows = core.compile_rows(
+        """[DESCRIÇÃO] Camilly observa {{*nome}}.
+[PENSAMENTO camilly] Será que {{**nome}} lembra de mim?
+[FALA EXATA camilly] Oi, {{nome}}.
+""",
+        package_id="roleplay2026.camilly",
+        script_version="203",
+        frame_prefix="encontro",
+    )
+    assert rows[0]["instruction"] == "[DESCRIÇÃO] Camilly observa {{*nome}}."
+    assert "{{**nome}}" in str(rows[1]["instruction"])
+    assert rows[2]["instruction"] == "[FALA EXATA camilly] Oi, {{nome}}."
+
+
 def test_speech_delivery_requires_actor() -> None:
     try:
         core.parse_draft("[DESCRIÇÃO] Cena.\n[FALA EXATA] Oi.")

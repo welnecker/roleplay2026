@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 from typing import Any, Mapping
 
 from services.editorial_runtime_types import EditorialScript
@@ -34,9 +35,43 @@ def profile_tags(profile: Mapping[str, Any] | None) -> tuple[str, ...]:
     )
 
 
+def _plain(value: Any) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    return "".join(
+        char for char in normalized if not unicodedata.combining(char)
+    ).casefold().strip()
+
+
+def _gendered_name_values(
+    profile: Mapping[str, Any] | None,
+) -> tuple[str, str, str]:
+    source = profile or {}
+    name = str(
+        source.get("preferred_name")
+        or source.get("name")
+        or source.get("user_name")
+        or source.get("nome")
+        or ""
+    ).strip()
+    gender = _plain(source.get("story_gender") or source.get("gender"))
+    if gender in {"como homem", "homem", "masculino", "male"}:
+        return name, f"o {name}".strip(), "ele"
+    if gender in {"como mulher", "mulher", "feminino", "female"}:
+        return name, f"a {name}".strip(), "ela"
+    return name, name, name
+
+
 def resolve_profile_text(text: str, profile: Mapping[str, Any] | None) -> str:
-    name = str((profile or {}).get("preferred_name", "") or "").strip()
-    return str(text or "").replace("{{nome}}", name)
+    """Resolve os marcadores autorais de nome e tratamento do protagonista."""
+
+    name, article_name, pronoun = _gendered_name_values(profile)
+    rendered = str(text or "")
+    # Do marcador mais específico para o mais simples, mantendo o roteiro fonte intacto.
+    return (
+        rendered.replace("{{**nome}}", pronoun)
+        .replace("{{*nome}}", article_name)
+        .replace("{{nome}}", name)
+    )
 
 
 def _selected_variant(variants: Any, tags: tuple[str, ...]) -> str:
@@ -143,6 +178,10 @@ def personalize_editorial_script(
         beat["objective"] = resolve_profile_text(
             str(beat.get("objective", "") or ""), profile
         )
+        if "required_movement" in beat:
+            beat["required_movement"] = resolve_profile_text(
+                str(beat.get("required_movement", "") or ""), profile
+            )
     for ending in scene.get("endings", []) or []:
         if not isinstance(ending, dict):
             continue
