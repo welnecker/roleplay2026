@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 
@@ -13,6 +13,25 @@ def _existing_path(value: object) -> str:
     if path.exists() and path.is_file():
         return str(path)
     return ""
+
+
+def _saved_basename(value: object) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    return PureWindowsPath(raw).name or PurePosixPath(raw).name
+
+
+def _reference_directory_files(payload: dict[str, Any]) -> dict[str, Path]:
+    raw = str(payload.get("reference_directory", "") or "").strip()
+    directory = Path(raw)
+    if not raw or not directory.is_dir():
+        return {}
+    return {
+        candidate.name.casefold(): candidate
+        for candidate in directory.iterdir()
+        if candidate.is_file()
+    }
 
 
 def restore_project_image_state(
@@ -53,11 +72,18 @@ def restore_project_image_state(
         if clean and clean not in image_ids:
             image_ids.append(clean)
 
+    reference_files_by_name = _reference_directory_files(restored)
     resolved_sources: dict[str, str] = {}
     for image_id in image_ids:
         original = _existing_path(raw_sources.get(image_id, ""))
         if original:
             resolved_sources[image_id] = original
+            continue
+
+        saved_basename = _saved_basename(raw_sources.get(image_id, ""))
+        relocated = reference_files_by_name.get(saved_basename.casefold())
+        if relocated is not None:
+            resolved_sources[image_id] = str(relocated)
             continue
 
         candidates = (

@@ -66,6 +66,35 @@ def test_restore_recovers_exported_images_when_original_paths_are_stale(tmp_path
     assert restored["description_bindings"]["1"]["source"] == str(exported)
 
 
+def test_restore_recovers_assigned_source_from_selected_reference_directory(
+    tmp_path: Path,
+) -> None:
+    gallery = tmp_path / "nova_pasta"
+    gallery.mkdir()
+    relocated = gallery / "Foto Da Cena.JPG"
+    relocated.write_bytes(b"imagem")
+    project = tmp_path / "roteiro.json"
+
+    payload = {
+        "reference_directory": str(gallery),
+        "image_map": {"encontro_020_descricao": "camilly20.webp"},
+        "image_sources": {
+            "camilly20.webp": r"C:\pasta-antiga\Foto Da Cena.JPG"
+        },
+        "description_bindings": {
+            "20": {
+                "source": r"C:\pasta-antiga\Foto Da Cena.JPG",
+                "image_id": "camilly20.webp",
+            }
+        },
+    }
+
+    restored = module.restore_project_image_state(payload, project_path=project)
+
+    assert restored["image_sources"] == {"camilly20.webp": str(relocated)}
+    assert restored["description_bindings"]["20"]["source"] == str(relocated)
+
+
 def test_restore_supports_older_project_with_image_map_but_no_sources(tmp_path: Path) -> None:
     project_dir = tmp_path / "projeto"
     images_dir = project_dir / "imagens"

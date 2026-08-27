@@ -12,6 +12,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 from core import compile_rows, export_package, load_project, normalize_image_name, save_project, slugify  # noqa: E402
+from image_sequence import next_image_number as calculate_next_image_number  # noqa: E402
 
 try:
     from PIL import Image, ImageTk
@@ -271,13 +272,16 @@ class ScriptEditor(tk.Tk):
         self.insert_tag(f"[{kind} {slugify(self.actor_var.get(), 'usuario')}] ")
 
     def next_image_number(self) -> int:
-        import re
-        prefix=slugify(self.image_prefix_var.get(), "imagem"); start=int(self.image_start_var.get()); used=[]
-        pattern=re.compile(rf"^{re.escape(prefix)}(\d+)\.webp$", re.I)
-        for image_id in self.image_sources:
-            m=pattern.match(image_id)
-            if m: used.append(int(m.group(1)))
-        return max([start-1, *used])+1
+        return calculate_next_image_number(
+            slugify(self.image_prefix_var.get(), "imagem"),
+            int(self.image_start_var.get()),
+            image_source_ids=self.image_sources,
+            mapped_image_ids=self.image_map.values(),
+            binding_image_ids=(
+                binding.get("image_id", "")
+                for binding in self.description_bindings.values()
+            ),
+        )
 
     def build_image_map(self, rows):
         result=dict(self.image_map)
