@@ -24,6 +24,10 @@ from services.immersive_onboarding import (
     restore_profile_for_run,
 )
 from services.novel_frame_runtime_support import first_frame_movement, is_frame_script
+from services.novel_frame_output_contract import (
+    FrameOutputContractError,
+    enforce_frame_output_contract,
+)
 from services.novel_runtime_conflict import persisted_movement_at_sequence
 from services.novel_v2_adapter import build_novel_prompt, movement_from_script, next_movement_id
 from services.paid_run_access import finish_active_run, get_paid_run_access, terminate_paid_access
@@ -266,14 +270,29 @@ def generate_movement_text(*, movement, user_name: str, profile: object, message
         for item in messages[-8:]
         if str(item.get("role", "")) == "assistant"
     ]
-    return generate_response(
-        api_key=api_key,
-        model=model,
-        system_prompt=system_prompt + private_context,
-        history=history,
-        user_text="Avance a novela executando somente o movimento atual.",
-        debug_logging=not bool(private_context),
-    ).strip()
+    last_contract_error: FrameOutputContractError | None = None
+    for attempt in range(2):
+        user_instruction = "Avance a novela executando somente o movimento atual."
+        if attempt:
+            user_instruction += (
+                " A resposta anterior violou a correspondência 1:1. "
+                "Emita exatamente as entries autorais, na mesma ordem, sem acrescentar nenhuma."
+            )
+        generated = generate_response(
+            api_key=api_key,
+            model=model,
+            system_prompt=system_prompt + private_context,
+            history=history,
+            user_text=user_instruction,
+            debug_logging=not bool(private_context),
+        ).strip()
+        try:
+            return enforce_frame_output_contract(movement, generated)
+        except FrameOutputContractError as exc:
+            last_contract_error = exc
+    raise RuntimeError(
+        f"O modelo não respeitou a estrutura obrigatória do quadro: {last_contract_error}"
+    )
 
 
 def persist_movement(
