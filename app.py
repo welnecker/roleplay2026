@@ -9,11 +9,11 @@ from packages.engine_adapter import StoryEngineAdapterError, adapt_story_definit
 from packages.loader import StoryPackageError, discover_packages
 from packages.models import InstalledStoryPackage
 from packages.story_content import StoryContentError, load_story_content
-from persistence.accounts import GoogleSheetsAccountRepository
+from persistence.accounts import GoogleSheetsAccountRepository, build_account_repository
 from persistence.factory import build_google_sheets_repository
 from persistence.google_sheets import GoogleSheetsRuntimeRepository
 from persistence.models import ConcurrentSaveUpdateError
-from platform_core.auth import AuthenticatedUser, authenticate_demo
+from platform_core.auth import AuthenticatedUser, authenticate_demo, demo_auth_allowed
 from platform_core.catalog import load_demo_catalog
 from platform_core.models import AccessStatus, ProgressStatus, StoryCard
 from roleplay.engine import StoryEngine
@@ -64,13 +64,8 @@ def runtime_repository() -> tuple[GoogleSheetsRuntimeRepository | None, str]:
 
 @st.cache_resource(show_spinner=False)
 def account_repository() -> tuple[GoogleSheetsAccountRepository | None, str]:
-    runtime, error = runtime_repository()
-    if runtime is None:
-        return None, error
     try:
-        repository = GoogleSheetsAccountRepository(runtime.spreadsheet)
-        repository.ensure_schema()
-        return repository, ""
+        return build_account_repository(st.secrets), ""
     except Exception as exc:
         return None, str(exc)
 
@@ -90,7 +85,12 @@ def initialize_state() -> None:
 
 def current_user() -> AuthenticatedUser | None:
     value = st.session_state.authenticated_user
-    return value if isinstance(value, AuthenticatedUser) else None
+    if not isinstance(value, AuthenticatedUser):
+        return None
+    if value.user_id.startswith("demo:") and not demo_auth_allowed(st.secrets):
+        st.session_state.authenticated_user = None
+        return None
+    return value
 
 
 def installed_packages() -> tuple[dict[str, InstalledStoryPackage], list[str]]:
@@ -205,8 +205,10 @@ def render_login() -> None:
                 if repository is not None:
                     account = repository.authenticate(email=email, password=password)
                     user = _to_authenticated_user(account) if account is not None else None
-                else:
+                elif demo_auth_allowed(st.secrets):
                     user = authenticate_demo(email, password)
+                else:
+                    user = None
                 if user is None:
                     st.error("E-mail ou senha inválidos.")
                 else:
@@ -249,10 +251,15 @@ def render_login() -> None:
                             st.rerun()
 
         if account_error:
-            st.caption(
-                "Google Sheets indisponível. O login demonstrativo permanece ativo nesta execução: "
-                f"{account_error}"
-            )
+            if demo_auth_allowed(st.secrets):
+                st.caption(
+                    f"Modo local demonstrativo ativo nesta execução: {account_error}"
+                )
+            else:
+                st.error(
+                    "O serviço de contas está temporariamente indisponível. "
+                    "O login demonstrativo permanece desativado por segurança."
+                )
         elif repository is None:
             st.caption("Modo local: qualquer e-mail válido e senha não vazia permitem o acesso.")
         else:

@@ -60,6 +60,24 @@ class AccountUser:
     status: str
 
 
+def build_account_repository(secrets: Any) -> "GoogleSheetsAccountRepository":
+    """Abre autenticação diretamente na base autoritativa de contas e cobrança."""
+
+    credentials = secrets.get("gcp_service_account")
+    if not credentials:
+        raise ValueError("Google Sheets não está configurado para autenticação.")
+    spreadsheet_id = str(
+        secrets.get("ROLEPLAY_ACCOUNTS_BILLING_SPREADSHEET_ID", "") or ""
+    ).strip()
+    if not spreadsheet_id:
+        raise ValueError("ID da planilha de contas e cobrança não configurado.")
+    client = gspread.service_account_from_dict(dict(credentials))
+    spreadsheet = client.open_by_key(spreadsheet_id)
+    repository = GoogleSheetsAccountRepository(spreadsheet)
+    repository.ensure_schema()
+    return repository
+
+
 class GoogleSheetsAccountRepository:
     _paid_access_resolver: ClassVar[PaidAccessResolver | None] = None
     _billing_spreadsheet: ClassVar[Spreadsheet | None] = None
