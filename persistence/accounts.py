@@ -13,6 +13,7 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from gspread import Spreadsheet, Worksheet
 from gspread.exceptions import APIError
 
+from persistence.google_sheets_retry import with_transient_retry
 from persistence.models import new_id, utc_now_iso
 
 USERS_SHEET = "USERS"
@@ -72,7 +73,7 @@ def build_account_repository(secrets: Any) -> "GoogleSheetsAccountRepository":
     if not spreadsheet_id:
         raise ValueError("ID da planilha de contas e cobrança não configurado.")
     client = gspread.service_account_from_dict(dict(credentials))
-    spreadsheet = client.open_by_key(spreadsheet_id)
+    spreadsheet = with_transient_retry(lambda: client.open_by_key(spreadsheet_id))
     repository = GoogleSheetsAccountRepository(spreadsheet)
     repository.ensure_schema()
     return repository

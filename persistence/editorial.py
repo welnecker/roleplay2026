@@ -6,6 +6,7 @@ from typing import Any
 import gspread
 from gspread import Spreadsheet, Worksheet
 
+from persistence.google_sheets_retry import with_transient_retry
 from persistence.models import utc_now_iso
 from persistence.v2_schemas import EDITORIAL_SCHEMAS
 
@@ -25,7 +26,7 @@ class GoogleSheetsEditorialRepository:
         spreadsheet_id: str,
     ) -> "GoogleSheetsEditorialRepository":
         client = gspread.service_account_from_dict(credentials)
-        return cls(client.open_by_key(spreadsheet_id))
+        return cls(with_transient_retry(lambda: client.open_by_key(spreadsheet_id)))
 
     def ensure_schema(self) -> None:
         for name, headers in EDITORIAL_SCHEMAS.items():
