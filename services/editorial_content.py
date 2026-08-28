@@ -199,7 +199,6 @@ def load_effective_editorial_document(
 ) -> dict[str, Any]:
     """Prefere ROTEIROS e preserva o YAML como fallback de migração."""
 
-    ensure_editorial_package(secrets, package)
     script_repository = build_runtime_script_repository(secrets)
     base_document = load_editorial_document(package)
     script_version, rows = script_repository.load_active_story_lines(

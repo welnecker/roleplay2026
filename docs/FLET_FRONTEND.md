@@ -15,7 +15,11 @@ interface funcional e nenhum fluxo de produção foi substituído.
 - tela de login conectável à API autenticada;
 - biblioteca responsiva com capas e metadados dos cards instalados;
 - capas servidas pela API como arquivos HTTP, sem Base64 no cliente;
-- navegação da biblioteca para o quadro demonstrativo.
+- Pix real e pagamento interno master executados somente no servidor;
+- abertura/retomada de `STORY_RUNS`, `SESSIONS` e `INTERACTIONS`;
+- roteiro ativo carregado de `ROLEPLAY_RUNTIME.ROTEIROS`;
+- checkpoint da revelação persistido em `INTERACTIONS.metadata_json`;
+- geração do próximo quadro somente depois da revelação completa.
 
 ## Executar no desktop
 
@@ -36,9 +40,8 @@ Também existe uma entrada ASGI, compatível com Uvicorn:
 uvicorn flet_client.asgi:app --host 0.0.0.0 --port 8000
 ```
 
-O quadro atual é demonstrativo. A etapa seguinte criará a API autenticada que
-entregará ao Flet os quadros persistidos pelo runtime existente. Secrets,
-OpenRouter, Google Sheets e pagamentos permanecerão no servidor.
+Não existem mais `DEMO_FRAME` ou `DEMO_IMAGE` no cliente. Secrets, OpenRouter,
+Google Sheets e pagamentos permanecem exclusivamente no servidor.
 
 ## API autenticada inicial
 
@@ -55,6 +58,10 @@ Contrato inicial:
 - `GET /api/v1/auth/me`: revalida a identidade da sessão;
 - `POST /api/v1/auth/logout`: revoga a sessão atual;
 - `GET /api/v1/catalog`: retorna cards reais como `free`, `owned` ou `locked`.
+- `POST /api/v1/payments/*`: cria/confere Pix ou pagamento master autorizado;
+- `POST /api/v1/runs/open`: abre ou retoma a run e devolve o quadro persistido;
+- `POST /api/v1/runs/reveal`: salva o checkpoint visual do quadro;
+- `POST /api/v1/runs/advance`: valida o checkpoint e gera o próximo quadro.
 
 O token é opaco, expira no servidor e pode ser revogado. Esta primeira versão
 mantém as sessões em memória; reinícios do processo encerram as sessões, sem
@@ -73,8 +80,8 @@ python -m flet_client.main
 
 O login envia e-mail e senha para `POST /api/v1/auth/login`, guarda o Bearer
 somente no processo atual e carrega `GET /api/v1/catalog`. As capas usam URLs
-como `/api/v1/catalog/{package_id}/cover`. Cards bloqueados permanecem
-desabilitados; o cliente não cria entitlements nem simula pagamento.
+como `/api/v1/catalog/{package_id}/cover`. O cliente nunca cria créditos ou
+entitlements: ele solicita as operações ao servidor autenticado.
 
 Para um teste local completo, a API deve rodar em outro terminal com os secrets
 do servidor configurados:
@@ -84,5 +91,13 @@ uvicorn flet_api.asgi:app --host 127.0.0.1 --port 8001
 ```
 
 Sem `ROLEPLAY_FLET_API_URL`, ou sem uma API acessível, a tela permanece no login
-e apresenta uma mensagem de configuração/conexão. O player ainda usa um quadro
-demonstrativo; abertura e retomada de runs serão integradas na próxima etapa.
+e apresenta uma mensagem de configuração/conexão.
+
+## Fontes autoritativas
+
+- `ROLEPLAY_ACCOUNTS_BILLING`: `USERS`, `USER_CREDENTIALS`, `STORY_CREDITS`,
+  `PAYMENT_ORDERS`, `PAYMENT_EVENTS` e `WEBHOOK_EVENTS`;
+- `ROLEPLAY_RUNTIME`: `ROTEIROS`, `STORY_RUNS`, `SESSIONS` e `INTERACTIONS`.
+
+`ROLEPLAY_EDITORIAL_SPREADSHEET_ID` é compatível, mas deixou de ser obrigatório;
+quando ausente, o runtime usa o próprio `ROLEPLAY_RUNTIME` para `ROTEIROS`.

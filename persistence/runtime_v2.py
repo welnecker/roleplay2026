@@ -393,6 +393,54 @@ class GoogleSheetsV2RuntimeRepository:
                 break
         return result
 
+    def persist_frame_reveal(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        package_id: str,
+        frame_id: str,
+        revealed_entries: int,
+    ) -> int:
+        """Atualiza o checkpoint visual na interação assistente do quadro atual."""
+
+        rows = self._interaction_rows_for_owner(
+            run_id=run_id,
+            user_id=user_id,
+            package_id=package_id,
+        )
+        indexed = list(enumerate(rows))
+        indexed.sort(key=lambda item: int(item[1].get("sequence", 0) or 0), reverse=True)
+        for _index, row in indexed:
+            if str(row.get("role", "")) != "assistant":
+                continue
+            content = str(row.get("content", "") or "")
+            from services.novel_frame_reveal import frame_entry_count, frame_id as content_frame_id
+
+            if content_frame_id(content) != frame_id:
+                continue
+            total = frame_entry_count(content)
+            value = min(max(0, int(revealed_entries)), total)
+            raw = str(row.get("metadata_json", "") or "")
+            try:
+                metadata = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                metadata = {}
+            if not isinstance(metadata, dict):
+                metadata = {}
+            previous = int(metadata.get("flet_revealed_entries", 0) or 0)
+            metadata["flet_revealed_entries"] = max(previous, value)
+            updated = dict(row)
+            updated["metadata_json"] = json.dumps(
+                metadata, ensure_ascii=False, separators=(",", ":")
+            )
+            found = self.interactions.table.find("interaction_id", str(row.get("interaction_id", "")))
+            if found is None:
+                raise RuntimeConflictError("Interação do quadro não foi encontrada para checkpoint.")
+            self.interactions.table.replace(found[0], updated)
+            return int(metadata["flet_revealed_entries"])
+        raise RuntimeConflictError("Quadro atual não encontrado em INTERACTIONS.")
+
     def update_run_progress(
         self,
         *,

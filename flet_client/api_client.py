@@ -31,6 +31,18 @@ class ApiPayment:
     master_test_available: bool
 
 
+@dataclass(frozen=True, slots=True)
+class ApiRunFrame:
+    run_id: str
+    package_id: str
+    frame_id: str
+    content: str
+    image_url: str
+    revealed_entries: int
+    entry_count: int
+    finished: bool
+
+
 class FletApiClient:
     def __init__(
         self,
@@ -161,6 +173,55 @@ class FletApiClient:
             )
         )
 
+    @staticmethod
+    def _run_frame(response: requests.Response) -> ApiRunFrame:
+        payload = response.json()
+        if not isinstance(payload, dict) or not payload.get("frame_id"):
+            raise FletApiError("Resposta de run inválida.")
+        return ApiRunFrame(
+            run_id=str(payload.get("run_id", "") or ""),
+            package_id=str(payload.get("package_id", "") or ""),
+            frame_id=str(payload.get("frame_id", "") or ""),
+            content=str(payload.get("content", "") or ""),
+            image_url=str(payload.get("image_url", "") or ""),
+            revealed_entries=int(payload.get("revealed_entries", 0) or 0),
+            entry_count=int(payload.get("entry_count", 0) or 0),
+            finished=bool(payload.get("finished", False)),
+        )
+
+    def open_run(self, package_id: str) -> ApiRunFrame:
+        return self._run_frame(
+            self._request("POST", "/api/v1/runs/open", json={"package_id": package_id})
+        )
+
+    def advance_run(
+        self,
+        *,
+        package_id: str,
+        frame_id: str,
+        revealed_entries: int,
+    ) -> ApiRunFrame:
+        return self._run_frame(
+            self._request(
+                "POST",
+                "/api/v1/runs/advance",
+                json={
+                    "package_id": package_id,
+                    "frame_id": frame_id,
+                    "revealed_entries": revealed_entries,
+                },
+            )
+        )
+
+    def reveal_run_entry(self, *, package_id: str, frame_id: str) -> ApiRunFrame:
+        return self._run_frame(
+            self._request(
+                "POST",
+                "/api/v1/runs/reveal",
+                json={"package_id": package_id, "frame_id": frame_id},
+            )
+        )
+
     def logout(self) -> None:
         if not self.access_token:
             return
@@ -170,4 +231,4 @@ class FletApiClient:
             self.access_token = ""
 
 
-__all__ = ["ApiPayment", "ApiUser", "FletApiClient", "FletApiError"]
+__all__ = ["ApiPayment", "ApiRunFrame", "ApiUser", "FletApiClient", "FletApiError"]

@@ -129,3 +129,32 @@ def test_cliente_flet_cria_e_confere_pagamento_pix() -> None:
     assert approved.approved is True
     assert session.calls[0][2]["json"] == {"package_id": "roleplay2026.camilly"}
     assert session.calls[1][2]["json"] == {"payment_order_id": "pay-1"}
+
+
+def test_cliente_flet_abre_e_avanca_run_real() -> None:
+    first = {
+        "run_id": "run-1",
+        "package_id": "roleplay2026.camilly",
+        "frame_id": "quadro-1",
+        "content": "[QUADRO quadro-1]\n[DESCRIÇÃO]\nCena.\n[/QUADRO]",
+        "image_url": "https://api.example.com/api/v1/runs/image",
+        "revealed_entries": 0,
+        "entry_count": 0,
+        "finished": False,
+    }
+    session = FakeSession(
+        [FakeResponse(200, first), FakeResponse(200, {**first, "frame_id": "quadro-2"})]
+    )
+    client = FletApiClient("https://api.example.com", session=session)  # type: ignore[arg-type]
+    client.access_token = "token"
+
+    opened = client.open_run("roleplay2026.camilly")
+    advanced = client.advance_run(
+        package_id=opened.package_id,
+        frame_id=opened.frame_id,
+        revealed_entries=opened.entry_count,
+    )
+
+    assert opened.run_id == "run-1"
+    assert advanced.frame_id == "quadro-2"
+    assert session.calls[1][2]["json"]["frame_id"] == "quadro-1"

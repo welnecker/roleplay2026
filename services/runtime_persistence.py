@@ -235,11 +235,12 @@ def _ensure_run_and_session(
     *,
     context: RuntimePersistenceContext,
     user: AuthenticatedUser,
+    secrets: object | None = None,
 ) -> tuple[StoryRun, RuntimeSession]:
     run = context.run
     if run is None:
         run = start_v2_run_on_first_message(
-            secrets=st.secrets,
+            secrets=st.secrets if secrets is None else secrets,
             user_id=user.user_id,
             package_id=context.package_id,
             installed_stories_root=INSTALLED_STORIES_ROOT,
@@ -369,6 +370,7 @@ def persist_opening_message(
     state: StoryState,
     assistant_text: str,
     assistant_metadata: dict[str, object],
+    secrets: object | None = None,
 ) -> RuntimePersistenceContext:
     """Persiste a abertura exibida, uma única vez por run.
 
@@ -377,7 +379,9 @@ def persist_opening_message(
     outra linha.
     """
 
-    run, session = _ensure_run_and_session(repository, context=context, user=user)
+    run, session = _ensure_run_and_session(
+        repository, context=context, user=user, secrets=secrets
+    )
     block_id, node_id = _editorial_location(assistant_metadata, run)
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)
@@ -428,10 +432,13 @@ def persist_assistant_message(
     state: StoryState,
     assistant_text: str,
     assistant_metadata: dict[str, object],
+    secrets: object | None = None,
 ) -> RuntimePersistenceContext:
     """Registra uma ponte automática de Mary sem inventar uma fala do usuário."""
 
-    run, session = _ensure_run_and_session(repository, context=context, user=user)
+    run, session = _ensure_run_and_session(
+        repository, context=context, user=user, secrets=secrets
+    )
     block_id, beat_id = _editorial_location(assistant_metadata, run)
     persisted_metadata = dict(assistant_metadata)
     persisted_metadata["_story_state"] = serialize_story_state(state)

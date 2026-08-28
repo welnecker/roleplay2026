@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from flet_api.sessions import SessionStore
 from flet_api.payments import PaymentGateway, PaymentState, build_payment_gateway
+from flet_api.runs import FletRunService, RunFrame
 from persistence.accounts import AccountUser, build_account_repository
 from platform_core.catalog import INSTALLED_STORIES_ROOT, cover_file_for_package, load_demo_catalog
 from platform_core.models import AccessStatus, StoryCard
@@ -92,6 +93,32 @@ class PaymentResponse(BaseModel):
     master_test_available: bool = False
 
 
+class RunOpenRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    package_id: str
+
+
+class RunAdvanceRequest(RunOpenRequest):
+    frame_id: str
+    revealed_entries: int
+
+
+class RunRevealRequest(RunOpenRequest):
+    frame_id: str
+
+
+class RunFrameResponse(BaseModel):
+    run_id: str
+    package_id: str
+    frame_id: str
+    content: str
+    image_url: str
+    revealed_entries: int
+    entry_count: int
+    finished: bool
+
+
 @dataclass(slots=True)
 class ApiServices:
     accounts: AccountRepository
@@ -101,6 +128,7 @@ class ApiServices:
     payment_gateway: PaymentGateway | None = None
     paid_access_resolver: Callable[[str, str], bool] | None = None
     paid_access_primer: Callable[[str, str], None] | None = None
+    run_service: FletRunService | None = None
 
 
 def _user_response(user: AccountUser) -> UserResponse:
@@ -150,6 +178,22 @@ def _payment_response(
         qr_code_base64=state.qr_code_base64,
         ticket_url=state.ticket_url,
         master_test_available=master_test_available,
+    )
+
+
+def _run_response(frame: RunFrame, request: Request) -> RunFrameResponse:
+    image_url = frame.image_url
+    if image_url.startswith("/"):
+        image_url = str(request.base_url).rstrip("/") + image_url
+    return RunFrameResponse(
+        run_id=frame.run_id,
+        package_id=frame.package_id,
+        frame_id=frame.frame_id,
+        content=frame.content,
+        image_url=image_url,
+        revealed_entries=frame.revealed_entries,
+        entry_count=frame.entry_count,
+        finished=frame.finished,
     )
 
 
@@ -321,6 +365,84 @@ def create_api_app(services: ApiServices) -> FastAPI:
             master_test_available=gateway.master_test_available(user_id=user.user_id),
         )
 
+    def run_service() -> FletRunService:
+        if services.run_service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Runtime ainda não está configurado neste servidor.",
+            )
+        return services.run_service
+
+    @app.post("/api/v1/runs/open", response_model=RunFrameResponse)
+    def open_run(
+        payload: RunOpenRequest,
+        request: Request,
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> RunFrameResponse:
+        user, _token = identity
+        selected_card = next(
+            (card for card in services.catalog_loader() if card.package_id == payload.package_id),
+            None,
+        )
+        if selected_card is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="História não encontrada.")
+        is_free = selected_card.access_status == AccessStatus.FREE
+        if (
+            not is_free
+            and services.paid_access_resolver is not None
+            and not services.paid_access_resolver(user.user_id, payload.package_id)
+        ):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="História sem acesso liberado.")
+        try:
+            frame = run_service().open(account=user, package_id=payload.package_id)
+        except (KeyError, ValueError, PermissionError, RuntimeError) as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc).strip("'")) from exc
+        return _run_response(frame, request)
+
+    @app.post("/api/v1/runs/advance", response_model=RunFrameResponse)
+    def advance_run(
+        payload: RunAdvanceRequest,
+        request: Request,
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> RunFrameResponse:
+        user, _token = identity
+        try:
+            frame = run_service().advance(
+                account=user,
+                package_id=payload.package_id,
+                expected_frame_id=payload.frame_id,
+                revealed_entries=payload.revealed_entries,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        except (KeyError, ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc).strip("'")) from exc
+        return _run_response(frame, request)
+
+    @app.post("/api/v1/runs/reveal", response_model=RunFrameResponse)
+    def reveal_run_entry(
+        payload: RunRevealRequest,
+        request: Request,
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> RunFrameResponse:
+        user, _token = identity
+        try:
+            frame = run_service().reveal(
+                account=user,
+                package_id=payload.package_id,
+                expected_frame_id=payload.frame_id,
+            )
+        except (KeyError, ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc).strip("'")) from exc
+        return _run_response(frame, request)
+
+    @app.get("/api/v1/runs/image")
+    def run_image(package_id: str, node_id: str) -> FileResponse:
+        image = run_service().image(package_id=package_id, node_id=node_id)
+        if image is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imagem não encontrada.")
+        return FileResponse(image)
+
     return app
 
 
@@ -342,6 +464,7 @@ def production_app() -> FastAPI:
                     accounts=accounts,
                     stories_root=INSTALLED_STORIES_ROOT,
                 )
+                run_gateway = FletRunService(secrets)
 
                 def has_paid_access(user_id: str, package_id: str) -> bool:
                     from services.paid_run_access import get_paid_run_access
@@ -370,6 +493,7 @@ def production_app() -> FastAPI:
                         payment_gateway=payment_gateway,
                         paid_access_resolver=has_paid_access,
                         paid_access_primer=prime_paid_access,
+                        run_service=run_gateway,
                     )
                 )
     return _production_app

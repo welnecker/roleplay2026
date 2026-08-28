@@ -53,11 +53,17 @@ class NovelFrameView:
         frame: VisualFrame,
         *,
         image: bytes | str | None = None,
+        revealed_entries: int = 0,
         on_frame_complete: Callable[[], None] | None = None,
+        on_reveal: Callable[[int], None] | None = None,
     ) -> None:
         self.page = page
-        self.controller = FrameRevealController(frame)
+        self.controller = FrameRevealController(
+            frame,
+            revealed_entries=revealed_entries,
+        )
         self.on_frame_complete = on_frame_complete
+        self.on_reveal = on_reveal
         self.track = ft.Row(spacing=14, scroll=ft.ScrollMode.AUTO)
         self.progress = ft.Text(size=12, color="#D6E5E3")
         self.advance_button = ft.FilledButton(
@@ -132,5 +138,6 @@ class NovelFrameView:
             if self.on_frame_complete is not None:
                 self.on_frame_complete()
             return
+        if self.on_reveal is not None:
+            self.on_reveal(self.controller.revealed_entries)
         self._refresh()
-

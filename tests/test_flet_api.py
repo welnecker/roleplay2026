@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from flet_api.app import ApiServices, create_api_app
 from flet_api.payments import PaymentState
+from flet_api.runs import RunFrame
 from flet_api.sessions import SessionStore
 from persistence.accounts import AccountUser
 from platform_core.models import AccessStatus, ProgressStatus, StoryCard
@@ -58,6 +59,27 @@ class FakePayments:
         return PaymentState("story.locked", payment_order_id, "approved", True)
 
 
+class FakeRuns:
+    def open(self, *, account: AccountUser, package_id: str) -> RunFrame:
+        return RunFrame(
+            "run-1",
+            package_id,
+            "quadro-1",
+            "[QUADRO quadro-1]\n[DESCRIÇÃO]\nCena real.\n[FALA mary|Mary]\nOlá.\n[/QUADRO]",
+            "",
+            1,
+            1,
+        )
+
+    def advance(self, **kwargs) -> RunFrame:
+        if kwargs["revealed_entries"] < 1:
+            raise PermissionError("Revele todas as falas.")
+        return RunFrame("run-1", kwargs["package_id"], "quadro-2", "[QUADRO quadro-2]\n[DESCRIÇÃO]\nContinuação.\n[/QUADRO]", "", 0, 0)
+
+    def image(self, *, package_id: str, node_id: str):
+        return None
+
+
 def card(package_id: str, access: AccessStatus) -> StoryCard:
     return StoryCard(
         package_id=package_id,
@@ -92,6 +114,7 @@ def client(*, entitled_packages: set[str] | None = None) -> tuple[TestClient, Fa
             paid_access_primer=lambda user_id, package_id: primed.append(
                 (user_id, package_id)
             ),
+            run_service=FakeRuns(),  # type: ignore[arg-type]
         )
     )
     app.state.primed_access = primed
@@ -219,3 +242,30 @@ def test_inactive_user_invalidates_existing_session() -> None:
     )
 
     assert response.status_code == 401
+
+
+def test_run_abre_quadro_persistido_e_bloqueia_avanco_antecipado() -> None:
+    test_client, _accounts = client()
+    token = login(test_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    opened = test_client.post(
+        "/api/v1/runs/open",
+        headers=headers,
+        json={"package_id": "story.free"},
+    )
+    blocked = test_client.post(
+        "/api/v1/runs/advance",
+        headers=headers,
+        json={"package_id": "story.free", "frame_id": "quadro-1", "revealed_entries": 0},
+    )
+    advanced = test_client.post(
+        "/api/v1/runs/advance",
+        headers=headers,
+        json={"package_id": "story.free", "frame_id": "quadro-1", "revealed_entries": 1},
+    )
+
+    assert opened.status_code == 200
+    assert opened.json()["frame_id"] == "quadro-1"
+    assert blocked.status_code == 403
+    assert advanced.json()["frame_id"] == "quadro-2"
