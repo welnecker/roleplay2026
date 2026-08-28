@@ -14,17 +14,18 @@ SPEECH_COLORS = ("#ED8BAE", "#F1B5CB", "#F0CFDD", "#F3D5E6")
 TEXT_COLOR = "#2B1822"
 
 
-def _entry_card(entry: VisualEntry, index: int) -> ft.Control:
+def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
     is_thought = entry.kind == "pensamento"
     label = entry.visible_name or entry.actor or "Personagem"
     card_color = "#F7DFEA" if is_thought else SPEECH_COLORS[index % len(SPEECH_COLORS)]
+    border = ft.Border.all(2, "#8F6475") if is_thought else None
     card = ft.Container(
-        width=360,
-        margin=ft.Margin.only(left=11, right=11),
+        width=width,
+        margin=ft.Margin.only(left=11, right=11, bottom=14),
         padding=18,
         border_radius=22,
         bgcolor=card_color,
-        border=ft.Border.all(2, "#8F6475") if is_thought else None,
+        border=border,
         shadow=ft.BoxShadow(blur_radius=14, color="#33000000", offset=ft.Offset(0, 5)),
         content=ft.Column(
             spacing=8,
@@ -47,20 +48,34 @@ def _entry_card(entry: VisualEntry, index: int) -> ft.Control:
     )
     tail_on_right = index % 2 == 1
     tail = ft.Container(
-        width=23,
-        height=23,
-        left=None if tail_on_right else 1,
-        right=1 if tail_on_right else None,
-        top=38,
+        width=24,
+        height=24,
+        left=None if tail_on_right else 42,
+        right=42 if tail_on_right else None,
+        bottom=2,
         bgcolor=card_color,
-        border=ft.Border.all(2, "#8F6475") if is_thought else None,
+        border=border,
         rotate=ft.Rotate(angle=math.pi / 4),
     )
     return ft.Stack(
         controls=[tail, card],
-        width=382,
+        width=width + 22,
         clip_behavior=ft.ClipBehavior.NONE,
     )
+
+
+def _slide_width(viewport_width: float | None) -> float:
+    """Replica o contrato do carrossel: tela cheia no mobile e faixa no desktop."""
+
+    width = float(viewport_width or 390)
+    usable = max(280.0, width - 52.0)
+    if width < 900:
+        return min(usable, 720.0)
+    return min(760.0, max(420.0, width * 0.72))
+
+
+def _image_height(slide_width: float) -> float:
+    return min(460.0, max(230.0, slide_width * 0.58))
 
 
 class NovelFrameView:
@@ -87,7 +102,13 @@ class NovelFrameView:
         self.base_image = image
         self.entry_images = tuple(entry_images)
         self._busy = False
-        self.track = ft.Row(spacing=14, scroll=ft.ScrollMode.AUTO)
+        self.slide_width = _slide_width(getattr(page, "width", None))
+        self.track = ft.Row(
+            spacing=14,
+            scroll=ft.ScrollMode.AUTO,
+            auto_scroll=True,
+            vertical_alignment=ft.CrossAxisAlignment.START,
+        )
         self.progress = ft.Text(size=12, color="#D6E5E3")
         self.advance_button = ft.FilledButton(
             "Avançar",
@@ -111,24 +132,6 @@ class NovelFrameView:
                 ),
             )
         ]
-        self.image_control = ft.Image(
-            src=image or "",
-            fit=ft.BoxFit.CONTAIN,
-            border_radius=18,
-            expand=True,
-        )
-        self.image_container = ft.Container(
-            height=420,
-            alignment=ft.Alignment.CENTER,
-            border_radius=18,
-            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-            content=self.image_control,
-            visible=bool(image or any(self.entry_images)),
-        )
-        if self.image_container.visible:
-            controls.append(
-                self.image_container
-            )
         controls.extend(
             [
                 self.track,
@@ -145,24 +148,71 @@ class NovelFrameView:
                 expand=True,
             ),
             expand=True,
+            on_size_change=self._resize,
         )
         self._refresh(update_page=False)
 
+    def _entry_image(self, index: int) -> bytes | str | None:
+        """Retorna a imagem efetiva da entry, carregando a última válida."""
+
+        active: bytes | str | None = self.base_image
+        for position in range(index + 1):
+            if position < len(self.entry_images) and self.entry_images[position]:
+                active = self.entry_images[position]
+        return active
+
+    def _entry_slide(self, entry: VisualEntry, index: int) -> ft.Control:
+        image = self._entry_image(index)
+        controls: list[ft.Control] = []
+        if image:
+            controls.append(
+                ft.Container(
+                    width=self.slide_width,
+                    height=_image_height(self.slide_width),
+                    alignment=ft.Alignment.CENTER,
+                    border_radius=18,
+                    clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                    bgcolor="#102F2D",
+                    content=ft.Image(
+                        src=image,
+                        fit=ft.BoxFit.CONTAIN,
+                        border_radius=18,
+                        expand=True,
+                    ),
+                )
+            )
+        controls.append(
+            _entry_card(
+                entry,
+                index,
+                width=max(258.0, self.slide_width - 22.0),
+            )
+        )
+        return ft.Container(
+            key=f"frame-slide-{self.controller.frame.frame_id}-{index}",
+            width=self.slide_width,
+            content=ft.Column(
+                controls=controls,
+                spacing=10,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+        )
+
+    def _resize(self, event: object) -> None:
+        width = getattr(event, "width", None)
+        next_width = _slide_width(width)
+        if abs(next_width - self.slide_width) < 1:
+            return
+        self.slide_width = next_width
+        self._refresh()
+
     def _refresh(self, *, update_page: bool = True) -> None:
         self.track.controls = [
-            _entry_card(entry, index)
+            self._entry_slide(entry, index)
             for index, entry in enumerate(self.controller.visible_entries)
         ]
         total = len(self.controller.frame.entries)
         self.progress.value = f"{self.controller.revealed_entries} de {total}"
-        image_index = max(0, self.controller.revealed_entries - 1)
-        active_image = (
-            self.entry_images[image_index]
-            if image_index < len(self.entry_images) and self.entry_images[image_index]
-            else self.base_image or ""
-        )
-        self.image_control.src = active_image
-        self.image_container.visible = bool(active_image)
         self.advance_button.disabled = self._busy
         self.advance_button.content = (
             "Carregando..."
