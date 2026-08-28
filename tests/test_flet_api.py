@@ -19,6 +19,15 @@ class FakeAccounts:
     password: str = "senha-segura"
     entitled_packages: set[str] | None = None
 
+    def register(self, *, email: str, password: str, display_name: str) -> AccountUser:
+        if email.casefold() == self.user.email.casefold():
+            raise ValueError("Já existe uma conta com este e-mail.")
+        if len(password) < 8:
+            raise ValueError("A senha deve ter ao menos 8 caracteres.")
+        self.user = AccountUser("user-new", email.casefold(), display_name, "active")
+        self.password = password
+        return self.user
+
     def authenticate(self, *, email: str, password: str) -> AccountUser | None:
         if email.casefold() == self.user.email.casefold() and password == self.password:
             return self.user
@@ -153,6 +162,37 @@ def test_login_returns_opaque_bearer_and_current_user() -> None:
         "email": "pessoa@example.com",
         "display_name": "Pessoa",
     }
+
+
+def test_cadastro_cria_sessao_e_rejeita_email_duplicado() -> None:
+    test_client, _accounts = client()
+
+    created = test_client.post(
+        "/api/v1/auth/register",
+        json={
+            "display_name": "Pessoa Nova",
+            "email": "nova@example.com",
+            "password": "senha-segura",
+        },
+    )
+    duplicated = test_client.post(
+        "/api/v1/auth/register",
+        json={
+            "display_name": "Outra Pessoa",
+            "email": "nova@example.com",
+            "password": "outra-senha",
+        },
+    )
+
+    assert created.status_code == 201
+    assert created.json()["access_token"]
+    assert created.json()["user"] == {
+        "user_id": "user-new",
+        "email": "nova@example.com",
+        "display_name": "Pessoa Nova",
+    }
+    assert duplicated.status_code == 400
+    assert duplicated.json()["detail"] == "Já existe uma conta com este e-mail."
 
 
 def test_invalid_credentials_and_missing_token_are_rejected() -> None:

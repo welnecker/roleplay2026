@@ -100,6 +100,28 @@ class FletApiClient:
             display_name=str(user.get("display_name", "") or ""),
         )
 
+    def register(self, *, display_name: str, email: str, password: str) -> ApiUser:
+        response = self._request(
+            "POST",
+            "/api/v1/auth/register",
+            json={
+                "display_name": display_name,
+                "email": email,
+                "password": password,
+            },
+        )
+        payload = response.json()
+        token = str(payload.get("access_token", "") or "").strip()
+        user = payload.get("user") or {}
+        if not token or not isinstance(user, dict):
+            raise FletApiError("Resposta de cadastro inválida.")
+        self.access_token = token
+        return ApiUser(
+            user_id=str(user.get("user_id", "") or ""),
+            email=str(user.get("email", "") or ""),
+            display_name=str(user.get("display_name", "") or ""),
+        )
+
     def catalog(self) -> list[StoryCard]:
         response = self._request("GET", "/api/v1/catalog")
         payload = response.json()

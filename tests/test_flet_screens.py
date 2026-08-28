@@ -24,6 +24,7 @@ def _texts(control: ft.Control) -> list[str]:
 def test_login_identifica_api_real_configurada() -> None:
     screen = login_screen(
         on_login=lambda _email, _password: None,
+        on_register=lambda _name, _email, _password, _confirmation: None,
         api_url="https://api.example.com",
     )
 
@@ -41,6 +42,7 @@ def test_login_identifica_api_real_configurada() -> None:
 def test_login_bem_sucedido_nao_atualiza_controle_removido_da_pagina() -> None:
     screen = login_screen(
         on_login=lambda _email, _password: None,
+        on_register=lambda _name, _email, _password, _confirmation: None,
         api_url="https://api.example.com",
     )
     fields = [item for item in _walk(screen) if isinstance(item, ft.TextField)]
@@ -57,6 +59,53 @@ def test_login_bem_sucedido_nao_atualiza_controle_removido_da_pagina() -> None:
 
     assert error.visible is False
     assert not error.value
+
+
+def test_login_oferece_aba_de_cadastro_e_envia_os_campos() -> None:
+    submitted: list[tuple[str, str, str, str]] = []
+    screen = login_screen(
+        on_login=lambda _email, _password: None,
+        on_register=lambda name, email, password, confirmation: (
+            submitted.append((name, email, password, confirmation)) or None
+        ),
+        api_url="https://api.example.com",
+    )
+    register_tab = next(
+        item
+        for item in _walk(screen)
+        if isinstance(item, ft.Container)
+        and isinstance(item.content, ft.Text)
+        and item.content.value == "Criar conta"
+    )
+    register_tab.on_click(None)
+    register_panel = next(
+        item for item in _walk(screen) if isinstance(item, ft.Column) and item.key == "register-panel"
+    )
+    login_panel = next(
+        item for item in _walk(screen) if isinstance(item, ft.Column) and item.key == "login-panel"
+    )
+    assert register_panel.visible is True
+    assert login_panel.visible is False
+
+    fields = {
+        item.label: item
+        for item in _walk(register_panel)
+        if isinstance(item, ft.TextField)
+    }
+    fields["Nome de exibição"].value = "Pessoa Nova"
+    fields["E-mail"].value = "nova@example.com"
+    fields["Senha"].value = "senha-segura"
+    fields["Confirmar senha"].value = "senha-segura"
+    button = next(
+        item
+        for item in _walk(register_panel)
+        if isinstance(item, ft.FilledButton) and item.content == "Criar conta"
+    )
+    button.on_click(None)
+
+    assert submitted == [
+        ("Pessoa Nova", "nova@example.com", "senha-segura", "senha-segura")
+    ]
 
 
 def test_capa_data_url_e_convertida_em_base64_puro_para_flet_desktop() -> None:
@@ -79,6 +128,10 @@ def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
         progress_status=ProgressStatus.NOT_STARTED,
         price_label="R$ 9,90",
         cover_url="https://api.example.com/api/v1/catalog/roleplay2026.exemplo/cover",
+        profile_name="Personagem Exemplo",
+        profile_identity="Quem é a personagem.",
+        profile_personality="Como a personagem se comporta.",
+        profile_intention="O que pretende com você.",
     )
 
     screen = library_screen(
@@ -103,3 +156,21 @@ def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
     button = next(item for item in _walk(screen) if isinstance(item, ft.FilledButton))
     assert button.disabled is False
     assert button.content == "Comprar com Pix"
+
+    switcher = next(item for item in _walk(screen) if isinstance(item, ft.AnimatedSwitcher))
+    assert switcher.transition == ft.AnimatedSwitcherTransition.ROTATION
+    flip_button = next(
+        item
+        for item in _walk(screen)
+        if isinstance(item, ft.TextButton) and item.content == "↻ Conhecer personagem"
+    )
+    flip_button.on_click(None)
+
+    assert isinstance(switcher.content, ft.Container)
+    assert switcher.content.key == "card-back-roleplay2026.exemplo"
+    back_texts = _texts(switcher.content)
+    assert "Personagem Exemplo" in back_texts
+    assert "QUEM É" in back_texts
+    assert "Quem é a personagem." in back_texts
+    assert "COMO É" in back_texts
+    assert "O QUE PRETENDE COM VOCÊ" in back_texts

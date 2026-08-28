@@ -178,7 +178,35 @@ def main(page: ft.Page) -> None:
             show_library(cards, user.display_name or user.email)
             return None
 
-        show(login_screen(on_login=authenticate, api_url=api_url))
+        def register(
+            display_name: str,
+            email: str,
+            password: str,
+            password_confirmation: str,
+        ) -> str | None:
+            if api_client is None:
+                return "Defina ROLEPLAY_FLET_API_URL antes de criar a conta."
+            if password != password_confirmation:
+                return "As senhas não coincidem."
+            try:
+                user = api_client.register(
+                    display_name=display_name,
+                    email=email,
+                    password=password,
+                )
+                cards = api_client.catalog()
+            except FletApiError as exc:
+                return str(exc)
+            show_library(cards, user.display_name or user.email)
+            return None
+
+        show(
+            login_screen(
+                on_login=authenticate,
+                on_register=register,
+                api_url=api_url,
+            )
+        )
 
     show_login()
 

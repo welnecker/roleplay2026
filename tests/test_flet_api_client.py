@@ -79,6 +79,40 @@ def test_cliente_flet_autentica_e_envia_bearer_ao_catalogo() -> None:
     assert session.calls[1][2]["headers"]["Authorization"] == "Bearer token-opaco"
 
 
+def test_cliente_flet_cadastra_e_guarda_o_token() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(
+                201,
+                {
+                    "access_token": "token-cadastro",
+                    "user": {
+                        "user_id": "user-new",
+                        "email": "nova@example.com",
+                        "display_name": "Pessoa Nova",
+                    },
+                },
+            )
+        ]
+    )
+    client = FletApiClient("https://api.example.com", session=session)  # type: ignore[arg-type]
+
+    user = client.register(
+        display_name="Pessoa Nova",
+        email="nova@example.com",
+        password="senha-segura",
+    )
+
+    assert user.user_id == "user-new"
+    assert client.access_token == "token-cadastro"
+    assert session.calls[0][1].endswith("/api/v1/auth/register")
+    assert session.calls[0][2]["json"] == {
+        "display_name": "Pessoa Nova",
+        "email": "nova@example.com",
+        "password": "senha-segura",
+    }
+
+
 def test_cliente_flet_exibe_detalhe_de_erro_da_api() -> None:
     session = FakeSession([FakeResponse(401, {"detail": "E-mail ou senha inválidos."})])
     client = FletApiClient("https://api.example.com", session=session)  # type: ignore[arg-type]

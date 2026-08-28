@@ -21,6 +21,8 @@ from services.secret_loader import load_application_secrets
 
 
 class AccountRepository(Protocol):
+    def register(self, *, email: str, password: str, display_name: str) -> AccountUser: ...
+
     def authenticate(self, *, email: str, password: str) -> AccountUser | None: ...
 
     def get_user(self, *, user_id: str) -> AccountUser | None: ...
@@ -33,6 +35,10 @@ class LoginRequest(BaseModel):
 
     email: str
     password: str
+
+
+class RegisterRequest(LoginRequest):
+    display_name: str
 
 
 class UserResponse(BaseModel):
@@ -230,6 +236,30 @@ def create_api_app(services: ApiServices) -> FastAPI:
         user = services.accounts.authenticate(email=payload.email, password=payload.password)
         if user is None or user.status != "active":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-mail ou senha inválidos.")
+        token, session = services.sessions.create(user_id=user.user_id)
+        return LoginResponse(
+            access_token=token,
+            expires_at=session.expires_at.isoformat(),
+            user=_user_response(user),
+        )
+
+    @app.post(
+        "/api/v1/auth/register",
+        response_model=LoginResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    def register(payload: RegisterRequest) -> LoginResponse:
+        try:
+            user = services.accounts.register(
+                email=payload.email,
+                password=payload.password,
+                display_name=payload.display_name,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
         token, session = services.sessions.create(user_id=user.user_id)
         return LoginResponse(
             access_token=token,

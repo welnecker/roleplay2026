@@ -16,6 +16,17 @@ INK = "#2B1822"
 MUTED = "#765E68"
 
 
+def _update_attached(control: ft.Control) -> None:
+    """Atualiza somente controles ainda montados na página Flet."""
+
+    try:
+        page = control.page
+    except RuntimeError:
+        return
+    if page is not None:
+        page.update()
+
+
 def flet_image_source(source: str) -> str:
     """Remove o cabeçalho data URL e entrega Base64 puro ao Flet desktop."""
 
@@ -41,36 +52,146 @@ def _logo() -> ft.Column:
 def login_screen(
     *,
     on_login: Callable[[str, str], str | None],
+    on_register: Callable[[str, str, str, str], str | None],
     api_url: str,
 ) -> ft.Control:
-    email = ft.TextField(
+    login_email = ft.TextField(
         label="E-mail",
         hint_text="voce@email.com",
         keyboard_type=ft.KeyboardType.EMAIL,
         border_radius=14,
         autofocus=True,
     )
-    password = ft.TextField(
+    login_password = ft.TextField(
         label="Senha",
         password=True,
         can_reveal_password=True,
         border_radius=14,
     )
-    error = ft.Text(size=12, color="#B42318", visible=False)
+    login_error = ft.Text(size=12, color="#B42318", visible=False)
+    register_name = ft.TextField(label="Nome de exibição", border_radius=14)
+    register_email = ft.TextField(
+        label="E-mail",
+        hint_text="voce@email.com",
+        keyboard_type=ft.KeyboardType.EMAIL,
+        border_radius=14,
+    )
+    register_password = ft.TextField(
+        label="Senha",
+        password=True,
+        can_reveal_password=True,
+        border_radius=14,
+    )
+    register_confirmation = ft.TextField(
+        label="Confirmar senha",
+        password=True,
+        can_reveal_password=True,
+        border_radius=14,
+    )
+    register_error = ft.Text(size=12, color="#B42318", visible=False)
+
+    def set_error(control: ft.Text, message: str | None) -> None:
+        control.value = str(message or "")
+        control.visible = bool(message)
+        _update_attached(control)
 
     def submit(_event: object = None) -> None:
-        clean_email = str(email.value or "").strip()
-        clean_password = str(password.value or "")
+        clean_email = str(login_email.value or "").strip()
+        clean_password = str(login_password.value or "")
         if not clean_email or not clean_password:
             message = "Informe seu e-mail e sua senha."
         else:
             message = on_login(clean_email, clean_password)
         if message is None:
             return
-        error.value = str(message or "")
-        error.visible = bool(message)
-        if error.page is not None:
-            error.update()
+        set_error(login_error, message)
+
+    def submit_register(_event: object = None) -> None:
+        name = str(register_name.value or "").strip()
+        clean_email = str(register_email.value or "").strip()
+        password = str(register_password.value or "")
+        confirmation = str(register_confirmation.value or "")
+        if not name or not clean_email or not password or not confirmation:
+            message = "Preencha nome, e-mail, senha e confirmação."
+        elif password != confirmation:
+            message = "As senhas não coincidem."
+        else:
+            message = on_register(name, clean_email, password, confirmation)
+        if message is None:
+            return
+        set_error(register_error, message)
+
+    login_panel = ft.Column(
+        key="login-panel",
+        spacing=17,
+        controls=[
+            ft.Text("Bem-vindo de volta", size=25, weight=ft.FontWeight.BOLD, color=INK),
+            ft.Text("Entre para continuar suas histórias.", size=14, color=MUTED),
+            login_email,
+            login_password,
+            login_error,
+            ft.FilledButton(
+                "Entrar",
+                height=52,
+                bgcolor=ACCENT,
+                color="#FFFFFF",
+                on_click=submit,
+            ),
+            ft.TextButton("Esqueci minha senha", disabled=True),
+        ],
+    )
+    register_panel = ft.Column(
+        key="register-panel",
+        spacing=15,
+        visible=False,
+        controls=[
+            ft.Text("Crie sua conta", size=25, weight=ft.FontWeight.BOLD, color=INK),
+            ft.Text("Seu progresso ficará associado ao seu cadastro.", size=14, color=MUTED),
+            register_name,
+            register_email,
+            register_password,
+            ft.Text("Use ao menos 8 caracteres.", size=11, color=MUTED),
+            register_confirmation,
+            register_error,
+            ft.FilledButton(
+                "Criar conta",
+                height=52,
+                bgcolor=ACCENT,
+                color="#FFFFFF",
+                on_click=submit_register,
+            ),
+        ],
+    )
+    login_tab_text = ft.Text("Entrar", weight=ft.FontWeight.BOLD, color="#FFFFFF")
+    register_tab_text = ft.Text("Criar conta", weight=ft.FontWeight.BOLD, color=ACCENT_DARK)
+    login_tab = ft.Container(
+        expand=True,
+        padding=12,
+        border_radius=12,
+        bgcolor=ACCENT,
+        alignment=ft.Alignment.CENTER,
+        content=login_tab_text,
+    )
+    register_tab = ft.Container(
+        expand=True,
+        padding=12,
+        border_radius=12,
+        bgcolor=SURFACE_MUTED,
+        alignment=ft.Alignment.CENTER,
+        content=register_tab_text,
+    )
+
+    def select_tab(registering: bool) -> None:
+        login_panel.visible = not registering
+        register_panel.visible = registering
+        login_tab.bgcolor = SURFACE_MUTED if registering else ACCENT
+        register_tab.bgcolor = ACCENT if registering else SURFACE_MUTED
+        login_tab_text.color = ACCENT_DARK if registering else "#FFFFFF"
+        register_tab_text.color = "#FFFFFF" if registering else ACCENT_DARK
+        _update_attached(register_panel if registering else login_panel)
+
+    login_tab.on_click = lambda _event: select_tab(False)
+    register_tab.on_click = lambda _event: select_tab(True)
 
     return ft.Container(
         expand=True,
@@ -78,8 +199,8 @@ def login_screen(
         alignment=ft.Alignment.CENTER,
         padding=ft.Padding.symmetric(horizontal=22, vertical=30),
         content=ft.Column(
-            tight=True,
             width=430,
+            scroll=ft.ScrollMode.AUTO,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=22,
             controls=[
@@ -96,26 +217,9 @@ def login_screen(
                     content=ft.Column(
                         spacing=17,
                         controls=[
-                            ft.Text("Bem-vindo de volta", size=25, weight=ft.FontWeight.BOLD, color=INK),
-                            ft.Text(
-                                "Entre para continuar suas histórias.",
-                                size=14,
-                                color=MUTED,
-                            ),
-                            email,
-                            password,
-                            error,
-                            ft.FilledButton(
-                                "Entrar",
-                                height=52,
-                                bgcolor=ACCENT,
-                                color="#FFFFFF",
-                                on_click=submit,
-                            ),
-                            ft.TextButton(
-                                "Esqueci minha senha",
-                                disabled=True,
-                            ),
+                            ft.Row([login_tab, register_tab], spacing=8),
+                            login_panel,
+                            register_panel,
                         ],
                     ),
                 ),
@@ -166,12 +270,32 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
             content=ft.Icon(ft.Icons.IMAGE_OUTLINED, size=46, color=MUTED),
         )
 
-    return ft.Container(
-        col={"xs": 12, "sm": 6, "lg": 4, "xl": 3},
+    profile_name = card.profile_name or card.title
+    profile_identity = card.profile_identity or card.description
+    profile_personality = card.profile_personality or (
+        "Uma presença que revela novas camadas ao longo da história."
+    )
+    profile_intention = card.profile_intention or (
+        "Construir uma relação própria com você sem antecipar a trama."
+    )
+
+    def profile_section(label: str, value: str) -> ft.Control:
+        return ft.Column(
+            spacing=4,
+            controls=[
+                ft.Text(label.upper(), size=10, weight=ft.FontWeight.BOLD, color="#DDB9F7"),
+                ft.Text(value, size=14, color="#F5EAF1", selectable=True),
+            ],
+        )
+
+    def flip(show_back: bool) -> None:
+        switcher.content = back if show_back else front
+        _update_attached(switcher)
+
+    front = ft.Container(
+        key=f"card-front-{card.package_id}",
+        height=460,
         bgcolor=SURFACE,
-        border_radius=22,
-        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-        shadow=ft.BoxShadow(blur_radius=18, color="#35000000", offset=ft.Offset(0, 7)),
         content=ft.Column(
             spacing=0,
             controls=[
@@ -193,15 +317,15 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
                                 color="#FFFFFF",
                             ),
                         ),
-                    ]
+                    ],
                 ),
                 ft.Container(
                     padding=20,
                     content=ft.Column(
-                        spacing=10,
+                        spacing=9,
                         controls=[
                             ft.Text(card.title, size=23, weight=ft.FontWeight.BOLD, color=INK),
-                            ft.Text(card.subtitle, size=14, color=MUTED, max_lines=3),
+                            ft.Text(card.subtitle, size=14, color=MUTED, max_lines=2),
                             ft.Row(
                                 spacing=7,
                                 controls=[
@@ -214,16 +338,68 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
                                     for genre in card.genres[:2]
                                 ],
                             ),
-                            ft.FilledButton(
-                                "Abrir história"
-                                if card.access_status != AccessStatus.LOCKED
-                                else "Comprar com Pix",
-                                bgcolor=ACCENT,
-                                color="#FFFFFF",
-                                height=45,
-                                on_click=lambda _event, selected=card: on_open_preview(selected),
+                            ft.TextButton(
+                                "↻ Conhecer personagem",
+                                icon=ft.Icons.SWAP_HORIZ,
+                                on_click=lambda _event: flip(True),
                             ),
                         ],
+                    ),
+                ),
+            ],
+        ),
+    )
+    back = ft.Container(
+        key=f"card-back-{card.package_id}",
+        height=460,
+        bgcolor=INK,
+        padding=22,
+        content=ft.Column(
+            spacing=15,
+            scroll=ft.ScrollMode.AUTO,
+            controls=[
+                ft.Text(profile_name, size=25, weight=ft.FontWeight.BOLD, color="#FFFFFF"),
+                profile_section("Quem é", profile_identity),
+                profile_section("Como é", profile_personality),
+                profile_section("O que pretende com você", profile_intention),
+                ft.TextButton(
+                    "↻ Voltar para a capa",
+                    icon=ft.Icons.SWAP_HORIZ,
+                    style=ft.ButtonStyle(color="#FFFFFF"),
+                    on_click=lambda _event: flip(False),
+                ),
+            ],
+        ),
+    )
+    switcher = ft.AnimatedSwitcher(
+        content=front,
+        duration=420,
+        reverse_duration=420,
+        transition=ft.AnimatedSwitcherTransition.ROTATION,
+        switch_in_curve=ft.AnimationCurve.EASE_OUT_CUBIC,
+        switch_out_curve=ft.AnimationCurve.EASE_IN_CUBIC,
+    )
+
+    return ft.Container(
+        col={"xs": 12, "sm": 6, "lg": 4, "xl": 3},
+        bgcolor=SURFACE,
+        border_radius=22,
+        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+        shadow=ft.BoxShadow(blur_radius=18, color="#35000000", offset=ft.Offset(0, 7)),
+        content=ft.Column(
+            spacing=0,
+            controls=[
+                switcher,
+                ft.Container(
+                    padding=ft.Padding.only(left=20, right=20, bottom=20),
+                    content=ft.FilledButton(
+                        "Abrir história"
+                        if card.access_status != AccessStatus.LOCKED
+                        else "Comprar com Pix",
+                        bgcolor=ACCENT,
+                        color="#FFFFFF",
+                        height=45,
+                        on_click=lambda _event, selected=card: on_open_preview(selected),
                     ),
                 ),
             ],
