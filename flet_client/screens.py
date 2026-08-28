@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import binascii
 from collections.abc import Callable, Sequence
 
 import flet as ft
@@ -18,17 +16,14 @@ INK = "#2B1822"
 MUTED = "#765E68"
 
 
-def flet_image_source(source: str) -> bytes | str:
-    """Converte data URLs do catálogo web em bytes aceitos pelo Flet desktop."""
+def flet_image_source(source: str) -> str:
+    """Remove o cabeçalho data URL e entrega Base64 puro ao Flet desktop."""
 
     value = str(source or "").strip()
     if not value.startswith("data:image/") or ";base64," not in value:
         return value
     _header, encoded = value.split(",", maxsplit=1)
-    try:
-        return base64.b64decode(encoded, validate=True)
-    except (ValueError, binascii.Error):
-        return ""
+    return encoded.strip()
 
 
 def _logo() -> ft.Column:

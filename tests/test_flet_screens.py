@@ -30,13 +30,13 @@ def test_login_identifica_previa_sem_autenticacao_real() -> None:
     assert any(isinstance(item, ft.TextField) and item.password for item in _walk(screen))
 
 
-def test_capa_data_url_e_convertida_em_bytes_para_flet_desktop() -> None:
+def test_capa_data_url_e_convertida_em_base64_puro_para_flet_desktop() -> None:
     payload = b"capa-webp"
-    source = "data:image/webp;base64," + base64.b64encode(payload).decode("ascii")
+    encoded = base64.b64encode(payload).decode("ascii")
+    source = "data:image/webp;base64," + encoded
 
-    assert flet_image_source(source) == payload
+    assert flet_image_source(source) == encoded
     assert flet_image_source("https://example.com/capa.webp") == "https://example.com/capa.webp"
-    assert flet_image_source("data:image/webp;base64,invalido***") == ""
 
 
 def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
@@ -65,7 +65,7 @@ def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
     assert "R$ 9,90" in texts
     assert story.access_status == AccessStatus.LOCKED
     image = next(item for item in _walk(screen) if isinstance(item, ft.Image))
-    assert image.src == b"imagem"
+    assert image.src == base64.b64encode(b"imagem").decode("ascii")
     assert (image.left, image.top, image.right, image.bottom) == (0, 0, 0, 0)
     stack = next(item for item in _walk(screen) if isinstance(item, ft.Stack))
     assert stack.height == 280
