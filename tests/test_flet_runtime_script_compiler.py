@@ -1,3 +1,5 @@
+import json
+
 from services import editorial_content
 
 
@@ -10,12 +12,14 @@ class _ScriptRepository:
                 "order": 1,
                 "instruction": "[DESCRIÇÃO] Mary entra na sala.",
                 "status": "active",
+                "image_id": "mary1.webp",
             },
             {
                 "line_id": "encontro_001_fala",
                 "order": 2,
                 "instruction": "[FALA mary] Olá.",
                 "status": "active",
+                "image_id": "mary2.webp",
             },
         ]
 
@@ -48,3 +52,7 @@ def test_api_sem_patches_streamlit_compila_descricao_v2(monkeypatch) -> None:
 
     assert document["authoring_source"] == "spreadsheet_novel_frame_v2"
     assert document["blocks"][0]["entry_beat_id"] == "encontro_001"
+    movement = document["blocks"][0]["beats"][0]["required_movement"]
+    frame = json.loads(movement.removeprefix("NOVEL_FRAME_V2\n"))
+    assert frame["image_id"] == "mary1.webp"
+    assert frame["entries"][0]["image_id"] == "mary2.webp"

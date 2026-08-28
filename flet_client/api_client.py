@@ -38,6 +38,7 @@ class ApiRunFrame:
     frame_id: str
     content: str
     image_url: str
+    entry_image_urls: tuple[str, ...]
     revealed_entries: int
     entry_count: int
     finished: bool
@@ -184,6 +185,10 @@ class FletApiClient:
             frame_id=str(payload.get("frame_id", "") or ""),
             content=str(payload.get("content", "") or ""),
             image_url=str(payload.get("image_url", "") or ""),
+            entry_image_urls=tuple(
+                str(item or "")
+                for item in payload.get("entry_image_urls", []) or []
+            ),
             revealed_entries=int(payload.get("revealed_entries", 0) or 0),
             entry_count=int(payload.get("entry_count", 0) or 0),
             finished=bool(payload.get("finished", False)),

@@ -138,6 +138,9 @@ def test_cliente_flet_abre_e_avanca_run_real() -> None:
         "frame_id": "quadro-1",
         "content": "[QUADRO quadro-1]\n[DESCRIÇÃO]\nCena.\n[/QUADRO]",
         "image_url": "https://api.example.com/api/v1/runs/image",
+        "entry_image_urls": [
+            "https://api.example.com/api/v1/runs/image?image_id=mary1.webp"
+        ],
         "revealed_entries": 0,
         "entry_count": 0,
         "finished": False,
@@ -156,5 +159,8 @@ def test_cliente_flet_abre_e_avanca_run_real() -> None:
     )
 
     assert opened.run_id == "run-1"
+    assert opened.entry_image_urls == (
+        "https://api.example.com/api/v1/runs/image?image_id=mary1.webp",
+    )
     assert advanced.frame_id == "quadro-2"
     assert session.calls[1][2]["json"]["frame_id"] == "quadro-1"

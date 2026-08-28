@@ -11,9 +11,11 @@ from persistence.factory import build_google_sheets_repository
 from platform_core.auth import AuthenticatedUser
 from roleplay.openrouter import generate_response
 from roleplay.models import StoryState
+from services import novel_frame_patch
 from services.editorial_content import load_editorial_package, require_editorial_package
 from services.editorial_scene_images import (
     resolve_editorial_scene_image,
+    resolve_narrative_image_id,
     resolve_numbered_beat_image,
 )
 from services.immersive_onboarding import (
@@ -32,6 +34,7 @@ from services.novel_frame_runtime_support import (
     first_frame_movement,
     is_frame_script,
 )
+from services.novel_frame_images import image_sequence_for_frame
 from services.novel_v2_adapter import movement_from_script, next_movement_id
 from services.runtime_persistence import (
     RuntimePersistenceContext,
@@ -51,7 +54,21 @@ class RunFrame:
     image_url: str
     revealed_entries: int
     entry_count: int
+    entry_image_urls: tuple[str, ...] = ()
     finished: bool = False
+
+
+def _is_idempotent_duplicate_advance(
+    script: Any,
+    *,
+    expected_frame_id: str,
+    current_movement_id: str,
+) -> bool:
+    return bool(
+        expected_frame_id
+        and current_movement_id
+        and next_movement_id(script, expected_frame_id) == current_movement_id
+    )
 
 
 class FletRunService:
@@ -215,6 +232,37 @@ class FletRunService:
         messages.append({"role": "assistant", "content": content, **metadata})
         return context, updated_state, messages
 
+    @staticmethod
+    def _previous_image_id(script: Any, current_id: str) -> str:
+        beat_ids = tuple(str(item or "").strip() for item in script.beats)
+        if current_id not in beat_ids:
+            return ""
+        last = ""
+        for beat_id in beat_ids[: beat_ids.index(current_id)]:
+            try:
+                movement = movement_from_script(script, beat_id)
+                frame = novel_frame_patch._frame_from_movement(movement)
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not isinstance(frame, dict):
+                continue
+            base, sequence = image_sequence_for_frame(frame, inherited_image_id=last)
+            if base:
+                last = base
+            for image_id in sequence:
+                if image_id:
+                    last = image_id
+        return last
+
+    @staticmethod
+    def _image_url(package_id: str, *, image_id: str = "", node_id: str = "") -> str:
+        query = "package_id=" + quote(package_id)
+        if image_id:
+            query += "&image_id=" + quote(image_id)
+        elif node_id:
+            query += "&node_id=" + quote(node_id)
+        return "/api/v1/runs/image?" + query
+
     def _view(self, package, script, context, state, messages) -> RunFrame:
         current = self._current(messages)
         if current is None:
@@ -225,12 +273,32 @@ class FletRunService:
         if not current_frame_id:
             raise RuntimeError("A interação persistida não contém um quadro V2 válido.")
         node_id = self._movement_id(current)
+        movement = movement_from_script(script, node_id)
+        frame = novel_frame_patch._frame_from_movement(movement)
         image = resolve_editorial_scene_image(package.root, node_id)
         if image is None:
             image = resolve_numbered_beat_image(package.root, node_id, tuple(script.beats))
         image_url = ""
         if image is not None:
-            image_url = "/api/v1/runs/image?package_id=" + quote(package.manifest.package_id) + "&node_id=" + quote(node_id)
+            image_url = self._image_url(package.manifest.package_id, node_id=node_id)
+        entry_image_urls: tuple[str, ...] = ()
+        if isinstance(frame, dict):
+            inherited = self._previous_image_id(script, node_id)
+            base_image_id, image_ids = image_sequence_for_frame(
+                frame,
+                inherited_image_id=inherited,
+            )
+            if base_image_id and resolve_narrative_image_id(package.root, base_image_id):
+                image_url = self._image_url(
+                    package.manifest.package_id,
+                    image_id=base_image_id,
+                )
+            entry_image_urls = tuple(
+                self._image_url(package.manifest.package_id, image_id=image_id)
+                if image_id and resolve_narrative_image_id(package.root, image_id)
+                else image_url
+                for image_id in image_ids
+            )
         return RunFrame(
             run_id=context.run.run_id if context.run is not None else "",
             package_id=package.manifest.package_id,
@@ -245,6 +313,7 @@ class FletRunService:
                 ),
             ),
             entry_count=entry_count,
+            entry_image_urls=entry_image_urls,
             finished=bool(state.finished),
         )
 
@@ -279,7 +348,17 @@ class FletRunService:
             if current is None:
                 raise RuntimeError("A run não possui quadro atual.")
             content = str(current.get("content", "") or "")
-            if frame_id(content) != expected_frame_id:
+            current_frame_id = frame_id(content)
+            if current_frame_id != expected_frame_id:
+                # Um clique duplicado pode chegar depois de o primeiro já ter
+                # persistido o quadro seguinte. Nesse caso, devolver o estado
+                # atual é idempotente e evita avançar duas vezes.
+                if _is_idempotent_duplicate_advance(
+                    script,
+                    expected_frame_id=expected_frame_id,
+                    current_movement_id=self._movement_id(current),
+                ):
+                    return self._view(package, script, context, state, messages)
                 raise RuntimeError("O quadro informado não é mais o quadro atual.")
             persisted_reveal = int(current.get("flet_revealed_entries", 0) or 0)
             if persisted_reveal <= 0 and frame_entry_count(content):
@@ -340,12 +419,21 @@ class FletRunService:
             current["flet_revealed_entries"] = revealed
             return self._view(package, script, context, state, messages)
 
-    def image(self, *, package_id: str, node_id: str) -> Path | None:
+    def image(
+        self,
+        *,
+        package_id: str,
+        node_id: str = "",
+        image_id: str = "",
+    ) -> Path | None:
         package = require_editorial_package(package_id)
-        image = resolve_editorial_scene_image(package.root, node_id)
+        image = resolve_narrative_image_id(package.root, image_id) if image_id else None
+        if image is None and node_id:
+            image = resolve_editorial_scene_image(package.root, node_id)
         if image is None:
             script = load_editorial_package(self.secrets, package)
-            image = resolve_numbered_beat_image(package.root, node_id, tuple(script.beats))
+            if node_id:
+                image = resolve_numbered_beat_image(package.root, node_id, tuple(script.beats))
         return Path(image["path"]) if image is not None else None
 
 

@@ -208,12 +208,22 @@ def load_effective_editorial_document(
         return base_document
     from services import novel_frame_patch
 
+    is_frame_story = novel_frame_patch.is_novel_frame_rows(rows)
     compiler = (
         novel_frame_patch.compile_novel_frame_story
-        if novel_frame_patch.is_novel_frame_rows(rows)
+        if is_frame_story
         else compile_spreadsheet_story
     )
-    return compiler(base_document, rows, script_version=script_version)
+    document = compiler(base_document, rows, script_version=script_version)
+    if is_frame_story:
+        # O vínculo imagem/linha é parte do roteiro compartilhado. Antes ele era
+        # instalado apenas pelo player Streamlit e desaparecia na API Flet.
+        from services.novel_frame_images import (
+            enrich_compiled_document_with_image_ids,
+        )
+
+        document = enrich_compiled_document_with_image_ids(document, rows)
+    return document
 
 
 def load_editorial_package(

@@ -69,6 +69,7 @@ class FakeRuns:
             "",
             1,
             1,
+            ("/api/v1/runs/image?package_id=story.free&image_id=mary1.webp",),
         )
 
     def advance(self, **kwargs) -> RunFrame:
@@ -76,7 +77,7 @@ class FakeRuns:
             raise PermissionError("Revele todas as falas.")
         return RunFrame("run-1", kwargs["package_id"], "quadro-2", "[QUADRO quadro-2]\n[DESCRIÇÃO]\nContinuação.\n[/QUADRO]", "", 0, 0)
 
-    def image(self, *, package_id: str, node_id: str):
+    def image(self, *, package_id: str, node_id: str = "", image_id: str = ""):
         return None
 
 
@@ -267,5 +268,8 @@ def test_run_abre_quadro_persistido_e_bloqueia_avanco_antecipado() -> None:
 
     assert opened.status_code == 200
     assert opened.json()["frame_id"] == "quadro-1"
+    assert opened.json()["entry_image_urls"][0].endswith(
+        "/api/v1/runs/image?package_id=story.free&image_id=mary1.webp"
+    )
     assert blocked.status_code == 403
     assert advanced.json()["frame_id"] == "quadro-2"

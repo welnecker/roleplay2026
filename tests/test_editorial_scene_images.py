@@ -13,6 +13,7 @@ from services.editorial_scene_images import (
     message_allows_beat_image,
     render_editorial_scene_image,
     resolve_editorial_scene_image,
+    resolve_narrative_image_id,
     resolve_numbered_beat_image,
     zoomable_image_html,
 )
@@ -151,6 +152,22 @@ def test_data_uri_preserva_tipo_da_imagem(tmp_path: Path) -> None:
     image.write_bytes(b"webp")
 
     assert image_data_uri(image).startswith("data:image/webp;base64,")
+
+
+def test_image_id_da_planilha_resolve_asset_e_bloqueia_saida_do_pacote(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "casada_frustrada"
+    image_dir = package / "assets" / "scenes"
+    image_dir.mkdir(parents=True)
+    (image_dir / "mary1.webp").write_bytes(b"mary")
+    (tmp_path / "fora.webp").write_bytes(b"fora")
+
+    resolved = resolve_narrative_image_id(package, "mary1.webp")
+
+    assert resolved is not None
+    assert Path(resolved["path"]).name == "mary1.webp"
+    assert resolve_narrative_image_id(package, "../../../fora.webp") is None
 
 
 def test_ids_da_planilha_reutilizam_imagens_do_roteiro_original(tmp_path: Path) -> None:

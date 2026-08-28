@@ -37,7 +37,7 @@ def main(page: ft.Page) -> None:
             show_api_error(str(exc))
             return
 
-        def completed() -> None:
+        def completed() -> bool:
             try:
                 following = api_client.advance_run(
                     package_id=card.package_id,
@@ -46,10 +46,11 @@ def main(page: ft.Page) -> None:
                 )
             except FletApiError as exc:
                 show_api_error(str(exc))
-                return
+                return False
             show_player(card, following)
+            return True
 
-        def persist_reveal(_revealed_entries: int) -> None:
+        def persist_reveal(_revealed_entries: int) -> bool:
             try:
                 api_client.reveal_run_entry(
                     package_id=card.package_id,
@@ -57,11 +58,14 @@ def main(page: ft.Page) -> None:
                 )
             except FletApiError as exc:
                 show_api_error(str(exc))
+                return False
+            return True
 
         view = NovelFrameView(
             page,
             frame,
             image=run_frame.image_url or None,
+            entry_images=run_frame.entry_image_urls,
             revealed_entries=run_frame.revealed_entries,
             on_frame_complete=completed,
             on_reveal=persist_reveal,

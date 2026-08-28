@@ -120,6 +120,43 @@ def resolve_numbered_beat_image(
     return None
 
 
+def resolve_narrative_image_id(
+    package_root: Path,
+    image_id: str,
+) -> dict[str, object] | None:
+    """Resolve com segurança um ``image_id`` autoral dentro do pacote."""
+
+    clean = str(image_id or "").strip().replace("\\", "/")
+    if not clean:
+        return None
+    root = package_root.resolve()
+    scene_root = (root / "assets" / "scenes").resolve()
+    relative = Path(clean)
+    candidates: list[Path] = []
+    if relative.suffix:
+        candidates.extend((scene_root / relative, root / relative))
+    else:
+        for extension in ("webp", "png", "jpg", "jpeg"):
+            candidates.extend(
+                (scene_root / f"{clean}.{extension}", root / f"{clean}.{extension}")
+            )
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            continue
+        if resolved.is_file():
+            return {
+                "file": str(resolved.relative_to(root)),
+                "path": resolved,
+                "caption": "",
+                "alt": f"Imagem narrativa {Path(clean).stem}",
+                "expanded": False,
+            }
+    return None
+
+
 def image_data_uri(path: Path) -> str:
     """Converte a imagem local em data URI para o visualizador touch."""
 

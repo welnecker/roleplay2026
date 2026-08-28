@@ -114,6 +114,7 @@ class RunFrameResponse(BaseModel):
     frame_id: str
     content: str
     image_url: str
+    entry_image_urls: list[str]
     revealed_entries: int
     entry_count: int
     finished: bool
@@ -182,15 +183,19 @@ def _payment_response(
 
 
 def _run_response(frame: RunFrame, request: Request) -> RunFrameResponse:
-    image_url = frame.image_url
-    if image_url.startswith("/"):
-        image_url = str(request.base_url).rstrip("/") + image_url
+    base_url = str(request.base_url).rstrip("/")
+
+    def absolute(url: str) -> str:
+        return base_url + url if url.startswith("/") else url
+
+    image_url = absolute(frame.image_url)
     return RunFrameResponse(
         run_id=frame.run_id,
         package_id=frame.package_id,
         frame_id=frame.frame_id,
         content=frame.content,
         image_url=image_url,
+        entry_image_urls=[absolute(url) for url in frame.entry_image_urls],
         revealed_entries=frame.revealed_entries,
         entry_count=frame.entry_count,
         finished=frame.finished,
@@ -437,8 +442,16 @@ def create_api_app(services: ApiServices) -> FastAPI:
         return _run_response(frame, request)
 
     @app.get("/api/v1/runs/image")
-    def run_image(package_id: str, node_id: str) -> FileResponse:
-        image = run_service().image(package_id=package_id, node_id=node_id)
+    def run_image(
+        package_id: str,
+        node_id: str = "",
+        image_id: str = "",
+    ) -> FileResponse:
+        image = run_service().image(
+            package_id=package_id,
+            node_id=node_id,
+            image_id=image_id,
+        )
         if image is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imagem não encontrada.")
         return FileResponse(image)
