@@ -2,16 +2,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from threading import Lock
 from typing import Protocol
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 
 from flet_api.sessions import SessionStore
 from persistence.accounts import AccountUser, build_account_repository
-from platform_core.catalog import load_demo_catalog
+from platform_core.catalog import cover_file_for_package, load_demo_catalog
 from platform_core.models import AccessStatus, StoryCard
 from services.secret_loader import load_application_secrets
 
@@ -71,6 +73,7 @@ class ApiServices:
     accounts: AccountRepository
     sessions: SessionStore
     catalog_loader: Callable[[], list[StoryCard]]
+    cover_resolver: Callable[[str], Path | None] = cover_file_for_package
 
 
 def _user_response(user: AccountUser) -> UserResponse:
@@ -81,7 +84,12 @@ def _user_response(user: AccountUser) -> UserResponse:
     )
 
 
-def _card_response(card: StoryCard, *, access_status: AccessStatus) -> StoryCardResponse:
+def _card_response(
+    card: StoryCard,
+    *,
+    access_status: AccessStatus,
+    cover_url: str,
+) -> StoryCardResponse:
     return StoryCardResponse(
         package_id=card.package_id,
         title=card.title,
@@ -91,7 +99,7 @@ def _card_response(card: StoryCard, *, access_status: AccessStatus) -> StoryCard
         access_status=access_status.value,
         price_label=card.price_label,
         chapter_label=card.chapter_label,
-        cover_url=card.cover_url,
+        cover_url=cover_url,
         is_tasting=card.is_tasting,
         profile_name=card.profile_name,
         profile_identity=card.profile_identity,
@@ -147,7 +155,10 @@ def create_api_app(services: ApiServices) -> FastAPI:
         services.sessions.revoke(token)
 
     @app.get("/api/v1/catalog", response_model=CatalogResponse)
-    def catalog(identity: tuple[AccountUser, str] = Depends(authenticated)) -> CatalogResponse:
+    def catalog(
+        request: Request,
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> CatalogResponse:
         user, _token = identity
         items: list[StoryCardResponse] = []
         for card in services.catalog_loader():
@@ -164,8 +175,26 @@ def create_api_app(services: ApiServices) -> FastAPI:
                 if entitled
                 else AccessStatus.LOCKED
             )
-            items.append(_card_response(card, access_status=access_status))
+            cover_url = ""
+            if services.cover_resolver(card.package_id) is not None:
+                cover_url = str(
+                    request.url_for("catalog_cover", package_id=card.package_id)
+                )
+            items.append(
+                _card_response(
+                    card,
+                    access_status=access_status,
+                    cover_url=cover_url,
+                )
+            )
         return CatalogResponse(items=items)
+
+    @app.get("/api/v1/catalog/{package_id}/cover", name="catalog_cover")
+    def catalog_cover(package_id: str) -> FileResponse:
+        cover = services.cover_resolver(package_id)
+        if cover is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Capa não encontrada.")
+        return FileResponse(cover)
 
     return app
 
@@ -190,4 +219,3 @@ def production_app() -> FastAPI:
                     )
                 )
     return _production_app
-

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import flet as ft
 
+from flet_client.api_client import FletApiClient, FletApiError
 from flet_client.frame_state import parse_visual_frame
 from flet_client.frame_view import NovelFrameView
 from flet_client.screens import BACKGROUND, library_screen, login_screen
-from platform_core.catalog import load_demo_catalog
 from platform_core.models import StoryCard
 
 
@@ -30,6 +31,10 @@ def main(page: ft.Page) -> None:
     page.bgcolor = BACKGROUND
     page.padding = 0
     page.theme_mode = ft.ThemeMode.LIGHT
+    api_url = os.getenv("ROLEPLAY_FLET_API_URL", "").strip().rstrip("/")
+    api_client = FletApiClient(api_url) if api_url else None
+    active_cards: list[StoryCard] = []
+    active_display_name = ""
 
     def show(control: ft.Control) -> None:
         page.controls.clear()
@@ -53,23 +58,45 @@ def main(page: ft.Page) -> None:
             ft.TextButton(
                 "← Voltar para os cards",
                 style=ft.ButtonStyle(color="#FFFFFF"),
-                on_click=lambda _event: show_library(),
+                on_click=lambda _event: show_library(active_cards, active_display_name),
             ),
         )
         show(view.root)
 
-    def show_library() -> None:
+    def show_library(cards: list[StoryCard], display_name: str) -> None:
+        nonlocal active_cards, active_display_name
+        active_cards = list(cards)
+        active_display_name = display_name
+        def logout() -> None:
+            if api_client is not None:
+                try:
+                    api_client.logout()
+                except FletApiError:
+                    pass
+            show_login()
+
         show(
             library_screen(
-                load_demo_catalog(),
-                display_name="Visitante",
-                on_logout=show_login,
+                cards,
+                display_name=display_name,
+                on_logout=logout,
                 on_open_preview=show_player,
             )
         )
 
     def show_login() -> None:
-        show(login_screen(on_preview_login=show_library))
+        def authenticate(email: str, password: str) -> str | None:
+            if api_client is None:
+                return "Defina ROLEPLAY_FLET_API_URL antes de entrar."
+            try:
+                user = api_client.login(email=email, password=password)
+                cards = api_client.catalog()
+            except FletApiError as exc:
+                return str(exc)
+            show_library(cards, user.display_name or user.email)
+            return None
+
+        show(login_screen(on_login=authenticate, api_url=api_url))
 
     show_login()
 

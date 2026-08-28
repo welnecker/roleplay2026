@@ -12,9 +12,9 @@ interface funcional e nenhum fluxo de produção foi substituído.
 - próximo quadro liberado somente depois de todas as entries;
 - imagem WebP preservada com `contain`;
 - trilho horizontal de balões para desktop e mobile.
-- tela de login em modo de prévia local claramente identificado;
+- tela de login conectável à API autenticada;
 - biblioteca responsiva com capas e metadados dos cards instalados;
-- adaptação das capas em data URL para Base64 puro aceito pelo Flet desktop;
+- capas servidas pela API como arquivos HTTP, sem Base64 no cliente;
 - navegação da biblioteca para o quadro demonstrativo.
 
 ## Executar no desktop
@@ -61,7 +61,28 @@ mantém as sessões em memória; reinícios do processo encerram as sessões, se
 afetar contas, entitlements ou runs persistidas. A API não expõe credenciais do
 Google, Mercado Pago, OpenRouter nem conteúdo interno do runtime.
 
-Enquanto o cliente ainda não está apontado para essa API, `python -m
-flet_client.main` apresenta login e biblioteca em modo de prévia local. Os
-campos de login não são enviados e os botões de demonstração não concedem
-entitlements. Essa separação evita confundir a validação visual com acesso real.
+## Conectar o cliente à API
+
+O fluxo padrão não possui mais login de prévia. Configure a URL do servidor
+antes de iniciar o cliente:
+
+```powershell
+$env:ROLEPLAY_FLET_API_URL="http://127.0.0.1:8001"
+python -m flet_client.main
+```
+
+O login envia e-mail e senha para `POST /api/v1/auth/login`, guarda o Bearer
+somente no processo atual e carrega `GET /api/v1/catalog`. As capas usam URLs
+como `/api/v1/catalog/{package_id}/cover`. Cards bloqueados permanecem
+desabilitados; o cliente não cria entitlements nem simula pagamento.
+
+Para um teste local completo, a API deve rodar em outro terminal com os secrets
+do servidor configurados:
+
+```powershell
+uvicorn flet_api.asgi:app --host 127.0.0.1 --port 8001
+```
+
+Sem `ROLEPLAY_FLET_API_URL`, ou sem uma API acessível, a tela permanece no login
+e apresenta uma mensagem de configuração/conexão. O player ainda usa um quadro
+demonstrativo; abertura e retomada de runs serão integradas na próxima etapa.

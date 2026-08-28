@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -56,6 +57,7 @@ def client(*, entitled_packages: set[str] | None = None) -> tuple[TestClient, Fa
                 card("story.owned", AccessStatus.LOCKED),
                 card("story.locked", AccessStatus.LOCKED),
             ],
+            cover_resolver=lambda _package_id: Path(__file__),
         )
     )
     return TestClient(app), accounts
@@ -121,12 +123,19 @@ def test_catalog_marks_free_owned_and_locked_server_side() -> None:
     assert items["story.free"]["access_status"] == "free"
     assert items["story.owned"]["access_status"] == "owned"
     assert items["story.locked"]["access_status"] == "locked"
+    assert items["story.owned"]["cover_url"].endswith(
+        "/api/v1/catalog/story.owned/cover"
+    )
     assert set(items["story.owned"]) == {
         "package_id", "title", "subtitle", "description", "genres",
         "access_status", "price_label", "chapter_label", "cover_url",
         "is_tasting", "profile_name", "profile_identity",
         "profile_personality", "profile_intention", "replay_requires_purchase",
     }
+
+    cover = test_client.get("/api/v1/catalog/story.owned/cover")
+    assert cover.status_code == 200
+    assert cover.content == Path(__file__).read_bytes()
 
 
 def test_logout_revokes_session() -> None:
@@ -149,4 +158,3 @@ def test_inactive_user_invalidates_existing_session() -> None:
     )
 
     assert response.status_code == 401
-

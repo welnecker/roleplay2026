@@ -47,6 +47,35 @@ def _cover_url(package_root: Path, cover: str) -> str:
     return f"data:{mime_type};base64,{encoded}"
 
 
+def cover_file_for_package(
+    package_id: str,
+    *,
+    root: Path = INSTALLED_STORIES_ROOT,
+) -> Path | None:
+    """Resolve a capa declarada sem permitir acesso fora do pacote instalado."""
+
+    packages, _errors = discover_packages(root)
+    package = next(
+        (item for item in packages if item.manifest.package_id == package_id),
+        None,
+    )
+    if package is None:
+        return None
+    value = str(package.manifest.card.cover or "").strip()
+    if not value or urlparse(value).scheme:
+        return None
+    package_root = package.root.resolve()
+    target = (package_root / value).resolve()
+    try:
+        target.relative_to(package_root)
+    except ValueError:
+        return None
+    mime_type, _encoding = mimetypes.guess_type(target.name)
+    if not target.is_file() or not mime_type or not mime_type.startswith("image/"):
+        return None
+    return target
+
+
 def package_to_story_card(package: InstalledStoryPackage) -> StoryCard:
     manifest = package.manifest
     card = manifest.card

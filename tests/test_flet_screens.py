@@ -21,12 +21,20 @@ def _texts(control: ft.Control) -> list[str]:
     return [item.value for item in _walk(control) if isinstance(item, ft.Text)]
 
 
-def test_login_identifica_previa_sem_autenticacao_real() -> None:
-    screen = login_screen(on_preview_login=lambda: None)
+def test_login_identifica_api_real_configurada() -> None:
+    screen = login_screen(
+        on_login=lambda _email, _password: None,
+        api_url="https://api.example.com",
+    )
 
     texts = _texts(screen)
     assert "Bem-vindo de volta" in texts
-    assert any("PRÉVIA LOCAL" in value for value in texts)
+    assert "API CONFIGURADA · https://api.example.com" in texts
+    assert "Entrar" in [
+        item.content
+        for item in _walk(screen)
+        if isinstance(item, ft.FilledButton)
+    ]
     assert any(isinstance(item, ft.TextField) and item.password for item in _walk(screen))
 
 
@@ -49,7 +57,7 @@ def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
         access_status=AccessStatus.LOCKED,
         progress_status=ProgressStatus.NOT_STARTED,
         price_label="R$ 9,90",
-        cover_url="data:image/webp;base64," + base64.b64encode(b"imagem").decode("ascii"),
+        cover_url="https://api.example.com/api/v1/catalog/roleplay2026.exemplo/cover",
     )
 
     screen = library_screen(
@@ -65,8 +73,11 @@ def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
     assert "R$ 9,90" in texts
     assert story.access_status == AccessStatus.LOCKED
     image = next(item for item in _walk(screen) if isinstance(item, ft.Image))
-    assert image.src == base64.b64encode(b"imagem").decode("ascii")
+    assert image.src == story.cover_url
     assert (image.left, image.top, image.right, image.bottom) == (0, 0, 0, 0)
     stack = next(item for item in _walk(screen) if isinstance(item, ft.Stack))
     assert stack.height == 280
     assert stack.fit == ft.StackFit.EXPAND
+    button = next(item for item in _walk(screen) if isinstance(item, ft.FilledButton))
+    assert button.disabled is True
+    assert button.content == "Pagamento ainda não integrado"

@@ -38,7 +38,11 @@ def _logo() -> ft.Column:
     )
 
 
-def login_screen(*, on_preview_login: Callable[[], None]) -> ft.Control:
+def login_screen(
+    *,
+    on_login: Callable[[str, str], str | None],
+    api_url: str,
+) -> ft.Control:
     email = ft.TextField(
         label="E-mail",
         hint_text="voce@email.com",
@@ -52,6 +56,19 @@ def login_screen(*, on_preview_login: Callable[[], None]) -> ft.Control:
         can_reveal_password=True,
         border_radius=14,
     )
+    error = ft.Text(size=12, color="#B42318", visible=False)
+
+    def submit(_event: object = None) -> None:
+        clean_email = str(email.value or "").strip()
+        clean_password = str(password.value or "")
+        if not clean_email or not clean_password:
+            message = "Informe seu e-mail e sua senha."
+        else:
+            message = on_login(clean_email, clean_password)
+        error.value = str(message or "")
+        error.visible = bool(message)
+        if error.page is not None:
+            error.update()
 
     return ft.Container(
         expand=True,
@@ -85,12 +102,13 @@ def login_screen(*, on_preview_login: Callable[[], None]) -> ft.Control:
                             ),
                             email,
                             password,
+                            error,
                             ft.FilledButton(
-                                "Entrar na prévia visual",
+                                "Entrar",
                                 height=52,
                                 bgcolor=ACCENT,
                                 color="#FFFFFF",
-                                on_click=lambda _event: on_preview_login(),
+                                on_click=submit,
                             ),
                             ft.TextButton(
                                 "Esqueci minha senha",
@@ -104,7 +122,7 @@ def login_screen(*, on_preview_login: Callable[[], None]) -> ft.Control:
                     border_radius=12,
                     padding=12,
                     content=ft.Text(
-                        "PRÉVIA LOCAL · Os campos não são enviados. O login real será conectado à API autenticada.",
+                        f"API CONFIGURADA · {api_url}" if api_url else "API NÃO CONFIGURADA",
                         size=11,
                         text_align=ft.TextAlign.CENTER,
                         color="#FFFFFFBB",
@@ -195,10 +213,13 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
                                 ],
                             ),
                             ft.FilledButton(
-                                "Abrir demonstração",
+                                "Abrir história"
+                                if card.access_status != AccessStatus.LOCKED
+                                else "Pagamento ainda não integrado",
                                 bgcolor=ACCENT,
                                 color="#FFFFFF",
                                 height=45,
+                                disabled=card.access_status == AccessStatus.LOCKED,
                                 on_click=lambda _event, selected=card: on_open_preview(selected),
                             ),
                         ],
