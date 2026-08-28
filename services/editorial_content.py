@@ -206,11 +206,14 @@ def load_effective_editorial_document(
     )
     if not rows:
         return base_document
-    return compile_spreadsheet_story(
-        base_document,
-        rows,
-        script_version=script_version,
+    from services import novel_frame_patch
+
+    compiler = (
+        novel_frame_patch.compile_novel_frame_story
+        if novel_frame_patch.is_novel_frame_rows(rows)
+        else compile_spreadsheet_story
     )
+    return compiler(base_document, rows, script_version=script_version)
 
 
 def load_editorial_package(
