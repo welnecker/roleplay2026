@@ -38,6 +38,27 @@ def test_login_identifica_api_real_configurada() -> None:
     assert any(isinstance(item, ft.TextField) and item.password for item in _walk(screen))
 
 
+def test_login_bem_sucedido_nao_atualiza_controle_removido_da_pagina() -> None:
+    screen = login_screen(
+        on_login=lambda _email, _password: None,
+        api_url="https://api.example.com",
+    )
+    fields = [item for item in _walk(screen) if isinstance(item, ft.TextField)]
+    fields[0].value = "pessoa@example.com"
+    fields[1].value = "senha"
+    button = next(item for item in _walk(screen) if isinstance(item, ft.FilledButton))
+    error = next(
+        item
+        for item in _walk(screen)
+        if isinstance(item, ft.Text) and item.color == "#B42318"
+    )
+
+    button.on_click(None)
+
+    assert error.visible is False
+    assert not error.value
+
+
 def test_capa_data_url_e_convertida_em_base64_puro_para_flet_desktop() -> None:
     payload = b"capa-webp"
     encoded = base64.b64encode(payload).decode("ascii")

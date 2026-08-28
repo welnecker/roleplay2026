@@ -65,6 +65,8 @@ def login_screen(
             message = "Informe seu e-mail e sua senha."
         else:
             message = on_login(clean_email, clean_password)
+        if message is None:
+            return
         error.value = str(message or "")
         error.visible = bool(message)
         if error.page is not None:
