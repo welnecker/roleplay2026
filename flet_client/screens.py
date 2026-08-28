@@ -135,12 +135,17 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
         cover = ft.Image(
             src=flet_image_source(card.cover_url),
             fit=ft.BoxFit.COVER,
-            width=float("inf"),
-            height=280,
+            left=0,
+            top=0,
+            right=0,
+            bottom=0,
         )
     else:
         cover = ft.Container(
-            height=280,
+            left=0,
+            top=0,
+            right=0,
+            bottom=0,
             bgcolor=SURFACE_MUTED,
             alignment=ft.Alignment.CENTER,
             content=ft.Icon(ft.Icons.IMAGE_OUTLINED, size=46, color=MUTED),
@@ -156,6 +161,8 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
             spacing=0,
             controls=[
                 ft.Stack(
+                    height=280,
+                    fit=ft.StackFit.EXPAND,
                     controls=[
                         cover,
                         ft.Container(

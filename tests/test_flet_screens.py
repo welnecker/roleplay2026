@@ -66,3 +66,7 @@ def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
     assert story.access_status == AccessStatus.LOCKED
     image = next(item for item in _walk(screen) if isinstance(item, ft.Image))
     assert image.src == b"imagem"
+    assert (image.left, image.top, image.right, image.bottom) == (0, 0, 0, 0)
+    stack = next(item for item in _walk(screen) if isinstance(item, ft.Stack))
+    assert stack.height == 280
+    assert stack.fit == ft.StackFit.EXPAND
