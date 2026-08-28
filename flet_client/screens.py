@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 from collections.abc import Callable, Sequence
 
 import flet as ft
@@ -14,6 +16,19 @@ ACCENT = "#D24369"
 ACCENT_DARK = "#A52D50"
 INK = "#2B1822"
 MUTED = "#765E68"
+
+
+def flet_image_source(source: str) -> bytes | str:
+    """Converte data URLs do catálogo web em bytes aceitos pelo Flet desktop."""
+
+    value = str(source or "").strip()
+    if not value.startswith("data:image/") or ";base64," not in value:
+        return value
+    _header, encoded = value.split(",", maxsplit=1)
+    try:
+        return base64.b64decode(encoded, validate=True)
+    except (ValueError, binascii.Error):
+        return ""
 
 
 def _logo() -> ft.Column:
@@ -118,7 +133,7 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
     cover: ft.Control
     if card.cover_url:
         cover = ft.Image(
-            src=card.cover_url,
+            src=flet_image_source(card.cover_url),
             fit=ft.BoxFit.COVER,
             width=float("inf"),
             height=280,
@@ -264,5 +279,4 @@ def library_screen(
     )
 
 
-__all__ = ["BACKGROUND", "library_screen", "login_screen"]
-
+__all__ = ["BACKGROUND", "flet_image_source", "library_screen", "login_screen"]

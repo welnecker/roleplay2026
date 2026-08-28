@@ -14,6 +14,7 @@ interface funcional e nenhum fluxo de produção foi substituído.
 - trilho horizontal de balões para desktop e mobile.
 - tela de login em modo de prévia local claramente identificado;
 - biblioteca responsiva com capas e metadados dos cards instalados;
+- adaptação das capas em data URL para bytes no Flet desktop;
 - navegação da biblioteca para o quadro demonstrativo.
 
 ## Executar no desktop
