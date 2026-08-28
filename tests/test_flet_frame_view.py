@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import flet as ft
+import pytest
 
 from flet_client.frame_state import VisualEntry, VisualFrame
 from flet_client.frame_view import NovelFrameView
@@ -31,6 +32,14 @@ def _slide_balloon(slide: ft.Container) -> ft.Stack:
     return balloon
 
 
+def _interaction_slides(view: NovelFrameView, index: int = 0) -> list[ft.Control]:
+    wrapper = view.track.controls[index]
+    assert isinstance(wrapper, ft.Container)
+    row = wrapper.content
+    assert isinstance(row, ft.Row)
+    return row.controls
+
+
 def test_cada_balao_forma_um_slide_com_sua_imagem_e_cauda_visivel() -> None:
     page = _Page()
     frame = VisualFrame(
@@ -38,7 +47,7 @@ def test_cada_balao_forma_um_slide_com_sua_imagem_e_cauda_visivel() -> None:
         description="Mary entra.",
         entries=(
             VisualEntry("pensamento", "mary", "Mary", "Primeiro."),
-            VisualEntry("pensamento", "mary", "Mary", "Segundo."),
+            VisualEntry("fala", "mary", "Mary", "Segundo."),
         ),
     )
     persisted: list[int] = []
@@ -50,28 +59,39 @@ def test_cada_balao_forma_um_slide_com_sua_imagem_e_cauda_visivel() -> None:
     )
 
     assert len(view.track.controls) == 1
-    first_slide = view.track.controls[0]
+    assert len(_interaction_slides(view)) == 1
+    first_slide = _interaction_slides(view)[0]
     assert isinstance(first_slide, ft.Container)
     assert _slide_image(first_slide).src == "https://img/mary1.webp"
     first_balloon = _slide_balloon(first_slide)
-    tail = first_balloon.controls[0]
-    assert isinstance(tail, ft.Container)
-    assert tail.bottom == 2
-    assert isinstance(tail.rotate, ft.Rotate)
-    assert tail.rotate.angle > 0
+    thought_tails = first_balloon.controls[:-1]
+    assert len(thought_tails) == 3
+    assert all(
+        isinstance(tail, ft.Container)
+        and tail.shape == ft.BoxShape.CIRCLE
+        and tail.top is not None
+        and tail.top >= 0
+        for tail in thought_tails
+    )
     assert first_balloon.clip_behavior == ft.ClipBehavior.NONE
 
     view._advance()
 
     assert persisted == [2]
-    assert len(view.track.controls) == 2
-    second_slide = view.track.controls[1]
+    assert len(view.track.controls) == 1
+    assert len(_interaction_slides(view)) == 2
+    second_slide = _interaction_slides(view)[1]
     assert isinstance(second_slide, ft.Container)
     assert _slide_image(second_slide).src == "https://img/mary2.webp"
+    speech_balloon = _slide_balloon(second_slide)
+    speech_tail = speech_balloon.controls[0]
+    assert isinstance(speech_tail, ft.Container)
+    assert speech_tail.top == 5
+    assert isinstance(speech_tail.rotate, ft.Rotate)
     assert view.controller.revealed_entries == 2
 
 
-def test_slides_sao_responsivos_e_carrossel_foca_o_mais_recente() -> None:
+def test_linha_e_responsiva_e_tem_barra_para_rever_as_imagens() -> None:
     page = _Page()
     page.width = 390
     frame = VisualFrame(
@@ -85,14 +105,77 @@ def test_slides_sao_responsivos_e_carrossel_foca_o_mais_recente() -> None:
         entry_images=("https://img/mary1.webp",),
     )
 
+    assert isinstance(view.track, ft.ListView)
+    assert view.track.scroll == ft.ScrollMode.ALWAYS
     assert view.track.auto_scroll is True
-    assert view.slide_width == 338
-    assert view.track.controls[0].width == 338
+    assert view.slide_width == pytest.approx(317.72)
+    first_row = view.track.controls[0].content
+    assert isinstance(first_row, ft.Row)
+    assert first_row.scroll == ft.ScrollMode.ALWAYS
+    assert first_row.auto_scroll is True
+    assert first_row.controls[0].width == pytest.approx(317.72)
 
     view._resize(type("Resize", (), {"width": 1400})())
 
-    assert view.slide_width == 760
-    assert view.track.controls[0].width == 760
+    assert view.slide_width == 326.5
+    assert _interaction_slides(view)[0].width == 326.5
+
+
+def test_uma_interacao_mantem_quatro_imagens_na_mesma_linha() -> None:
+    page = _Page()
+    frame = VisualFrame(
+        frame_id="encontro_001",
+        description="Mary entra.",
+        entries=tuple(
+            VisualEntry("fala", "mary", "Mary", f"Linha {index}.")
+            for index in range(1, 5)
+        ),
+    )
+    view = NovelFrameView(
+        page,  # type: ignore[arg-type]
+        frame,
+        entry_images=tuple(f"https://img/mary{index}.webp" for index in range(1, 5)),
+        revealed_entries=4,
+    )
+
+    assert len(view.track.controls) == 1
+    assert len(_interaction_slides(view)) == 4
+    assert [_slide_image(slide).src for slide in _interaction_slides(view)] == [
+        f"https://img/mary{index}.webp" for index in range(1, 5)
+    ]
+
+
+def test_tela_preserva_no_maximo_cinco_interacoes_de_quatro_imagens() -> None:
+    page = _Page()
+    history = ()
+    current = None
+    for frame_index in range(1, 7):
+        entries = tuple(
+            VisualEntry("fala", "mary", "Mary", f"F{frame_index} L{entry_index}.")
+            for entry_index in range(1, 5)
+        )
+        current = NovelFrameView(
+            page,  # type: ignore[arg-type]
+            VisualFrame(
+                f"encontro_{frame_index:03d}",
+                f"Quadro {frame_index}.",
+                entries,
+            ),
+            entry_images=tuple(
+                f"https://img/f{frame_index}-{entry_index}.webp"
+                for entry_index in range(1, 5)
+            ),
+            history=history,
+            revealed_entries=4,
+        )
+        history = current.history_snapshot()
+
+    assert current is not None
+    assert len(current.track.controls) == 5
+    assert [row.key for row in current.track.controls] == [
+        f"frame-row-encontro_{frame_index:03d}" for frame_index in range(2, 7)
+    ]
+    assert all(len(_interaction_slides(current, index)) == 4 for index in range(5))
 
 
 def test_revelacao_falha_restaura_o_indice_visual() -> None:

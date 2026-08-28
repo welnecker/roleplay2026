@@ -5,7 +5,7 @@ import flet as ft
 
 from flet_client.api_client import ApiPayment, ApiRunFrame, FletApiClient, FletApiError
 from flet_client.frame_state import parse_visual_frame
-from flet_client.frame_view import NovelFrameView
+from flet_client.frame_view import FrameVisualRow, NovelFrameView
 from flet_client.screens import BACKGROUND, library_screen, login_screen, payment_screen
 from platform_core.models import AccessStatus
 from platform_core.models import StoryCard
@@ -26,7 +26,11 @@ def main(page: ft.Page) -> None:
         page.add(control)
         page.update()
 
-    def show_player(card: StoryCard, current: ApiRunFrame | None = None) -> None:
+    def show_player(
+        card: StoryCard,
+        current: ApiRunFrame | None = None,
+        history: tuple[FrameVisualRow, ...] = (),
+    ) -> None:
         if api_client is None:
             show_api_error("API não configurada.")
             return
@@ -47,7 +51,7 @@ def main(page: ft.Page) -> None:
             except FletApiError as exc:
                 show_api_error(str(exc))
                 return False
-            show_player(card, following)
+            show_player(card, following, history=view.history_snapshot())
             return True
 
         def persist_reveal(_revealed_entries: int) -> bool:
@@ -66,6 +70,7 @@ def main(page: ft.Page) -> None:
             frame,
             image=run_frame.image_url or None,
             entry_images=run_frame.entry_image_urls,
+            history=history,
             revealed_entries=run_frame.revealed_entries,
             on_frame_complete=completed,
             on_reveal=persist_reveal,
