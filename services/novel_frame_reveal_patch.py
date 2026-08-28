@@ -6,6 +6,7 @@ from typing import Any
 import streamlit as st
 
 from narrative_v2.repository import RuntimeConflictError
+from services.novel_frame_reveal import frame_entry_count, frame_id
 
 _CURRENT_KEY = "novel_frame_reveal:current"
 _PREFIX = "novel_frame_reveal:index:"
@@ -46,7 +47,7 @@ def reveal_index(frame_id: str, entry_count: int) -> int:
         return 0
 
 
-def start_frame_reveal(frame_id: str) -> None:
+def start_frame_reveal(frame_id: str, entry_count: int | None = None) -> None:
     """Inicia um quadro novo já exibindo seu primeiro card.
 
     O total real de cards só é conhecido na renderização. Guardar ``1`` aqui é
@@ -59,6 +60,8 @@ def start_frame_reveal(frame_id: str) -> None:
     clean = str(frame_id or "").strip()
     if clean:
         st.session_state[reveal_key(clean)] = 1
+        if entry_count is not None:
+            set_current_frame(clean, entry_count)
 
 
 def _sequence(messages: list[dict[str, object]]) -> int:
@@ -211,9 +214,19 @@ def _persist_wrapper(*args: Any, **kwargs: Any):
 
     metadata = kwargs.get("assistant_metadata")
     if isinstance(metadata, dict) and bool(metadata.get("novel_frame", False)):
-        frame_id = str(metadata.get("editorial_node", "") or "").strip()
-        if frame_id:
-            start_frame_reveal(frame_id)
+        content = str(kwargs.get("assistant_text", "") or "")
+        persisted_frame_id = frame_id(content)
+        persisted_entry_count = frame_entry_count(content)
+        if persisted_frame_id:
+            # O botão Avançar não pode depender de o renderer/carrossel ter
+            # conseguido registrar o quadro atual. A persistência conhece o
+            # conteúdo definitivo e ativa, de forma atômica, o primeiro card
+            # e a contagem completa das entries que ainda serão reveladas.
+            start_frame_reveal(persisted_frame_id, persisted_entry_count)
+        else:
+            editorial_node = str(metadata.get("editorial_node", "") or "").strip()
+            if editorial_node:
+                start_frame_reveal(editorial_node)
     return result
 
 

@@ -15,6 +15,41 @@ def test_quadro_novo_comeca_com_primeiro_card_visivel(monkeypatch) -> None:
     assert reveal_patch.reveal_index("encontro_001", 0) == 0
 
 
+def test_persistencia_ativa_quadro_e_contagem_sem_depender_do_renderer(monkeypatch) -> None:
+    state: dict[str, object] = {}
+    monkeypatch.setattr(reveal_patch.st, "session_state", state)
+    monkeypatch.setattr(
+        reveal_patch,
+        "_original_persist_assistant_message",
+        lambda *args, **kwargs: "persistido",
+    )
+
+    content = """[QUADRO encontro_001]
+[DESCRIÇÃO]
+Mary entra na sala.
+[PENSAMENTO mary|Mary]
+Preciso manter a coragem.
+[FALA mary|Mary]
+Olá... tem alguém aqui?
+[/QUADRO]"""
+
+    result = reveal_patch._persist_wrapper(
+        object(),
+        assistant_text=content,
+        assistant_metadata={
+            "novel_frame": True,
+            "editorial_node": "encontro_001",
+        },
+    )
+
+    assert result == "persistido"
+    assert state[reveal_patch.reveal_key("encontro_001")] == 1
+    assert state["novel_frame_reveal:current"] == {
+        "frame_id": "encontro_001",
+        "entry_count": 2,
+    }
+
+
 def test_um_card_exige_um_clique_para_avancar_quadro(monkeypatch) -> None:
     state: dict[str, object] = {
         "novel_frame_reveal:current": {"frame_id": "quadro_001", "entry_count": 1},

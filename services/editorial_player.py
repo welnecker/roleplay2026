@@ -19,7 +19,7 @@ from services.novel_synced_visual_contract import install as install_synced_visu
 
 
 _RUNTIME_PATH = Path(__file__).with_name("novel_player_runtime.py")
-NOVEL_FRAME_BUILD = "2026-08-27.synced-image-carousel.13"
+NOVEL_FRAME_BUILD = "2026-08-28.synced-image-carousel.14"
 _BUILD_LOGGED = False
 
 
