@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from flet_api.app import ApiServices, create_api_app
+from flet_api.payments import PaymentState
 from flet_api.sessions import SessionStore
 from persistence.accounts import AccountUser
 from platform_core.models import AccessStatus, ProgressStatus, StoryCard
@@ -27,6 +28,34 @@ class FakeAccounts:
 
     def has_entitlement(self, *, user_id: str, package_id: str, access: str) -> bool:
         return user_id == self.user.user_id and package_id in (self.entitled_packages or set())
+
+
+@dataclass
+class FakePayments:
+    master_user_id: str = "user-1"
+
+    def master_test_available(self, *, user_id: str) -> bool:
+        return user_id == self.master_user_id
+
+    def approve_master_test(self, *, user: AccountUser, package_id: str) -> PaymentState:
+        if not self.master_test_available(user_id=user.user_id):
+            raise PermissionError("Não autorizado.")
+        return PaymentState(package_id, "test-pay-1", "approved", True)
+
+    def create_pix(self, *, user: AccountUser, package_id: str) -> PaymentState:
+        return PaymentState(
+            package_id,
+            "pay-1",
+            "pending",
+            False,
+            qr_code="pix-copia-cola",
+            qr_code_base64="cXI=",
+        )
+
+    def refresh(self, *, user: AccountUser, payment_order_id: str) -> PaymentState:
+        if payment_order_id != "pay-1":
+            raise KeyError("Cobrança não encontrada.")
+        return PaymentState("story.locked", payment_order_id, "approved", True)
 
 
 def card(package_id: str, access: AccessStatus) -> StoryCard:
@@ -58,6 +87,7 @@ def client(*, entitled_packages: set[str] | None = None) -> tuple[TestClient, Fa
                 card("story.locked", AccessStatus.LOCKED),
             ],
             cover_resolver=lambda _package_id: Path(__file__),
+            payment_gateway=FakePayments(),
         )
     )
     return TestClient(app), accounts
@@ -145,6 +175,31 @@ def test_logout_revokes_session() -> None:
 
     assert test_client.post("/api/v1/auth/logout", headers=headers).status_code == 204
     assert test_client.get("/api/v1/auth/me", headers=headers).status_code == 401
+
+
+def test_pagamento_pix_e_teste_master_exigem_sessao() -> None:
+    test_client, _accounts = client()
+    token = login(test_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    options = test_client.get("/api/v1/payments/story.locked/options", headers=headers)
+    created = test_client.post(
+        "/api/v1/payments/pix",
+        headers=headers,
+        json={"package_id": "story.locked"},
+    )
+    approved = test_client.post(
+        "/api/v1/payments/master-test",
+        headers=headers,
+        json={"package_id": "story.locked"},
+    )
+
+    assert options.json()["master_test_available"] is True
+    assert created.json()["qr_code"] == "pix-copia-cola"
+    assert approved.json()["approved"] is True
+    assert test_client.post(
+        "/api/v1/payments/pix", json={"package_id": "story.locked"}
+    ).status_code == 401
 
 
 def test_inactive_user_invalidates_existing_session() -> None:

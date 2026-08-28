@@ -19,6 +19,18 @@ class ApiUser:
     display_name: str
 
 
+@dataclass(frozen=True, slots=True)
+class ApiPayment:
+    package_id: str
+    payment_order_id: str
+    status: str
+    approved: bool
+    qr_code: str
+    qr_code_base64: str
+    ticket_url: str
+    master_test_available: bool
+
+
 class FletApiClient:
     def __init__(
         self,
@@ -111,6 +123,44 @@ class FletApiClient:
             )
         return result
 
+    @staticmethod
+    def _payment(response: requests.Response) -> ApiPayment:
+        payload = response.json()
+        if not isinstance(payload, dict) or not payload.get("package_id"):
+            raise FletApiError("Resposta de pagamento inválida.")
+        return ApiPayment(
+            package_id=str(payload.get("package_id", "") or ""),
+            payment_order_id=str(payload.get("payment_order_id", "") or ""),
+            status=str(payload.get("status", "") or ""),
+            approved=bool(payload.get("approved", False)),
+            qr_code=str(payload.get("qr_code", "") or ""),
+            qr_code_base64=str(payload.get("qr_code_base64", "") or ""),
+            ticket_url=str(payload.get("ticket_url", "") or ""),
+            master_test_available=bool(payload.get("master_test_available", False)),
+        )
+
+    def payment_options(self, package_id: str) -> ApiPayment:
+        return self._payment(self._request("GET", f"/api/v1/payments/{package_id}/options"))
+
+    def approve_master_test(self, package_id: str) -> ApiPayment:
+        return self._payment(
+            self._request("POST", "/api/v1/payments/master-test", json={"package_id": package_id})
+        )
+
+    def create_pix(self, package_id: str) -> ApiPayment:
+        return self._payment(
+            self._request("POST", "/api/v1/payments/pix", json={"package_id": package_id})
+        )
+
+    def refresh_payment(self, payment_order_id: str) -> ApiPayment:
+        return self._payment(
+            self._request(
+                "POST",
+                "/api/v1/payments/refresh",
+                json={"payment_order_id": payment_order_id},
+            )
+        )
+
     def logout(self) -> None:
         if not self.access_token:
             return
@@ -120,4 +170,4 @@ class FletApiClient:
             self.access_token = ""
 
 
-__all__ = ["ApiUser", "FletApiClient", "FletApiError"]
+__all__ = ["ApiPayment", "ApiUser", "FletApiClient", "FletApiError"]

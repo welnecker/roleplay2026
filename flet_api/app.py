@@ -12,8 +12,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 
 from flet_api.sessions import SessionStore
+from flet_api.payments import PaymentGateway, PaymentState, build_payment_gateway
 from persistence.accounts import AccountUser, build_account_repository
-from platform_core.catalog import cover_file_for_package, load_demo_catalog
+from platform_core.catalog import INSTALLED_STORIES_ROOT, cover_file_for_package, load_demo_catalog
 from platform_core.models import AccessStatus, StoryCard
 from services.secret_loader import load_application_secrets
 
@@ -68,12 +69,37 @@ class CatalogResponse(BaseModel):
     items: list[StoryCardResponse]
 
 
+class PaymentRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    package_id: str
+
+
+class PaymentRefreshRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    payment_order_id: str
+
+
+class PaymentResponse(BaseModel):
+    package_id: str
+    payment_order_id: str
+    status: str
+    approved: bool
+    qr_code: str = ""
+    qr_code_base64: str = ""
+    ticket_url: str = ""
+    master_test_available: bool = False
+
+
 @dataclass(slots=True)
 class ApiServices:
     accounts: AccountRepository
     sessions: SessionStore
     catalog_loader: Callable[[], list[StoryCard]]
     cover_resolver: Callable[[str], Path | None] = cover_file_for_package
+    payment_gateway: PaymentGateway | None = None
+    paid_access_resolver: Callable[[str, str], bool] | None = None
 
 
 def _user_response(user: AccountUser) -> UserResponse:
@@ -106,6 +132,23 @@ def _card_response(
         profile_personality=card.profile_personality,
         profile_intention=card.profile_intention,
         replay_requires_purchase=card.replay_requires_purchase,
+    )
+
+
+def _payment_response(
+    state: PaymentState,
+    *,
+    master_test_available: bool,
+) -> PaymentResponse:
+    return PaymentResponse(
+        package_id=state.package_id,
+        payment_order_id=state.payment_order_id,
+        status=state.status,
+        approved=state.approved,
+        qr_code=state.qr_code,
+        qr_code_base64=state.qr_code_base64,
+        ticket_url=state.ticket_url,
+        master_test_available=master_test_available,
     )
 
 
@@ -163,11 +206,14 @@ def create_api_app(services: ApiServices) -> FastAPI:
         items: list[StoryCardResponse] = []
         for card in services.catalog_loader():
             is_free = card.access_status == AccessStatus.FREE
-            entitled = is_free or services.accounts.has_entitlement(
-                user_id=user.user_id,
-                package_id=card.package_id,
-                access="free" if is_free else "paid",
-            )
+            if services.paid_access_resolver is not None and not is_free:
+                entitled = services.paid_access_resolver(user.user_id, card.package_id)
+            else:
+                entitled = is_free or services.accounts.has_entitlement(
+                    user_id=user.user_id,
+                    package_id=card.package_id,
+                    access="free" if is_free else "paid",
+                )
             access_status = (
                 AccessStatus.FREE
                 if is_free
@@ -196,6 +242,78 @@ def create_api_app(services: ApiServices) -> FastAPI:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Capa não encontrada.")
         return FileResponse(cover)
 
+    def payment_gateway() -> PaymentGateway:
+        if services.payment_gateway is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Pagamento ainda não está configurado neste servidor.",
+            )
+        return services.payment_gateway
+
+    @app.get("/api/v1/payments/{package_id}/options", response_model=PaymentResponse)
+    def payment_options(
+        package_id: str,
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> PaymentResponse:
+        user, _token = identity
+        gateway = payment_gateway()
+        return PaymentResponse(
+            package_id=package_id,
+            payment_order_id="",
+            status="not_started",
+            approved=False,
+            master_test_available=gateway.master_test_available(user_id=user.user_id),
+        )
+
+    @app.post("/api/v1/payments/master-test", response_model=PaymentResponse)
+    def approve_master_test(
+        payload: PaymentRequest,
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> PaymentResponse:
+        user, _token = identity
+        gateway = payment_gateway()
+        try:
+            state = gateway.approve_master_test(user=user, package_id=payload.package_id)
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc).strip("'")) from exc
+        return _payment_response(state, master_test_available=True)
+
+    @app.post("/api/v1/payments/pix", response_model=PaymentResponse)
+    def create_pix(
+        payload: PaymentRequest,
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> PaymentResponse:
+        user, _token = identity
+        gateway = payment_gateway()
+        try:
+            state = gateway.create_pix(user=user, package_id=payload.package_id)
+        except (KeyError, ValueError, PermissionError) as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc).strip("'")) from exc
+        return _payment_response(
+            state,
+            master_test_available=gateway.master_test_available(user_id=user.user_id),
+        )
+
+    @app.post("/api/v1/payments/refresh", response_model=PaymentResponse)
+    def refresh_payment(
+        payload: PaymentRefreshRequest,
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> PaymentResponse:
+        user, _token = identity
+        gateway = payment_gateway()
+        try:
+            state = gateway.refresh(user=user, payment_order_id=payload.payment_order_id)
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc).strip("'")) from exc
+        return _payment_response(
+            state,
+            master_test_available=gateway.master_test_available(user_id=user.user_id),
+        )
+
     return app
 
 
@@ -210,12 +328,30 @@ def production_app() -> FastAPI:
     if _production_app is None:
         with _production_lock:
             if _production_app is None:
-                accounts = build_account_repository(load_application_secrets())
+                secrets = load_application_secrets()
+                accounts = build_account_repository(secrets)
+                payment_gateway = build_payment_gateway(
+                    secrets,
+                    accounts=accounts,
+                    stories_root=INSTALLED_STORIES_ROOT,
+                )
+
+                def has_paid_access(user_id: str, package_id: str) -> bool:
+                    from services.paid_run_access import get_paid_run_access
+
+                    return get_paid_run_access(
+                        secrets=secrets,
+                        user_id=user_id,
+                        package_id=package_id,
+                    ).allowed
+
                 _production_app = create_api_app(
                     ApiServices(
                         accounts=accounts,
                         sessions=SessionStore(),
                         catalog_loader=load_demo_catalog,
+                        payment_gateway=payment_gateway,
+                        paid_access_resolver=has_paid_access,
                     )
                 )
     return _production_app

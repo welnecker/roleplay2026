@@ -149,7 +149,7 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
     if card.cover_url:
         cover = ft.Image(
             src=flet_image_source(card.cover_url),
-            fit=ft.BoxFit.COVER,
+            fit=ft.BoxFit.CONTAIN,
             left=0,
             top=0,
             right=0,
@@ -217,16 +217,105 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
                             ft.FilledButton(
                                 "Abrir história"
                                 if card.access_status != AccessStatus.LOCKED
-                                else "Pagamento ainda não integrado",
+                                else "Comprar com Pix",
                                 bgcolor=ACCENT,
                                 color="#FFFFFF",
                                 height=45,
-                                disabled=card.access_status == AccessStatus.LOCKED,
                                 on_click=lambda _event, selected=card: on_open_preview(selected),
                             ),
                         ],
                     ),
                 ),
+            ],
+        ),
+    )
+
+
+def payment_screen(
+    card: StoryCard,
+    *,
+    master_test_available: bool,
+    payment_order_id: str = "",
+    qr_code: str = "",
+    qr_code_base64: str = "",
+    payment_status: str = "not_started",
+    on_back: Callable[[], None],
+    on_create_pix: Callable[[], None],
+    on_master_test: Callable[[], None],
+    on_refresh: Callable[[], None],
+) -> ft.Control:
+    details: list[ft.Control] = []
+    if qr_code_base64:
+        details.append(
+            ft.Image(src=qr_code_base64, width=260, height=260, fit=ft.BoxFit.CONTAIN)
+        )
+    if qr_code:
+        details.extend(
+            [
+                ft.Text("Pix Copia e Cola", size=15, weight=ft.FontWeight.BOLD, color=INK),
+                ft.TextField(value=qr_code, multiline=True, read_only=True, min_lines=3),
+            ]
+        )
+    if payment_order_id:
+        details.append(
+            ft.FilledButton(
+                "Já paguei — verificar agora",
+                bgcolor=ACCENT,
+                color="#FFFFFF",
+                on_click=lambda _event: on_refresh(),
+            )
+        )
+    else:
+        details.append(
+            ft.FilledButton(
+                "Gerar Pix",
+                bgcolor=ACCENT,
+                color="#FFFFFF",
+                on_click=lambda _event: on_create_pix(),
+            )
+        )
+    if master_test_available:
+        details.extend(
+            [
+                ft.Divider(),
+                ft.Text(
+                    "Ambiente interno autorizado para esta conta.",
+                    size=12,
+                    color=MUTED,
+                ),
+                ft.OutlinedButton(
+                    "Liberar pagamento de teste",
+                    on_click=lambda _event: on_master_test(),
+                ),
+            ]
+        )
+
+    return ft.Container(
+        expand=True,
+        bgcolor=BACKGROUND,
+        padding=ft.Padding.symmetric(horizontal=22, vertical=24),
+        content=ft.Column(
+            scroll=ft.ScrollMode.AUTO,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[
+                ft.Container(
+                    width=560,
+                    bgcolor=SURFACE,
+                    border_radius=22,
+                    padding=24,
+                    content=ft.Column(
+                        spacing=14,
+                        controls=[
+                            ft.TextButton("← Voltar aos cards", on_click=lambda _event: on_back()),
+                            ft.Text("Pagamento por Pix", size=28, weight=ft.FontWeight.BOLD, color=INK),
+                            ft.Text(card.title, size=21, weight=ft.FontWeight.BOLD, color=INK),
+                            ft.Text(card.description or card.subtitle, color=MUTED),
+                            ft.Text(card.price_label, size=24, weight=ft.FontWeight.BOLD, color=ACCENT_DARK),
+                            ft.Text(f"Status: {payment_status}", size=12, color=MUTED),
+                            *details,
+                        ],
+                    ),
+                )
             ],
         ),
     )
@@ -304,4 +393,10 @@ def library_screen(
     )
 
 
-__all__ = ["BACKGROUND", "flet_image_source", "library_screen", "login_screen"]
+__all__ = [
+    "BACKGROUND",
+    "flet_image_source",
+    "library_screen",
+    "login_screen",
+    "payment_screen",
+]

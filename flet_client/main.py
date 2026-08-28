@@ -5,10 +5,11 @@ from pathlib import Path
 
 import flet as ft
 
-from flet_client.api_client import FletApiClient, FletApiError
+from flet_client.api_client import ApiPayment, FletApiClient, FletApiError
 from flet_client.frame_state import parse_visual_frame
 from flet_client.frame_view import NovelFrameView
-from flet_client.screens import BACKGROUND, library_screen, login_screen
+from flet_client.screens import BACKGROUND, library_screen, login_screen, payment_screen
+from platform_core.models import AccessStatus
 from platform_core.models import StoryCard
 
 
@@ -63,6 +64,66 @@ def main(page: ft.Page) -> None:
         )
         show(view.root)
 
+    def show_api_error(message: str) -> None:
+        page.show_dialog(ft.SnackBar(ft.Text(message)))
+
+    def reload_library() -> None:
+        if api_client is None:
+            show_login()
+            return
+        try:
+            cards = api_client.catalog()
+        except FletApiError as exc:
+            show_api_error(str(exc))
+            return
+        show_library(cards, active_display_name)
+
+    def show_payment(card: StoryCard, state: ApiPayment | None = None) -> None:
+        if api_client is None:
+            show_api_error("API não configurada.")
+            return
+        try:
+            current = state or api_client.payment_options(card.package_id)
+        except FletApiError as exc:
+            show_api_error(str(exc))
+            return
+
+        def run(operation) -> None:
+            try:
+                updated = operation()
+            except FletApiError as exc:
+                show_api_error(str(exc))
+                return
+            if updated.approved:
+                reload_library()
+                return
+            show_payment(card, updated)
+
+        show(
+            payment_screen(
+                card,
+                master_test_available=current.master_test_available,
+                payment_order_id=current.payment_order_id,
+                qr_code=current.qr_code,
+                qr_code_base64=current.qr_code_base64,
+                payment_status=current.status,
+                on_back=lambda: show_library(active_cards, active_display_name),
+                on_create_pix=lambda: run(lambda: api_client.create_pix(card.package_id)),
+                on_master_test=lambda: run(
+                    lambda: api_client.approve_master_test(card.package_id)
+                ),
+                on_refresh=lambda: run(
+                    lambda: api_client.refresh_payment(current.payment_order_id)
+                ),
+            )
+        )
+
+    def select_card(card: StoryCard) -> None:
+        if card.access_status == AccessStatus.LOCKED:
+            show_payment(card)
+        else:
+            show_player(card)
+
     def show_library(cards: list[StoryCard], display_name: str) -> None:
         nonlocal active_cards, active_display_name
         active_cards = list(cards)
@@ -80,7 +141,7 @@ def main(page: ft.Page) -> None:
                 cards,
                 display_name=display_name,
                 on_logout=logout,
-                on_open_preview=show_player,
+                on_open_preview=select_card,
             )
         )
 

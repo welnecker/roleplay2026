@@ -104,3 +104,28 @@ def test_cliente_flet_trata_indisponibilidade_da_api() -> None:
         assert "conectar" in str(exc)
     else:
         raise AssertionError("Era esperado FletApiError")
+
+
+def test_cliente_flet_cria_e_confere_pagamento_pix() -> None:
+    payload = {
+        "package_id": "roleplay2026.camilly",
+        "payment_order_id": "pay-1",
+        "status": "pending",
+        "approved": False,
+        "qr_code": "pix-copia-cola",
+        "qr_code_base64": "cXI=",
+        "ticket_url": "https://example.com/pix",
+        "master_test_available": True,
+    }
+    session = FakeSession([FakeResponse(200, payload), FakeResponse(200, {**payload, "approved": True})])
+    client = FletApiClient("https://api.example.com", session=session)  # type: ignore[arg-type]
+    client.access_token = "token"
+
+    created = client.create_pix("roleplay2026.camilly")
+    approved = client.refresh_payment(created.payment_order_id)
+
+    assert created.qr_code == "pix-copia-cola"
+    assert created.master_test_available is True
+    assert approved.approved is True
+    assert session.calls[0][2]["json"] == {"package_id": "roleplay2026.camilly"}
+    assert session.calls[1][2]["json"] == {"payment_order_id": "pay-1"}

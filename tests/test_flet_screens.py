@@ -95,10 +95,11 @@ def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
     assert story.access_status == AccessStatus.LOCKED
     image = next(item for item in _walk(screen) if isinstance(item, ft.Image))
     assert image.src == story.cover_url
+    assert image.fit == ft.BoxFit.CONTAIN
     assert (image.left, image.top, image.right, image.bottom) == (0, 0, 0, 0)
     stack = next(item for item in _walk(screen) if isinstance(item, ft.Stack))
     assert stack.height == 280
     assert stack.fit == ft.StackFit.EXPAND
     button = next(item for item in _walk(screen) if isinstance(item, ft.FilledButton))
-    assert button.disabled is True
-    assert button.content == "Pagamento ainda não integrado"
+    assert button.disabled is False
+    assert button.content == "Comprar com Pix"

@@ -121,6 +121,9 @@ class GoogleSheetsPaymentRepository:
     def find_by_external_reference(self, external_reference: str) -> StoredPaymentOrder | None:
         return self._find("external_reference", external_reference)
 
+    def find_by_payment_order_id(self, payment_order_id: str) -> StoredPaymentOrder | None:
+        return self._find("payment_order_id", payment_order_id)
+
     def find_by_provider_order_id(self, provider_order_id: str) -> StoredPaymentOrder | None:
         return self._find("provider_order_id", provider_order_id)
 
