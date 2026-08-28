@@ -12,6 +12,9 @@ interface funcional e nenhum fluxo de produção foi substituído.
 - próximo quadro liberado somente depois de todas as entries;
 - imagem WebP preservada com `contain`;
 - trilho horizontal de balões para desktop e mobile.
+- tela de login em modo de prévia local claramente identificado;
+- biblioteca responsiva com capas e metadados dos cards instalados;
+- navegação da biblioteca para o quadro demonstrativo.
 
 ## Executar no desktop
 
@@ -56,3 +59,8 @@ O token é opaco, expira no servidor e pode ser revogado. Esta primeira versão
 mantém as sessões em memória; reinícios do processo encerram as sessões, sem
 afetar contas, entitlements ou runs persistidas. A API não expõe credenciais do
 Google, Mercado Pago, OpenRouter nem conteúdo interno do runtime.
+
+Enquanto o cliente ainda não está apontado para essa API, `python -m
+flet_client.main` apresenta login e biblioteca em modo de prévia local. Os
+campos de login não são enviados e os botões de demonstração não concedem
+entitlements. Essa separação evita confundir a validação visual com acesso real.
