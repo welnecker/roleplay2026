@@ -100,6 +100,7 @@ class ApiServices:
     cover_resolver: Callable[[str], Path | None] = cover_file_for_package
     payment_gateway: PaymentGateway | None = None
     paid_access_resolver: Callable[[str, str], bool] | None = None
+    paid_access_primer: Callable[[str, str], None] | None = None
 
 
 def _user_response(user: AccountUser) -> UserResponse:
@@ -278,6 +279,8 @@ def create_api_app(services: ApiServices) -> FastAPI:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc).strip("'")) from exc
+        if state.approved and services.paid_access_primer is not None:
+            services.paid_access_primer(user.user_id, state.package_id)
         return _payment_response(state, master_test_available=True)
 
     @app.post("/api/v1/payments/pix", response_model=PaymentResponse)
@@ -291,6 +294,8 @@ def create_api_app(services: ApiServices) -> FastAPI:
             state = gateway.create_pix(user=user, package_id=payload.package_id)
         except (KeyError, ValueError, PermissionError) as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc).strip("'")) from exc
+        if state.approved and services.paid_access_primer is not None:
+            services.paid_access_primer(user.user_id, state.package_id)
         return _payment_response(
             state,
             master_test_available=gateway.master_test_available(user_id=user.user_id),
@@ -309,6 +314,8 @@ def create_api_app(services: ApiServices) -> FastAPI:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc).strip("'")) from exc
+        if state.approved and services.paid_access_primer is not None:
+            services.paid_access_primer(user.user_id, state.package_id)
         return _payment_response(
             state,
             master_test_available=gateway.master_test_available(user_id=user.user_id),
@@ -345,6 +352,16 @@ def production_app() -> FastAPI:
                         package_id=package_id,
                     ).allowed
 
+                def prime_paid_access(user_id: str, package_id: str) -> None:
+                    from services.paid_run_access import prime_paid_access_available
+
+                    prime_paid_access_available(
+                        secrets=secrets,
+                        user_id=user_id,
+                        package_id=package_id,
+                        ttl_seconds=90.0,
+                    )
+
                 _production_app = create_api_app(
                     ApiServices(
                         accounts=accounts,
@@ -352,6 +369,7 @@ def production_app() -> FastAPI:
                         catalog_loader=load_demo_catalog,
                         payment_gateway=payment_gateway,
                         paid_access_resolver=has_paid_access,
+                        paid_access_primer=prime_paid_access,
                     )
                 )
     return _production_app

@@ -77,6 +77,7 @@ def client(*, entitled_packages: set[str] | None = None) -> tuple[TestClient, Fa
         user=AccountUser("user-1", "pessoa@example.com", "Pessoa", "active"),
         entitled_packages=entitled_packages,
     )
+    primed: list[tuple[str, str]] = []
     app = create_api_app(
         ApiServices(
             accounts=accounts,
@@ -88,8 +89,12 @@ def client(*, entitled_packages: set[str] | None = None) -> tuple[TestClient, Fa
             ],
             cover_resolver=lambda _package_id: Path(__file__),
             payment_gateway=FakePayments(),
+            paid_access_primer=lambda user_id, package_id: primed.append(
+                (user_id, package_id)
+            ),
         )
     )
+    app.state.primed_access = primed
     return TestClient(app), accounts
 
 
@@ -197,6 +202,7 @@ def test_pagamento_pix_e_teste_master_exigem_sessao() -> None:
     assert options.json()["master_test_available"] is True
     assert created.json()["qr_code"] == "pix-copia-cola"
     assert approved.json()["approved"] is True
+    assert test_client.app.state.primed_access == [("user-1", "story.locked")]
     assert test_client.post(
         "/api/v1/payments/pix", json={"package_id": "story.locked"}
     ).status_code == 401
