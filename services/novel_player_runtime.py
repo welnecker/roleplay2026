@@ -23,13 +23,18 @@ from services.immersive_onboarding import (
     render_immersive_onboarding,
     restore_profile_for_run,
 )
-from services.novel_frame_runtime_support import first_frame_movement, is_frame_script
+from services.novel_frame_runtime_support import (
+    build_runtime_prompt,
+    first_frame_movement,
+    is_frame_script,
+)
 from services.novel_frame_output_contract import (
     FrameOutputContractError,
     enforce_frame_output_contract,
+    frame_generation_instruction,
 )
 from services.novel_runtime_conflict import persisted_movement_at_sequence
-from services.novel_v2_adapter import build_novel_prompt, movement_from_script, next_movement_id
+from services.novel_v2_adapter import movement_from_script, next_movement_id
 from services.paid_run_access import finish_active_run, get_paid_run_access, terminate_paid_access
 from services.pwa import install_pwa_metadata
 from services.runtime_persistence import (
@@ -259,7 +264,7 @@ def profile_user_name(profile: object) -> str:
 def generate_movement_text(*, movement, user_name: str, profile: object, messages: list[dict[str, object]]) -> str:
     if not api_key:
         raise RuntimeError(OPERATIONAL_GENERATION_ERROR)
-    system_prompt = build_novel_prompt(
+    system_prompt = build_runtime_prompt(
         character_name=CHARACTER_NAME,
         user_name=user_name,
         movement=movement,
@@ -272,18 +277,12 @@ def generate_movement_text(*, movement, user_name: str, profile: object, message
     ]
     last_contract_error: FrameOutputContractError | None = None
     for attempt in range(2):
-        user_instruction = "Avance a novela executando somente o movimento atual."
-        if attempt:
-            user_instruction += (
-                " A resposta anterior violou a correspondência 1:1. "
-                "Emita exatamente as entries autorais, na mesma ordem, sem acrescentar nenhuma."
-            )
         generated = generate_response(
             api_key=api_key,
             model=model,
             system_prompt=system_prompt + private_context,
             history=history,
-            user_text=user_instruction,
+            user_text=frame_generation_instruction(attempt),
             debug_logging=not bool(private_context),
         ).strip()
         try:

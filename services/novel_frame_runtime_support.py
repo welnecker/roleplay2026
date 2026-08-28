@@ -4,6 +4,7 @@ import json
 from dataclasses import replace
 from typing import Any
 
+from services import novel_frame_patch
 from services.novel_v2_adapter import movement_from_script, next_movement_id
 
 _FRAME_PREFIX = "NOVEL_FRAME_V2\n"
@@ -13,6 +14,25 @@ _AUTHORING_SOURCE = "spreadsheet_novel_frame_v2"
 def is_frame_script(script: Any) -> bool:
     raw = getattr(script, "raw", {}) or {}
     return str(raw.get("authoring_source", "") or "").strip() == _AUTHORING_SOURCE
+
+
+def build_runtime_prompt(*, character_name: str, user_name: str, movement: Any) -> str:
+    """Seleciona o prompt correto sem depender da ordem de patches do frontend."""
+
+    if novel_frame_patch._frame_from_movement(movement) is not None:
+        return novel_frame_patch.build_frame_prompt(
+            character_name=character_name,
+            user_name=user_name,
+            movement=movement,
+        )
+
+    from services.novel_v2_adapter import build_novel_prompt
+
+    return build_novel_prompt(
+        character_name=character_name,
+        user_name=user_name,
+        movement=movement,
+    )
 
 
 def first_frame_movement(script: Any):
@@ -51,4 +71,4 @@ def first_frame_movement(script: Any):
     )
 
 
-__all__ = ["first_frame_movement", "is_frame_script"]
+__all__ = ["build_runtime_prompt", "first_frame_movement", "is_frame_script"]

@@ -11,6 +11,18 @@ class FrameOutputContractError(ValueError):
     pass
 
 
+def frame_generation_instruction(attempt: int = 0) -> str:
+    instruction = "Avance a novela executando somente o quadro atual."
+    if int(attempt) > 0:
+        instruction += (
+            " A resposta anterior violou a correspondência estrutural 1:1. "
+            "Emita uma saída para cada entry autoral, com o mesmo tipo e actor, "
+            "na mesma ordem e sem criar nenhuma entry. Respeite a modalidade "
+            "delivery de cada fala."
+        )
+    return instruction
+
+
 def _plain(value: object) -> str:
     normalized = unicodedata.normalize("NFKD", str(value or ""))
     return "".join(
@@ -20,6 +32,23 @@ def _plain(value: object) -> str:
 
 def _signature(kind: object, actor: object) -> tuple[str, str]:
     return _plain(kind), _plain(actor)
+
+
+def _validate_exact_speech(
+    expected_entries: list[dict[str, Any]],
+    selected: list[tuple[str, str, str, str]],
+) -> None:
+    for authored, generated in zip(expected_entries, selected):
+        if _plain(authored.get("kind", "")) != "fala":
+            continue
+        if _plain(authored.get("delivery", "")) != "exata":
+            continue
+        expected_body = str(authored.get("instruction", "") or "").strip()
+        generated_body = str(generated[3] or "").strip()
+        if generated_body != expected_body:
+            raise FrameOutputContractError(
+                "O modelo alterou uma [FALA EXATA] do roteiro."
+            )
 
 
 def enforce_frame_output_contract(movement: Any, content: str) -> str:
@@ -75,6 +104,8 @@ def enforce_frame_output_contract(movement: Any, content: str) -> str:
     if expected_index != len(expected):
         raise FrameOutputContractError("O modelo omitiu uma ou mais entries do roteiro.")
 
+    _validate_exact_speech(expected_entries, selected)
+
     output = [f"[QUADRO {expected_frame_id}]"]
     authored_description = str(frame.get("description", "") or "").strip()
     if authored_description:
@@ -89,4 +120,8 @@ def enforce_frame_output_contract(movement: Any, content: str) -> str:
     return "\n".join(output)
 
 
-__all__ = ["FrameOutputContractError", "enforce_frame_output_contract"]
+__all__ = [
+    "FrameOutputContractError",
+    "enforce_frame_output_contract",
+    "frame_generation_instruction",
+]

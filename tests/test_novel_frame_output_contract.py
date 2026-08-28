@@ -82,3 +82,58 @@ Quarta fala.
 
     with pytest.raises(FrameOutputContractError, match="ordem|omitiu"):
         enforce_frame_output_contract(_movement(), content)
+
+
+def test_rejects_change_to_exact_authored_speech() -> None:
+    frame = {
+        "frame_id": "encontro_001",
+        "description": "Mary chega.",
+        "entries": [
+            {
+                "kind": "fala",
+                "actor": "mary",
+                "instruction": "Oi, Janio... cheguei.",
+                "delivery": "exata",
+            }
+        ],
+    }
+    movement = SimpleNamespace(
+        instruction="NOVEL_FRAME_V2\n" + json.dumps(frame, ensure_ascii=False)
+    )
+    content = """[QUADRO encontro_001]
+[DESCRIÇÃO]
+Mary chega.
+[FALA mary|Mary]
+Oi, Janio... finalmente cheguei.
+[/QUADRO]"""
+
+    with pytest.raises(FrameOutputContractError, match="FALA EXATA"):
+        enforce_frame_output_contract(movement, content)
+
+
+def test_accepts_literal_exact_authored_speech() -> None:
+    frame = {
+        "frame_id": "encontro_001",
+        "description": "Mary chega.",
+        "entries": [
+            {
+                "kind": "fala",
+                "actor": "mary",
+                "instruction": "Oi, Janio... cheguei.",
+                "delivery": "exata",
+            }
+        ],
+    }
+    movement = SimpleNamespace(
+        instruction="NOVEL_FRAME_V2\n" + json.dumps(frame, ensure_ascii=False)
+    )
+    content = """[QUADRO encontro_001]
+[DESCRIÇÃO]
+Mary chega.
+[FALA mary|Mary]
+Oi, Janio... cheguei.
+[/QUADRO]"""
+
+    result = enforce_frame_output_contract(movement, content)
+
+    assert "Oi, Janio... cheguei." in result

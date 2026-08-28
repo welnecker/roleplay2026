@@ -21,10 +21,18 @@ from services.immersive_onboarding import (
     persistent_profile_payload,
     recover_persistent_profile,
 )
-from services.novel_frame_output_contract import FrameOutputContractError, enforce_frame_output_contract
+from services.novel_frame_output_contract import (
+    FrameOutputContractError,
+    enforce_frame_output_contract,
+    frame_generation_instruction,
+)
 from services.novel_frame_reveal import frame_entry_count, frame_id
-from services.novel_frame_runtime_support import first_frame_movement, is_frame_script
-from services.novel_v2_adapter import build_novel_prompt, movement_from_script, next_movement_id
+from services.novel_frame_runtime_support import (
+    build_runtime_prompt,
+    first_frame_movement,
+    is_frame_script,
+)
+from services.novel_v2_adapter import movement_from_script, next_movement_id
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
@@ -140,7 +148,7 @@ class FletRunService:
             target_id = first_frame_movement(script)[0]
         character_name, character_id = self._character(package)
         user_name = str(profile.get("preferred_name") or user.display_name or "").strip()
-        prompt = build_novel_prompt(
+        prompt = build_runtime_prompt(
             character_name=character_name,
             user_name=user_name,
             movement=movement,
@@ -153,18 +161,12 @@ class FletRunService:
         last_contract_error: FrameOutputContractError | None = None
         content = ""
         for attempt in range(2):
-            instruction = "Avance a novela executando somente o movimento atual."
-            if attempt:
-                instruction += (
-                    " A resposta anterior violou a correspondência 1:1. "
-                    "Emita exatamente as entries autorais, na mesma ordem, sem acrescentar nenhuma."
-                )
             generated = generate_response(
                 api_key=self.api_key,
                 model=self.model,
                 system_prompt=prompt,
                 history=history,
-                user_text=instruction,
+                user_text=frame_generation_instruction(attempt),
                 debug_logging=not bool(build_immersive_context(profile)),
             ).strip()
             try:
