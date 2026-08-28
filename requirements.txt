@@ -8,3 +8,4 @@ gspread>=6.1,<7
 argon2-cffi>=23.1,<24
 fastapi>=0.115,<1
 uvicorn[standard]>=0.34,<1
+flet==0.86.5

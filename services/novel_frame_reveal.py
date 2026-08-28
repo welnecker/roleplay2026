@@ -45,6 +45,16 @@ def _sections(content: str) -> list[tuple[str, str]]:
     return result
 
 
+def frame_sections(content: str) -> tuple[tuple[str, str], ...]:
+    """Expõe a estrutura canônica do quadro para outros frontends.
+
+    Streamlit e Flet passam a consumir a mesma normalização das tags sem
+    duplicar a gramática narrativa V2.
+    """
+
+    return tuple(_sections(content))
+
+
 def frame_entry_count(content: str) -> int:
     count = 0
     for header, body in _sections(content):
@@ -111,6 +121,7 @@ def reveal_complete(content: str, revealed_entries: int) -> bool:
 __all__ = [
     "frame_entry_count",
     "frame_id",
+    "frame_sections",
     "is_frame_content",
     "normalize_frame_markers",
     "reveal_complete",
