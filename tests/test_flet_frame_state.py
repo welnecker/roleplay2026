@@ -25,6 +25,20 @@ def test_parser_flet_reutiliza_quadro_canonico_v2() -> None:
     assert [entry.visible_name for entry in frame.entries] == ["Mary", "Mary", "Professor"]
 
 
+def test_parser_preserva_diretiva_balao_como_estilo_visual_da_fala() -> None:
+    frame = parse_visual_frame("""[QUADRO encontro_003]
+[DESCRIÇÃO]
+Mary se assusta.
+[FALA mary_balao|Mary]
+Ai! Que susto!
+[/QUADRO]""")
+
+    entry = frame.entries[0]
+    assert entry.actor == "mary_balao"
+    assert entry.visible_name == "Mary"
+    assert entry.impact_balloon is True
+
+
 def test_controller_revela_entries_antes_de_liberar_proximo_quadro() -> None:
     controller = FrameRevealController(parse_visual_frame(CONTENT))
 
@@ -43,4 +57,3 @@ def test_parser_rejeita_conteudo_que_nao_e_quadro() -> None:
         assert "[QUADRO id]" in str(exc)
     else:
         raise AssertionError("Era esperado ValueError")
-

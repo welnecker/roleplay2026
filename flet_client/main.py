@@ -84,6 +84,7 @@ def main(page: ft.Page) -> None:
             ),
         )
         show(view.root)
+        view.focus_current()
 
     def show_api_error(message: str) -> None:
         page.show_dialog(ft.SnackBar(ft.Text(message)))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -33,6 +34,7 @@ class FrameVisualRow:
 
 def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
     is_thought = entry.kind == "pensamento"
+    is_impact_balloon = not is_thought and entry.impact_balloon
     label = entry.visible_name or entry.actor or "Personagem"
     card_color = "#F7DFEA" if is_thought else SPEECH_COLORS[index % len(SPEECH_COLORS)]
     border = ft.Border.all(2, "#8F6475") if is_thought else None
@@ -55,7 +57,11 @@ def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
                 ),
                 ft.Text(
                     entry.body,
-                    size=17,
+                    # ``*_balao`` é uma diretiva visual autoral, não parte do
+                    # nome do personagem. A fala recebe destaque sem alterar
+                    # o texto nem o actor persistidos pelo runtime.
+                    size=23 if is_impact_balloon else 17,
+                    weight=ft.FontWeight.BOLD if is_impact_balloon else None,
                     italic=is_thought,
                     color=TEXT_COLOR,
                     selectable=True,
@@ -142,10 +148,16 @@ class NovelFrameView:
         self.history = tuple(history[-(INTERACTION_LIMIT - 1) :])
         self._busy = False
         self.slide_width = _slide_width(getattr(page, "width", None))
-        self.track = ft.ListView(
+        # ``Column`` mantém somente as cinco interações visuais e permite o
+        # foco programático no quadro novo; ListView não garante scroll_to
+        # para itens construídos dinamicamente.
+        self.track = ft.Column(
             spacing=16,
             scroll=ft.ScrollMode.ALWAYS,
-            auto_scroll=True,
+            # A rolagem é controlada ao entrar no quadro seguinte. Isso
+            # preserva as cinco interações para revisão manual, mas impede que
+            # a anterior ocupe a área corrente sob a nova descrição.
+            auto_scroll=False,
             expand=True,
         )
         self.progress = ft.Text(size=12, color="#D6E5E3")
@@ -272,10 +284,28 @@ class NovelFrameView:
                 ],
                 spacing=14,
                 scroll=ft.ScrollMode.ALWAYS,
-                auto_scroll=row.frame_id == self.controller.frame.frame_id,
+                auto_scroll=False,
                 vertical_alignment=ft.CrossAxisAlignment.START,
             ),
         )
+
+    async def _focus_current_after_mount(self) -> None:
+        """Leva a interação nova ao foco após a árvore Flet estar montada."""
+
+        # O pequeno adiamento permite que o cliente calcule a altura das
+        # imagens antes de rolar. Assim os cartões anteriores passam para
+        # cima, atrás da descrição fixa, em vez de poluir o quadro atual.
+        await asyncio.sleep(0.12)
+        await self.track.scroll_to(offset=-1, duration=420)
+
+    def focus_current(self) -> None:
+        """Agenda o foco da interação atual quando há histórico visual."""
+
+        if not self.history:
+            return
+        run_task = getattr(self.page, "run_task", None)
+        if callable(run_task):
+            run_task(self._focus_current_after_mount)
 
     def _resize(self, event: object) -> None:
         width = getattr(event, "width", None)

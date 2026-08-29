@@ -11,6 +11,7 @@ class VisualEntry:
     actor: str
     visible_name: str
     body: str
+    impact_balloon: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +50,13 @@ def parse_visual_frame(content: str) -> VisualFrame:
                         actor=actor,
                         visible_name=visible_name,
                         body=body.strip(),
+                        # A diretiva vem do roteiro como ``mary_balao`` e o
+                        # contrato do runtime a preserva no actor da saída.
+                        # O nome visível continua sendo somente "Mary".
+                        impact_balloon=(
+                            kind == "fala"
+                            and actor.casefold().endswith("_balao")
+                        ),
                     )
                 )
 
@@ -89,4 +97,3 @@ class FrameRevealController:
             return True
         self.revealed_entries += 1
         return False
-

@@ -105,20 +105,48 @@ def test_linha_e_responsiva_e_tem_barra_para_rever_as_imagens() -> None:
         entry_images=("https://img/mary1.webp",),
     )
 
-    assert isinstance(view.track, ft.ListView)
+    assert isinstance(view.track, ft.Column)
     assert view.track.scroll == ft.ScrollMode.ALWAYS
-    assert view.track.auto_scroll is True
+    assert view.track.auto_scroll is False
     assert view.slide_width == pytest.approx(317.72)
     first_row = view.track.controls[0].content
     assert isinstance(first_row, ft.Row)
     assert first_row.scroll == ft.ScrollMode.ALWAYS
-    assert first_row.auto_scroll is True
+    assert first_row.auto_scroll is False
     assert first_row.controls[0].width == pytest.approx(317.72)
 
     view._resize(type("Resize", (), {"width": 1400})())
 
     assert view.slide_width == 326.5
     assert _interaction_slides(view)[0].width == 326.5
+
+
+def test_fala_balao_recebe_tipografia_de_destaque() -> None:
+    page = _Page()
+    frame = VisualFrame(
+        frame_id="encontro_003",
+        description="Mary reage.",
+        entries=(
+            VisualEntry(
+                "fala",
+                "mary_balao",
+                "Mary",
+                "Ai!!! Que susto!",
+                impact_balloon=True,
+            ),
+        ),
+    )
+    view = NovelFrameView(page, frame)  # type: ignore[arg-type]
+
+    balloon = _slide_balloon(_interaction_slides(view)[0])
+    card = balloon.controls[-1]
+    assert isinstance(card, ft.Container)
+    column = card.content
+    assert isinstance(column, ft.Column)
+    copy = column.controls[-1]
+    assert isinstance(copy, ft.Text)
+    assert copy.size == 23
+    assert copy.weight == ft.FontWeight.BOLD
 
 
 def test_uma_interacao_mantem_quatro_imagens_na_mesma_linha() -> None:
