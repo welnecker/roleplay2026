@@ -186,7 +186,18 @@ class NovelFrameView:
         controls.extend(
             [
                 self.track,
-                ft.Row([self.progress, self.advance_button], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.SafeArea(
+                    content=ft.Row(
+                        [self.progress, self.advance_button],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    avoid_intrusions_left=False,
+                    avoid_intrusions_top=False,
+                    avoid_intrusions_right=False,
+                    avoid_intrusions_bottom=True,
+                    maintain_bottom_view_padding=True,
+                    minimum_padding=ft.Padding.only(bottom=8),
+                ),
             ]
         )
         self.root = ft.Container(
@@ -293,10 +304,14 @@ class NovelFrameView:
         """Leva a interação nova ao foco após a árvore Flet estar montada."""
 
         # O pequeno adiamento permite que o cliente calcule a altura das
-        # imagens antes de rolar. Assim os cartões anteriores passam para
-        # cima, atrás da descrição fixa, em vez de poluir o quadro atual.
+        # imagens antes de rolar. A âncora é o início da linha atual, não o
+        # fim da lista: assim a borda inferior da interação anterior fica
+        # rente à descrição e todo o conteúdo anterior sai da área corrente.
         await asyncio.sleep(0.12)
-        await self.track.scroll_to(offset=-1, duration=420)
+        await self.track.scroll_to(
+            scroll_key=f"frame-row-{self.controller.frame.frame_id}",
+            duration=420,
+        )
 
     def focus_current(self) -> None:
         """Agenda o foco da interação atual quando há histórico visual."""
