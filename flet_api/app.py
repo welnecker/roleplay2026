@@ -8,13 +8,19 @@ from typing import Protocol
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from gspread.exceptions import APIError
 from pydantic import BaseModel, ConfigDict
 
 from flet_api.sessions import SessionStore
 from flet_api.payments import PaymentGateway, PaymentState, build_payment_gateway
 from flet_api.runs import FletRunService, RunFrame
 from persistence.accounts import AccountUser, build_account_repository
+from persistence.google_sheets_retry import (
+    GoogleSheetsTemporarilyUnavailable,
+    api_error_status,
+    is_quota_error,
+)
 from platform_core.catalog import INSTALLED_STORIES_ROOT, cover_file_for_package, load_demo_catalog
 from platform_core.models import AccessStatus, StoryCard
 from services.secret_loader import load_application_secrets
@@ -211,6 +217,35 @@ def _run_response(frame: RunFrame, request: Request) -> RunFrameResponse:
 def create_api_app(services: ApiServices) -> FastAPI:
     app = FastAPI(title="Roleplay 2026 Flet API", version="0.1.0")
     bearer = HTTPBearer(auto_error=False)
+
+    def sheets_unavailable_response(message: str) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": message},
+            headers={"Retry-After": "15"},
+        )
+
+    @app.exception_handler(GoogleSheetsTemporarilyUnavailable)
+    async def handle_sheets_unavailable(
+        _request: Request,
+        exc: GoogleSheetsTemporarilyUnavailable,
+    ) -> JSONResponse:
+        return sheets_unavailable_response(str(exc))
+
+    @app.exception_handler(APIError)
+    async def handle_raw_sheets_error(
+        _request: Request,
+        exc: APIError,
+    ) -> JSONResponse:
+        if is_quota_error(exc) or api_error_status(exc) in {500, 502, 503, 504}:
+            return sheets_unavailable_response(
+                "O armazenamento está temporariamente ocupado. "
+                "Seu progresso foi preservado; tente novamente em alguns segundos."
+            )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Falha de configuração do armazenamento."},
+        )
 
     def authenticated(
         credentials: HTTPAuthorizationCredentials | None = Depends(bearer),

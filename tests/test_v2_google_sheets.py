@@ -3,14 +3,21 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from gspread.exceptions import APIError
+from requests import Response
 
 from narrative_v2.models import RunCredit
 from narrative_v2.repository import RuntimeConflictError
 from persistence.v2_google_sheets import (
+    _SheetTable,
     GoogleSheetsNarrativeInteractionRepository,
     GoogleSheetsStoryCreditRepository,
     GoogleSheetsStoryRunRepository,
 )
+from persistence.runtime_v2 import GoogleSheetsV2RuntimeRepository
+from persistence.editorial import GoogleSheetsEditorialRepository
+from persistence.google_sheets_retry import GoogleSheetsTemporarilyUnavailable
+from persistence import v2_google_sheets
 from persistence.v2_schemas import ACCOUNTS_BILLING_SCHEMAS, RUNTIME_SCHEMAS
 
 
@@ -18,11 +25,18 @@ class FakeWorksheet:
     def __init__(self, title: str, headers: tuple[str, ...]) -> None:
         self.title = title
         self.rows: list[list[Any]] = [list(headers)]
+        self.header_reads = 0
+        self.record_reads = 0
+        self.read_error: Exception | None = None
 
     def row_values(self, row_number: int) -> list[Any]:
+        self.header_reads += 1
         return list(self.rows[row_number - 1]) if row_number <= len(self.rows) else []
 
     def get_all_records(self, default_blank: str = "") -> list[dict[str, Any]]:
+        self.record_reads += 1
+        if self.read_error is not None:
+            raise self.read_error
         headers = self.rows[0]
         return [
             {
@@ -55,6 +69,15 @@ class FakeSpreadsheet:
 
     def worksheet(self, name: str) -> FakeWorksheet:
         return self.sheets[name]
+
+
+def _api_error(status_code: int) -> APIError:
+    response = Response()
+    response.status_code = status_code
+    response._content = (
+        f'{{"error":{{"code":{status_code},"message":"Quota exceeded"}}}}'.encode()
+    )
+    return APIError(response)
 
 
 def test_credit_is_idempotent_by_payment_and_can_be_consumed() -> None:
@@ -145,3 +168,101 @@ def test_recent_interactions_are_limited_and_ordered() -> None:
 
     recent = repository.list_recent_interactions(run_id="run-1", limit=4)
     assert [int(row["sequence"]) for row in recent] == [5, 6, 7, 8]
+
+
+def test_sheet_table_reuses_reads_and_updates_cache_after_write() -> None:
+    spreadsheet = FakeSpreadsheet({"TEST": ("id", "value")})
+    worksheet = spreadsheet.worksheet("TEST")
+    table = _SheetTable(spreadsheet, "TEST")  # type: ignore[arg-type]
+
+    table.append({"id": "1", "value": "primeiro"})
+    first = table.records()
+    repeated = table.records()
+    table.replace(2, {"id": "1", "value": "atualizado"})
+    updated = table.records()
+
+    assert first == repeated == [{"id": "1", "value": "primeiro"}]
+    assert updated == [{"id": "1", "value": "atualizado"}]
+    assert worksheet.header_reads == 1
+    assert worksheet.record_reads == 1
+
+
+def test_sheet_table_serves_last_safe_snapshot_during_read_quota(monkeypatch) -> None:
+    clock = [0.0]
+    monkeypatch.setattr(v2_google_sheets, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        v2_google_sheets,
+        "with_transient_retry",
+        lambda operation, **_kwargs: operation(),
+    )
+    spreadsheet = FakeSpreadsheet({"TEST": ("id", "value")})
+    worksheet = spreadsheet.worksheet("TEST")
+    worksheet.rows.append(["1", "seguro"])
+    table = _SheetTable(spreadsheet, "TEST")  # type: ignore[arg-type]
+
+    assert table.records() == [{"id": "1", "value": "seguro"}]
+    clock[0] = 30.0
+    worksheet.read_error = _api_error(429)
+
+    assert table.records() == [{"id": "1", "value": "seguro"}]
+
+
+def test_sheet_table_without_snapshot_returns_recoverable_failure(monkeypatch) -> None:
+    monkeypatch.setattr(
+        v2_google_sheets,
+        "with_transient_retry",
+        lambda operation, **_kwargs: operation(),
+    )
+    spreadsheet = FakeSpreadsheet({"TEST": ("id", "value")})
+    spreadsheet.worksheet("TEST").read_error = _api_error(429)
+    table = _SheetTable(spreadsheet, "TEST")  # type: ignore[arg-type]
+
+    with pytest.raises(GoogleSheetsTemporarilyUnavailable):
+        table.records()
+
+
+def test_runtime_reuses_active_session_for_same_instance() -> None:
+    spreadsheet = FakeSpreadsheet(RUNTIME_SCHEMAS)
+    repository = GoogleSheetsV2RuntimeRepository(spreadsheet)  # type: ignore[arg-type]
+
+    first = repository.create_session(
+        run_id="run-1",
+        user_id="user-1",
+        package_id="story-1",
+        instance_id="flet_user-1",
+    )
+    repeated = repository.create_session(
+        run_id="run-1",
+        user_id="user-1",
+        package_id="story-1",
+        instance_id="flet_user-1",
+    )
+
+    assert repeated.session_id == first.session_id
+    assert len(spreadsheet.worksheet("SESSIONS").get_all_records()) == 1
+
+
+def test_editorial_repository_does_not_reload_roteiros_per_balloon() -> None:
+    spreadsheet = FakeSpreadsheet(
+        {
+            "ROTEIROS": (
+                "package_id",
+                "script_version",
+                "line_id",
+                "order",
+                "instruction",
+                "status",
+            )
+        }
+    )
+    worksheet = spreadsheet.worksheet("ROTEIROS")
+    worksheet.rows.append(
+        ["story-1", "1.0", "quadro_001_descricao", 1, "[DESCRIÇÃO] Cena.", "active"]
+    )
+    repository = GoogleSheetsEditorialRepository(spreadsheet)  # type: ignore[arg-type]
+
+    first = repository.load_active_story_lines("story-1")
+    repeated = repository.load_active_story_lines("story-1")
+
+    assert repeated == first
+    assert worksheet.record_reads == 1

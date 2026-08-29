@@ -11,6 +11,7 @@ from narrative_v2.models import StoryRun
 from narrative_v2.repository import RuntimeConflictError
 from persistence.models import new_id, utc_now_iso
 from persistence.v2_google_sheets import (
+    _SheetTable,
     GoogleSheetsNarrativeInteractionRepository,
     GoogleSheetsStoryRunRepository,
 )
@@ -42,7 +43,8 @@ class GoogleSheetsV2RuntimeRepository:
         self.spreadsheet = spreadsheet
         self.runs = GoogleSheetsStoryRunRepository(spreadsheet)
         self.interactions = GoogleSheetsNarrativeInteractionRepository(spreadsheet)
-        self.sessions = spreadsheet.worksheet("SESSIONS")
+        self._session_table = _SheetTable(spreadsheet, "SESSIONS")
+        self.sessions = self._session_table.worksheet
 
     @classmethod
     def from_service_account(
@@ -201,6 +203,35 @@ class GoogleSheetsV2RuntimeRepository:
         package_id: str,
         instance_id: str,
     ) -> RuntimeSession:
+        existing = [
+            dict(row)
+            for row in self._session_table.records()
+            if str(row.get("run_id", "") or "").strip() == run_id
+            and str(row.get("user_id", "") or "").strip() == user_id
+            and str(row.get("package_id", "") or "").strip() == package_id
+            and str(row.get("instance_id", "") or "").strip() == instance_id
+            and str(row.get("status", "") or "").strip() == "active"
+        ]
+        if existing:
+            existing.sort(
+                key=lambda row: str(
+                    row.get("last_seen_at", "") or row.get("started_at", "") or ""
+                ),
+                reverse=True,
+            )
+            row = existing[0]
+            return RuntimeSession(
+                session_id=str(row.get("session_id", "") or ""),
+                run_id=str(row.get("run_id", "") or ""),
+                user_id=str(row.get("user_id", "") or ""),
+                package_id=str(row.get("package_id", "") or ""),
+                instance_id=str(row.get("instance_id", "") or ""),
+                status=str(row.get("status", "") or "active"),
+                started_at=str(row.get("started_at", "") or ""),
+                last_seen_at=str(row.get("last_seen_at", "") or ""),
+                ended_at=str(row.get("ended_at", "") or ""),
+            )
+
         now = utc_now_iso()
         session = RuntimeSession(
             session_id=new_id("sess"),
@@ -212,7 +243,6 @@ class GoogleSheetsV2RuntimeRepository:
             started_at=now,
             last_seen_at=now,
         )
-        headers = [str(value).strip() for value in self.sessions.row_values(1)]
         data = {
             "session_id": session.session_id,
             "run_id": session.run_id,
@@ -224,10 +254,7 @@ class GoogleSheetsV2RuntimeRepository:
             "last_seen_at": session.last_seen_at,
             "ended_at": session.ended_at,
         }
-        self.sessions.append_row(
-            [data.get(header, "") for header in headers],
-            value_input_option="RAW",
-        )
+        self._session_table.append(data)
         return session
 
     def _existing_interaction(

@@ -11,6 +11,23 @@ T = TypeVar("T")
 TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 
+class GoogleSheetsTemporarilyUnavailable(Exception):
+    """Falha transitória do Sheets que deve virar HTTP 503, nunca erro 500."""
+
+
+def is_quota_error(exc: BaseException) -> bool:
+    return isinstance(exc, APIError) and (
+        api_error_status(exc) == 429 or "quota exceeded" in str(exc).casefold()
+    )
+
+
+def quota_unavailable(exc: APIError) -> GoogleSheetsTemporarilyUnavailable:
+    return GoogleSheetsTemporarilyUnavailable(
+        "O armazenamento está temporariamente ocupado. "
+        "Seu progresso foi preservado; tente novamente em alguns segundos."
+    )
+
+
 def api_error_status(exc: APIError) -> int | None:
     value = getattr(getattr(exc, "response", None), "status_code", None)
     try:
@@ -42,4 +59,11 @@ def with_transient_retry(
     raise RuntimeError("Retentativa do Google Sheets terminou inesperadamente.")
 
 
-__all__ = ["TRANSIENT_STATUS_CODES", "api_error_status", "with_transient_retry"]
+__all__ = [
+    "GoogleSheetsTemporarilyUnavailable",
+    "TRANSIENT_STATUS_CODES",
+    "api_error_status",
+    "is_quota_error",
+    "quota_unavailable",
+    "with_transient_retry",
+]

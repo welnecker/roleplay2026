@@ -10,6 +10,7 @@ from flet_api.payments import PaymentState
 from flet_api.runs import RunFrame
 from flet_api.sessions import SessionStore
 from persistence.accounts import AccountUser
+from persistence.google_sheets_retry import GoogleSheetsTemporarilyUnavailable
 from platform_core.models import AccessStatus, ProgressStatus, StoryCard
 
 
@@ -138,6 +139,26 @@ def login(test_client: TestClient) -> str:
     )
     assert response.status_code == 200
     return str(response.json()["access_token"])
+
+
+def test_sheets_temporarily_unavailable_is_recoverable_503() -> None:
+    test_client, accounts = client()
+    token = login(test_client)
+
+    def unavailable(*, user_id: str) -> AccountUser | None:
+        raise GoogleSheetsTemporarilyUnavailable(
+            "O armazenamento está temporariamente ocupado. Seu progresso foi preservado."
+        )
+
+    accounts.get_user = unavailable  # type: ignore[method-assign]
+    response = test_client.get(
+        "/api/v1/catalog",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "15"
+    assert "progresso foi preservado" in response.json()["detail"]
 
 
 def test_login_returns_opaque_bearer_and_current_user() -> None:

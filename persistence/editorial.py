@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+from threading import RLock
+from time import monotonic
 from typing import Any
 
 import gspread
 from gspread import Spreadsheet, Worksheet
 
-from persistence.google_sheets_retry import with_transient_retry
+from persistence.google_sheets_retry import (
+    is_quota_error,
+    quota_unavailable,
+    with_transient_retry,
+)
 from persistence.models import utc_now_iso
 from persistence.v2_schemas import EDITORIAL_SCHEMAS
 
@@ -17,6 +23,8 @@ class GoogleSheetsEditorialRepository:
     def __init__(self, spreadsheet: Spreadsheet) -> None:
         self.spreadsheet = spreadsheet
         self._worksheets: dict[str, Worksheet] = {}
+        self._records_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        self._records_lock = RLock()
 
     @classmethod
     def from_service_account(
@@ -282,12 +290,41 @@ class GoogleSheetsEditorialRepository:
             return worksheet
 
     def _records(self, name: str) -> list[dict[str, Any]]:
-        return [dict(row) for row in self._worksheet(name).get_all_records(default_blank="")]
+        # ROTEIROS é fonte autoral, mas não precisa ser baixada novamente a
+        # cada balão. O TTL mantém alterações editoriais visíveis rapidamente
+        # e a cópia anterior sustenta a leitura durante uma cota 429.
+        now = monotonic()
+        cached = self._records_cache.get(name)
+        if cached is not None and now < cached[0]:
+            return [dict(row) for row in cached[1]]
+        with self._records_lock:
+            now = monotonic()
+            cached = self._records_cache.get(name)
+            if cached is not None and now < cached[0]:
+                return [dict(row) for row in cached[1]]
+            try:
+                rows = with_transient_retry(
+                    lambda: [
+                        dict(row)
+                        for row in self._worksheet(name).get_all_records(default_blank="")
+                    ],
+                    attempts=3,
+                    base_delay_seconds=0.5,
+                )
+            except gspread.exceptions.APIError as exc:
+                if is_quota_error(exc):
+                    if cached is not None:
+                        return [dict(row) for row in cached[1]]
+                    raise quota_unavailable(exc) from exc
+                raise
+            self._records_cache[name] = (now + 30.0, rows)
+            return [dict(row) for row in rows]
 
     def _append(self, name: str, data: dict[str, Any]) -> None:
         worksheet = self._worksheet(name)
         headers = [str(item).strip() for item in worksheet.row_values(1)]
         worksheet.append_row([data.get(header, "") for header in headers], value_input_option="RAW")
+        self._records_cache.pop(name, None)
 
     @staticmethod
     def _json(value: Any) -> str:

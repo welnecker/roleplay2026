@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from threading import RLock
+from time import monotonic
 from typing import Any
 
 import gspread
@@ -9,7 +11,15 @@ from gspread import Spreadsheet, Worksheet
 
 from narrative_v2.models import RunCredit, StoryRun
 from narrative_v2.repository import RuntimeConflictError
+from persistence.google_sheets_retry import (
+    is_quota_error,
+    quota_unavailable,
+    with_transient_retry,
+)
 from persistence.models import new_id, utc_now_iso
+
+
+SHEET_RECORDS_CACHE_TTL_SECONDS = 20.0
 
 
 class _SheetTable:
@@ -17,6 +27,9 @@ class _SheetTable:
         self.spreadsheet = spreadsheet
         self.sheet_name = sheet_name
         self._worksheet: Worksheet | None = None
+        self._headers: tuple[str, ...] | None = None
+        self._records_cache: tuple[float, list[dict[str, Any]]] | None = None
+        self._lock = RLock()
 
     @property
     def worksheet(self) -> Worksheet:
@@ -24,35 +37,142 @@ class _SheetTable:
             self._worksheet = self.spreadsheet.worksheet(self.sheet_name)
         return self._worksheet
 
-    def records(self) -> list[dict[str, Any]]:
-        return [dict(row) for row in self.worksheet.get_all_records(default_blank="")]
+    def records(
+        self,
+        *,
+        force_refresh: bool = False,
+        allow_stale_on_quota: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Lê uma aba uma vez por janela e impede rajadas concorrentes.
 
-    def find(self, key: str, value: str) -> tuple[int, dict[str, Any]] | None:
+        Em uma cota 429, uma cópia expirada ainda é segura para consultas. As
+        operações de concorrência otimista pedem ``force_refresh`` e recusam
+        cache antigo, preservando a autoridade do Sheets antes de gravar.
+        """
+
+        now = monotonic()
+        cached = self._records_cache
+        if not force_refresh and cached is not None and now < cached[0]:
+            return [dict(row) for row in cached[1]]
+
+        with self._lock:
+            now = monotonic()
+            cached = self._records_cache
+            if not force_refresh and cached is not None and now < cached[0]:
+                return [dict(row) for row in cached[1]]
+            try:
+                rows = with_transient_retry(
+                    lambda: [
+                        dict(row)
+                        for row in self.worksheet.get_all_records(default_blank="")
+                    ],
+                    attempts=3,
+                    base_delay_seconds=0.5,
+                )
+            except gspread.exceptions.APIError as exc:
+                if is_quota_error(exc):
+                    if allow_stale_on_quota and cached is not None:
+                        return [dict(row) for row in cached[1]]
+                    raise quota_unavailable(exc) from exc
+                raise
+            self._records_cache = (
+                now + SHEET_RECORDS_CACHE_TTL_SECONDS,
+                [dict(row) for row in rows],
+            )
+            return [dict(row) for row in rows]
+
+    def find(
+        self,
+        key: str,
+        value: str,
+        *,
+        force_refresh: bool = False,
+    ) -> tuple[int, dict[str, Any]] | None:
         headers = self.headers()
         if key not in headers:
             raise RuntimeError(f"Coluna ausente em {self.sheet_name}: {key}")
-        for row_number, row in enumerate(self.worksheet.get_all_records(default_blank=""), start=2):
+        for row_number, row in enumerate(
+            self.records(
+                force_refresh=force_refresh,
+                allow_stale_on_quota=not force_refresh,
+            ),
+            start=2,
+        ):
             if str(row.get(key, "")).strip() == value:
                 return row_number, dict(row)
         return None
 
     def append(self, data: dict[str, Any]) -> None:
         headers = self.headers()
-        self.worksheet.append_row(
-            [data.get(header, "") for header in headers],
-            value_input_option="RAW",
-        )
+        with self._lock:
+            try:
+                with_transient_retry(
+                    lambda: self.worksheet.append_row(
+                        [data.get(header, "") for header in headers],
+                        value_input_option="RAW",
+                    ),
+                    attempts=3,
+                    base_delay_seconds=0.5,
+                )
+            except gspread.exceptions.APIError as exc:
+                if is_quota_error(exc):
+                    raise quota_unavailable(exc) from exc
+                raise
+            cached = self._records_cache
+            if cached is not None:
+                rows = [dict(row) for row in cached[1]]
+                rows.append({header: data.get(header, "") for header in headers})
+                self._records_cache = (
+                    monotonic() + SHEET_RECORDS_CACHE_TTL_SECONDS,
+                    rows,
+                )
 
     def replace(self, row_number: int, data: dict[str, Any]) -> None:
         headers = self.headers()
-        self.worksheet.update(
-            range_name=f"A{row_number}",
-            values=[[data.get(header, "") for header in headers]],
-            value_input_option="RAW",
-        )
+        with self._lock:
+            try:
+                with_transient_retry(
+                    lambda: self.worksheet.update(
+                        range_name=f"A{row_number}",
+                        values=[[data.get(header, "") for header in headers]],
+                        value_input_option="RAW",
+                    ),
+                    attempts=3,
+                    base_delay_seconds=0.5,
+                )
+            except gspread.exceptions.APIError as exc:
+                if is_quota_error(exc):
+                    raise quota_unavailable(exc) from exc
+                raise
+            cached = self._records_cache
+            index = int(row_number) - 2
+            if cached is not None and 0 <= index < len(cached[1]):
+                rows = [dict(row) for row in cached[1]]
+                rows[index] = {header: data.get(header, "") for header in headers}
+                self._records_cache = (
+                    monotonic() + SHEET_RECORDS_CACHE_TTL_SECONDS,
+                    rows,
+                )
+            else:
+                self._records_cache = None
 
     def headers(self) -> list[str]:
-        return [str(item).strip() for item in self.worksheet.row_values(1)]
+        if self._headers is not None:
+            return list(self._headers)
+        with self._lock:
+            if self._headers is None:
+                try:
+                    values = with_transient_retry(
+                        lambda: self.worksheet.row_values(1),
+                        attempts=3,
+                        base_delay_seconds=0.5,
+                    )
+                except gspread.exceptions.APIError as exc:
+                    if is_quota_error(exc):
+                        raise quota_unavailable(exc) from exc
+                    raise
+                self._headers = tuple(str(item).strip() for item in values)
+        return list(self._headers)
 
 
 class GoogleSheetsStoryCreditRepository:
@@ -219,7 +339,7 @@ class GoogleSheetsStoryRunRepository:
         return candidates[0]
 
     def update_run(self, *, run: StoryRun, expected_version: int) -> StoryRun:
-        found = self.runs.find("run_id", run.run_id)
+        found = self.runs.find("run_id", run.run_id, force_refresh=True)
         if found is None:
             raise KeyError(f"Run não encontrada: {run.run_id}")
         row_number, row = found

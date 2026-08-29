@@ -4,6 +4,7 @@ import random
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from threading import RLock
 from time import monotonic
 from typing import Any, ClassVar
 
@@ -13,14 +14,17 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from gspread import Spreadsheet, Worksheet
 from gspread.exceptions import APIError
 
-from persistence.google_sheets_retry import with_transient_retry
+from persistence.google_sheets_retry import (
+    GoogleSheetsTemporarilyUnavailable,
+    with_transient_retry,
+)
 from persistence.models import new_id, utc_now_iso
 
 USERS_SHEET = "USERS"
 CREDENTIALS_SHEET = "USER_CREDENTIALS"
 ENTITLEMENTS_SHEET = "USER_ENTITLEMENTS"
 RECORDS_CACHE_TTL_SECONDS = 30.0
-QUOTA_RETRY_ATTEMPTS = 5
+QUOTA_RETRY_ATTEMPTS = 3
 
 USERS_HEADERS = (
     "user_id",
@@ -88,6 +92,7 @@ class GoogleSheetsAccountRepository:
         self.hasher = PasswordHasher()
         self._worksheets: dict[str, Worksheet] = {}
         self._records_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        self._records_lock = RLock()
 
     @classmethod
     def configure_paid_access_resolver(cls, resolver: PaidAccessResolver | None) -> None:
@@ -302,7 +307,7 @@ class GoogleSheetsAccountRepository:
             except APIError as exc:
                 if not self._is_quota_error(exc) or attempt == QUOTA_RETRY_ATTEMPTS - 1:
                     if self._is_quota_error(exc):
-                        raise RuntimeError(
+                        raise GoogleSheetsTemporarilyUnavailable(
                             "O acesso está temporariamente ocupado. Aguarde alguns instantes e tente novamente."
                         ) from exc
                     raise
@@ -317,10 +322,21 @@ class GoogleSheetsAccountRepository:
             expires_at, rows = cached
             if now < expires_at:
                 return [dict(row) for row in rows]
-
-        rows = self._read_records(name)
-        self._records_cache[name] = (now + RECORDS_CACHE_TTL_SECONDS, rows)
-        return [dict(row) for row in rows]
+        with self._records_lock:
+            now = monotonic()
+            cached = self._records_cache.get(name)
+            if cached is not None:
+                expires_at, rows = cached
+                if now < expires_at:
+                    return [dict(row) for row in rows]
+            try:
+                rows = self._read_records(name)
+            except GoogleSheetsTemporarilyUnavailable:
+                if cached is not None:
+                    return [dict(row) for row in cached[1]]
+                raise
+            self._records_cache[name] = (now + RECORDS_CACHE_TTL_SECONDS, rows)
+            return [dict(row) for row in rows]
 
     def _append(self, sheet_name: str, data: dict[str, Any]) -> None:
         worksheet = self._worksheet(sheet_name)
