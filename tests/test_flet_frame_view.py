@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import flet as ft
 import pytest
 
@@ -119,6 +121,53 @@ def test_linha_e_responsiva_e_tem_barra_para_rever_as_imagens() -> None:
 
     assert view.slide_width == 326.5
     assert _interaction_slides(view)[0].width == 326.5
+
+
+def test_controles_respeitam_a_area_segura_inferior_do_android() -> None:
+    page = _Page()
+    frame = VisualFrame(
+        frame_id="encontro_001",
+        description="Mary entra.",
+        entries=(VisualEntry("fala", "mary", "Mary", "Olá."),),
+    )
+    view = NovelFrameView(page, frame)  # type: ignore[arg-type]
+
+    layout = view.root.content
+    assert isinstance(layout, ft.Column)
+    footer = layout.controls[-1]
+    assert isinstance(footer, ft.SafeArea)
+    assert footer.avoid_intrusions_bottom is True
+    assert footer.maintain_bottom_view_padding is True
+    assert footer.minimum_padding == ft.Padding.only(bottom=8)
+
+
+def test_foco_vertical_usa_o_inicio_da_interacao_atual(monkeypatch) -> None:
+    page = _Page()
+    frame = VisualFrame(
+        frame_id="encontro_003",
+        description="Mary reage.",
+        entries=(VisualEntry("fala", "mary", "Mary", "Ai!"),),
+    )
+    view = NovelFrameView(page, frame)  # type: ignore[arg-type]
+    calls: list[dict[str, object]] = []
+
+    async def immediate_sleep(_delay: float) -> None:
+        return None
+
+    async def record_scroll(**kwargs: object) -> None:
+        calls.append(kwargs)
+
+    monkeypatch.setattr("flet_client.frame_view.asyncio.sleep", immediate_sleep)
+    monkeypatch.setattr(view.track, "scroll_to", record_scroll)
+
+    asyncio.run(view._focus_current_after_mount())
+
+    assert calls == [
+        {
+            "scroll_key": "frame-row-encontro_003",
+            "duration": 420,
+        }
+    ]
 
 
 def test_fala_balao_recebe_tipografia_de_destaque() -> None:
