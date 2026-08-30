@@ -11,6 +11,9 @@ MODULE_PATH = (
     / "roteiro_editor_desktop"
     / "reference_folder.py"
 )
+EDITOR_MODULE_PATH = MODULE_PATH.with_name(
+    "app_image_first_timeline_gallery_restore.py"
+)
 spec = importlib.util.spec_from_file_location("reference_folder", MODULE_PATH)
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
@@ -47,3 +50,27 @@ def test_old_project_infers_common_reference_directory() -> None:
     assert Path(module.reference_directory_from_project(payload)) == Path(
         "C:/roteiro/imagens"
     )
+
+
+def test_manual_image_batches_are_accumulated_without_duplicates() -> None:
+    current = ["C:/roteiro/cena1.png", "C:/roteiro/cena2.webp"]
+    selected = [
+        "C:/roteiro/cena2.webp",
+        "D:/novo/cena3.jpg",
+        "D:/novo/notas.txt",
+    ]
+
+    result = module.merge_reference_images(current, selected)
+
+    assert result == [
+        "C:/roteiro/cena1.png",
+        "C:/roteiro/cena2.webp",
+        "D:/novo/cena3.jpg",
+    ]
+
+
+def test_editor_exposes_manual_batch_selection_button() -> None:
+    source = EDITOR_MODULE_PATH.read_text(encoding="utf-8")
+
+    assert 'text="SELECIONE IMAGENS"' in source
+    assert "command=self.open_reference_batch" in source

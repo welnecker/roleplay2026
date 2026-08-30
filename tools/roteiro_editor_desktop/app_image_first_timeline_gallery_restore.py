@@ -11,6 +11,7 @@ from project_image_restore import restore_project_image_state
 from reference_folder import (
     DEFAULT_REFERENCE_DIR,
     existing_initial_directory,
+    merge_reference_images,
     reference_directory_from_project,
     reference_images_from_directory,
 )
@@ -77,19 +78,23 @@ class ScriptEditor(GalleryScriptEditor):
 
     def open_reference_batch(self):
         files = filedialog.askopenfilenames(
-            title="Abrir imagens de referência",
+            title="Selecione as imagens do roteiro",
             initialdir=self._dialog_initial_directory(),
             filetypes=IMAGE_TYPES,
         )
         if files:
-            parents = {str(Path(item).parent) for item in files}
+            self.reference_files = merge_reference_images(self.reference_files, files)
+            parents = {str(Path(item).parent) for item in self.reference_files}
             self.reference_directory_var.set(
                 parents.pop() if len(parents) == 1 else "Seleção de várias pastas"
             )
-            self.reference_files = [str(item) for item in files]
             self.reference_index = 0
             self._select_first_available_reference()
             self._refresh_reference_gallery()
+            self.status_var.set(
+                f"Galeria atualizada — {len(files)} arquivo(s) selecionado(s), "
+                f"{len(self.reference_files)} imagem(ns) no lote acumulado."
+            )
 
     def _install_assignment_controls(self) -> None:
         # Mantém a experiência já conhecida do editor: um botão explícito
@@ -136,9 +141,14 @@ class ScriptEditor(GalleryScriptEditor):
                 ).grid(row=0, column=1, sticky="ew", padx=(6, 8))
                 ttk.Button(
                     folder_bar,
+                    text="SELECIONE IMAGENS",
+                    command=self.open_reference_batch,
+                ).grid(row=0, column=2, sticky="e", padx=(0, 6))
+                ttk.Button(
+                    folder_bar,
                     text="ALTERAR PASTA",
                     command=self.select_reference_directory,
-                ).grid(row=0, column=2, sticky="e")
+                ).grid(row=0, column=3, sticky="e")
                 break
 
     def _available_reference_indexes(self) -> list[int]:
@@ -184,7 +194,10 @@ class ScriptEditor(GalleryScriptEditor):
         if not self.reference_files:
             ttk.Label(
                 self._gallery_inner,
-                text="Clique em INFORMAR PASTA DE IMAGENS para carregar a galeria.",
+                text=(
+                    "Clique em SELECIONE IMAGENS para escolher um lote ou em "
+                    "INFORMAR PASTA DE IMAGENS para carregar uma pasta inteira."
+                ),
                 anchor="center",
             ).grid(row=0, column=0, padx=8, pady=24, sticky="ew")
             return
