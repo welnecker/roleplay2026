@@ -62,10 +62,10 @@ def test_manual_image_batches_are_accumulated_without_duplicates() -> None:
 
     result = module.merge_reference_images(current, selected)
 
-    assert result == [
-        "C:/roteiro/cena1.png",
-        "C:/roteiro/cena2.webp",
-        "D:/novo/cena3.jpg",
+    assert [Path(item) for item in result] == [
+        Path("C:/roteiro/cena1.png"),
+        Path("C:/roteiro/cena2.webp"),
+        Path("D:/novo/cena3.jpg"),
     ]
 
 
