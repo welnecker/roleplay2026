@@ -117,22 +117,25 @@ def _worksheet_title(worksheet: Any) -> str:
 
 
 def _install_gspread_probes() -> None:
+    """Instrumenta os métodos-folha usados pelo app para não contar duas vezes.
+
+    ``get_all_records`` e ``row_values`` delegam para ``Worksheet.get``;
+    ``append_row`` delega para ``append_rows``. Monitorar os dois níveis faria
+    uma única chamada HTTP parecer duas leituras/escritas.
+    """
+
     from gspread import Worksheet
     from gspread.exceptions import APIError
 
     from persistence.google_sheets_retry import is_quota_error
 
     operations = {
-        "get_all_records": (1, 0),
-        "row_values": (1, 0),
         "get": (1, 0),
         "batch_get": (1, 0),
-        "append_row": (0, 1),
         "append_rows": (0, 1),
         "update": (0, 1),
         "batch_update": (0, 1),
         "delete_rows": (0, 1),
-        "insert_row": (0, 1),
         "insert_rows": (0, 1),
     }
 
@@ -166,14 +169,12 @@ def _install_gspread_probes() -> None:
                         status="429" if quota else "error",
                     )
                     raise
-                rows = len(result) if name == "get_all_records" and isinstance(result, list) else None
                 emit(
                     sheet=sheet,
                     operation=f"google.{name}",
                     started_at=started,
                     google_read=read_count,
                     google_write=write_count,
-                    rows=rows,
                 )
                 return result
 
@@ -203,7 +204,18 @@ def _install_editorial_cache_probe() -> None:
         started = monotonic()
         try:
             result = original(self, name)
-            stale = bool(_QUOTA_SEEN.get()) and cache == "MISS"
+        except Exception:
+            emit(
+                sheet=name,
+                operation="records",
+                started_at=started,
+                cache=cache,
+                status="429" if _QUOTA_SEEN.get() else "error",
+                logical_request=True,
+            )
+            raise
+        else:
+            stale = bool(_QUOTA_SEEN.get()) and cached is not None
             emit(
                 sheet=name,
                 operation="records",
@@ -250,6 +262,18 @@ def _install_runtime_cache_probe() -> None:
                 force_refresh=force_refresh,
                 allow_stale_on_quota=allow_stale_on_quota,
             )
+        except Exception:
+            emit(
+                sheet=self.sheet_name,
+                operation="records",
+                started_at=started,
+                cache=cache,
+                status="429" if _QUOTA_SEEN.get() else "error",
+                force_refresh=force_refresh,
+                logical_request=True,
+            )
+            raise
+        else:
             stale = bool(_QUOTA_SEEN.get()) and cached is not None
             emit(
                 sheet=self.sheet_name,
