@@ -10,13 +10,19 @@ from flet_client.screens import BACKGROUND, library_screen, login_screen, paymen
 from platform_core.models import AccessStatus
 from platform_core.models import StoryCard
 
+DEFAULT_FLET_API_URL = "https://roleplay2026-flet-api.onrender.com"
+
+
+def configured_api_url() -> str:
+    return os.getenv("ROLEPLAY_FLET_API_URL", DEFAULT_FLET_API_URL).strip().rstrip("/")
+
 
 def main(page: ft.Page) -> None:
     page.title = "Entre Cenas — Player Flet"
     page.bgcolor = BACKGROUND
     page.padding = 0
     page.theme_mode = ft.ThemeMode.LIGHT
-    api_url = os.getenv("ROLEPLAY_FLET_API_URL", "").strip().rstrip("/")
+    api_url = configured_api_url()
     api_client = FletApiClient(api_url) if api_url else None
     active_cards: list[StoryCard] = []
     active_display_name = ""

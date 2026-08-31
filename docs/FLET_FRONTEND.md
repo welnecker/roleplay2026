@@ -28,6 +28,11 @@ python -m pip install -r requirements.txt
 python -m flet_client.main
 ```
 
+Por padrão, o cliente usa a API publicada em
+`https://roleplay2026-flet-api.onrender.com`. A variável
+`ROLEPLAY_FLET_API_URL` continua disponível para apontar o cliente para uma API
+local ou para outro ambiente.
+
 ## Executar no navegador
 
 ```powershell
@@ -90,7 +95,7 @@ do servidor configurados:
 uvicorn flet_api.asgi:app --host 127.0.0.1 --port 8001
 ```
 
-Sem `ROLEPLAY_FLET_API_URL`, ou sem uma API acessível, a tela permanece no login
+Sem uma API acessível, a tela permanece no login
 e apresenta uma mensagem de configuração/conexão.
 
 ## Fontes autoritativas
