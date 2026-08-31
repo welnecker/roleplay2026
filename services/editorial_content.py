@@ -45,6 +45,8 @@ _FREE_TEXT_KEYS = {
 _FREE_TEXT_PATTERN = re.compile(
     r"^(?P<indent>\s*)(?P<key>" + "|".join(sorted(_FREE_TEXT_KEYS)) + r"):\s*(?P<value>.*)$"
 )
+_END_STORY_MARKER = re.compile(r"^\s*\[\s*fim_historia\s*\]\s*$", re.IGNORECASE)
+_FRAME_PREFIX = "NOVEL_FRAME_V2\n"
 
 # Compatibilidade interna enquanto a implementação histórica ainda delega sua
 # decisão avançada ao módulo de progressão editorial.
@@ -193,6 +195,61 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
     return ensure_editorial_package(secrets, _default_editorial_package())
 
 
+def _mark_explicit_story_end(
+    document: dict[str, Any],
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Aplica [FIM_HISTORIA] ao último quadro V2 sem criar uma entry visual."""
+
+    active = [
+        dict(row)
+        for row in rows
+        if str(row.get("status", "active") or "active").strip().casefold() == "active"
+    ]
+    active.sort(key=lambda row: (int(row.get("order", 0) or 0), str(row.get("line_id", ""))))
+    markers = [
+        index
+        for index, row in enumerate(active)
+        if _END_STORY_MARKER.fullmatch(str(row.get("instruction", "") or ""))
+    ]
+    if not markers:
+        return document
+    if len(markers) > 1:
+        raise ValueError("O roteiro V2 deve possuir no máximo uma tag [FIM_HISTORIA].")
+    marker_index = markers[0]
+    if marker_index != len(active) - 1:
+        raise ValueError("[FIM_HISTORIA] deve ser a última linha ativa do roteiro V2.")
+
+    blocks = [item for item in document.get("blocks", []) if isinstance(item, dict)]
+    beats = [
+        beat
+        for block in blocks
+        for beat in block.get("beats", []) or []
+        if isinstance(beat, dict)
+    ]
+    if not beats:
+        raise ValueError("[FIM_HISTORIA] apareceu sem um quadro V2 anterior.")
+    last = beats[-1]
+    instruction = str(last.get("required_movement", "") or "")
+    if not instruction.startswith(_FRAME_PREFIX):
+        raise ValueError("[FIM_HISTORIA] só pode encerrar um quadro V2.")
+    try:
+        payload = json.loads(instruction[len(_FRAME_PREFIX) :])
+    except json.JSONDecodeError as exc:
+        raise ValueError("Quadro V2 final inválido ao aplicar [FIM_HISTORIA].") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Quadro V2 final inválido ao aplicar [FIM_HISTORIA].")
+    payload["is_ending"] = True
+    last["required_movement"] = _FRAME_PREFIX + json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    last["next_beat_id"] = ""
+    last["allowed_transitions"] = {}
+    return document
+
+
 def load_effective_editorial_document(
     secrets: Any,
     package: InstalledStoryPackage,
@@ -223,6 +280,7 @@ def load_effective_editorial_document(
         )
 
         document = enrich_compiled_document_with_image_ids(document, rows)
+        document = _mark_explicit_story_end(document, list(rows))
     return document
 
 
