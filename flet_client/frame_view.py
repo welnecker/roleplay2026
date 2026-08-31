@@ -22,7 +22,7 @@ ENTRIES_PER_ROW = 4
 class FrameVisualItem:
     frame_id: str
     entry_index: int
-    entry: VisualEntry
+    entry: VisualEntry | None
     image: bytes | str | None
 
 
@@ -243,14 +243,15 @@ class NovelFrameView:
                     ),
                 )
             )
-        balloon_width = max(238.0, self.slide_width - 22.0)
-        controls.append(
-            _entry_card(
-                entry,
-                visual_index,
-                width=balloon_width,
+        if entry is not None:
+            balloon_width = max(238.0, self.slide_width - 22.0)
+            controls.append(
+                _entry_card(
+                    entry,
+                    visual_index,
+                    width=balloon_width,
+                )
             )
-        )
         return ft.Container(
             key=f"frame-slide-{item.frame_id}-{item.entry_index}",
             width=self.slide_width,
@@ -262,7 +263,7 @@ class NovelFrameView:
         )
 
     def _current_row(self) -> FrameVisualRow:
-        items = tuple(
+        items = list(
             FrameVisualItem(
                 frame_id=self.controller.frame.frame_id,
                 entry_index=index,
@@ -271,7 +272,22 @@ class NovelFrameView:
             )
             for index, entry in enumerate(self.controller.visible_entries)
         )
-        return FrameVisualRow(self.controller.frame.frame_id, items)
+        # Se a primeira entry já troca a imagem, a imagem autoral da
+        # [DESCRIÇÃO] não pode desaparecer antes de chegar à tela. Ela ganha
+        # um slide visual próprio; quando a primeira entry herda a mesma
+        # imagem, não criamos uma duplicata.
+        first_entry_image = items[0].image if items else None
+        if self.base_image and first_entry_image != self.base_image:
+            items.insert(
+                0,
+                FrameVisualItem(
+                    frame_id=self.controller.frame.frame_id,
+                    entry_index=-1,
+                    entry=None,
+                    image=self.base_image,
+                ),
+            )
+        return FrameVisualRow(self.controller.frame.frame_id, tuple(items))
 
     def _visible_rows(self) -> tuple[FrameVisualRow, ...]:
         return self.history + (self._current_row(),)
@@ -291,7 +307,7 @@ class NovelFrameView:
             content=ft.Row(
                 controls=[
                     self._entry_slide(item, row_index * ENTRIES_PER_ROW + index)
-                    for index, item in enumerate(row.items[:ENTRIES_PER_ROW])
+                    for index, item in enumerate(row.items)
                 ],
                 spacing=14,
                 scroll=ft.ScrollMode.ALWAYS,

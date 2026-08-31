@@ -222,6 +222,54 @@ def test_uma_interacao_mantem_quatro_imagens_na_mesma_linha() -> None:
     ]
 
 
+def test_imagem_da_descricao_nao_e_pulada_quando_primeira_entry_troca_imagem() -> None:
+    page = _Page()
+    frame = VisualFrame(
+        frame_id="capitulo1_003",
+        description="Mary aguarda no escuro.",
+        entries=(VisualEntry("pensamento", "mary", "Mary", "Alguém está vindo."),),
+    )
+    view = NovelFrameView(
+        page,  # type: ignore[arg-type]
+        frame,
+        image="https://img/mary11.webp",
+        entry_images=("https://img/mary12.webp",),
+    )
+
+    slides = _interaction_slides(view)
+
+    assert len(slides) == 2
+    assert [_slide_image(slide).src for slide in slides] == [
+        "https://img/mary11.webp",
+        "https://img/mary12.webp",
+    ]
+    description_column = slides[0].content
+    assert isinstance(description_column, ft.Column)
+    assert len(description_column.controls) == 1
+    assert isinstance(_slide_balloon(slides[1]), ft.Stack)
+
+
+def test_imagem_herdada_da_descricao_nao_cria_slide_duplicado() -> None:
+    page = _Page()
+    frame = VisualFrame(
+        frame_id="capitulo1_001",
+        description="Mary entra.",
+        entries=(VisualEntry("pensamento", "mary", "Mary", "Cheguei."),),
+    )
+    view = NovelFrameView(
+        page,  # type: ignore[arg-type]
+        frame,
+        image="https://img/mary1.webp",
+        entry_images=("https://img/mary1.webp",),
+    )
+
+    slides = _interaction_slides(view)
+
+    assert len(slides) == 1
+    assert _slide_image(slides[0]).src == "https://img/mary1.webp"
+    assert isinstance(_slide_balloon(slides[0]), ft.Stack)
+
+
 def test_tela_preserva_no_maximo_cinco_interacoes_de_quatro_imagens() -> None:
     page = _Page()
     history = ()
