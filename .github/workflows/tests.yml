@@ -7,6 +7,7 @@ on:
       - agent/streamlit-initial-skeleton
       - agent/narrative-engine-v2
       - agent/synced-image-carousel
+      - agent/flet-visual-client
   pull_request:
     branches:
       - main
