@@ -6,11 +6,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_player_bootstrap_nao_instala_hook_visual_global() -> None:
+def test_player_bootstrap_instala_somente_camadas_da_visual_novel_v2() -> None:
     source = (ROOT / "services" / "editorial_player.py").read_text(encoding="utf-8")
 
     assert "install_editorial_scene_image_hook" not in source
-    assert "install_contextual_player_cycle()" in source
+    assert "install_contextual_player_cycle" not in source
+    assert "install_novel_frame_v2()" in source
+    assert "install_novel_frame_reveal()" in source
+    assert "install_novel_frame_presentation()" in source
 
 
 def test_camada_visual_nao_substitui_chat_input() -> None:

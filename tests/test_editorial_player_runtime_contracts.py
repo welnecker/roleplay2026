@@ -46,13 +46,38 @@ def test_player_usa_pipeline_editorial_transacional() -> None:
     source = RUNTIME_PATH.read_text(encoding="utf-8")
 
     assert "def load_script(package_id: str) -> EditorialScript:" in source
-    assert "decide_editorial_turn(script, editorial_state, user_text)" in source
+    loader_prefix = source.split(
+        "def load_script(package_id: str) -> EditorialScript:", 1
+    )[0].rsplit("\n\n", 1)[-1]
+    assert "@st.cache_resource" not in loader_prefix
+    assert "load_editorial_package(st.secrets, package)" in source
+    assert "def session_script(user: AuthenticatedUser, *, refresh: bool = False)" in source
+    assert "return load_script_snapshot(" in source
+    assert "script = session_script(user, refresh=fresh_start)" in source
+    assert "clear_script_snapshot(user.user_id)" in source
+    assert "proposed_turn = decide_editorial_turn(" in source
+    assert "history=history" in source
     assert "prepare_pending_editorial_turn(script, editorial_state, proposed_turn)" in source
     assert "clean_editorial_model_response(raw_model_response, \"\")" in source
     assert "evaluate_deterministic_response(candidate, pending.context)" in source
-    assert "parse_semantic_evaluation(semantic_raw)" in source
+    assert "semantic = parse_semantic_evaluation(" in source
+    assert "candidate=candidate" in source
+    assert "context=pending.context" in source
+    assert "previous_violations: tuple[str, ...] = ()" in source
+    assert "current_violations: tuple[str, ...] = ()" in source
+    assert "violations=previous_violations" in source
     assert "commit_editorial_turn(pending, assistant_text)" in source
     assert "editorial_opening_text(script)" in source
+    assert "editorial_scene_opening_text(script)" in source
+    assert "with_scripted_thought_guidance(" in source
+    assert "authored_thought=pending.context.authored_thought" in source
+    assert "with_optional_thought_guidance" not in source
+    assert "persist_opening_message(" in source
+    assert 'opening_editorial_state.node_id = "" if scene_opening else script.first_beat_id' in source
+    assert "script.first_beat_id if scene_opening else \"\"" in source
+    assert 'opening_metadata["scene_opening"] = bool(scene_opening)' in source
+    assert 'opening_metadata["editorial_block"]' in source
+    assert 'metadata["editorial_block"]' in source
     assert "build_editorial_turn_diagnostics(" in source
     assert "editorial_followups_after(turn.target_id)" in source
     assert "state_after_editorial_followup(" in source

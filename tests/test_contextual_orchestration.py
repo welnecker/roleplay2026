@@ -1,6 +1,7 @@
 import json
 
 from services.editorial_contextual_orchestration import (
+    _spreadsheet_needs_contextual_classifier,
     classify_contextual_destination_for_turn,
     decide_contextual_editorial_turn,
 )
@@ -150,3 +151,38 @@ def test_decisao_recebe_estado_ja_classificado() -> None:
     assert len(received) == 1
     assert received[0].facts["_contextual_route"] == "terminal_yard"
     assert turn.target_id == "yard_001"
+
+
+def test_planilha_nao_classifica_proposta_sexual_como_ruptura() -> None:
+    script = _script()
+    script.raw["authoring_source"] = "spreadsheet"
+    called = False
+
+    def classify(prompt: str, request: str) -> str:
+        nonlocal called
+        called = True
+        return "{}"
+
+    updated, destination = classify_contextual_destination_for_turn(
+        script,
+        PilotState(node_id="beat_001"),
+        "quer foder?",
+        classifier_call=classify,
+    )
+
+    assert called is False
+    assert destination.route == "continue"
+    assert destination.reason == "spreadsheet_rupture_prefilter_clear"
+    assert updated.facts["_contextual_route"] == "continue"
+
+
+def test_planilha_classifica_indicio_de_violencia_ou_exposicao() -> None:
+    script = _script()
+    script.raw["authoring_source"] = "spreadsheet"
+
+    assert _spreadsheet_needs_contextual_classifier(
+        script, "Vou te filmar e publicar isso na internet."
+    )
+    assert _spreadsheet_needs_contextual_classifier(
+        script, "Se você não fizer o que quero, vou te bater."
+    )

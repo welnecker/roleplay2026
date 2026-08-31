@@ -19,21 +19,22 @@ runtime:
       - content/extensions/transitions.yaml
       - content/extensions/parking_dialogue.yaml
       - content/extensions/dynamic_endings.yaml
+      - content/extensions/character_path.yaml
       - content/extensions/runtime.yaml
 card:
   title: Casada frustrada
-  subtitle: Interaja com Mary, ela quer muito te conhecer melhor. Só não abuse logo de cara, pois ela não é tão fácil.
-  description: Uma história adulta de tensão emocional, escolhas e consequências, conduzida em ritmo gradual.
+  subtitle: Sua esposa está carente e frustrada. Você não comparece há um bom tempo, e isso tem consequências.
+  description: Acompanhe, de forma onipresente, o que sua esposa é capaz de fazer para sair da solidão.
   genres:
-    - Drama
+    - Nsfw
     - Romance adulto
-  chapter_label: Capítulo 1
-  cover: assets/capas/cap1_casada.jpg
+  chapter_label: ''
+  cover: assets/capas/capa1_casada.webp
   character_profile:
     name: Mary
-    identity: Mary é uma mulher adulta, casada e emocionalmente inquieta. Sua rotina já não acompanha tudo o que ela sente e deseja viver.
-    personality: Espontânea, sensual, curiosa e bem-humorada. Costuma esconder insegurança, desejo e expectativa atrás de provocações e conversas aparentemente inocentes.
-    intention: Ela quer descobrir até onde pode confiar em você e se existe espaço para cumplicidade, atenção e uma conexão mais íntima — sem revelar tudo de uma vez.
+    identity: Mary é um tesão de mulher. Ela ama o marido, mas não suporta mais ser ignorada.
+    personality: Seu professor da faculdade já sacou que Mary está triste. Ele tem o antídoto pra tudo isso.
+    intention: Enquanto você se estressa no trabalho, sua esposa está prestes a sair do atraso em um seminário fake... na casa do professor...
 commerce:
   access: paid
   price_cents: 990

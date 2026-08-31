@@ -26,6 +26,11 @@ class PilotState:
     finished: bool = False
     run_status: str = "active"
     ending_code: str = ""
+    decision_id: str = ""
+    decision_beat_id: str = ""
+    decision_attempts: int = 0
+    decision_status: str = ""
+    input_source: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -47,6 +52,11 @@ class PilotState:
             finished=bool(raw.get("finished", False)),
             run_status=str(raw.get("run_status", "active") or "active"),
             ending_code=str(raw.get("ending_code", "") or ""),
+            decision_id=str(raw.get("decision_id", "") or ""),
+            decision_beat_id=str(raw.get("decision_beat_id", "") or ""),
+            decision_attempts=int(raw.get("decision_attempts", 0) or 0),
+            decision_status=str(raw.get("decision_status", "") or ""),
+            input_source=str(raw.get("input_source", "") or ""),
         )
 
 
@@ -81,6 +91,11 @@ class PilotScript:
         configured_first = str(self.scene.get("first_beat_id", "") or "").strip()
         self.first_beat_id = configured_first if configured_first in self.beats else next(iter(self.beats))
         self.engagement_policy = raw.get("engagement_policy") or {}
+
+    @property
+    def character_name(self) -> str:
+        character = self.raw.get("character") or {}
+        return str(character.get("name", "Personagem") or "Personagem")
 
     @classmethod
     def load(cls, path: Path) -> "PilotScript":
@@ -130,9 +145,10 @@ def classify_user_message(text: str) -> Engagement:
         return "hostile"
     if any(marker in value for marker in _MOCKING_MARKERS):
         return "mocking"
-    if value in _DISMISSIVE or (
-        len(value.split()) <= 3 and any(value.startswith(marker) for marker in _DISMISSIVE)
-    ):
+    # Marcadores displicentes só valem como enunciado completo. Usar
+    # ``startswith`` confundia comandos contextualizados (por exemplo,
+    # "Vai... tira meu calção") com uma ordem para o app apenas continuar.
+    if value in _DISMISSIVE:
         return "dismissive"
     if value in _MINIMAL or (len(value.split()) == 1 and len(value) <= 5):
         return "minimal"
@@ -149,6 +165,12 @@ def _first_beat_id(script: PilotScript) -> str:
 def opening_text(script: PilotScript) -> str:
     beat_id = _first_beat_id(script)
     return _fallback_for_beat(beat_id, script.beats[beat_id])
+
+
+def scene_opening_text(script: PilotScript) -> str:
+    """Retorna a introdução narrativa declarada, sem consumir o primeiro beat."""
+
+    return str(script.scene.get("introduction", "") or "").strip()
 
 
 def decide_turn(script: PilotScript, state: PilotState, user_text: str) -> PilotTurn:
@@ -285,7 +307,7 @@ def _ending_turn(
     state.run_status = str(ending.get("run_status", "terminated"))
     state.ending_code = str(ending.get("ending_code", ending_id))
     prompt = (
-        "Você é Mary. Encerre a cena somente com pensamento curto, fala direta ou onomatopeia. "
+        f"Você é {script.character_name}. Encerre a cena somente com pensamento curto, fala direta ou onomatopeia. "
         "Não descreva movimentos, expressões faciais, postura, olhar, mãos, corpo ou cenário. "
         "Não faça perguntas e não deixe convite para continuar. "
         "Não mencione aplicativo, regras, roteiro ou evento técnico.\n\n"
@@ -334,8 +356,8 @@ def _build_organic_prompt(
         else "Não antecipe outro movimento nesta resposta."
     )
     return (
-        "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
-        "Este é um TURNO ORGÂNICO INTERMEDIÁRIO. A prioridade é mostrar que Mary ouviu e entendeu o usuário.\n"
+        f"Você é {script.character_name}, uma personagem adulta numa história guiada.\n"
+        f"Este é um TURNO ORGÂNICO INTERMEDIÁRIO. A prioridade é mostrar que {script.character_name} ouviu e entendeu o usuário.\n"
         "Não recite mecanicamente a próxima fala do roteiro. Reaja somente ao conteúdo novo.\n"
         "Não narre ações do usuário nem use terceira pessoa, rubricas ou asteriscos.\n\n"
         f"TIPO DE CONTRIBUIÇÃO: {signal_kind}\n"
@@ -368,17 +390,49 @@ def _build_prompt(
         if organic_instruction
         else ""
     )
+    exact_speech = bool(str(beat.get("exact_speech", "") or "").strip())
+    free_speech = bool(beat.get("free_speech", False))
+    interpreted_speech = bool(beat.get("interpreted_speech", False))
+    if exact_speech:
+        speech_contract = (
+            "FALA EXATA: reproduza literalmente a fala autoral, sem nenhuma palavra audível "
+            "antes ou depois dela.\n"
+        )
+    elif free_speech:
+        speech_contract = (
+            "FALA LIVRE: use a instrução autoral como direção e crie integralmente a redação, "
+            "respeitando o objetivo atual, os fatos e os limites narrativos.\n"
+        )
+    elif interpreted_speech:
+        speech_contract = (
+            "FALA INTERPRETADA:\n"
+            "- Use a fala fornecida como núcleo autoral obrigatório e reconhecível, não como texto fechado.\n"
+            "- Reaja ao sentido da mensagem atual e desenvolva uma atuação humana, intensa e emocionalmente comprometida.\n"
+            "- Incorpore concretamente psicologia, desejo, estado corporal próprio, iniciativa e estágio da relação.\n"
+            "- Quando compatível, expresse prazer, tensão, humor, vulnerabilidade ou lascívia; não responda de modo tímido, neutro ou protocolar.\n"
+            "- Não invente ação, sensação, desejo ou consentimento do usuário e não antecipe outro movimento.\n"
+        )
+    else:
+        speech_contract = (
+            "FALA AUTORAL ADAPTÁVEL:\n"
+            "- A reação ao sentido da mensagem mais recente do usuário é obrigatória quando ela contém conteúdo pertinente.\n"
+            "- Não conte palavras, interjeições ou perguntas já presentes na referência de voz como essa reação; escreva uma ligação nova que demonstre compreensão do que o usuário acabou de dizer.\n"
+            "- Preserve de forma reconhecível o sentido, o vocabulário central e o tom da referência de voz.\n"
+            "- Complete todas as finalidades pendentes do objetivo atual, inclusive pergunta ou pedido não escrito na referência.\n"
+            "- Una reação, fala autoral e complemento em uma resposta natural e viva.\n"
+            "- Não abra assunto independente, não antecipe outro movimento e não presuma resposta ou ação do usuário.\n"
+        )
     return (
-        "Você é Mary, uma mulher adulta brasileira, numa história guiada.\n"
+        f"Você é {script.character_name}, uma personagem adulta numa história guiada.\n"
         "A resposta deve soar como voz viva, não como prosa narrativa.\n\n"
         "REGRAS ABSOLUTAS:\n"
         "- Não narre ações, movimentos, gestos, expressões, postura ou contato visual.\n"
         "- Não use terceira pessoa, rubricas, asteriscos ou parênteses de ação.\n"
         "- onomatopeia é permitida quando surgir naturalmente na fala.\n"
         "- Não invente ações, pensamentos, endereço, profissão ou passado do usuário.\n"
-        "- Mary pode expressar apenas o próprio pensamento interno quando o formato opcional permitir.\n"
+        f"- {script.character_name} pode expressar apenas o próprio pensamento interno quando o formato opcional permitir.\n"
         "- Siga o movimento atual com máxima fidelidade e não crie outra trama.\n"
-        "- Preserve semanticamente a fala canônica, mas adapte ritmo e ligação ao que o usuário disse.\n"
+        "- Respeite o contrato específico da modalidade de fala declarado abaixo.\n"
         "- Use fatos confirmados pelo usuário quando forem relevantes.\n"
         "- Não mencione roteiro, classificação, sistema, END_RUN ou JSON.\n\n"
         f"LOCAL: {script.scene.get('location', 'supermercado')}\n"
@@ -386,6 +440,7 @@ def _build_prompt(
         f"ENGAJAMENTO DETECTADO: {engagement}\n"
         f"FATOS CONFIRMADOS: {render_facts(state.facts)}\n"
         f"RESPOSTA DO USUÁRIO: {user_text}\n"
+        f"\n{speech_contract}"
         f"{organic_context}\n"
         f"UNIDADES DO MOVIMENTO:\n{unit_text}\n\n"
         f"REFERÊNCIA DE VOZ SEM NARRAÇÃO: {fallback}"

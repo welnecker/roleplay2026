@@ -1,0 +1,82 @@
+name: Build Roteiro Editor Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/synced-image-carousel
+    paths:
+      - "tools/roteiro_editor_desktop/**"
+      - ".github/workflows/build-roteiro-editor-windows.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "tools/roteiro_editor_desktop/**"
+      - "tests/test_roteiro_editor_desktop_core.py"
+      - "tests/test_roteiro_editor_project_image_restore.py"
+      - "tests/test_roteiro_editor_reference_gallery_allocation.py"
+      - ".github/workflows/build-roteiro-editor-windows.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r tools/roteiro_editor_desktop/requirements-build.txt
+
+      - name: Validate source
+        shell: pwsh
+        run: |
+          python -m py_compile tools/roteiro_editor_desktop/core.py
+          python -m py_compile tools/roteiro_editor_desktop/image_sequence.py
+          python -m py_compile tools/roteiro_editor_desktop/project_image_restore.py
+          python -m py_compile tools/roteiro_editor_desktop/reference_folder.py
+          python -m py_compile tools/roteiro_editor_desktop/reference_gallery_allocation.py
+          python -m py_compile tools/roteiro_editor_desktop/app_image_first.py
+          python -m py_compile tools/roteiro_editor_desktop/app_image_first_balao.py
+          python -m py_compile tools/roteiro_editor_desktop/app_image_first_timeline.py
+          python -m py_compile tools/roteiro_editor_desktop/app_image_first_timeline_thumbs.py
+          python -m py_compile tools/roteiro_editor_desktop/app_image_first_timeline_gallery.py
+          python -m py_compile tools/roteiro_editor_desktop/app_image_first_timeline_gallery_restore.py
+          python -m pytest -q tests/test_roteiro_editor_desktop_core.py tests/test_roteiro_editor_image_sequence.py tests/test_roteiro_editor_project_image_restore.py tests/test_roteiro_editor_reference_gallery_allocation.py tests/test_roteiro_editor_reference_folder.py
+
+      - name: Build single-file EXE
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed `
+            --name Editor_Roteiros_ROLEPLAY2026 `
+            --paths tools/roteiro_editor_desktop `
+            --hidden-import openpyxl `
+            --hidden-import PIL.Image `
+            --hidden-import PIL.ImageTk `
+            --collect-all openpyxl `
+            tools/roteiro_editor_desktop/app_image_first_timeline_gallery_restore.py
+
+      - name: Create distribution ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item dist/Editor_Roteiros_ROLEPLAY2026.exe release/
+          Copy-Item tools/roteiro_editor_desktop/LEIA-ME.txt release/
+          Compress-Archive -Path release/* -DestinationPath Editor_Roteiros_ROLEPLAY2026_Windows.zip -Force
+
+      - name: Upload Windows editor
+        uses: actions/upload-artifact@v4
+        with:
+          name: Editor_Roteiros_ROLEPLAY2026_Windows
+          path: Editor_Roteiros_ROLEPLAY2026_Windows.zip
+          if-no-files-found: error

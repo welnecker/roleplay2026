@@ -13,6 +13,7 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from gspread import Spreadsheet, Worksheet
 from gspread.exceptions import APIError
 
+from persistence.google_sheets_retry import with_transient_retry
 from persistence.models import new_id, utc_now_iso
 
 USERS_SHEET = "USERS"
@@ -58,6 +59,24 @@ class AccountUser:
     email: str
     display_name: str
     status: str
+
+
+def build_account_repository(secrets: Any) -> "GoogleSheetsAccountRepository":
+    """Abre autenticação diretamente na base autoritativa de contas e cobrança."""
+
+    credentials = secrets.get("gcp_service_account")
+    if not credentials:
+        raise ValueError("Google Sheets não está configurado para autenticação.")
+    spreadsheet_id = str(
+        secrets.get("ROLEPLAY_ACCOUNTS_BILLING_SPREADSHEET_ID", "") or ""
+    ).strip()
+    if not spreadsheet_id:
+        raise ValueError("ID da planilha de contas e cobrança não configurado.")
+    client = gspread.service_account_from_dict(dict(credentials))
+    spreadsheet = with_transient_retry(lambda: client.open_by_key(spreadsheet_id))
+    repository = GoogleSheetsAccountRepository(spreadsheet)
+    repository.ensure_schema()
+    return repository
 
 
 class GoogleSheetsAccountRepository:
@@ -165,6 +184,20 @@ class GoogleSheetsAccountRepository:
             display_name=str(user_row["display_name"]),
             status=str(user_row["status"]),
         )
+
+    def get_user(self, *, user_id: str) -> AccountUser | None:
+        """Resolve a identidade autoritativa pelo id persistido no servidor."""
+
+        for row in self._records(USERS_SHEET):
+            if str(row.get("user_id", "")).strip() != user_id.strip():
+                continue
+            return AccountUser(
+                user_id=str(row.get("user_id", "")),
+                email=str(row.get("email", "")).strip().casefold(),
+                display_name=str(row.get("display_name", "")),
+                status=str(row.get("status", "")),
+            )
+        return None
 
     def has_entitlement(self, *, user_id: str, package_id: str, access: str) -> bool:
         if access == "free":

@@ -107,6 +107,34 @@ def test_classificador_sem_secrets_preserva_progressao_local(monkeypatch) -> Non
     assert player_cycle._classifier_call("prompt", "request") == "{}"
 
 
+def test_abertura_semantica_nao_pula_primeiro_beat_da_personagem(monkeypatch) -> None:
+    script = _script()
+    state = PilotState(node_id="", pending_next_beat_id=script.first_beat_id)
+
+    monkeypatch.setattr(
+        engine,
+        "classify_contextual_destination_for_turn",
+        lambda _script, received_state, _text, *, classifier_call: (
+            received_state,
+            ContextualDestination(route="continue"),
+        ),
+    )
+
+    turn = engine.decide_editorial_turn(
+        script,
+        state,
+        "Oi, estou vendo você.",
+        classifier_call=lambda *_: (
+            '{"route":"continue","steps":['
+            '{"step_id":"beat_001","status":"satisfied",'
+            '"evidence":"estou vendo você"}]}'
+        ),
+    )
+
+    assert turn.target_id == "beat_001"
+    assert turn.state.node_id == "beat_001"
+
+
 def test_motor_nao_compartilha_estado_entre_cards(monkeypatch) -> None:
     seen_packages: list[str] = []
 

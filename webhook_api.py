@@ -9,7 +9,8 @@ import gspread
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 
 from billing.mercado_pago import MercadoPagoClient, validate_webhook_signature
-from billing.service import PixCheckoutService, read_secret
+from billing.service import PaymentValidationError, PixCheckoutService, read_secret
+from persistence.accounts import GoogleSheetsAccountRepository
 from persistence.payments import GoogleSheetsPaymentRepository
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from persistence.v2_google_sheets import GoogleSheetsStoryCreditRepository
@@ -44,10 +45,13 @@ def build_services() -> tuple[PixCheckoutService, GoogleSheetsPaymentRepository,
     )
 
     payments = GoogleSheetsPaymentRepository(accounts_billing)
+    payments.ensure_schema()
+    accounts = GoogleSheetsAccountRepository(accounts_billing)
     story_credits = GoogleSheetsStoryCreditRepository(accounts_billing)
     service = PixCheckoutService(
         client=MercadoPagoClient(access_token),
         payments=payments,
+        accounts=accounts,
         story_credits=story_credits,
     )
     return service, payments, webhook_secret
@@ -181,20 +185,38 @@ async def mercado_pago_webhook(
         data_id=data_id,
         secret=webhook_secret,
     )
-    provider_event_id = str(payload.get("id", "")) if isinstance(payload, dict) else ""
+    provider_event_id = (
+        str(payload.get("id", "")) if isinstance(payload, dict) else ""
+    ) or x_request_id
     event_type = str(payload.get("action", notification_type)) if isinstance(payload, dict) else notification_type
-    payments.record_webhook(
+    if not signature_valid:
+        # Registra a tentativa, mas não reserva o id do evento: uma requisição
+        # inválida não pode bloquear a entrega legítima posterior com o mesmo id.
+        payments.record_webhook(
+            provider_event_id="",
+            provider_order_id=data_id,
+            event_type=event_type,
+            signature_valid=False,
+            payload=payload if isinstance(payload, dict) else {},
+        )
+        raise HTTPException(status_code=401, detail="Assinatura inválida.")
+    if not data_id:
+        raise HTTPException(status_code=400, detail="Identificador da ordem ausente.")
+    first_delivery = payments.record_webhook(
         provider_event_id=provider_event_id,
         provider_order_id=data_id,
         event_type=event_type,
-        signature_valid=signature_valid,
+        signature_valid=True,
         payload=payload if isinstance(payload, dict) else {},
     )
-    if not signature_valid:
-        raise HTTPException(status_code=401, detail="Assinatura inválida.")
+    if not first_delivery:
+        return {"received": True, "duplicate": True, "processed": False}
     if notification_type not in {"", "orders", "order"}:
         return {"received": True, "ignored": True}
-    result = service.process_provider_order(data_id)
+    try:
+        result = service.process_provider_order(data_id)
+    except PaymentValidationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {
         "received": True,
         "processed": result is not None,

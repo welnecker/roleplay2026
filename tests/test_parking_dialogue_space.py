@@ -26,7 +26,8 @@ def test_resposta_no_caminho_exige_posicao_clara_e_curta() -> None:
 
     assert beat["max_sentences"] == 2
     assert beat["max_questions"] == 0
-    assert "sim, não ou limite claro" in instruction
+    assert "voz natural e pessoal" in instruction
+    assert "negociação" in instruction
     assert "não pedir nova explicação" in instruction
 
 
@@ -38,15 +39,38 @@ def test_porta_malas_responde_uma_vez_antes_do_nome() -> None:
     assert "porta_malas_conversa_002" not in script.beats
 
 
-def test_porta_malas_nao_fica_apenas_em_confirmacao_generica() -> None:
+def test_porta_malas_preserva_atracao_sem_linguagem_burocratica() -> None:
     script = _script()
     beat = script.beats["porta_malas_conversa_001"]
     anchor = beat["units"][0]["anchor"].casefold()
     instruction = beat["units"][0]["instruction"].casefold()
 
-    assert "proposta bem direta" in anchor
-    assert "posição inequívoca" in instruction
+    assert "você também está mexendo comigo" in anchor
+    assert "mulher atraída" in instruction
+    assert "não como mediadora de uma proposta" in instruction
+    assert "acordo" not in anchor
+    assert "não vou cozinhar você" not in anchor
     assert beat["max_sentences"] == 2
+
+
+def test_nome_pendente_nao_repete_o_mecanismo_da_conversa() -> None:
+    script = _script()
+    beat = script.beats["nome_assunto_pendente_001"]
+    anchor = beat["units"][0]["anchor"].casefold()
+    instruction = beat["units"][0]["instruction"].casefold()
+
+    assert "condicionou seu nome" not in anchor
+    assert "eu não me assusto com ousadia" in anchor
+    assert "mecânica da conversa" in instruction
+    assert "condicionou uma resposta" in instruction
+
+
+def test_nome_ja_conhecido_pula_o_pedido_redundante() -> None:
+    script = _script()
+    beat = script.beats["reencontro_fila_011"]
+
+    assert beat["skip_when_facts"]["user_name"] == "reencontro_fila_012"
+    assert beat["skip_when_facts"]["mutual_introduction_completed"] == "reencontro_fila_012"
 
 
 def test_condicao_do_nome_recebe_uma_resposta_e_o_fluxo_avanca() -> None:
@@ -62,10 +86,9 @@ def test_folga_do_nome_exige_resposta_efetiva() -> None:
     beat = script.beats["nome_assunto_pendente_001"]
     instruction = beat["units"][0]["instruction"].casefold()
 
-    assert "efetivamente responder" in instruction
-    assert "explicitar o pedido concreto" in instruction
+    assert "efetivamente responder" in instruction or "responder ao conteúdo real" in instruction
     assert beat["max_questions"] == 0
-    assert beat["max_sentences"] == 2
+    assert beat["max_sentences"] == 3
 
 
 def test_confirmacao_do_horario_avanca_diretamente_para_despedida() -> None:

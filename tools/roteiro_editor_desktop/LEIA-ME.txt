@@ -1,0 +1,57 @@
+EDITOR DE ROTEIROS ROLEPLAY2026 - WINDOWS
+VERSAO DE AUTORIA: TIMELINE VISUAL / GALERIA DE REFERENCIAS
+
+Este programa e independente do Roleplay2026.
+Nao precisa instalar Python, Streamlit, venv ou Miniconda depois de compilado.
+
+FLUXO: IMAGEM PRIMEIRO
+1. Abra Editor_Roteiros_ROLEPLAY2026.exe.
+2. No painel direito, clique em INFORMAR PASTA DE IMAGENS e escolha onde estão
+   as imagens que alimentarão o roteiro. A pasta pode estar em qualquer local.
+3. O caminho escolhido fica visível acima da galeria e é salvo junto com o projeto.
+4. Para escolher somente alguns arquivos, clique em SELECIONE IMAGENS. A janela permite
+   marcar varias imagens de uma vez; novas selecoes sao acrescentadas ao lote atual sem
+   duplicar, mover ou apagar os arquivos originais.
+5. Todas as imagens selecionadas ou encontradas na pasta aparecem como miniaturas
+   na GALERIA DE REFERENCIAS.
+6. Clique em qualquer miniatura para torna-la a imagem atual e exibi-la no preview grande.
+7. Clique em + DESCRICAO DESTA IMAGEM para criar um novo quadro ligado a imagem atual.
+8. Escreva a DESCRICAO, FALAS e PENSAMENTOS olhando para a referencia visual.
+9. Use + FALA para ajustes mínimos, + FALA EXATA para texto literal e
+   + FALA INTERPRETADA para permitir que o modelo desenvolva o núcleo autoral.
+10. Use + FALA BALAO para gerar [FALA ator_balao]. Na edição de uma linha,
+   as modalidades exata e interpretada também podem ser combinadas com BALÃO.
+11. Use {{nome}} para o nome cadastrado, {{*nome}} para o/a + nome e
+    {{**nome}} para ele/ela. Se o tratamento escolhido for neutro, os três
+    marcadores resultam somente no nome cadastrado.
+12. Na timeline, cada [DESCRICAO] abre um quadro expansivel com suas FALAS e PENSAMENTOS.
+13. A primeira imagem fica no image_id da [DESCRICAO] e e herdada pelas linhas seguintes ate aparecer outro image_id explicito.
+14. Para trocar a imagem durante o quadro, selecione a linha desejada, clique na miniatura da galeria e use USAR IMAGEM ATUAL NESTA LINHA.
+15. Imagens ja utilizadas aparecem com um marcador de confirmacao na galeria.
+16. A timeline mostra um thumbnail apenas nas linhas que possuem image_id proprio; linhas que apenas herdam a imagem anterior ficam sem thumbnail.
+17. Para editar uma linha ja gerada, selecione-a e clique em EDITAR LINHA SELECIONADA ou de duplo clique nela.
+18. Em linhas de dialogo, voce pode alternar entre FALA, FALA EXATA, FALA INTERPRETADA, PENSAMENTO e suas variantes de BALAO, alem de trocar o ator. Uma DESCRICAO permanece DESCRICAO para preservar a estrutura V2.
+19. Ao salvar a alteracao, line_id e order sao recompilados automaticamente e a imagem ja atribuida aquela linha e preservada.
+20. Anterior / Proxima continuam disponiveis como navegacao auxiliar, mas nao sao necessarios para trabalhar com lotes grandes.
+21. Salve o projeto JSON para continuar outro dia.
+22. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
+
+SAIDA
+A pasta exportada contem:
+- roteiro.xlsx
+- roteiro.csv
+- roteiro.tsv
+- projeto_roteiro.json
+- imagens/*.webp
+
+CABECALHO OFICIAL
+package_id | script_version | line_id | order | instruction | status | image_id
+
+As imagens sao convertidas para WebP e recebem numeracao automatica, por exemplo:
+camilly1.webp
+camilly2.webp
+camilly3.webp
+
+O arquivo projeto_roteiro.json permite continuar a edicao posteriormente enquanto as imagens originais permanecerem acessiveis no PC.
+
+O programa nao envia nem altera arquivos no GitHub ou Google Sheets. A transferencia final continua manual e controlada por voce.

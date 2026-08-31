@@ -1,52 +1,68 @@
 from __future__ import annotations
 
-import importlib
-import sys
-from types import ModuleType
+import runpy
+from pathlib import Path
+from typing import Any
 
-from services.editorial_player_contextual_cycle import install_contextual_player_cycle
-from services.editorial_script_cache import refresh_loaded_editorial_script_cache
+from services.novel_frame_continuity_patch import install as install_novel_frame_continuity
+from services.novel_frame_image_patch import install as install_novel_frame_image
+from services.novel_frame_layout_patch import install as install_novel_frame_layout
+from services.novel_frame_patch import install as install_novel_frame_v2
+from services.novel_frame_presentation import install as install_novel_frame_presentation
+from services.novel_frame_reveal_patch import install as install_novel_frame_reveal
+from services.novel_frame_typography_patch import install as install_novel_frame_typography
+from services.novel_run_version_guard import install as install_novel_run_version_guard
+from services.novel_synced_image_carousel import install as install_synced_image_carousel
+from services.novel_synced_image_carousel_autoscroll import install as install_synced_carousel_autoscroll
+from services.novel_synced_image_carousel_desktop import install as install_synced_desktop_carousel
+from services.novel_synced_visual_contract import install as install_synced_visual_contract
 
 
-_RUNTIME_MODULE = "services.editorial_player_runtime"
+_RUNTIME_PATH = Path(__file__).with_name("novel_player_runtime.py")
+NOVEL_FRAME_BUILD = "2026-08-28.synced-image-carousel.14"
+_BUILD_LOGGED = False
 
 
-def _load_or_reload_runtime() -> ModuleType:
-    """Carrega o runtime ou recarrega somente a instância ainda registrada."""
+def _execute_runtime() -> dict[str, Any]:
+    """Executa o player em namespace isolado para cada rerun do Streamlit.
 
-    # Apenas a dependência do classificador é registrada no bootstrap. A camada
-    # visual não substitui widgets globais do Streamlit.
-    install_contextual_player_cycle()
+    ``importlib.reload`` modifica a entrada global de ``sys.modules`` enquanto
+    executa o arquivo. Dois reruns simultâneos podiam, portanto, remover ou
+    substituir o módulo um do outro e repetir a abertura da mesma run. O player
+    é um script Streamlit; executá-lo por caminho preserva esse contrato sem
+    compartilhar estado de importação entre sessões.
+    """
 
-    loaded = sys.modules.get(_RUNTIME_MODULE)
-    if loaded is None:
-        return importlib.import_module(_RUNTIME_MODULE)
+    global _BUILD_LOGGED
+    install_novel_run_version_guard()
+    install_novel_frame_v2()
+    install_novel_frame_continuity()
+    install_novel_frame_reveal()
+    install_novel_frame_presentation()
+    install_novel_frame_typography()
+    install_novel_frame_image()
+    install_novel_frame_layout()
+    install_synced_image_carousel()
+    install_synced_desktop_carousel()
+    install_synced_carousel_autoscroll()
+    install_synced_visual_contract()
+    if not _BUILD_LOGGED:
+        print(
+            f"[NOVEL_FRAME_BUILD] {NOVEL_FRAME_BUILD} — "
+            "carrossel imagem+balão sincronizado, falas exatas/interpretadas, "
+            "contrato determinístico 1:1 de entries, "
+            "placeholders de nome e gênero resolvidos pelo perfil, onboarding direto, "
+            "binding de versão e continuidade canônica autoritativa"
+        )
+        _BUILD_LOGGED = True
 
-    refresh_loaded_editorial_script_cache(loaded)
-
-    # O refresh pode invalidar/remover o módulo durante o hot reload do Streamlit.
-    # Releia o registro oficial antes de chamar importlib.reload; uma referência
-    # antiga não pode ser recarregada depois de sair de sys.modules.
-    registered = sys.modules.get(_RUNTIME_MODULE)
-    if registered is None:
-        return importlib.import_module(_RUNTIME_MODULE)
-
-    try:
-        return importlib.reload(registered)
-    except ImportError:
-        # O Streamlit pode remover ou substituir o módulo entre a leitura acima
-        # e a verificação interna feita por importlib.reload(). Nesse caso, não
-        # tente recarregar a referência obsoleta: importe o registro atual.
-        current = sys.modules.get(_RUNTIME_MODULE)
-        if current is None or current is not registered:
-            return importlib.import_module(_RUNTIME_MODULE)
-        raise
+    return runpy.run_path(str(_RUNTIME_PATH), run_name="services.novel_player_runtime.__streamlit__")
 
 
 def run_editorial_player() -> None:
-    """Executa o player editorial em toda nova execução do Streamlit."""
+    """Executa o player V2 com compatibilidade para quadros legados."""
 
-    _load_or_reload_runtime()
+    _execute_runtime()
 
 
-__all__ = ["run_editorial_player"]
+__all__ = ["NOVEL_FRAME_BUILD", "run_editorial_player"]

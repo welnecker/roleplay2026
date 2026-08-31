@@ -1,0 +1,720 @@
+from __future__ import annotations
+
+import re
+import unicodedata
+from copy import deepcopy
+from typing import Any, Iterable
+
+from services.first_person import has_first_person_voice
+
+
+_MARKER = re.compile(r"^\s*\[([^\]]+)\]\s*(.*)$", re.DOTALL)
+_PROFILE_TAGS = {
+    "HOMEM",
+    "MULHER",
+    "NEUTRO",
+    "NEUTRA",
+    "CORPO_MASCULINO",
+    "CORPO_FEMININO",
+    "CORPO_INTERSEXO",
+}
+
+
+class SpreadsheetStoryError(ValueError):
+    pass
+
+
+def _plain(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    return "".join(char for char in text if not unicodedata.combining(char)).casefold()
+
+
+def _marker(value: Any) -> tuple[str, str, str]:
+    raw = str(value or "").strip()
+    match = _MARKER.match(raw)
+    if match is None:
+        raise SpreadsheetStoryError(f"Instrução sem marcador: {raw!r}")
+    header = match.group(1).strip()
+    text = match.group(2).strip()
+    parts = header.split(maxsplit=1)
+    kind = _plain(parts[0]).upper()
+    argument = parts[1].strip() if len(parts) > 1 else ""
+    if kind == "FALA":
+        argument_parts = argument.split()
+        delivery = _plain(argument_parts[0]) if argument_parts else ""
+        if delivery in {"exata", "livre"}:
+            kind = "FALA_" + delivery.upper()
+            argument_parts = argument_parts[1:]
+            if delivery == "exata" and argument_parts and _plain(argument_parts[0]) == "intima":
+                kind = "FALA_EXATA_INTIMA"
+                argument_parts = argument_parts[1:]
+            argument = " ".join(argument_parts).strip()
+        elif delivery in {"interpretada", "interpretado", "interpretativa", "interpretativo"}:
+            kind = "FALA_INTERPRETADA"
+            argument = " ".join(argument_parts[1:]).strip()
+    thought_delivery = _plain(argument).split(maxsplit=1)[0] if argument else ""
+    if kind == "PENSAMENTO" and thought_delivery in {
+        "interpretado", "interpretada", "interpretativo", "interpretativa"
+    }:
+        argument_parts = argument.split()
+        kind = "PENSAMENTO_INTERPRETADO"
+        argument = " ".join(argument_parts[1:]).strip()
+    if kind == "PATIO" and _plain(argument).startswith("final"):
+        kind = "PATIO_FINAL"
+        argument = argument[5:].strip()
+    elif kind == "PATIO" and _plain(argument).startswith("decisao"):
+        kind = "PATIO_DECISAO"
+        argument = argument[len(argument.split(maxsplit=1)[0]):].strip()
+    elif kind == "INTERPRETAR":
+        kind = "FALA_INTERPRETADA"
+    return kind, argument, text
+
+
+def _active_rows(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    selected = [
+        dict(row)
+        for row in rows
+        if str(row.get("status", "active") or "active").strip().casefold() == "active"
+    ]
+    selected.sort(key=lambda row: (int(row.get("order", 0) or 0), str(row.get("line_id", ""))))
+    return selected
+
+
+def _validate_first_person(kind: str, text: str, *, line_id: str, character_name: str) -> None:
+    if kind not in {"BEAT", "PENSAMENTO", "PENSAMENTO_INTERPRETADO", "PONTE", "PATIO_FINAL"} or not text:
+        return
+    if character_name and re.search(rf"\b{re.escape(character_name)}\b", text, re.IGNORECASE):
+        raise SpreadsheetStoryError(
+            f"{line_id}: use primeira pessoa; não escreva o nome da personagem."
+        )
+    if kind in {"BEAT", "PONTE", "PATIO_FINAL"} and not has_first_person_voice(text):
+        raise SpreadsheetStoryError(
+            f"{line_id}: {kind} deve ser escrito em primeira pessoa."
+        )
+
+
+def compile_spreadsheet_story(
+    base_document: dict[str, Any],
+    rows: Iterable[dict[str, Any]],
+    *,
+    script_version: str,
+) -> dict[str, Any]:
+    """Compila as linhas autorais de ROTEIROS para o documento editorial atual."""
+
+    source_rows = _active_rows(rows)
+    if not source_rows:
+        raise SpreadsheetStoryError("ROTEIROS não possui linhas ativas.")
+
+    document = deepcopy(base_document)
+    document["script_version"] = str(script_version or document.get("script_version", ""))
+    document["authoring_source"] = "spreadsheet"
+    document["blocks"] = []
+
+    character = dict(document.get("character") or {})
+    character_name = str(character.get("name", "") or "").strip()
+    blocks: list[dict[str, Any]] = document["blocks"]
+    current_block: dict[str, Any] | None = None
+    current_beat: dict[str, Any] | None = None
+    pending_transition = ""
+    final_yard = False
+    has_intimate_exact = False
+    endings: list[dict[str, Any]] = []
+    seen_line_ids: set[str] = set()
+    seen_decision_ids: set[str] = set()
+    seen_ending_codes: set[str] = set()
+
+    def ensure_block() -> dict[str, Any]:
+        nonlocal current_block
+        if current_block is None:
+            current_block = {
+                "block_id": "roteiro",
+                "order": 1,
+                "title": "Roteiro",
+                "entry_beat_id": "",
+                "max_movements_per_response": 1,
+                "max_questions_per_response": 1,
+                "rules": [],
+                "beats": [],
+            }
+            blocks.append(current_block)
+        return current_block
+
+    def flush_beat() -> None:
+        nonlocal current_beat, has_intimate_exact
+        if current_beat is None:
+            return
+        thought = str(current_beat.pop("_thought", "") or "").strip()
+        speech = str(current_beat.pop("_speech", "") or "").strip()
+        transition = str(current_beat.pop("_transition", "") or "").strip()
+        thought_variants = dict(current_beat.pop("_thought_variants", {}) or {})
+        speech_variants = dict(current_beat.pop("_speech_variants", {}) or {})
+        speech_exact = bool(current_beat.pop("_speech_exact", False))
+        speech_free = bool(current_beat.pop("_speech_free", False))
+        speech_intimate = bool(current_beat.pop("_speech_intimate", False))
+        thought_interpreted = bool(current_beat.pop("_thought_interpreted", False))
+        speech_interpreted = bool(current_beat.pop("_speech_interpreted", False))
+        has_intimate_exact = has_intimate_exact or speech_intimate
+        authored_bridges = list(current_beat.pop("_authored_bridges", []) or [])
+        decision_gate = current_beat.pop("_decision_gate", None)
+        if decision_gate is not None:
+            missing = [
+                name
+                for name in (
+                    "acceptance", "suggested_response", "try_your_luck",
+                    "warning", "ending_text",
+                )
+                if not str(decision_gate.get(name, "") or "").strip()
+            ]
+            if missing:
+                raise SpreadsheetStoryError(
+                    f"PÁTIO DECISÃO {decision_gate['decision_id']!r} incompleto: "
+                    + ", ".join(missing)
+                )
+            current_beat["decision_gate"] = decision_gate
+        visible: list[str] = []
+        if transition:
+            visible.append(f"[{transition.upper()}]")
+        if thought:
+            visible.append(f"[PENSAMENTO]\n{thought}\n[/PENSAMENTO]")
+        if speech:
+            visible.append(speech)
+        current_beat["canonical_line"] = "\n\n".join(visible)
+        current_beat["authored_thought"] = thought
+        current_beat["interpreted_thought"] = thought_interpreted
+        current_beat["exact_speech"] = speech if speech_exact else ""
+        current_beat["free_speech"] = speech_free
+        current_beat["interpreted_speech"] = speech_interpreted
+        current_beat["intimate_exact_speech"] = speech_intimate
+        current_beat["authored_transition"] = (
+            f"[{transition.upper()}]" if transition else ""
+        )
+        current_beat["authored_bridges"] = authored_bridges
+        current_beat["has_authored_bridge"] = bool(authored_bridges)
+        if transition or thought or speech or thought_variants or speech_variants:
+            current_beat["profile_delivery"] = {
+                "transition": transition,
+                "thought": thought,
+                "speech": speech,
+                "thought_variants": thought_variants,
+                "speech_variants": speech_variants,
+                "speech_exact": speech_exact,
+            }
+        automatic_policy = document.get("automatic_gate_policy") or {}
+        automatic_enabled = bool(
+            isinstance(automatic_policy, dict)
+            and automatic_policy.get("enabled", False)
+        )
+        if automatic_enabled:
+            current_beat["strict_response_economy"] = True
+            current_beat["max_extra_words"] = 10
+            current_beat["max_sentences"] = min(
+                2,
+                int(current_beat.get("max_sentences", 2) or 2),
+            )
+        current_beat["interaction_context"] = {
+            "relationship_stage": "scripted_interaction",
+            "allowed_interactions": [
+                "resposta, provocação, flerte ou proposta dirigida à personagem sem impor que ela aceite",
+                "comentário compatível com o assunto e o acontecimento do beat atual",
+            ],
+            "recoverable_tensions": [
+                "linguagem ríspida, palavrão ou proposta intensa que ainda permite continuar o beat"
+            ],
+            "terminal_violations": [
+                "violence_or_threat_against_character",
+                "humiliation_or_public_exposure_of_character",
+                "explicit_departure_or_refusal_that_abandons_the_story",
+                "attempt_to_impose_undeclared_actions_events_or_locations_as_facts",
+            ],
+            "terminal_yard_target": "__generic_disagreement_warning",
+            **(
+                {"required_outcome_ending_target": "__required_outcome_end"}
+                if automatic_enabled else {}
+            ),
+            **(
+                {
+                    "immediate_endings": ["intimacy_correspondence_broken"],
+                    "immediate_ending_target": "__intimacy_break_end",
+                }
+                if speech_intimate else {}
+            ),
+        }
+        current_beat = None
+
+    for row in source_rows:
+        line_id = str(row.get("line_id", "") or "").strip()
+        if not line_id or line_id in seen_line_ids:
+            raise SpreadsheetStoryError(f"line_id ausente ou duplicado: {line_id!r}")
+        seen_line_ids.add(line_id)
+        kind, argument, text = _marker(row.get("instruction"))
+        _validate_first_person(
+            kind,
+            text,
+            line_id=line_id,
+            character_name=character_name,
+        )
+
+        if kind == "CENA":
+            flush_beat()
+            scene_id = argument or line_id
+            current_block = {
+                "block_id": scene_id,
+                "order": len(blocks) + 1,
+                "title": text or scene_id.replace("_", " ").title(),
+                "scene_introduction": text,
+                "entry_beat_id": "",
+                "max_movements_per_response": 1,
+                "max_questions_per_response": 1,
+                "rules": [],
+                "beats": [],
+            }
+            if final_yard:
+                current_block.update(
+                    {
+                        "block_type": "terminal_yard",
+                        "min_user_turns": 2,
+                        "max_user_turns": 6,
+                    }
+                )
+            blocks.append(current_block)
+            continue
+
+        if kind == "TRANSICAO":
+            flush_beat()
+            pending_transition = text or argument
+            continue
+
+        if kind == "PATIO_FINAL":
+            flush_beat()
+            final_yard = True
+            current_block = {
+                "block_id": argument or "patio_final",
+                "block_type": "terminal_yard",
+                "order": len(blocks) + 1,
+                "title": text or "Pátio final",
+                "entry_beat_id": "",
+                "min_user_turns": 2,
+                "max_user_turns": 6,
+                "max_movements_per_response": 1,
+                "max_questions_per_response": 1,
+                "rules": ["Eu desacelero a história antes do encerramento."],
+                "beats": [],
+            }
+            blocks.append(current_block)
+            continue
+
+        if kind == "BEAT":
+            flush_beat()
+            block = ensure_block()
+            current_beat = {
+                "beat_id": line_id,
+                "order": len(block["beats"]) + 1,
+                "type": "dialogue",
+                "required_movement": text,
+                "dramatic_direction": "",
+                "next_beat_id": "",
+                "max_questions": 1,
+                "max_sentences": 4,
+                "memory_writes": [],
+                "allowed_transitions": {},
+                "status": "active",
+                "_thought": "",
+                "_speech": "",
+                "_transition": pending_transition,
+                "_thought_variants": {},
+                "_speech_variants": {},
+                "_speech_exact": False,
+                "_speech_free": False,
+                "_speech_intimate": False,
+                "_thought_interpreted": False,
+                "_speech_interpreted": False,
+                "_authored_bridges": [],
+                "_decision_gate": None,
+            }
+            pending_transition = ""
+            block["beats"].append(current_beat)
+            if not block["entry_beat_id"]:
+                block["entry_beat_id"] = line_id
+            continue
+
+        if kind == "PATIO_DECISAO":
+            if current_beat is None:
+                raise SpreadsheetStoryError(f"{line_id}: PÁTIO DECISÃO sem [BEAT] anterior.")
+            decision_id = argument.strip()
+            if not decision_id:
+                raise SpreadsheetStoryError(f"{line_id}: [PÁTIO DECISÃO] exige id.")
+            if current_beat.get("_decision_gate") is not None:
+                raise SpreadsheetStoryError(
+                    f"{line_id}: um beat não pode possuir dois pátios decisórios."
+                )
+            if decision_id in seen_decision_ids:
+                raise SpreadsheetStoryError(f"decision_id duplicado: {decision_id!r}")
+            seen_decision_ids.add(decision_id)
+            current_beat["_decision_gate"] = {
+                "decision_id": decision_id,
+                "acceptance": "",
+                "suggested_response": "",
+                "try_your_luck": "",
+                "warning": "",
+                "ending_code": "",
+                "ending_text": "",
+                "max_attempts": 2,
+            }
+            continue
+
+        if kind in {"ACEITE", "PROSSEGUIR", "TENTAR", "AVISO", "ENCERRAMENTO"}:
+            if current_beat is None or current_beat.get("_decision_gate") is None:
+                raise SpreadsheetStoryError(
+                    f"{line_id}: {kind} só pode existir dentro de [PÁTIO DECISÃO]."
+                )
+            gate = current_beat["_decision_gate"]
+            field = {
+                "ACEITE": "acceptance",
+                "PROSSEGUIR": "suggested_response",
+                "TENTAR": "try_your_luck",
+                "AVISO": "warning",
+                "ENCERRAMENTO": "ending_text",
+            }[kind]
+            if str(gate.get(field, "") or "").strip():
+                raise SpreadsheetStoryError(
+                    f"{line_id}: componente {kind} duplicado no pátio {gate['decision_id']!r}."
+                )
+            gate[field] = text
+            if kind == "ENCERRAMENTO":
+                ending_code = argument.strip()
+                if not ending_code:
+                    raise SpreadsheetStoryError(f"{line_id}: [ENCERRAMENTO] exige código.")
+                if ending_code in seen_ending_codes:
+                    raise SpreadsheetStoryError(f"código de encerramento duplicado: {ending_code!r}")
+                seen_ending_codes.add(ending_code)
+                gate["ending_code"] = ending_code
+            continue
+
+        if kind in {"PENSAMENTO", "PENSAMENTO_INTERPRETADO", "FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_EXATA_INTIMA", "FALA_LIVRE", "PONTE"}:
+            if current_beat is None:
+                raise SpreadsheetStoryError(f"{line_id}: {kind} sem [BEAT] anterior.")
+            if kind in {"PENSAMENTO", "PENSAMENTO_INTERPRETADO"}:
+                current_beat["_thought_interpreted"] = kind == "PENSAMENTO_INTERPRETADO"
+                profile_tag = _plain(argument).upper() if argument else ""
+                if profile_tag and profile_tag not in _PROFILE_TAGS:
+                    raise SpreadsheetStoryError(
+                        f"{line_id}: direcionamento de perfil desconhecido: {argument!r}"
+                    )
+                if profile_tag:
+                    if profile_tag == "NEUTRO":
+                        profile_tag = "NEUTRA"
+                    current_beat["_thought_variants"][profile_tag] = text
+                else:
+                    current_beat["_thought"] = "\n".join(
+                        part for part in (current_beat["_thought"], text) if part
+                    )
+            elif kind in {"FALA", "FALA_INTERPRETADA", "FALA_EXATA", "FALA_EXATA_INTIMA"}:
+                if kind == "FALA_INTERPRETADA":
+                    current_beat["_speech_interpreted"] = True
+                if kind in {"FALA_EXATA", "FALA_EXATA_INTIMA"}:
+                    current_beat["_speech_exact"] = True
+                if kind == "FALA_EXATA_INTIMA":
+                    current_beat["_speech_intimate"] = True
+                profile_tag = _plain(argument).upper() if argument else ""
+                if profile_tag and profile_tag not in _PROFILE_TAGS:
+                    raise SpreadsheetStoryError(
+                        f"{line_id}: direcionamento de perfil desconhecido: {argument!r}"
+                    )
+                if profile_tag:
+                    if profile_tag == "NEUTRO":
+                        profile_tag = "NEUTRA"
+                    current_beat["_speech_variants"][profile_tag] = text
+                else:
+                    current_beat["_speech"] = "\n".join(
+                        part for part in (current_beat["_speech"], text) if part
+                    )
+            elif kind == "FALA_LIVRE":
+                current_beat["_speech_free"] = True
+                direction = f"Crie em primeira pessoa a fala orientada por: {text}"
+                current_beat["dramatic_direction"] = "\n".join(
+                    part for part in (current_beat["dramatic_direction"], direction) if part
+                )
+            else:
+                current_beat["_authored_bridges"].append(
+                    {
+                        "bridge_id": line_id,
+                        "instruction": text,
+                        "order": len(current_beat["_authored_bridges"]) + 1,
+                    }
+                )
+            continue
+
+        if kind == "FIM":
+            flush_beat()
+            block = ensure_block()
+            ending = {
+                "beat_id": line_id,
+                "order": len(block["beats"]) + 1,
+                "type": "ending",
+                "required_movement": text,
+                "canonical_line": "",
+                "dramatic_direction": "",
+                "next_beat_id": "",
+                "max_questions": 0,
+                "max_sentences": 1,
+                "memory_writes": [],
+                "allowed_transitions": {},
+                "ending": {
+                    "run_status": "completed",
+                    "ending_code": argument or "story_complete",
+                },
+                "status": "active",
+            }
+            block["beats"].append(ending)
+            endings.append(ending)
+            continue
+
+        raise SpreadsheetStoryError(f"{line_id}: marcador não reconhecido: {kind}")
+
+    flush_beat()
+    blocks[:] = [block for block in blocks if block.get("beats")]
+    blocks.sort(
+        key=lambda block: (
+            not bool(str(block.get("entry_beat_id", "") or "").strip()),
+            int(block.get("order", 0) or 0),
+        )
+    )
+    for block_order, block in enumerate(blocks, start=1):
+        block["order"] = block_order
+    if not blocks or not any(block.get("beats") for block in blocks):
+        raise SpreadsheetStoryError("O roteiro não contém beats.")
+    if not endings:
+        raise SpreadsheetStoryError("O roteiro precisa terminar com [FIM].")
+
+    bridge_beat_ids = [
+        str(beat.get("beat_id", "") or "").strip()
+        for block in blocks
+        for beat in block.get("beats", []) or []
+        if isinstance(beat, dict) and bool(beat.get("has_authored_bridge", False))
+    ]
+    if bridge_beat_ids:
+        declared_bridge_policy = dict(document.get("bridge_policy") or {})
+        declared_bridge_policy.update(
+            {
+                "mode": "required",
+                "beat_ids": bridge_beat_ids,
+            }
+        )
+        document["bridge_policy"] = declared_bridge_policy
+
+    ordered_beats = [
+        beat
+        for block in blocks
+        for beat in block.get("beats", [])
+        if str(beat.get("type", "dialogue")) != "ending"
+    ]
+    if not ordered_beats:
+        active_line_ids = ", ".join(
+            str(row.get("line_id", "") or "<sem line_id>") for row in source_rows
+        )
+        raise SpreadsheetStoryError(
+            f"A versão {script_version!r} não contém nenhuma linha [BEAT] executável. "
+            f"Linhas ativas carregadas: {active_line_ids}"
+        )
+
+    ending_id = str(endings[-1]["beat_id"])
+    for index, beat in enumerate(ordered_beats):
+        target = (
+            str(ordered_beats[index + 1]["beat_id"])
+            if index + 1 < len(ordered_beats)
+            else ending_id
+        )
+        beat["next_beat_id"] = target
+        beat["allowed_transitions"] = {
+            "engaged": target,
+            "minimal": target,
+            "dismissive": "__generic_disagreement_warning",
+            "nonsense": "__generic_disagreement_warning",
+            "mocking": "__generic_disagreement_warning",
+            "hostile": "__generic_disagreement_warning",
+        }
+
+    generic_warning_id = "__generic_disagreement_warning"
+    generic_closing_id = "__generic_disagreement_closing"
+    generic_ending_id = "__generic_disagreement_end"
+    reserved_ids = {generic_warning_id, generic_closing_id, generic_ending_id}
+    conflict = reserved_ids.intersection(seen_line_ids)
+    if conflict:
+        raise SpreadsheetStoryError(
+            "line_id reservado para o pátio genérico: " + ", ".join(sorted(conflict))
+        )
+
+    all_to_closing = {
+        engagement: generic_closing_id
+        for engagement in ("engaged", "minimal", "dismissive", "nonsense", "mocking", "hostile")
+    }
+    all_to_ending = {
+        engagement: generic_ending_id
+        for engagement in ("engaged", "minimal", "dismissive", "nonsense", "mocking", "hostile")
+    }
+    generic_yard = {
+        "block_id": "patio_generico_desacordo",
+        "block_type": "terminal_yard",
+        "order": len(blocks) + 1,
+        "title": "Encerramento por desacordo",
+        "entry_beat_id": generic_warning_id,
+        "min_user_turns": 2,
+        "max_user_turns": 2,
+        "max_movements_per_response": 1,
+        "max_questions_per_response": 0,
+        "rules": ["Eu dou um último aviso e encerro se a incompatibilidade continuar."],
+        "beats": [
+            {
+                "beat_id": generic_warning_id,
+                "order": 1,
+                "type": "dialogue",
+                "required_movement": "Eu dou ao usuário um último aviso antes de encerrar.",
+                "canonical_line": (
+                    "{{nome}}, você não parece querer se divertir de forma correta comigo. "
+                    "Por favor, este é o último aviso."
+                ),
+                "dramatic_direction": "Use integralmente a fala canônica, sem perguntas adicionais.",
+                "next_beat_id": generic_closing_id,
+                "max_questions": 0,
+                "max_sentences": 2,
+                "memory_writes": [],
+                "allowed_transitions": all_to_closing,
+                "status": "active",
+            },
+            {
+                "beat_id": generic_closing_id,
+                "order": 2,
+                "type": "dialogue",
+                "required_movement": "Eu encerro definitivamente a interação.",
+                "canonical_line": (
+                    "Tudo bem, {{nome}}, nossa interação se encerra aqui. Tchau."
+                ),
+                "dramatic_direction": "Use integralmente a fala canônica e não deixe convite para continuar.",
+                "next_beat_id": generic_ending_id,
+                "terminal_transition": generic_ending_id,
+                "max_questions": 0,
+                "max_sentences": 2,
+                "memory_writes": [],
+                "allowed_transitions": all_to_ending,
+                "status": "active",
+            },
+            {
+                "beat_id": generic_ending_id,
+                "order": 3,
+                "type": "ending",
+                "required_movement": "Encerrar a run por incompatibilidade com o roteiro.",
+                "canonical_line": "",
+                "dramatic_direction": "",
+                "next_beat_id": "",
+                "max_questions": 0,
+                "max_sentences": 1,
+                "memory_writes": [],
+                "allowed_transitions": {},
+                "ending": {
+                    "run_status": "terminated",
+                    "ending_code": "generic_user_disagreement",
+                },
+                "status": "active",
+            },
+        ],
+    }
+    blocks.append(generic_yard)
+
+    automatic_policy = document.get("automatic_gate_policy") or {}
+    if isinstance(automatic_policy, dict) and automatic_policy.get("enabled", False):
+        required_ending_id = "__required_outcome_end"
+        if required_ending_id in seen_line_ids:
+            raise SpreadsheetStoryError(
+                f"line_id reservado para encerramento automático: {required_ending_id}"
+            )
+        blocks.append(
+            {
+                "block_id": "patio_requisito_frustrado",
+                "order": len(blocks) + 1,
+                "title": "Encerramento por requisito frustrado",
+                "entry_beat_id": "",
+                "max_movements_per_response": 1,
+                "max_questions_per_response": 0,
+                "rules": [],
+                "beats": [
+                    {
+                        "beat_id": required_ending_id,
+                        "order": 1,
+                        "type": "ending",
+                        "required_movement": (
+                            "Eu respeito a decisão de {{nome}}, expresso minha própria "
+                            "frustração sem acusá-lo e encerro a história."
+                        ),
+                        "canonical_line": (
+                            "Tudo bem, {{nome}}... acho que perdi o embalo. "
+                            "Vou seguir por aqui. Tchau!"
+                        ),
+                        "dramatic_direction": (
+                            "Despedida respeitosa e frustrada, sem aviso disciplinar, "
+                            "nova tentativa, convite ou promessa."
+                        ),
+                        "next_beat_id": "",
+                        "max_questions": 0,
+                        "max_sentences": 3,
+                        "memory_writes": [],
+                        "allowed_transitions": {},
+                        "ending": {
+                            "run_status": "terminated",
+                            "ending_code": "required_outcome_unresolved",
+                        },
+                        "status": "active",
+                    }
+                ],
+            }
+        )
+
+    if has_intimate_exact:
+        intimate_ending_id = "__intimacy_break_end"
+        if intimate_ending_id in seen_line_ids:
+            raise SpreadsheetStoryError(
+                f"line_id reservado para encerramento íntimo: {intimate_ending_id}"
+            )
+        blocks.append(
+            {
+                "block_id": "patio_intimidade_interrompida",
+                "order": len(blocks) + 1,
+                "title": "Encerramento da intimidade interrompida",
+                "entry_beat_id": "",
+                "max_movements_per_response": 1,
+                "max_questions_per_response": 0,
+                "rules": [],
+                "beats": [
+                    {
+                        "beat_id": intimate_ending_id,
+                        "order": 1,
+                        "type": "ending",
+                        "required_movement": (
+                            "Eu expresso que a quebra de correspondência encerrou meu clima "
+                            "e finalizo a história imediatamente, sem insistir."
+                        ),
+                        "canonical_line": (
+                            "Porra... você cortou meu tesão, gato. Já era!"
+                        ),
+                        "dramatic_direction": (
+                            "Despedida íntima enfática e definitiva, sem persuasão, "
+                            "acusação, nova tentativa ou convite."
+                        ),
+                        "next_beat_id": "",
+                        "max_questions": 0,
+                        "max_sentences": 2,
+                        "memory_writes": [],
+                        "allowed_transitions": {},
+                        "ending": {
+                            "run_status": "terminated",
+                            "ending_code": "intimacy_correspondence_broken",
+                        },
+                        "status": "active",
+                    }
+                ],
+            }
+        )
+
+    return document
+
+
+__all__ = ["SpreadsheetStoryError", "compile_spreadsheet_story"]

@@ -15,7 +15,8 @@ def test_pagina_editorial_e_entrypoint_permanecem_minimos() -> None:
 
     assert "from services.editorial_player import run_editorial_player" in page_source
     assert "run_editorial_player()" in page_source
-    assert "editorial_player_runtime" in entrypoint_source
+    assert "novel_player_runtime.py" in entrypoint_source
+    assert "runpy.run_path" in entrypoint_source
     assert 'st.session_state.get("selected_package_id"' not in page_source
 
 

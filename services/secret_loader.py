@@ -33,6 +33,7 @@ def load_application_secrets() -> dict[str, Any]:
         "MERCADO_PAGO_WEBHOOK_SECRET",
         "MERCADOPAGO_WEBHOOK_SECRET",
         "MP_WEBHOOK_SECRET",
+        "PAYMENT_TEST_MASTER_EMAILS",
     )
     for name in aliases:
         value = os.getenv(name)

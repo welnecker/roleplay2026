@@ -8,7 +8,9 @@ from persistence.editorial_runtime_v2 import EditorialGoogleSheetsV2RuntimeRepos
 from persistence.spreadsheet_config import read_spreadsheet_ids
 
 
-GOOGLE_SHEETS_CONNECT_TIMEOUT_SECONDS = 8.0
+# A autenticação do Google pode ultrapassar oito segundos durante o cold start
+# do Streamlit Cloud. O limite continua finito para não travar a interface.
+GOOGLE_SHEETS_CONNECT_TIMEOUT_SECONDS = 20.0
 
 
 def _connect_runtime_repository(

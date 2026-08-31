@@ -41,6 +41,19 @@ def test_conexao_lenta_expira_sem_bloquear_indefinidamente(monkeypatch) -> None:
     assert elapsed < 0.15
 
 
+def test_conexao_lenta_dentro_do_limite_e_aceita(monkeypatch) -> None:
+    monkeypatch.setattr(factory, "GOOGLE_SHEETS_CONNECT_TIMEOUT_SECONDS", 0.2)
+    repository = object.__new__(factory.EditorialGoogleSheetsV2RuntimeRepository)
+
+    def slow_connect(**_kwargs):
+        time.sleep(0.05)
+        return repository
+
+    monkeypatch.setattr(factory, "_connect_runtime_repository", slow_connect)
+
+    assert factory.build_google_sheets_repository(_secrets()) is repository
+
+
 def test_erro_da_conexao_e_repassado(monkeypatch) -> None:
     monkeypatch.setattr(factory, "GOOGLE_SHEETS_CONNECT_TIMEOUT_SECONDS", 0.2)
 
