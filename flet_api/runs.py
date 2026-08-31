@@ -13,6 +13,7 @@ from roleplay.openrouter import generate_response
 from roleplay.models import StoryState
 from services import novel_frame_patch
 from services.editorial_content import load_editorial_package, require_editorial_package
+from services.editorial_diagnostics import log_editorial_exception
 from services.editorial_scene_images import (
     resolve_editorial_scene_image,
     resolve_narrative_image_id,
@@ -191,6 +192,14 @@ class FletRunService:
                 break
             except FrameOutputContractError as exc:
                 last_contract_error = exc
+                log_editorial_exception(
+                    "flet_frame_contract",
+                    exc,
+                    user_id=user.user_id,
+                    package_id=package.manifest.package_id,
+                    frame_id=target_id,
+                    attempt=attempt + 1,
+                )
         if not content:
             raise RuntimeError(
                 "O modelo não respeitou a estrutura obrigatória do quadro: "

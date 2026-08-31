@@ -84,7 +84,7 @@ Quarta fala.
         enforce_frame_output_contract(_movement(), content)
 
 
-def test_rejects_change_to_exact_authored_speech() -> None:
+def test_restores_exact_authored_speech_changed_by_model() -> None:
     frame = {
         "frame_id": "encontro_001",
         "description": "Mary chega.",
@@ -107,8 +107,10 @@ Mary chega.
 Oi, Janio... finalmente cheguei.
 [/QUADRO]"""
 
-    with pytest.raises(FrameOutputContractError, match="FALA EXATA"):
-        enforce_frame_output_contract(movement, content)
+    result = enforce_frame_output_contract(movement, content)
+
+    assert "Oi, Janio... cheguei." in result
+    assert "finalmente" not in result
 
 
 def test_accepts_literal_exact_authored_speech() -> None:

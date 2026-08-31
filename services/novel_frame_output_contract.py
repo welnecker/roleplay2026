@@ -34,21 +34,21 @@ def _signature(kind: object, actor: object) -> tuple[str, str]:
     return _plain(kind), _plain(actor)
 
 
-def _validate_exact_speech(
+def _restore_exact_speech(
     expected_entries: list[dict[str, Any]],
     selected: list[tuple[str, str, str, str]],
-) -> None:
+) -> list[tuple[str, str, str, str]]:
+    restored: list[tuple[str, str, str, str]] = []
     for authored, generated in zip(expected_entries, selected):
-        if _plain(authored.get("kind", "")) != "fala":
-            continue
-        if _plain(authored.get("delivery", "")) != "exata":
-            continue
-        expected_body = str(authored.get("instruction", "") or "").strip()
-        generated_body = str(generated[3] or "").strip()
-        if generated_body != expected_body:
-            raise FrameOutputContractError(
-                "O modelo alterou uma [FALA EXATA] do roteiro."
-            )
+        if (
+            _plain(authored.get("kind", "")) == "fala"
+            and _plain(authored.get("delivery", "")) == "exata"
+        ):
+            expected_body = str(authored.get("instruction", "") or "").strip()
+            restored.append((*generated[:3], expected_body))
+        else:
+            restored.append(generated)
+    return restored
 
 
 def enforce_frame_output_contract(movement: Any, content: str) -> str:
@@ -104,7 +104,7 @@ def enforce_frame_output_contract(movement: Any, content: str) -> str:
     if expected_index != len(expected):
         raise FrameOutputContractError("O modelo omitiu uma ou mais entries do roteiro.")
 
-    _validate_exact_speech(expected_entries, selected)
+    selected = _restore_exact_speech(expected_entries, selected)
 
     output = [f"[QUADRO {expected_frame_id}]"]
     authored_description = str(frame.get("description", "") or "").strip()
