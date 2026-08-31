@@ -32,6 +32,43 @@ def main(page: ft.Page) -> None:
         page.add(control)
         page.update()
 
+    def show_story_complete(card: StoryCard) -> None:
+        show(
+            ft.Container(
+                expand=True,
+                bgcolor=BACKGROUND,
+                alignment=ft.Alignment.CENTER,
+                padding=32,
+                content=ft.Column(
+                    tight=True,
+                    spacing=18,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        ft.Text(
+                            "História concluída",
+                            size=30,
+                            weight=ft.FontWeight.BOLD,
+                            color="#FFFFFF",
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        ft.Text(
+                            card.title,
+                            size=18,
+                            color="#D6E5E3",
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        ft.FilledButton(
+                            "Voltar para os cards",
+                            on_click=lambda _event: show_library(
+                                active_cards,
+                                active_display_name,
+                            ),
+                        ),
+                    ],
+                ),
+            )
+        )
+
     def show_player(
         card: StoryCard,
         current: ApiRunFrame | None = None,
@@ -48,6 +85,9 @@ def main(page: ft.Page) -> None:
             return
 
         def completed() -> bool:
+            if run_frame.finished:
+                show_story_complete(card)
+                return True
             try:
                 following = api_client.advance_run(
                     package_id=card.package_id,
