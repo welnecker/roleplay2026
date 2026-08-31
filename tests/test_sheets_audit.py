@@ -61,13 +61,13 @@ def test_sheets_audit_counts_real_google_calls_and_quota(monkeypatch, caplog) ->
 
     sheets_audit.emit(
         sheet="STORY_RUNS",
-        operation="google.get_all_records",
+        operation="google.get",
         google_read=1,
         status="429",
     )
     sheets_audit.emit(
         sheet="INTERACTIONS",
-        operation="google.append_row",
+        operation="google.append_rows",
         google_write=1,
     )
 
