@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
+
+
+_FRAME_PREFIX = "NOVEL_FRAME_V2\n"
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +18,16 @@ class NovelMovement:
     is_ending: bool = False
 
 
+def _frame_is_explicit_ending(instruction: str) -> bool:
+    if not instruction.startswith(_FRAME_PREFIX):
+        return False
+    try:
+        payload = json.loads(instruction[len(_FRAME_PREFIX) :])
+    except json.JSONDecodeError:
+        return False
+    return bool(payload.get("is_ending", False)) if isinstance(payload, dict) else False
+
+
 def next_movement_id(script: Any, current_id: str) -> str:
     """Resolve o avanço sem classificar ou depender de resposta do usuário."""
 
@@ -24,6 +38,8 @@ def next_movement_id(script: Any, current_id: str) -> str:
         return ""
 
     beat = dict(getattr(script, "beats", {}).get(current_id) or {})
+    if _frame_is_explicit_ending(str(beat.get("objective", "") or "")):
+        return ""
     transitions = dict(beat.get("on_user") or {})
     target = str(transitions.get("engaged", "") or "").strip()
     if not target:
@@ -103,7 +119,7 @@ def movement_from_script(script: Any, movement_id: str) -> NovelMovement:
         instruction=objective,
         dramatic_direction=" ".join(dict.fromkeys(directions)),
         authorial_impulse=authorial_impulse,
-        is_ending=False,
+        is_ending=_frame_is_explicit_ending(objective),
     )
 
 
