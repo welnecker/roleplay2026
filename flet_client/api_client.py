@@ -9,7 +9,13 @@ from platform_core.models import AccessStatus, ProgressStatus, StoryCard
 
 
 class FletApiError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+    @property
+    def is_authentication_error(self) -> bool:
+        return self.status_code == 401
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,8 +85,22 @@ class FletApiClient:
                 detail = str(response.json().get("detail", "") or "").strip()
             except (ValueError, AttributeError):
                 detail = ""
-            raise FletApiError(detail or f"A API respondeu com erro {response.status_code}.")
+            raise FletApiError(
+                detail or f"A API respondeu com erro {response.status_code}.",
+                status_code=response.status_code,
+            )
         return response
+
+    @staticmethod
+    def _user(response: requests.Response) -> ApiUser:
+        payload = response.json()
+        if not isinstance(payload, dict) or not payload.get("user_id"):
+            raise FletApiError("Resposta de usuário inválida.")
+        return ApiUser(
+            user_id=str(payload.get("user_id", "") or ""),
+            email=str(payload.get("email", "") or ""),
+            display_name=str(payload.get("display_name", "") or ""),
+        )
 
     def login(self, *, email: str, password: str) -> ApiUser:
         response = self._request(
@@ -121,6 +141,9 @@ class FletApiClient:
             email=str(user.get("email", "") or ""),
             display_name=str(user.get("display_name", "") or ""),
         )
+
+    def me(self) -> ApiUser:
+        return self._user(self._request("GET", "/api/v1/auth/me"))
 
     def catalog(self) -> list[StoryCard]:
         response = self._request("GET", "/api/v1/catalog")
