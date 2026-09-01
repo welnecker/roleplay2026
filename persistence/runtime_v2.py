@@ -166,7 +166,12 @@ class GoogleSheetsV2RuntimeRepository:
         user_id: str,
         package_id: str,
     ) -> StoryRun | None:
-        """Retorna conclusão normal ou o falso encerramento conhecido da primeira mensagem."""
+        """Recupera apenas o falso encerramento legado da primeira mensagem.
+
+        Uma conclusão normal é terminal para o crédito que criou a execução. Mesmo
+        que o roteiro publicado depois ganhe novos quadros, essa run não é reativada:
+        um replay exige novo crédito e uma nova ``run_id`` desde o primeiro quadro.
+        """
 
         candidates: list[StoryRun] = []
         for row in self.runs.runs.records():
@@ -175,11 +180,7 @@ class GoogleSheetsV2RuntimeRepository:
             if str(row.get("package_id", "")).strip() != package_id:
                 continue
             run = self.runs._from_row(row)
-            normal_completion = (
-                run.status == "completed"
-                and run.ending_code in {"", "normal_completion", "pilot_complete"}
-            )
-            if normal_completion or self._was_false_message_ending(run):
+            if self._was_false_message_ending(run):
                 candidates.append(run)
 
         if not candidates:
