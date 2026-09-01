@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -15,7 +14,6 @@ SCENE_COLOR = "#D24369"
 SPEECH_COLORS = ("#ED8BAE", "#F1B5CB", "#F0CFDD", "#F3D5E6")
 TEXT_COLOR = "#2B1822"
 INTERACTION_LIMIT = 5
-ENTRIES_PER_ROW = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +30,37 @@ class FrameVisualRow:
     items: tuple[FrameVisualItem, ...]
 
 
+@dataclass(slots=True)
+class FrameStageCursor:
+    """Cursor puramente visual sobre posições já reveladas do quadro.
+
+    Ele nunca altera ``revealed_entries``. Assim voltar/avançar na revisão não
+    desfaz progresso, não escreve no Sheets e não consome uma nova interação.
+    """
+
+    position: int = 0
+
+    def clamp(self, item_count: int) -> int:
+        maximum = max(0, int(item_count) - 1)
+        self.position = min(max(0, int(self.position)), maximum)
+        return self.position
+
+    def latest(self, item_count: int) -> int:
+        self.position = max(0, int(item_count) - 1)
+        return self.position
+
+    def previous(self, item_count: int) -> int:
+        self.clamp(item_count)
+        self.position = max(0, self.position - 1)
+        return self.position
+
+    def next(self, item_count: int) -> int:
+        maximum = max(0, int(item_count) - 1)
+        self.clamp(item_count)
+        self.position = min(maximum, self.position + 1)
+        return self.position
+
+
 def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
     is_thought = entry.kind == "pensamento"
     is_impact_balloon = not is_thought and entry.impact_balloon
@@ -41,7 +70,7 @@ def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
     card = ft.Container(
         width=width,
         margin=ft.Margin.only(left=11, right=11, top=18),
-        padding=18,
+        padding=ft.Padding.symmetric(horizontal=20, vertical=16),
         border_radius=22,
         bgcolor=card_color,
         border=border,
@@ -57,9 +86,6 @@ def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
                 ),
                 ft.Text(
                     entry.body,
-                    # ``*_balao`` é uma diretiva visual autoral, não parte do
-                    # nome do personagem. A fala recebe destaque sem alterar
-                    # o texto nem o actor persistidos pelo runtime.
                     size=23 if is_impact_balloon else 17,
                     weight=ft.FontWeight.BOLD if is_impact_balloon else None,
                     italic=is_thought,
@@ -69,16 +95,13 @@ def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
             ],
         ),
     )
-    tail_on_right = index % 2 == 1
-    side = {"left": None, "right": 42} if tail_on_right else {"left": 42, "right": None}
+    # O balão permanece abaixo da imagem e sua cauda aponta para cima.
     if is_thought:
-        anchor = 36
         tails: list[ft.Control] = [
             ft.Container(
                 width=size,
                 height=size,
-                left=anchor + offset if not tail_on_right else None,
-                right=anchor + offset if tail_on_right else None,
+                left=38 + offset,
                 top=top,
                 bgcolor=card_color,
                 border=border,
@@ -91,11 +114,11 @@ def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
             ft.Container(
                 width=24,
                 height=24,
+                left=44,
                 top=5,
                 bgcolor=card_color,
                 border=border,
                 rotate=ft.Rotate(angle=math.pi / 4),
-                **side,
             )
         ]
     return ft.Stack(
@@ -105,24 +128,33 @@ def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
     )
 
 
-def _slide_width(viewport_width: float | None) -> float:
-    """Mostra quatro pares por linha no desktop e mantém a linha rolável no mobile."""
-
+def _stage_width(viewport_width: float | None) -> float:
     width = float(viewport_width or 390)
-    usable = max(280.0, width - 52.0)
+    usable = max(300.0, width - 48.0)
     if width >= 1200:
-        return max(260.0, (usable - 42.0) / ENTRIES_PER_ROW)
+        return min(1080.0, usable)
     if width >= 760:
-        return max(300.0, (usable - 14.0) / 2.0)
-    return min(420.0, usable * 0.94)
+        return min(900.0, usable)
+    return usable
 
 
-def _image_height(slide_width: float) -> float:
-    return min(280.0, max(210.0, slide_width * 0.38))
+def _image_height(stage_width: float, viewport_width: float | None) -> float:
+    width = float(viewport_width or 390)
+    if width >= 1200:
+        return min(610.0, max(390.0, stage_width * 0.56))
+    if width >= 760:
+        return min(520.0, max(330.0, stage_width * 0.56))
+    return min(360.0, max(220.0, stage_width * 0.62))
+
+
+def _balloon_width(stage_width: float, viewport_width: float | None) -> float:
+    width = float(viewport_width or 390)
+    ratio = 0.72 if width >= 1000 else 0.9 if width >= 620 else 0.96
+    return max(270.0, min(stage_width, stage_width * ratio))
 
 
 class NovelFrameView:
-    """Player visual de um quadro; não contém regras de backend ou cobrança."""
+    """Player visual focado: uma imagem grande e um balão por vez."""
 
     def __init__(
         self,
@@ -137,28 +169,34 @@ class NovelFrameView:
         on_reveal: Callable[[int], bool] | None = None,
     ) -> None:
         self.page = page
-        self.controller = FrameRevealController(
-            frame,
-            revealed_entries=revealed_entries,
-        )
+        self.controller = FrameRevealController(frame, revealed_entries=revealed_entries)
         self.on_frame_complete = on_frame_complete
         self.on_reveal = on_reveal
         self.base_image = image
         self.entry_images = tuple(entry_images)
         self.history = tuple(history[-(INTERACTION_LIMIT - 1) :])
         self._busy = False
-        self.slide_width = _slide_width(getattr(page, "width", None))
-        # ``Column`` mantém somente as cinco interações visuais e permite o
-        # foco programático no quadro novo; ListView não garante scroll_to
-        # para itens construídos dinamicamente.
-        self.track = ft.Column(
-            spacing=16,
-            scroll=ft.ScrollMode.ALWAYS,
-            # A rolagem é controlada ao entrar no quadro seguinte. Isso
-            # preserva as cinco interações para revisão manual, mas impede que
-            # a anterior ocupe a área corrente sob a nova descrição.
-            auto_scroll=False,
-            expand=True,
+        self._viewport_width = float(getattr(page, "width", None) or 390)
+        self.stage_width = _stage_width(self._viewport_width)
+        self.stage_cursor = FrameStageCursor()
+
+        self.scene_description = ft.Text(
+            frame.description,
+            size=17,
+            color="#FFFFFF",
+            selectable=True,
+        )
+        self.stage = ft.Container(alignment=ft.Alignment.TOP_CENTER, expand=True)
+        self.position_indicator = ft.Text(size=13, color="#D6E5E3")
+        self.previous_button = ft.OutlinedButton(
+            "← Anterior",
+            on_click=self._review_previous,
+            style=ft.ButtonStyle(color="#FFFFFF"),
+        )
+        self.review_next_button = ft.OutlinedButton(
+            "Seguinte →",
+            on_click=self._review_next,
+            style=ft.ButtonStyle(color="#FFFFFF"),
         )
         self.progress = ft.Text(size=12, color="#D6E5E3")
         self.advance_button = ft.FilledButton(
@@ -169,48 +207,59 @@ class NovelFrameView:
             on_click=self._advance,
         )
 
-        controls: list[ft.Control] = [
-            ft.Container(
-                padding=18,
-                border_radius=16,
-                bgcolor=SCENE_COLOR,
-                content=ft.Column(
-                    spacing=8,
-                    controls=[
-                        ft.Text("CENA", size=12, weight=ft.FontWeight.BOLD, color="#FFFFFFCC"),
-                        ft.Text(frame.description, size=17, color="#FFFFFF", selectable=True),
-                    ],
-                ),
-            )
-        ]
-        controls.extend(
-            [
-                self.track,
-                ft.SafeArea(
-                    content=ft.Row(
-                        [self.progress, self.advance_button],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    ),
-                    avoid_intrusions_left=False,
-                    avoid_intrusions_top=False,
-                    avoid_intrusions_right=False,
-                    avoid_intrusions_bottom=True,
-                    maintain_bottom_view_padding=True,
-                    minimum_padding=ft.Padding.only(bottom=8),
-                ),
-            ]
-        )
         self.root = ft.Container(
             padding=ft.Padding.symmetric(horizontal=18, vertical=14),
             bgcolor=BACKGROUND,
             content=ft.Column(
-                controls=controls,
+                controls=[
+                    ft.Container(
+                        padding=18,
+                        border_radius=16,
+                        bgcolor=SCENE_COLOR,
+                        content=ft.Column(
+                            spacing=8,
+                            controls=[
+                                ft.Text(
+                                    "CENA",
+                                    size=12,
+                                    weight=ft.FontWeight.BOLD,
+                                    color="#FFFFFFCC",
+                                ),
+                                self.scene_description,
+                            ],
+                        ),
+                    ),
+                    self.stage,
+                    ft.Row(
+                        [
+                            self.previous_button,
+                            self.position_indicator,
+                            self.review_next_button,
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        spacing=14,
+                    ),
+                    ft.SafeArea(
+                        content=ft.Row(
+                            [self.progress, self.advance_button],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        avoid_intrusions_left=False,
+                        avoid_intrusions_top=False,
+                        avoid_intrusions_right=False,
+                        avoid_intrusions_bottom=True,
+                        maintain_bottom_view_padding=True,
+                        minimum_padding=ft.Padding.only(bottom=8),
+                    ),
+                ],
                 spacing=14,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 expand=True,
             ),
             expand=True,
             on_size_change=self._resize,
         )
+        self.stage_cursor.latest(len(self._current_row().items))
         self._refresh(update_page=False)
 
     def _entry_image(self, index: int) -> bytes | str | None:
@@ -222,48 +271,8 @@ class NovelFrameView:
                 active = self.entry_images[position]
         return active
 
-    def _entry_slide(self, item: FrameVisualItem, visual_index: int) -> ft.Control:
-        entry = item.entry
-        image = item.image
-        controls: list[ft.Control] = []
-        if image:
-            controls.append(
-                ft.Container(
-                    width=self.slide_width,
-                    height=_image_height(self.slide_width),
-                    alignment=ft.Alignment.CENTER,
-                    border_radius=18,
-                    clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                    bgcolor="#102F2D",
-                    content=ft.Image(
-                        src=image,
-                        fit=ft.BoxFit.CONTAIN,
-                        border_radius=18,
-                        expand=True,
-                    ),
-                )
-            )
-        if entry is not None:
-            balloon_width = max(238.0, self.slide_width - 22.0)
-            controls.append(
-                _entry_card(
-                    entry,
-                    visual_index,
-                    width=balloon_width,
-                )
-            )
-        return ft.Container(
-            key=f"frame-slide-{item.frame_id}-{item.entry_index}",
-            width=self.slide_width,
-            content=ft.Column(
-                controls=controls,
-                spacing=12,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-        )
-
     def _current_row(self) -> FrameVisualRow:
-        items = list(
+        items = [
             FrameVisualItem(
                 frame_id=self.controller.frame.frame_id,
                 entry_index=index,
@@ -271,11 +280,9 @@ class NovelFrameView:
                 image=self._entry_image(index),
             )
             for index, entry in enumerate(self.controller.visible_entries)
-        )
-        # Se a primeira entry já troca a imagem, a imagem autoral da
-        # [DESCRIÇÃO] não pode desaparecer antes de chegar à tela. Ela ganha
-        # um slide visual próprio; quando a primeira entry herda a mesma
-        # imagem, não criamos uma duplicata.
+        ]
+        # Quando a primeira fala troca imediatamente a imagem, preserve a imagem
+        # autoral da [DESCRIÇÃO] como a primeira posição visual do quadro.
         first_entry_image = items[0].image if items else None
         if self.base_image and first_entry_image != self.base_image:
             items.insert(
@@ -290,6 +297,9 @@ class NovelFrameView:
         return FrameVisualRow(self.controller.frame.frame_id, tuple(items))
 
     def _visible_rows(self) -> tuple[FrameVisualRow, ...]:
+        # O histórico continua sendo transportado entre quadros para compatibilidade
+        # e eventual revisão futura, mas o palco principal mostra somente o quadro
+        # atual para não poluir o desktop.
         return self.history + (self._current_row(),)
 
     def history_snapshot(
@@ -297,60 +307,105 @@ class NovelFrameView:
         *,
         limit: int = INTERACTION_LIMIT,
     ) -> tuple[FrameVisualRow, ...]:
-        """Entrega ao próximo quadro até cinco interações completas."""
-
         return self._visible_rows()[-max(1, int(limit)) :]
 
-    def _interaction_row(self, row: FrameVisualRow, row_index: int) -> ft.Control:
+    def _selected_item(self) -> FrameVisualItem | None:
+        items = self._current_row().items
+        if not items:
+            return None
+        index = self.stage_cursor.clamp(len(items))
+        return items[index]
+
+    def _stage_control(self, item: FrameVisualItem | None) -> ft.Control:
+        if item is None:
+            return ft.Container(
+                width=self.stage_width,
+                alignment=ft.Alignment.CENTER,
+                content=ft.Text("Cena sem conteúdo visual.", color="#D6E5E3"),
+            )
+
+        controls: list[ft.Control] = []
+        if item.image:
+            controls.append(
+                ft.Container(
+                    width=self.stage_width,
+                    height=_image_height(self.stage_width, self._viewport_width),
+                    alignment=ft.Alignment.CENTER,
+                    border_radius=20,
+                    clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                    bgcolor="#102F2D",
+                    content=ft.Image(
+                        src=item.image,
+                        fit=ft.BoxFit.CONTAIN,
+                        border_radius=20,
+                        expand=True,
+                    ),
+                )
+            )
+        if item.entry is not None:
+            controls.append(
+                _entry_card(
+                    item.entry,
+                    max(0, item.entry_index),
+                    width=_balloon_width(self.stage_width, self._viewport_width),
+                )
+            )
         return ft.Container(
-            key=f"frame-row-{row.frame_id}",
-            content=ft.Row(
-                controls=[
-                    self._entry_slide(item, row_index * ENTRIES_PER_ROW + index)
-                    for index, item in enumerate(row.items)
-                ],
-                spacing=14,
-                scroll=ft.ScrollMode.ALWAYS,
-                auto_scroll=False,
-                vertical_alignment=ft.CrossAxisAlignment.START,
+            width=self.stage_width,
+            alignment=ft.Alignment.TOP_CENTER,
+            content=ft.Column(
+                controls=controls,
+                spacing=12,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                scroll=ft.ScrollMode.AUTO,
             ),
         )
 
-    async def _focus_current_after_mount(self) -> None:
-        """Leva a interação nova ao foco após a árvore Flet estar montada."""
-
-        # O pequeno adiamento permite que o cliente calcule a altura das
-        # imagens antes de rolar. A âncora é o início da linha atual, não o
-        # fim da lista: assim a borda inferior da interação anterior fica
-        # rente à descrição e todo o conteúdo anterior sai da área corrente.
-        await asyncio.sleep(0.12)
-        await self.track.scroll_to(
-            scroll_key=f"frame-row-{self.controller.frame.frame_id}",
-            duration=420,
-        )
-
     def focus_current(self) -> None:
-        """Agenda o foco da interação atual quando há histórico visual."""
+        """Compatibilidade com o chamador; o novo palco já nasce focado."""
 
-        if not self.history:
-            return
-        run_task = getattr(self.page, "run_task", None)
-        if callable(run_task):
-            run_task(self._focus_current_after_mount)
+        return None
 
     def _resize(self, event: object) -> None:
-        width = getattr(event, "width", None)
-        next_width = _slide_width(width)
-        if abs(next_width - self.slide_width) < 1:
+        width = float(getattr(event, "width", None) or self._viewport_width)
+        next_width = _stage_width(width)
+        if abs(next_width - self.stage_width) < 1 and abs(width - self._viewport_width) < 1:
             return
-        self.slide_width = next_width
+        self._viewport_width = width
+        self.stage_width = next_width
+        self._refresh()
+
+    def _review_previous(self, _event: object = None) -> None:
+        items = self._current_row().items
+        self.stage_cursor.previous(len(items))
+        self._refresh()
+
+    def _review_next(self, _event: object = None) -> None:
+        items = self._current_row().items
+        self.stage_cursor.next(len(items))
         self._refresh()
 
     def _refresh(self, *, update_page: bool = True) -> None:
-        self.track.controls = [
-            self._interaction_row(row, index)
-            for index, row in enumerate(self._visible_rows())
-        ]
+        items = self._current_row().items
+        self.stage_cursor.clamp(len(items))
+        self.stage.content = self._stage_control(self._selected_item())
+
+        item_count = len(items)
+        current_position = self.stage_cursor.position + 1 if item_count else 0
+        dots = " ".join(
+            "●" if index == self.stage_cursor.position else "○"
+            for index in range(item_count)
+        )
+        self.position_indicator.value = (
+            f"{dots}  {current_position}/{item_count}" if item_count else ""
+        )
+        self.previous_button.disabled = self._busy or item_count <= 1 or self.stage_cursor.position <= 0
+        self.review_next_button.disabled = (
+            self._busy
+            or item_count <= 1
+            or self.stage_cursor.position >= item_count - 1
+        )
+
         total = len(self.controller.frame.entries)
         self.progress.value = f"{self.controller.revealed_entries} de {total}"
         self.advance_button.disabled = self._busy
@@ -376,11 +431,15 @@ class NovelFrameView:
             self._busy = False
             self._refresh()
             return
-        previous = self.controller.revealed_entries - 1
+
+        previous_revealed = self.controller.revealed_entries - 1
         self._busy = True
         self._refresh()
         if self.on_reveal is not None:
             if not self.on_reveal(self.controller.revealed_entries):
-                self.controller.revealed_entries = previous
+                self.controller.revealed_entries = previous_revealed
         self._busy = False
+        # Uma revelação nova sempre leva o palco ao conteúdo mais recente. O
+        # usuário pode depois voltar localmente sem qualquer chamada à API.
+        self.stage_cursor.latest(len(self._current_row().items))
         self._refresh()
