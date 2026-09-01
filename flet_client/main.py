@@ -4,26 +4,28 @@ import os
 import flet as ft
 
 from flet_client.api_client import ApiPayment, ApiRunFrame, FletApiClient, FletApiError
+from flet_client.auth_storage import AuthTokenStorage
 from flet_client.frame_state import parse_visual_frame
 from flet_client.frame_view import FrameVisualRow, NovelFrameView
 from flet_client.screens import BACKGROUND, library_screen, login_screen, payment_screen
 from platform_core.models import AccessStatus
 from platform_core.models import StoryCard
 
-DEFAULT_FLET_API_URL = "https://roleplay2026-flet-api.onrender.com"
+DEFAULT_FLET_API_URL = "https://entrecenas-roleplay.com.br"
 
 
 def configured_api_url() -> str:
     return os.getenv("ROLEPLAY_FLET_API_URL", DEFAULT_FLET_API_URL).strip().rstrip("/")
 
 
-def main(page: ft.Page) -> None:
+async def main(page: ft.Page) -> None:
     page.title = "Entre Cenas — Player Flet"
     page.bgcolor = BACKGROUND
     page.padding = 0
     page.theme_mode = ft.ThemeMode.LIGHT
     api_url = configured_api_url()
     api_client = FletApiClient(api_url) if api_url else None
+    token_storage = AuthTokenStorage()
     active_cards: list[StoryCard] = []
     active_display_name = ""
 
@@ -31,6 +33,42 @@ def main(page: ft.Page) -> None:
         page.controls.clear()
         page.add(control)
         page.update()
+
+    def show_api_error(message: str) -> None:
+        page.show_dialog(ft.SnackBar(ft.Text(message)))
+
+    async def persist_current_token() -> None:
+        if api_client is None or not api_client.access_token:
+            return
+        try:
+            await token_storage.set_token(api_client.access_token)
+        except Exception:
+            # Falha do cofre local não invalida uma sessão já autenticada.
+            pass
+
+    async def clear_local_auth(*, revoke_server: bool) -> None:
+        if api_client is not None:
+            if revoke_server:
+                try:
+                    api_client.logout()
+                except FletApiError:
+                    api_client.access_token = ""
+            else:
+                api_client.access_token = ""
+        try:
+            await token_storage.clear_token()
+        except Exception:
+            pass
+
+    async def authentication_failed() -> None:
+        await clear_local_auth(revoke_server=False)
+        show_login()
+
+    def handle_api_error(exc: FletApiError) -> None:
+        if exc.is_authentication_error:
+            page.run_task(authentication_failed)
+            return
+        show_api_error(str(exc))
 
     def show_story_complete(card: StoryCard) -> None:
         show(
@@ -59,10 +97,7 @@ def main(page: ft.Page) -> None:
                         ),
                         ft.FilledButton(
                             "Voltar para os cards",
-                            on_click=lambda _event: show_library(
-                                active_cards,
-                                active_display_name,
-                            ),
+                            on_click=lambda _event: reload_library(),
                         ),
                     ],
                 ),
@@ -80,7 +115,10 @@ def main(page: ft.Page) -> None:
         try:
             run_frame = current or api_client.open_run(card.package_id)
             frame = parse_visual_frame(run_frame.content)
-        except (FletApiError, ValueError) as exc:
+        except FletApiError as exc:
+            handle_api_error(exc)
+            return
+        except ValueError as exc:
             show_api_error(str(exc))
             return
 
@@ -95,19 +133,23 @@ def main(page: ft.Page) -> None:
                     revealed_entries=len(frame.entries),
                 )
             except FletApiError as exc:
-                show_api_error(str(exc))
+                handle_api_error(exc)
                 return False
             show_player(card, following, history=view.history_snapshot())
             return True
 
         def persist_reveal(_revealed_entries: int) -> bool:
+            nonlocal run_frame
             try:
-                api_client.reveal_run_entry(
+                # O backend pode marcar finished=True exatamente na última
+                # revelação. Guarde a resposta para completed() enxergar esse
+                # estado e não disparar um advance extra.
+                run_frame = api_client.reveal_run_entry(
                     package_id=card.package_id,
                     frame_id=run_frame.frame_id,
                 )
             except FletApiError as exc:
-                show_api_error(str(exc))
+                handle_api_error(exc)
                 return False
             return True
 
@@ -132,9 +174,6 @@ def main(page: ft.Page) -> None:
         show(view.root)
         view.focus_current()
 
-    def show_api_error(message: str) -> None:
-        page.show_dialog(ft.SnackBar(ft.Text(message)))
-
     def reload_library() -> None:
         if api_client is None:
             show_login()
@@ -142,7 +181,7 @@ def main(page: ft.Page) -> None:
         try:
             cards = api_client.catalog()
         except FletApiError as exc:
-            show_api_error(str(exc))
+            handle_api_error(exc)
             return
         show_library(cards, active_display_name)
 
@@ -153,14 +192,14 @@ def main(page: ft.Page) -> None:
         try:
             current = state or api_client.payment_options(card.package_id)
         except FletApiError as exc:
-            show_api_error(str(exc))
+            handle_api_error(exc)
             return
 
         def run(operation) -> None:
             try:
                 updated = operation()
             except FletApiError as exc:
-                show_api_error(str(exc))
+                handle_api_error(exc)
                 return
             if updated.approved:
                 reload_library()
@@ -196,13 +235,13 @@ def main(page: ft.Page) -> None:
         nonlocal active_cards, active_display_name
         active_cards = list(cards)
         active_display_name = display_name
-        def logout() -> None:
-            if api_client is not None:
-                try:
-                    api_client.logout()
-                except FletApiError:
-                    pass
+
+        async def logout_flow() -> None:
+            await clear_local_auth(revoke_server=True)
             show_login()
+
+        def logout() -> None:
+            page.run_task(logout_flow)
 
         show(
             library_screen(
@@ -222,6 +261,7 @@ def main(page: ft.Page) -> None:
                 cards = api_client.catalog()
             except FletApiError as exc:
                 return str(exc)
+            page.run_task(persist_current_token)
             show_library(cards, user.display_name or user.email)
             return None
 
@@ -244,6 +284,7 @@ def main(page: ft.Page) -> None:
                 cards = api_client.catalog()
             except FletApiError as exc:
                 return str(exc)
+            page.run_task(persist_current_token)
             show_library(cards, user.display_name or user.email)
             return None
 
@@ -255,7 +296,69 @@ def main(page: ft.Page) -> None:
             )
         )
 
-    show_login()
+    async def restore_session() -> None:
+        if api_client is None:
+            show_login()
+            return
+        try:
+            token = await token_storage.get_token()
+        except Exception:
+            token = ""
+        if not token:
+            show_login()
+            return
+
+        api_client.access_token = token
+        try:
+            user = api_client.me()
+            cards = api_client.catalog()
+        except FletApiError as exc:
+            if exc.is_authentication_error:
+                await clear_local_auth(revoke_server=False)
+                show_login()
+                return
+
+            # Rede/Sheets/5xx não significam logout. Mantenha o token e dê ao
+            # usuário uma forma explícita de tentar novamente ou sair.
+            show(
+                ft.Container(
+                    expand=True,
+                    bgcolor=BACKGROUND,
+                    alignment=ft.Alignment.CENTER,
+                    padding=32,
+                    content=ft.Column(
+                        tight=True,
+                        spacing=16,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            ft.Text(
+                                "Não foi possível restaurar sua sessão agora.",
+                                size=20,
+                                color="#FFFFFF",
+                                text_align=ft.TextAlign.CENTER,
+                            ),
+                            ft.Text(
+                                str(exc),
+                                color="#D6E5E3",
+                                text_align=ft.TextAlign.CENTER,
+                            ),
+                            ft.FilledButton(
+                                "Tentar novamente",
+                                on_click=lambda _event: page.run_task(restore_session),
+                            ),
+                            ft.TextButton(
+                                "Sair desta conta",
+                                on_click=lambda _event: page.run_task(authentication_failed),
+                            ),
+                        ],
+                    ),
+                )
+            )
+            return
+
+        show_library(cards, user.display_name or user.email)
+
+    await restore_session()
 
 
 if __name__ == "__main__":
