@@ -7,9 +7,9 @@ quiser jogar novamente, precisa existir um novo crédito e uma nova ``run_id`` d
 ser criada desde o primeiro quadro.
 
 Também repara de forma idempotente runs antigas que foram reativadas por versões
-anteriores do runtime: se STORY_RUNS diz ``active`` mas o estado persistido em
-INTERACTIONS já está ``finished=True``, fechamos essa run novamente antes de
-prosseguir. O crédito novo, quando existir, permanece disponível para a nova run.
+anteriores do runtime. A reparação só acontece quando o estado diz ``finished`` E
+o último quadro já foi totalmente revelado; assim uma run terminal ainda em
+revelação nunca é fechada prematuramente.
 """
 
 from functools import wraps
@@ -17,6 +17,7 @@ from typing import Any
 
 from flet_api.runs import FletRunService
 from persistence.runtime_v2 import GoogleSheetsV2RuntimeRepository
+from services.novel_frame_reveal import frame_entry_count
 from services.paid_run_access import finish_active_run
 
 
@@ -27,12 +28,34 @@ def _is_normal_completion(run: Any) -> bool:
     return run is not None and str(getattr(run, "status", "") or "").strip() == "completed"
 
 
-def _is_stale_active_terminal(context: Any, state: Any) -> bool:
+def _last_frame_fully_revealed(messages: list[dict[str, object]]) -> bool:
+    current = next(
+        (
+            item
+            for item in reversed(messages)
+            if str(item.get("role", "")) == "assistant"
+            and str(item.get("content", "") or "").strip()
+        ),
+        None,
+    )
+    if current is None:
+        return False
+    total = frame_entry_count(str(current.get("content", "") or ""))
+    if total <= 0:
+        return True
+    revealed = int(current.get("flet_revealed_entries", 0) or 0)
+    if revealed <= 0:
+        revealed = 1
+    return revealed >= total
+
+
+def _is_stale_active_terminal(context: Any, state: Any, messages: list[dict[str, object]]) -> bool:
     run = getattr(context, "run", None)
     return bool(
         run is not None
         and str(getattr(run, "status", "") or "").strip() == "active"
         and bool(getattr(state, "finished", False))
+        and _last_frame_fully_revealed(messages)
     )
 
 
@@ -82,7 +105,8 @@ def install() -> None:
             values = original_load(self, account, package_id)
             context = values[3]
             state = values[4]
-            if not _is_stale_active_terminal(context, state):
+            messages = values[5]
+            if not _is_stale_active_terminal(context, state, messages):
                 return values
 
             # Repara dados produzidos pelo comportamento antigo. Não revogamos
@@ -109,5 +133,6 @@ __all__ = [
     "install",
     "_is_normal_completion",
     "_is_stale_active_terminal",
+    "_last_frame_fully_revealed",
     "_invalidate_local_story_runs_cache",
 ]
