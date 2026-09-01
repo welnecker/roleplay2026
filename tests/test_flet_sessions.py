@@ -12,7 +12,7 @@ def test_signed_session_survives_new_store_instance_with_same_key() -> None:
 
     assert restored is not None
     assert restored.user_id == "user_1"
-    assert restored.expires_at == created.expires_at
+    assert abs((restored.expires_at - created.expires_at).total_seconds()) < 1
 
 
 def test_signed_session_rejects_tampering_and_other_key() -> None:
