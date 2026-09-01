@@ -41,6 +41,12 @@ def start_v2_run_on_first_message(
 
     ``installed_stories_root`` permanece na assinatura por compatibilidade com os
     chamadores existentes, mas não é usado como fonte editorial.
+
+    Na abertura de uma nova execução, o runtime chamador já consultou a run ativa.
+    Evitamos repetir aqui a mesma consulta antes de olhar o crédito: quando existe
+    crédito disponível, ``create_run`` continua fazendo a confirmação final de run
+    ativa imediatamente antes do append. Quando não existe crédito, ainda
+    consultamos a run ativa para preservar a retomada/reutilização existente.
     """
 
     del installed_stories_root
@@ -49,19 +55,15 @@ def start_v2_run_on_first_message(
         return None
 
     repositories = build_v2_narrative_repositories(secrets)
-    active = repositories.runs.get_active_run(
-        user_id=user_id,
-        package_id=package_id,
-    )
-    if active is not None:
-        return active
-
     credit = repositories.credits.get_available_credit(
         user_id=user_id,
         package_id=package_id,
     )
     if credit is None:
-        return None
+        return repositories.runs.get_active_run(
+            user_id=user_id,
+            package_id=package_id,
+        )
 
     run = repositories.runs.create_run(
         credit=credit,
