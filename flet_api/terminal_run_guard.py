@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-"""Curto-circuita avanços repetidos depois de um quadro terminal já conhecido.
+"""Curto-circuita chamadas repetidas depois de um quadro terminal já conhecido.
 
 O estado durável continua sendo STORY_RUNS/INTERACTIONS. Este cache existe apenas
 como defesa de processo para clientes antigos, cliques duplicados ou latência:
-depois que a API já devolveu ``finished=True`` para um quadro, novos ``advance``
-desse mesmo quadro não precisam reabrir o runtime nem consultar Google Sheets.
+depois que a API já devolveu ``finished=True`` para um quadro, novos ``reveal`` ou
+``advance`` desse mesmo quadro não precisam reabrir o runtime nem consultar Google
+Sheets.
 """
 
 from functools import wraps
@@ -83,6 +84,9 @@ def install() -> None:
         package_id: str,
         expected_frame_id: str,
     ) -> RunFrame:
+        terminal = _cached(account.user_id, package_id, expected_frame_id)
+        if terminal is not None:
+            return terminal
         frame = original_reveal(
             self,
             account=account,
