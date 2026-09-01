@@ -19,14 +19,28 @@ class FakeServiceClass:
         return self.loads.pop(0)
 
 
-def _values(*, run=None, finished=False):
+def _terminal_message(*, revealed: int) -> dict[str, object]:
+    return {
+        "role": "assistant",
+        "content": (
+            "[QUADRO final]\n"
+            "[DESCRIÇÃO]\nFim.\n"
+            "[FALA mary|Mary]\nUma.\n"
+            "[FALA mary|Mary]\nDuas.\n"
+            "[/QUADRO]"
+        ),
+        "flet_revealed_entries": revealed,
+    }
+
+
+def _values(*, run=None, finished=False, messages=None):
     return (
         object(),
         object(),
         object(),
         SimpleNamespace(run=run),
         SimpleNamespace(finished=finished),
-        [],
+        list(messages or []),
         {},
     )
 
@@ -80,7 +94,7 @@ def test_legacy_noncompleted_candidate_remains_resumable(monkeypatch) -> None:
     )
 
 
-def test_stale_active_finished_run_is_closed_and_reloaded(monkeypatch) -> None:
+def test_stale_active_finished_run_is_closed_only_after_full_reveal(monkeypatch) -> None:
     active = SimpleNamespace(status="active")
     fresh_values = _values(run=None, finished=False)
 
@@ -100,7 +114,11 @@ def test_stale_active_finished_run_is_closed_and_reloaded(monkeypatch) -> None:
             del account, package_id
             self.calls += 1
             if self.calls == 1:
-                return _values(run=active, finished=True)
+                return _values(
+                    run=active,
+                    finished=True,
+                    messages=[_terminal_message(revealed=2)],
+                )
             return fresh_values
 
     finished_calls = []
@@ -132,3 +150,39 @@ def test_stale_active_finished_run_is_closed_and_reloaded(monkeypatch) -> None:
             "ending_code": "normal_completion",
         }
     ]
+
+
+def test_active_finished_run_stays_open_while_terminal_frame_is_still_revealing(monkeypatch) -> None:
+    active = SimpleNamespace(status="active")
+    pending = _values(
+        run=active,
+        finished=True,
+        messages=[_terminal_message(revealed=1)],
+    )
+
+    class Repository:
+        def get_resumable_completed_run(self, *, user_id: str, package_id: str):
+            del user_id, package_id
+            return None
+
+    class Service:
+        def __init__(self):
+            self.secrets = {}
+            self.repository = SimpleNamespace()
+
+        def _load(self, account, package_id):
+            del account, package_id
+            return pending
+
+    finished_calls = []
+    monkeypatch.setattr(guard, "GoogleSheetsV2RuntimeRepository", Repository)
+    monkeypatch.setattr(guard, "FletRunService", Service)
+    monkeypatch.setattr(guard, "finish_active_run", lambda **kwargs: finished_calls.append(kwargs))
+    monkeypatch.setattr(guard, "_INSTALLED", False)
+
+    guard.install()
+
+    result = Service()._load(SimpleNamespace(user_id="user_1"), "roleplay2026.test")
+
+    assert result is pending
+    assert finished_calls == []
