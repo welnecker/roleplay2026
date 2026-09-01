@@ -1,20 +1,16 @@
 from __future__ import annotations
 
-"""Conclui a run somente depois da última revelação do quadro terminal.
+"""Compatibilidade para a política antiga de conclusão terminal.
 
-O quadro final precisa continuar pertencendo a uma run ``active`` enquanto seus
-balões/pensamentos ainda estão sendo revelados. A geração do quadro pode saber que
-não existe próximo movimento, mas isso não significa que a experiência visual já
-acabou.
+O runtime Flet atual já implementa nativamente a regra correta:
 
-Esta política preserva o fluxo atual de FletRunService e apenas separa dois
-conceitos que antes estavam acoplados:
+* o quadro terminal permanece ``active`` enquanto ainda há entries para revelar;
+* a última revelação conclui ``STORY_RUNS``;
+* ``_finish_loaded_run`` mantém a checagem otimista de ``state_version``.
 
-* ``movement.is_ending``: o quadro gerado é o último do roteiro;
-* ``state.finished`` / ``STORY_RUNS.completed``: o usuário terminou de revelar o
-  último quadro.
-
-A instalação é feita antes dos guards de terminalidade em ``flet_api.asgi``.
+Esta camada só continua existindo para compatibilidade com branches/commits antigos
+que ainda dependem do monkeypatch histórico. Quando o runtime nativo novo está
+presente, ``install()`` é deliberadamente um no-op.
 """
 
 from contextvars import ContextVar
@@ -62,10 +58,19 @@ def install() -> None:
         return
 
     cls = FletRunService
+
+    # Desde o runtime estrutural novo, a conclusão terminal pertence ao próprio
+    # FletRunService. Não instale o monkeypatch legado por cima dele: além de ser
+    # redundante, versões atuais de ``flet_api.runs`` já não expõem
+    # ``finish_active_run`` como símbolo de módulo.
+    if callable(getattr(cls, "_finish_loaded_run", None)):
+        _INSTALLED = True
+        return
+
     original_generate = cls._generate
     original_reveal = cls.reveal
     original_persist = runs_module.persist_assistant_message
-    original_finish = runs_module.finish_active_run
+    original_finish = getattr(runs_module, "finish_active_run", finish_active_run)
 
     if getattr(original_generate, "_terminal_completion_policy", False):
         _INSTALLED = True
@@ -100,8 +105,6 @@ def install() -> None:
             _DEFER_TERMINAL_COMPLETION.reset(token)
 
         if terminal:
-            # O quadro é terminal, mas a experiência ainda não terminou: ainda
-            # existem entries a revelar. Persistência e resposta permanecem ativas.
             state.finished = False
         return context, state, messages
 
@@ -123,7 +126,6 @@ def install() -> None:
         if not fully_revealed or not _frame_is_terminal(self, package_id, expected_frame_id):
             return frame
 
-        # Somente a última revelação do último quadro consome a terminalidade.
         finish_active_run(
             secrets=self.secrets,
             user_id=account.user_id,
