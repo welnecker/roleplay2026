@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from flet_api.terminal_run_guard import install as install_terminal_run_guard
 from persistence.sheets_read_optimization import install as install_sheets_read_optimization
 from persistence.story_run_cache_guard import install as install_story_run_cache_guard
 
@@ -11,6 +12,9 @@ install_sheets_read_optimization()
 # STORY_RUNS usa cache longo quando encontra a run, mas ausência em cache não
 # é autoritativa: outro fluxo pode ter criado a run depois da leitura vazia.
 install_story_run_cache_guard()
+# Depois que um quadro terminal já foi devolvido pela API, avanços repetidos
+# são respondidos em memória e não reabrem o runtime/Google Sheets.
+install_terminal_run_guard()
 
 from flet_api.app import production_app
 from persistence.sheets_audit import install as install_sheets_audit
