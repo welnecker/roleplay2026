@@ -31,8 +31,11 @@ class FakeCredits:
 @dataclass
 class FakeRuns:
     active: StoryRun | None = None
+    active_lookups: int = 0
+    create_calls: int = 0
 
     def get_active_run(self, *, user_id: str, package_id: str) -> StoryRun | None:
+        self.active_lookups += 1
         return self.active
 
     def create_run(
@@ -43,6 +46,12 @@ class FakeRuns:
         first_block_id: str,
         first_beat_id: str,
     ) -> StoryRun:
+        self.create_calls += 1
+        # O repositório real confirma novamente a run ativa dentro de create_run.
+        # O fake preserva a semântica relevante para estes testes sem contar essa
+        # implementação interna como lookup explícito do starter.
+        if self.active is not None:
+            return self.active
         self.active = StoryRun(
             run_id="run_1",
             credit_id=credit.credit_id,
@@ -117,7 +126,7 @@ def _mock_editorial_start(monkeypatch) -> None:
     )
 
 
-def test_cria_run_e_consume_credit(monkeypatch, tmp_path: Path) -> None:
+def test_cria_run_e_consume_credit_sem_lookup_intermediario(monkeypatch, tmp_path: Path) -> None:
     credit = RunCredit(
         credit_id="credit_1",
         user_id="user_1",
@@ -145,6 +154,8 @@ def test_cria_run_e_consume_credit(monkeypatch, tmp_path: Path) -> None:
     assert run.current_block_id == "primeiro"
     assert run.current_beat_id == "beat_001"
     assert repositories.credits.consumed == ("credit_1", "run_1")
+    assert repositories.runs.active_lookups == 0
+    assert repositories.runs.create_calls == 1
 
 
 def test_reutiliza_run_ativa_sem_consumir_outro_credito(monkeypatch, tmp_path: Path) -> None:
@@ -183,3 +194,35 @@ def test_reutiliza_run_ativa_sem_consumir_outro_credito(monkeypatch, tmp_path: P
 
     assert run is active
     assert credits.consumed is None
+    assert repositories.runs.active_lookups == 0
+    assert repositories.runs.create_calls == 1
+
+
+def test_sem_credito_ainda_consulta_run_ativa_para_retomada(monkeypatch, tmp_path: Path) -> None:
+    active = StoryRun(
+        run_id="run_existing",
+        credit_id="credit_old",
+        user_id="user_1",
+        package_id="roleplay2026.test",
+        script_version="1.0.0",
+        current_block_id="primeiro",
+        current_beat_id="beat_001",
+    )
+    repositories = FakeRepositories(FakeCredits(None), FakeRuns(active))
+    monkeypatch.setattr(
+        v2_run_starter,
+        "build_v2_narrative_repositories",
+        lambda secrets: repositories,
+    )
+    _mock_editorial_start(monkeypatch)
+
+    run = v2_run_starter.start_v2_run_on_first_message(
+        secrets={},
+        user_id="user_1",
+        package_id="roleplay2026.test",
+        installed_stories_root=_story_root(tmp_path),
+    )
+
+    assert run is active
+    assert repositories.runs.active_lookups == 1
+    assert repositories.runs.create_calls == 0
