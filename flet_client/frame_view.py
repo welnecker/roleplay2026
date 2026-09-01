@@ -70,13 +70,13 @@ def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
     card = ft.Container(
         width=width,
         margin=ft.Margin.only(left=11, right=11, top=18),
-        padding=ft.Padding.symmetric(horizontal=20, vertical=16),
+        padding=ft.Padding.symmetric(horizontal=20, vertical=14),
         border_radius=22,
         bgcolor=card_color,
         border=border,
         shadow=ft.BoxShadow(blur_radius=14, color="#33000000", offset=ft.Offset(0, 5)),
         content=ft.Column(
-            spacing=8,
+            spacing=6,
             controls=[
                 ft.Text(
                     f"✦ pensamento · {label}" if is_thought else label.upper(),
@@ -95,7 +95,6 @@ def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
             ],
         ),
     )
-    # O balão permanece abaixo da imagem e sua cauda aponta para cima.
     if is_thought:
         tails: list[ft.Control] = [
             ft.Container(
@@ -138,19 +137,51 @@ def _stage_width(viewport_width: float | None) -> float:
     return usable
 
 
-def _image_height(stage_width: float, viewport_width: float | None) -> float:
-    width = float(viewport_width or 390)
-    if width >= 1200:
-        return min(610.0, max(390.0, stage_width * 0.56))
-    if width >= 760:
-        return min(520.0, max(330.0, stage_width * 0.56))
-    return min(360.0, max(220.0, stage_width * 0.62))
-
-
 def _balloon_width(stage_width: float, viewport_width: float | None) -> float:
     width = float(viewport_width or 390)
     ratio = 0.72 if width >= 1000 else 0.9 if width >= 620 else 0.96
     return max(270.0, min(stage_width, stage_width * ratio))
+
+
+def _estimated_balloon_height(entry: VisualEntry | None, balloon_width: float) -> float:
+    """Reserva vertical aproximada para a fala sem precisar medir o widget montado."""
+
+    if entry is None:
+        return 0.0
+    font_size = 23.0 if entry.impact_balloon and entry.kind != "pensamento" else 17.0
+    usable_width = max(180.0, balloon_width - 40.0)
+    chars_per_line = max(18, int(usable_width / max(7.5, font_size * 0.5)))
+    body = str(entry.body or "")
+    line_count = max(1, math.ceil(len(body) / chars_per_line))
+    line_height = font_size * 1.35
+    return 62.0 + line_count * line_height
+
+
+def _image_height(
+    stage_width: float,
+    viewport_width: float | None,
+    viewport_height: float | None,
+    entry: VisualEntry | None,
+) -> float:
+    """Mantém a imagem dominante sem empurrar o balão para fora da tela."""
+
+    width = float(viewport_width or 390)
+    height = float(viewport_height or 800)
+    balloon_width = _balloon_width(stage_width, width)
+    balloon_height = _estimated_balloon_height(entry, balloon_width)
+
+    # Reserva: cabeçalho da cena, navegação local, botão Continuar, margens e gaps.
+    reserved = 285.0 + balloon_height
+    available = max(210.0, height - reserved)
+
+    if width >= 1200:
+        desired = min(610.0, max(390.0, stage_width * 0.56))
+        return max(280.0, min(desired, available))
+    if width >= 760:
+        desired = min(520.0, max(330.0, stage_width * 0.56))
+        return max(250.0, min(desired, available))
+    desired = min(360.0, max(220.0, stage_width * 0.62))
+    return max(190.0, min(desired, available))
 
 
 class NovelFrameView:
@@ -177,6 +208,7 @@ class NovelFrameView:
         self.history = tuple(history[-(INTERACTION_LIMIT - 1) :])
         self._busy = False
         self._viewport_width = float(getattr(page, "width", None) or 390)
+        self._viewport_height = float(getattr(page, "height", None) or 800)
         self.stage_width = _stage_width(self._viewport_width)
         self.stage_cursor = FrameStageCursor()
 
@@ -189,18 +221,18 @@ class NovelFrameView:
         self.stage = ft.Container(alignment=ft.Alignment.TOP_CENTER, expand=True)
         self.position_indicator = ft.Text(size=13, color="#D6E5E3")
         self.previous_button = ft.OutlinedButton(
-            "← Anterior",
+            "← Voltar",
             on_click=self._review_previous,
             style=ft.ButtonStyle(color="#FFFFFF"),
         )
         self.review_next_button = ft.OutlinedButton(
-            "Seguinte →",
+            "Rever →",
             on_click=self._review_next,
             style=ft.ButtonStyle(color="#FFFFFF"),
         )
         self.progress = ft.Text(size=12, color="#D6E5E3")
         self.advance_button = ft.FilledButton(
-            "Avançar",
+            "Continuar",
             bgcolor=SCENE_COLOR,
             color="#FFFFFF",
             height=52,
@@ -208,16 +240,16 @@ class NovelFrameView:
         )
 
         self.root = ft.Container(
-            padding=ft.Padding.symmetric(horizontal=18, vertical=14),
+            padding=ft.Padding.symmetric(horizontal=18, vertical=10),
             bgcolor=BACKGROUND,
             content=ft.Column(
                 controls=[
                     ft.Container(
-                        padding=18,
+                        padding=ft.Padding.symmetric(horizontal=18, vertical=14),
                         border_radius=16,
                         bgcolor=SCENE_COLOR,
                         content=ft.Column(
-                            spacing=8,
+                            spacing=6,
                             controls=[
                                 ft.Text(
                                     "CENA",
@@ -249,10 +281,10 @@ class NovelFrameView:
                         avoid_intrusions_right=False,
                         avoid_intrusions_bottom=True,
                         maintain_bottom_view_padding=True,
-                        minimum_padding=ft.Padding.only(bottom=8),
+                        minimum_padding=ft.Padding.only(bottom=6),
                     ),
                 ],
-                spacing=14,
+                spacing=10,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 expand=True,
             ),
@@ -263,8 +295,6 @@ class NovelFrameView:
         self._refresh(update_page=False)
 
     def _entry_image(self, index: int) -> bytes | str | None:
-        """Retorna a imagem efetiva da entry, carregando a última válida."""
-
         active: bytes | str | None = self.base_image
         for position in range(index + 1):
             if position < len(self.entry_images) and self.entry_images[position]:
@@ -281,8 +311,6 @@ class NovelFrameView:
             )
             for index, entry in enumerate(self.controller.visible_entries)
         ]
-        # Quando a primeira fala troca imediatamente a imagem, preserve a imagem
-        # autoral da [DESCRIÇÃO] como a primeira posição visual do quadro.
         first_entry_image = items[0].image if items else None
         if self.base_image and first_entry_image != self.base_image:
             items.insert(
@@ -297,9 +325,6 @@ class NovelFrameView:
         return FrameVisualRow(self.controller.frame.frame_id, tuple(items))
 
     def _visible_rows(self) -> tuple[FrameVisualRow, ...]:
-        # O histórico continua sendo transportado entre quadros para compatibilidade
-        # e eventual revisão futura, mas o palco principal mostra somente o quadro
-        # atual para não poluir o desktop.
         return self.history + (self._current_row(),)
 
     def history_snapshot(
@@ -329,7 +354,12 @@ class NovelFrameView:
             controls.append(
                 ft.Container(
                     width=self.stage_width,
-                    height=_image_height(self.stage_width, self._viewport_width),
+                    height=_image_height(
+                        self.stage_width,
+                        self._viewport_width,
+                        self._viewport_height,
+                        item.entry,
+                    ),
                     alignment=ft.Alignment.CENTER,
                     border_radius=20,
                     clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
@@ -355,23 +385,26 @@ class NovelFrameView:
             alignment=ft.Alignment.TOP_CENTER,
             content=ft.Column(
                 controls=controls,
-                spacing=12,
+                spacing=10,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                scroll=ft.ScrollMode.AUTO,
             ),
         )
 
     def focus_current(self) -> None:
-        """Compatibilidade com o chamador; o novo palco já nasce focado."""
-
         return None
 
     def _resize(self, event: object) -> None:
         width = float(getattr(event, "width", None) or self._viewport_width)
+        height = float(getattr(event, "height", None) or self._viewport_height)
         next_width = _stage_width(width)
-        if abs(next_width - self.stage_width) < 1 and abs(width - self._viewport_width) < 1:
+        if (
+            abs(next_width - self.stage_width) < 1
+            and abs(width - self._viewport_width) < 1
+            and abs(height - self._viewport_height) < 1
+        ):
             return
         self._viewport_width = width
+        self._viewport_height = height
         self.stage_width = next_width
         self._refresh()
 
@@ -409,13 +442,7 @@ class NovelFrameView:
         total = len(self.controller.frame.entries)
         self.progress.value = f"{self.controller.revealed_entries} de {total}"
         self.advance_button.disabled = self._busy
-        self.advance_button.content = (
-            "Carregando..."
-            if self._busy
-            else "Próximo quadro"
-            if self.controller.all_entries_visible
-            else "Revelar próximo balão"
-        )
+        self.advance_button.content = "Aguarde..." if self._busy else "Continuar"
         if update_page:
             self.page.update()
 
@@ -439,7 +466,5 @@ class NovelFrameView:
             if not self.on_reveal(self.controller.revealed_entries):
                 self.controller.revealed_entries = previous_revealed
         self._busy = False
-        # Uma revelação nova sempre leva o palco ao conteúdo mais recente. O
-        # usuário pode depois voltar localmente sem qualquer chamada à API.
         self.stage_cursor.latest(len(self._current_row().items))
         self._refresh()
