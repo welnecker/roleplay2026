@@ -19,16 +19,28 @@ def _frame(*, finished: bool) -> RunFrame:
     )
 
 
+def _preserve_guard_state():
+    cls = FletRunService
+    with guard._CACHE_LOCK:
+        cache = dict(guard._CACHE)
+        guard._CACHE.clear()
+    return cls.open, cls.advance, cls.reveal, guard._INSTALLED, cache
+
+
+def _restore_guard_state(state) -> None:
+    real_open, real_advance, real_reveal, real_installed, real_cache = state
+    FletRunService.open = real_open
+    FletRunService.advance = real_advance
+    FletRunService.reveal = real_reveal
+    guard._INSTALLED = real_installed
+    with guard._CACHE_LOCK:
+        guard._CACHE.clear()
+        guard._CACHE.update(real_cache)
+
+
 def test_repeated_terminal_advance_is_served_without_calling_runtime_again() -> None:
     cls = FletRunService
-    real_open = cls.open
-    real_advance = cls.advance
-    real_reveal = cls.reveal
-    real_installed = guard._INSTALLED
-    with guard._CACHE_LOCK:
-        real_cache = dict(guard._CACHE)
-        guard._CACHE.clear()
-
+    saved = _preserve_guard_state()
     calls = {"advance": 0}
 
     def fake_open(self, *, account, package_id):
@@ -70,25 +82,56 @@ def test_repeated_terminal_advance_is_served_without_calling_runtime_again() -> 
         assert second is first
         assert calls["advance"] == 1
     finally:
-        cls.open = real_open
-        cls.advance = real_advance
-        cls.reveal = real_reveal
-        guard._INSTALLED = real_installed
-        with guard._CACHE_LOCK:
-            guard._CACHE.clear()
-            guard._CACHE.update(real_cache)
+        _restore_guard_state(saved)
+
+
+def test_repeated_terminal_reveal_is_served_without_calling_runtime_again() -> None:
+    cls = FletRunService
+    saved = _preserve_guard_state()
+    calls = {"reveal": 0}
+
+    def fake_open(self, *, account, package_id):
+        return _frame(finished=False)
+
+    def fake_reveal(self, *, account, package_id, expected_frame_id):
+        calls["reveal"] += 1
+        return _frame(finished=True)
+
+    def fake_advance(self, *, account, package_id, expected_frame_id, revealed_entries):
+        return _frame(finished=True)
+
+    try:
+        cls.open = fake_open  # type: ignore[method-assign]
+        cls.advance = fake_advance  # type: ignore[method-assign]
+        cls.reveal = fake_reveal  # type: ignore[method-assign]
+        guard._INSTALLED = False
+        guard.install()
+
+        service = object()
+        account = SimpleNamespace(user_id="user_1")
+        first = cls.reveal(  # type: ignore[arg-type]
+            service,
+            account=account,
+            package_id="story_1",
+            expected_frame_id="frame_final",
+        )
+        second = cls.reveal(  # type: ignore[arg-type]
+            service,
+            account=account,
+            package_id="story_1",
+            expected_frame_id="frame_final",
+        )
+
+        assert first.finished is True
+        assert second is first
+        assert calls["reveal"] == 1
+    finally:
+        _restore_guard_state(saved)
 
 
 def test_opening_non_terminal_run_clears_previous_terminal_cache() -> None:
     cls = FletRunService
-    real_open = cls.open
-    real_advance = cls.advance
-    real_reveal = cls.reveal
-    real_installed = guard._INSTALLED
-    with guard._CACHE_LOCK:
-        real_cache = dict(guard._CACHE)
-        guard._CACHE.clear()
-
+    saved = _preserve_guard_state()
     calls = {"advance": 0}
 
     def fake_open(self, *, account, package_id):
@@ -123,10 +166,4 @@ def test_opening_non_terminal_run_clears_previous_terminal_cache() -> None:
 
         assert calls["advance"] == 1
     finally:
-        cls.open = real_open
-        cls.advance = real_advance
-        cls.reveal = real_reveal
-        guard._INSTALLED = real_installed
-        with guard._CACHE_LOCK:
-            guard._CACHE.clear()
-            guard._CACHE.update(real_cache)
+        _restore_guard_state(saved)
