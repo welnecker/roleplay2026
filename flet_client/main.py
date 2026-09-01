@@ -8,6 +8,7 @@ from flet_client.auth_storage import AuthTokenStorage
 from flet_client.frame_state import parse_visual_frame
 from flet_client.frame_view import FrameVisualRow, NovelFrameView
 from flet_client.screens import BACKGROUND, library_screen, login_screen, payment_screen
+from flet_client.story_end_screen import story_end_screen
 from platform_core.models import AccessStatus
 from platform_core.models import StoryCard
 
@@ -70,40 +71,6 @@ async def main(page: ft.Page) -> None:
             return
         show_api_error(str(exc))
 
-    def show_story_complete(card: StoryCard) -> None:
-        show(
-            ft.Container(
-                expand=True,
-                bgcolor=BACKGROUND,
-                alignment=ft.Alignment.CENTER,
-                padding=32,
-                content=ft.Column(
-                    tight=True,
-                    spacing=18,
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        ft.Text(
-                            "História concluída",
-                            size=30,
-                            weight=ft.FontWeight.BOLD,
-                            color="#FFFFFF",
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                        ft.Text(
-                            card.title,
-                            size=18,
-                            color="#D6E5E3",
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                        ft.FilledButton(
-                            "Voltar para os cards",
-                            on_click=lambda _event: reload_library(),
-                        ),
-                    ],
-                ),
-            )
-        )
-
     def show_player(
         card: StoryCard,
         current: ApiRunFrame | None = None,
@@ -122,9 +89,22 @@ async def main(page: ft.Page) -> None:
             show_api_error(str(exc))
             return
 
+        # Um quadro terminal determinístico já chega completamente concluído.
+        # Mantemos imagem e despedida fixas e oferecemos somente Retornar; nenhum
+        # advance/reveal adicional é necessário depois desse ponto.
+        if run_frame.finished:
+            show(
+                story_end_screen(
+                    frame=frame,
+                    image_url=run_frame.image_url,
+                    on_return=reload_library,
+                )
+            )
+            return
+
         def completed() -> bool:
             if run_frame.finished:
-                show_story_complete(card)
+                reload_library()
                 return True
             try:
                 following = api_client.advance_run(
