@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from flet_api.completed_run_restart_guard import install as install_completed_run_restart_guard
+from flet_api.story_end_card import install as install_story_end_card
 from flet_api.terminal_completion_policy import install as install_terminal_completion_policy
 from flet_api.terminal_run_guard import install as install_terminal_run_guard
 from persistence.sheets_read_optimization import install as install_sheets_read_optimization
@@ -20,6 +21,10 @@ install_terminal_completion_policy()
 # Conclusão normal é terminal: uma nova execução exige novo crédito/run_id.
 # Também repara runs antigas que ficaram active apesar de state.finished=True.
 install_completed_run_restart_guard()
+# [FIM_HISTORIA] com texto vira um quadro final autoral, sem OpenRouter. A
+# instalação vem depois da política terminal para interceptar apenas esse quadro
+# determinístico e concluí-lo imediatamente depois de persistir a despedida.
+install_story_end_card()
 # Depois que um quadro terminal já foi devolvido pela API, avanços/reveals
 # repetidos são respondidos em memória e não reabrem runtime/Google Sheets.
 install_terminal_run_guard()
