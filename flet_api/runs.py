@@ -6,8 +6,10 @@ from threading import Lock
 from typing import Any
 from urllib.parse import quote
 
+from narrative_v2.repository import RuntimeConflictError
 from packages.models import InstalledStoryPackage
 from persistence.factory import build_google_sheets_repository
+from persistence.models import utc_now_iso
 from platform_core.auth import AuthenticatedUser
 from roleplay.openrouter import generate_response
 from roleplay.models import StoryState
@@ -42,7 +44,7 @@ from services.runtime_persistence import (
     open_persistent_runtime,
     persist_assistant_message,
 )
-from services.paid_run_access import finish_active_run
+from services.paid_run_access import clear_paid_access_cache
 from services.story_profile import personalize_editorial_script
 
 
@@ -136,6 +138,70 @@ class FletRunService:
             "user_name": account.display_name,
         }
 
+    def _finish_loaded_run(
+        self,
+        *,
+        context: RuntimePersistenceContext,
+        user_id: str,
+        package_id: str,
+        block_id: str,
+        beat_id: str,
+    ) -> RuntimePersistenceContext:
+        """Finaliza a run já carregada com uma única leitura autoritativa normal.
+
+        ``update_run`` continua fazendo o ``force_refresh`` que protege a versão
+        otimista. Só fazemos uma leitura adicional quando existe conflito real de
+        concorrência. Assim o fechamento não precisa chamar ``get_active_run`` antes
+        de cada update.
+        """
+
+        run = context.run
+        if run is None:
+            raise RuntimeError("A run não existe mais para ser finalizada.")
+        if run.user_id != user_id or run.package_id != package_id:
+            raise RuntimeConflictError("A run carregada não pertence ao usuário/pacote atual.")
+
+        for attempt in range(2):
+            expected_version = run.state_version
+            now = utc_now_iso()
+            run.current_block_id = block_id or run.current_block_id
+            run.current_beat_id = beat_id or run.current_beat_id
+            run.status = "completed"
+            run.ending_code = "normal_completion"
+            run.ended_at = now
+            run.updated_at = now
+            try:
+                updated = self.repository.runs.update_run(
+                    run=run,
+                    expected_version=expected_version,
+                )
+            except RuntimeConflictError:
+                if attempt:
+                    raise
+                refreshed = self.repository.get_active_run(
+                    user_id=user_id,
+                    package_id=package_id,
+                )
+                if refreshed is None:
+                    existing = self.repository.get_run(run_id=run.run_id)
+                    if existing is not None and existing.status == "completed":
+                        context.run = existing
+                        clear_paid_access_cache(user_id=user_id, package_id=package_id)
+                        return context
+                    raise
+                if refreshed.run_id != run.run_id:
+                    raise RuntimeConflictError(
+                        "Outra run ativa apareceu durante o fechamento da execução atual."
+                    )
+                run = refreshed
+                continue
+
+            context.run = updated
+            clear_paid_access_cache(user_id=user_id, package_id=package_id)
+            return context
+
+        return context
+
     def _load(self, account: Any, package_id: str):
         package = require_editorial_package(package_id)
         script = load_editorial_package(self.secrets, package)
@@ -208,7 +274,9 @@ class FletRunService:
         updated_state = state.copy()
         updated_state.step_index += 1
         updated_state.consumed_orders.append(updated_state.step_index)
-        updated_state.finished = movement.is_ending
+        # Um quadro terminal ainda precisa ser revelado. A run só fica concluída
+        # quando a última entry desse quadro é confirmada pelo cliente.
+        updated_state.finished = False
         metadata: dict[str, object] = {
             "character_id": character_id,
             "editorial_node": target_id,
@@ -216,6 +284,7 @@ class FletRunService:
             "novel_v2": True,
             "novel_movement": True,
             "novel_frame": True,
+            "novel_terminal_frame": bool(movement.is_ending),
             "input_source": "flet_api",
         }
         memory = persistent_profile_payload(profile)
@@ -230,14 +299,6 @@ class FletRunService:
             assistant_metadata=metadata,
             secrets=self.secrets,
         )
-        if movement.is_ending:
-            finish_active_run(
-                secrets=self.secrets,
-                user_id=user.user_id,
-                package_id=package.manifest.package_id,
-                status="completed",
-                ending_code="normal_completion",
-            )
         messages.append({"role": "assistant", "content": content, **metadata})
         return context, updated_state, messages
 
@@ -374,15 +435,17 @@ class FletRunService:
                 persisted_reveal = 1
             if min(int(revealed_entries), persisted_reveal) < frame_entry_count(content):
                 raise PermissionError("Revele todas as falas e pensamentos antes do próximo quadro.")
-            target = next_movement_id(script, self._movement_id(current))
+            movement_id = self._movement_id(current)
+            target = next_movement_id(script, movement_id)
             if not target:
+                movement = movement_from_script(script, movement_id)
                 state.finished = True
-                finish_active_run(
-                    secrets=self.secrets,
+                context = self._finish_loaded_run(
+                    context=context,
                     user_id=account.user_id,
                     package_id=package_id,
-                    status="completed",
-                    ending_code="normal_completion",
+                    block_id=movement.block_id,
+                    beat_id=movement_id,
                 )
                 return self._view(package, script, context, state, messages)
             context, state, messages = self._generate(
@@ -426,6 +489,18 @@ class FletRunService:
                 revealed_entries=min(total, previous + 1),
             )
             current["flet_revealed_entries"] = revealed
+
+            movement_id = self._movement_id(current)
+            movement = movement_from_script(script, movement_id)
+            if movement.is_ending and (total == 0 or revealed >= total):
+                state.finished = True
+                context = self._finish_loaded_run(
+                    context=context,
+                    user_id=account.user_id,
+                    package_id=package_id,
+                    block_id=movement.block_id,
+                    beat_id=movement_id,
+                )
             return self._view(package, script, context, state, messages)
 
     def image(
