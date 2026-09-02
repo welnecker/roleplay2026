@@ -56,24 +56,33 @@ def download_page_html() -> str:
       font-weight: 800;
       font-size: 1.05rem;
     }
-    .meta {
+    .info {
+      display: grid;
+      gap: 8px;
       padding: 16px;
       border-radius: 14px;
       background: rgba(255,255,255,.06);
-      font-size: .92rem;
-      overflow-wrap: anywhere;
+      font-size: .94rem;
+      line-height: 1.5;
+      color: #d8e3e2;
     }
+    .info strong { color: #fff; }
     .note { font-size: .9rem; color: #b9cac9; }
   </style>
 </head>
 <body>
   <main>
     <div class="brand">EntreCenas</div>
-    <h1>Baixar para Android</h1>
-    <p>Baixe sempre a versão mais recente do aplicativo EntreCenas diretamente pela página oficial.</p>
-    <a class="button" href="/baixar/android">Baixar APK para Android</a>
-    <div class="meta"><strong>Pacote Android:</strong> br.com.entrecenas.roleplay</div>
-    <p class="note">O Android pode exibir avisos ao instalar aplicativos distribuídos fora da Google Play. Confirme que o endereço desta página é entrecenas-roleplay.com.br antes de continuar.</p>
+    <h1>EntreCenas para Android</h1>
+    <p>Baixe a versão mais recente do EntreCenas diretamente pela página oficial.</p>
+    <a class="button" href="/baixar/android">Baixar EntreCenas</a>
+    <div class="info">
+      <div><strong>Tamanho aproximado:</strong> 135 MB</div>
+      <div>O download pode levar alguns minutos, dependendo da sua conexão.</div>
+      <div>Ao chegar a 100%, o navegador ainda pode levar alguns instantes preparando o arquivo.</div>
+      <div>Quando concluir, toque no arquivo baixado para iniciar a instalação.</div>
+    </div>
+    <p class="note">O Android pode exibir avisos ao instalar aplicativos baixados fora da loja. Antes de continuar, confirme que você está em entrecenas-roleplay.com.br.</p>
   </main>
 </body>
 </html>

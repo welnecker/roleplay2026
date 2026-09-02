@@ -6,13 +6,18 @@ from fastapi.testclient import TestClient
 from flet_api.download_routes import ANDROID_RELEASE_URL, install
 
 
-def test_download_page_exposes_official_android_package() -> None:
+def test_download_page_uses_clear_user_facing_android_language() -> None:
     app = install(FastAPI())
     response = TestClient(app).get("/baixar")
 
     assert response.status_code == 200
-    assert "EntreCenas" in response.text
-    assert "br.com.entrecenas.roleplay" in response.text
+    assert "EntreCenas para Android" in response.text
+    assert "Baixar EntreCenas" in response.text
+    assert "Tamanho aproximado:" in response.text
+    assert "135 MB" in response.text
+    assert "Ao chegar a 100%" in response.text
+    assert "br.com.entrecenas.roleplay" not in response.text
+    assert "Baixar APK" not in response.text
     assert 'href="/baixar/android"' in response.text
 
 
