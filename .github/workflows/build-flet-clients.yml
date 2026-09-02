@@ -23,24 +23,15 @@ env:
   FLET_CLI_NO_RICH_OUTPUT: "1"
 
 jobs:
-  build:
-    name: Build ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
+  android:
+    name: Build signed Android APK
+    runs-on: ubuntu-latest
     timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Android APK
-            runner: ubuntu-latest
-            command: flet build apk
-            artifact_path: build/apk
-            artifact_name: EntreCenas-Android-APK
-          - name: Windows
-            runner: windows-latest
-            command: flet build windows
-            artifact_path: build/windows
-            artifact_name: EntreCenas-Windows
+    env:
+      FLET_ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      FLET_ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
 
     steps:
       - name: Checkout repository
@@ -49,14 +40,99 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Build standalone client
+      - name: Require production signing secrets
         shell: bash
-        run: uv run ${{ matrix.command }} --yes --verbose
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 FLET_ANDROID_SIGNING_KEY_ALIAS FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD FLET_ANDROID_SIGNING_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required Android production signing secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Refusing to build an Android production artifact with the debug signing key."
+            exit 1
+          fi
 
-      - name: Upload standalone client
+      - name: Restore production keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="${RUNNER_TEMP}/entrecenas-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "FLET_ANDROID_SIGNING_KEY_STORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+      - name: Build signed Android APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run flet build apk --yes --verbose --build-number "${{ github.run_number }}"
+
+      - name: Verify APK signature and publish metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="$(find build/apk -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::Signed APK was not produced."
+            exit 1
+          fi
+
+          APKSIGNER="$(find "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools" -type f -name apksigner -print 2>/dev/null | sort -V | tail -n 1)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner was not found in Android build-tools."
+            exit 1
+          fi
+
+          "$APKSIGNER" verify --verbose --print-certs "$APK_PATH" | tee build/apk/signature.txt
+          SHA256="$(sha256sum "$APK_PATH" | awk '{print $1}')"
+          APK_NAME="$(basename "$APK_PATH")"
+
+          {
+            echo "product=EntreCenas"
+            echo "package_id=br.com.entrecenas.roleplay"
+            echo "git_commit=${GITHUB_SHA}"
+            echo "build_number=${{ github.run_number }}"
+            echo "apk=${APK_NAME}"
+            echo "sha256=${SHA256}"
+          } | tee build/apk/release-metadata.txt
+
+      - name: Remove temporary keystore
+        if: always()
+        shell: bash
+        run: rm -f "${RUNNER_TEMP}/entrecenas-release.jks"
+
+      - name: Upload signed Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_path }}
+          name: EntreCenas-Android-APK-signed
+          path: build/apk
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    name: Build Windows client
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build Windows client
+        shell: bash
+        run: uv run flet build windows --yes --verbose --build-number "${{ github.run_number }}"
+
+      - name: Upload Windows client
+        uses: actions/upload-artifact@v4
+        with:
+          name: EntreCenas-Windows
+          path: build/windows
           if-no-files-found: error
           retention-days: 14
