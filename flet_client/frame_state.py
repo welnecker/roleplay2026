@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from services.novel_frame_reveal import frame_sections
+from roleplay_shared.novel_frame_reveal import frame_sections
 
 
 @dataclass(frozen=True, slots=True)

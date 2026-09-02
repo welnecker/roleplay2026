@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import struct
 import tomllib
 from pathlib import Path
@@ -55,6 +56,25 @@ def test_standalone_client_excludes_server_data_and_secrets() -> None:
         for path in (ROOT / "flet_client").glob("*.py")
     )
     assert "platform_core" not in client_source
+
+
+def test_standalone_client_does_not_import_excluded_server_packages() -> None:
+    excluded_packages = {
+        item.split("/", maxsplit=1)[0]
+        for item in _config()["tool"]["flet"]["app"]["exclude"]
+        if "." not in item
+    }
+    imported_packages: set[str] = set()
+
+    for path in [ROOT / "main.py", *(ROOT / "flet_client").glob("*.py")]:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported_packages.update(alias.name.split(".", maxsplit=1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported_packages.add(node.module.split(".", maxsplit=1)[0])
+
+    assert imported_packages.isdisjoint(excluded_packages)
 
 
 def test_standalone_client_icons_have_native_build_sizes() -> None:

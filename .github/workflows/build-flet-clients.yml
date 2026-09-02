@@ -8,6 +8,7 @@ on:
     paths:
       - "assets/**"
       - "flet_client/**"
+      - "roleplay_shared/**"
       - "main.py"
       - "pyproject.toml"
       - "uv.lock"
