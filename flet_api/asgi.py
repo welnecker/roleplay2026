@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from flet_api.completed_run_restart_guard import install as install_completed_run_restart_guard
+from flet_api.download_routes import install as install_download_routes
 from flet_api.story_end_card import install as install_story_end_card
 from flet_api.terminal_completion_policy import install as install_terminal_completion_policy
 from flet_api.terminal_run_guard import install as install_terminal_run_guard
@@ -34,4 +35,6 @@ from persistence.sheets_audit import install as install_sheets_audit
 
 
 # Entrada futura e independente. Nenhum serviço de produção aponta para ela.
-app = install_sheets_audit(production_app())
+# As rotas públicas de download ficam isoladas das APIs autenticadas e não
+# alteram os contratos do cliente Flet.
+app = install_download_routes(install_sheets_audit(production_app()))
