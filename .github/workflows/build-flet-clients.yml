@@ -2,6 +2,16 @@ name: Build EntreCenas Clients
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - agent/flet-visual-client
+    paths:
+      - "assets/**"
+      - "flet_client/**"
+      - "main.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/build-flet-clients.yml"
 
 permissions:
   contents: read

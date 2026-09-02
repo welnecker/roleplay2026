@@ -84,7 +84,9 @@ com C++** instalados.
 
 ### Gerar pelo GitHub Actions
 
-O workflow `Build EntreCenas Clients` é manual e produz, na mesma execução:
+O workflow `Build EntreCenas Clients` pode ser executado manualmente e também
+roda quando os arquivos do cliente são enviados à branch
+`agent/flet-visual-client`. Ele produz, na mesma execução:
 
 - `EntreCenas-Android-APK`;
 - `EntreCenas-Windows`.
