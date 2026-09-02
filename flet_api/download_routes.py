@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
-from fastapi.responses import HTMLResponse, RedirectResponse
+import requests
+from fastapi import HTTPException, Request
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 
 ANDROID_PACKAGE_ID = "br.com.entrecenas.roleplay"
@@ -10,6 +13,9 @@ ANDROID_RELEASE_URL = (
     "https://github.com/welnecker/roleplay2026/"
     "releases/latest/download/entrecenas-roleplay.apk"
 )
+DOWNLOAD_FILENAME = "entrecenas-roleplay.apk"
+DOWNLOAD_MEDIA_TYPE = "application/vnd.android.package-archive"
+DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 
 
 def download_page_html() -> str:
@@ -79,7 +85,6 @@ def download_page_html() -> str:
     <div class="info">
       <div><strong>Tamanho aproximado:</strong> 135 MB</div>
       <div>O download pode levar alguns minutos, dependendo da sua conexão.</div>
-      <div>Ao chegar a 100%, o navegador ainda pode levar alguns instantes preparando o arquivo.</div>
       <div>Quando concluir, toque no arquivo baixado para iniciar a instalação.</div>
     </div>
     <p class="note">O Android pode exibir avisos ao instalar aplicativos baixados fora da loja. Antes de continuar, confirme que você está em entrecenas-roleplay.com.br.</p>
@@ -87,6 +92,42 @@ def download_page_html() -> str:
 </body>
 </html>
 """
+
+
+def _stream_upstream(response: requests.Response) -> Iterator[bytes]:
+    try:
+        for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+            if chunk:
+                yield chunk
+    finally:
+        response.close()
+
+
+def _upstream_headers(request: Request) -> dict[str, str]:
+    headers = {"Accept-Encoding": "identity"}
+    range_header = request.headers.get("range")
+    if range_header:
+        headers["Range"] = range_header
+    return headers
+
+
+def _download_headers(upstream: requests.Response) -> dict[str, str]:
+    headers = {
+        "Content-Disposition": f'attachment; filename="{DOWNLOAD_FILENAME}"',
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+    }
+    for source, target in (
+        ("content-length", "Content-Length"),
+        ("content-range", "Content-Range"),
+        ("accept-ranges", "Accept-Ranges"),
+        ("etag", "ETag"),
+        ("last-modified", "Last-Modified"),
+    ):
+        value = upstream.headers.get(source)
+        if value:
+            headers[target] = value
+    return headers
 
 
 def install(app: Any) -> Any:
@@ -100,8 +141,35 @@ def install(app: Any) -> Any:
         return HTMLResponse(download_page_html())
 
     @app.get("/baixar/android", include_in_schema=False)
-    def download_android() -> RedirectResponse:
-        return RedirectResponse(ANDROID_RELEASE_URL, status_code=307)
+    def download_android(request: Request) -> StreamingResponse:
+        try:
+            upstream = requests.get(
+                ANDROID_RELEASE_URL,
+                headers=_upstream_headers(request),
+                stream=True,
+                allow_redirects=True,
+                timeout=(10, 120),
+            )
+        except requests.RequestException as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="Não foi possível iniciar o download. Tente novamente em instantes.",
+            ) from exc
+
+        if upstream.status_code not in {200, 206}:
+            status_code = upstream.status_code
+            upstream.close()
+            raise HTTPException(
+                status_code=502,
+                detail=f"A versão para Android não está disponível no momento ({status_code}).",
+            )
+
+        return StreamingResponse(
+            _stream_upstream(upstream),
+            status_code=upstream.status_code,
+            media_type=DOWNLOAD_MEDIA_TYPE,
+            headers=_download_headers(upstream),
+        )
 
     app.state.download_routes_installed = True
     return app
