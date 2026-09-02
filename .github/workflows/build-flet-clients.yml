@@ -18,6 +18,7 @@ on:
       - "main.py"
       - "pyproject.toml"
       - "uv.lock"
+      - "release/android-release.txt"
       - ".github/workflows/build-flet-clients.yml"
 
 permissions:
@@ -44,9 +45,38 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
+
+      - name: Determine release publication
+        id: release_request
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUBLISH_INPUT: ${{ inputs.publish_release || false }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          publish=false
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$PUBLISH_INPUT" = "true" ]; then
+            publish=true
+          elif [ "$EVENT_NAME" = "push" ] && [ -f release/android-release.txt ]; then
+            if [ -n "${BEFORE_SHA:-}" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+              if ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+                git fetch --no-tags --depth=1 origin "$BEFORE_SHA" || true
+              fi
+              if git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null && \
+                 git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" | grep -Fxq "release/android-release.txt"; then
+                publish=true
+              fi
+            fi
+          fi
+
+          echo "publish=$publish" | tee -a "$GITHUB_OUTPUT"
 
       - name: Require production signing secrets
         shell: bash
@@ -122,7 +152,7 @@ jobs:
           retention-days: 14
 
       - name: Publish permanent Android release
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release }}
+        if: ${{ steps.release_request.outputs.publish == 'true' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -138,10 +168,6 @@ jobs:
           TAG="android-v${VERSION}-build${{ github.run_number }}"
           PUBLIC_APK="${RUNNER_TEMP}/entrecenas-roleplay.apk"
           cp "$APK_PATH" "$PUBLIC_APK"
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release delete "$TAG" --yes --cleanup-tag
-          fi
 
           gh release create "$TAG" \
             "$PUBLIC_APK#EntreCenas Android APK" \
