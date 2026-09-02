@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 
 import flet as ft
 
-from platform_core.models import AccessStatus, StoryCard
+from flet_client.models import AccessStatus, StoryCard
 
 
 BACKGROUND = "#143936"

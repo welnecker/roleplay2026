@@ -5,7 +5,7 @@ from typing import Any
 
 import requests
 
-from platform_core.models import AccessStatus, ProgressStatus, StoryCard
+from flet_client.models import AccessStatus, ProgressStatus, StoryCard
 
 
 class FletApiError(RuntimeError):

@@ -1,0 +1,76 @@
+[project]
+name = "entrecenas-roleplay"
+version = "0.1.0"
+description = "Cliente instalável do EntreCenas"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "flet==0.86.5",
+    "flet-secure-storage==0.86.5",
+    "requests>=2.32,<3",
+]
+
+[tool.uv]
+package = false
+
+[tool.flet]
+product = "EntreCenas"
+company = "EntreCenas"
+copyright = "Copyright © 2026 EntreCenas"
+org = "br.com.entrecenas"
+bundle_id = "br.com.entrecenas.roleplay"
+build_number = 1
+
+[tool.flet.app]
+path = "."
+module = "main.py"
+exclude = [
+    ".dockerignore",
+    ".env",
+    ".git",
+    ".github",
+    ".pytest_cache",
+    ".python-version",
+    ".streamlit",
+    ".venv",
+    "ABRIR_EDITOR_ROTEIROS.bat",
+    "DEPLOYMENT.md",
+    "Dockerfile.webhook",
+    "README.md",
+    "billing",
+    "docs",
+    "flet_api",
+    "installed_stories",
+    "narrative_v2",
+    "packages",
+    "pages",
+    "persistence",
+    "platform_core",
+    "roleplay",
+    "render.yaml",
+    "requirements.txt",
+    "scripts",
+    "services",
+    "static",
+    "stories",
+    "tests",
+    "tools",
+    "app.py",
+    "ui_components.py",
+    "ui_theme.py",
+    "webhook_api.py",
+]
+
+[tool.flet.android]
+min_sdk_version = 24
+target_sdk_version = 36
+adaptive_icon_background = "#0C2E2D"
+
+[tool.flet.android.manifest_application]
+allowBackup = "false"
+usesCleartextTraffic = "false"
+
+[tool.flet.android.permission]
+"android.permission.INTERNET" = true
+
+[tool.flet.windows]
+artifact = "EntreCenas"

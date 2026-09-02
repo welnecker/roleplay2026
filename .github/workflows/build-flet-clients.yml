@@ -1,0 +1,51 @@
+name: Build EntreCenas Clients
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  UV_PYTHON: "3.12"
+  PYTHONUTF8: "1"
+  FLET_CLI_NO_RICH_OUTPUT: "1"
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Android APK
+            runner: ubuntu-latest
+            command: flet build apk
+            artifact_path: build/apk
+            artifact_name: EntreCenas-Android-APK
+          - name: Windows
+            runner: windows-latest
+            command: flet build windows
+            artifact_path: build/windows
+            artifact_name: EntreCenas-Windows
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build standalone client
+        shell: bash
+        run: uv run ${{ matrix.command }} --yes --verbose
+
+      - name: Upload standalone client
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+          retention-days: 14

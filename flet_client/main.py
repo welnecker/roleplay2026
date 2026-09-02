@@ -7,10 +7,9 @@ from flet_client.api_client import ApiPayment, ApiRunFrame, FletApiClient, FletA
 from flet_client.auth_storage import AuthTokenStorage
 from flet_client.frame_state import parse_visual_frame
 from flet_client.frame_view import FrameVisualRow, NovelFrameView
+from flet_client.models import AccessStatus, StoryCard
 from flet_client.screens import BACKGROUND, library_screen, login_screen, payment_screen
 from flet_client.story_end_screen import story_end_screen
-from platform_core.models import AccessStatus
-from platform_core.models import StoryCard
 
 DEFAULT_FLET_API_URL = "https://entrecenas-roleplay.com.br"
 
@@ -20,7 +19,7 @@ def configured_api_url() -> str:
 
 
 async def main(page: ft.Page) -> None:
-    page.title = "Entre Cenas — Player Flet"
+    page.title = "EntreCenas"
     page.bgcolor = BACKGROUND
     page.padding = 0
     page.theme_mode = ft.ThemeMode.LIGHT

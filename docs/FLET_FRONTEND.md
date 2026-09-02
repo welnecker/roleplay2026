@@ -29,9 +29,69 @@ python -m flet_client.main
 ```
 
 Por padrão, o cliente usa a API publicada em
-`https://roleplay2026-flet-api.onrender.com`. A variável
+`https://entrecenas-roleplay.com.br`. A variável
 `ROLEPLAY_FLET_API_URL` continua disponível para apontar o cliente para uma API
 local ou para outro ambiente.
+
+## Aplicativos instaláveis para Android e Windows
+
+O cliente pode ser empacotado como aplicativo autônomo. Nesse contexto,
+"autônomo" significa que o aparelho do usuário não precisa ter Python, Flet ou
+o repositório instalados. O aplicativo continua precisando de internet e da API
+publicada, pois login, Pix, roteiros, runs, imagens e geração narrativa seguem
+protegidos no servidor.
+
+O `pyproject.toml` da raiz define:
+
+- produto `EntreCenas`;
+- identificador Android estável `br.com.entrecenas.roleplay`;
+- versão inicial `0.1.0`, build `1`;
+- Python embarcado 3.12;
+- Android mínimo API 24 e alvo API 36;
+- somente `flet`, `flet-secure-storage` e `requests` no cliente;
+- exclusão de código de servidor, planilhas, stories e secrets do pacote;
+- ícones próprios para Android e Windows.
+
+### Gerar no próprio computador
+
+No ambiente virtual da branch:
+
+```powershell
+python -m pip install uv
+uv sync
+```
+
+Para gerar o APK Android no Windows:
+
+```powershell
+uv run flet build apk --yes --verbose
+```
+
+O resultado fica em `build\apk`. O Flet instala automaticamente o JDK 17 e o
+Android SDK compatível caso não estejam disponíveis. O APK gerado sem uma chave
+privada de produção serve para instalação e validação direta nos aparelhos de
+teste.
+
+Para gerar o aplicativo Windows:
+
+```powershell
+uv run flet build windows --yes --verbose
+```
+
+O resultado fica em `build\windows`. Esse build precisa ser executado no
+Windows com o Visual Studio e a carga de trabalho **Desenvolvimento para desktop
+com C++** instalados.
+
+### Gerar pelo GitHub Actions
+
+O workflow `Build EntreCenas Clients` é manual e produz, na mesma execução:
+
+- `EntreCenas-Android-APK`;
+- `EntreCenas-Windows`.
+
+Os arquivos ficam nos artefatos da execução por 14 dias. O workflow apenas
+compila e disponibiliza os pacotes: não publica em loja, não faz deploy e não
+altera planilhas ou produção.
 
 ## Executar no navegador
 
