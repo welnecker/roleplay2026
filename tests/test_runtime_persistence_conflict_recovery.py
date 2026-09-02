@@ -154,6 +154,8 @@ def test_append_interaction_idempotente_nao_duplica_resposta_aprovada() -> None:
         [
             {
                 "run_id": "run_1",
+                "user_id": "user_1",
+                "package_id": "pkg_1",
                 "sequence": 12,
                 "role": "assistant",
                 "content": "Resposta aprovada",
@@ -181,6 +183,8 @@ def test_append_interaction_rejeita_mesma_sequencia_com_conteudo_diferente() -> 
         [
             {
                 "run_id": "run_1",
+                "user_id": "user_1",
+                "package_id": "pkg_1",
                 "sequence": 12,
                 "role": "assistant",
                 "content": "Resposta original",

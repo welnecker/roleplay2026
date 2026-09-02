@@ -121,7 +121,7 @@ def test_v2_rejeita_modalidade_de_fala_sem_ator() -> None:
 
 
 def test_v2_rejeita_entry_antes_da_primeira_descricao() -> None:
-    with pytest.raises(ScriptAuthoringError, match="precisa de \[DESCRIÇÃO\] anterior"):
+    with pytest.raises(ScriptAuthoringError, match=r"precisa de \[DESCRIÇÃO\] anterior"):
         compile_v2_rows(
             "[FALA camilly] Eu começo falando.\n\n[DESCRIÇÃO] Depois vem a cena.",
             package_id="roleplay2026.teste",

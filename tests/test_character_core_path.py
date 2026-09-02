@@ -12,16 +12,17 @@ def _script() -> PilotScript:
     return prepare_editorial_script(PilotScript(compile_editorial_document(document)))
 
 
-def test_character_core_substitui_ficha_fragmentada_no_prompt() -> None:
+def test_character_core_reflete_a_premissa_atual_no_prompt() -> None:
     document = load_source_document()
 
     assert document["character_core"]["summary"]
     context = build_narrative_context(document, [], {})
 
     assert "NÚCLEO VIVO E AUTORITATIVO DE MARY" in context
-    assert "corpo escultural e curvilíneo" in context
-    assert "não pretende divórcio" in context
-    assert "não se apaixona pelo usuário" in context
+    assert "idade: 29 anos" in context
+    assert "corpo feminino e sedutor" in context
+    assert "Mary é uma mulher brasileira de 29 anos, casada com o Usuário" in context
+    assert "o professor da faculdade é um terceiro personagem distinto do Usuário" in context
     assert "REGRAS DO PENSAMENTO INTERNO" in context
     assert "COMO ESTE NÚCLEO ORIENTA OS BEATS" in context
     assert "COMO ESTE NÚCLEO ORIENTA AS PONTES" in context
@@ -37,7 +38,7 @@ def test_beat_canonico_recebe_o_mesmo_character_core() -> None:
 
     assert "NÚCLEO VIVO E AUTORITATIVO DE MARY" in turn.system_prompt
     assert "o beat define o que acontece" in turn.system_prompt.casefold()
-    assert "não se apaixona pelo usuário" in turn.system_prompt
+    assert "o Usuário é o marido de Mary" in turn.system_prompt
 
 
 def test_ponte_recebe_o_mesmo_character_core_sem_criar_outra_personagem() -> None:
@@ -53,28 +54,28 @@ def test_ponte_recebe_o_mesmo_character_core_sem_criar_outra_personagem() -> Non
     assert turn.state.facts.get("_runtime_phase") == "bridge"
     assert "FASE ESTRUTURAL: PONTE NARRATIVA" in turn.system_prompt
     assert "NÚCLEO VIVO E AUTORITATIVO DE MARY" in turn.system_prompt
-    assert "improvisar a reação ao usuário a partir deste mesmo núcleo psicológico" in turn.system_prompt
+    assert "improvisar somente dentro do movimento atual" in turn.system_prompt
     assert "Beats e pontes são caminhos diferentes do mesmo personagem" in turn.system_prompt
 
 
-def test_character_core_remove_carencia_romantizada_do_caminho_autoritativo() -> None:
+def test_character_core_preserva_conflito_conjugal_sem_hedonismo_generico() -> None:
     document = load_source_document()
     context = build_narrative_context(document, [], {})
 
-    assert "carência afetiva e sexual" not in context
-    assert "não procura salvação emocional" in context
-    assert "sem culpa automática" in context
-    assert "farra secreta" in context
+    assert "carência afetiva acumulada" in context
+    assert "não transformar Mary em hedonista genérica" in context
+    assert "não apagar o vínculo com o marido" in context
+    assert "nem converter automaticamente a traição em desejo de separação" in context
 
 
 def test_mary_define_intensidade_sexual_com_brevidade() -> None:
     document = load_source_document()
     context = build_narrative_context(document, [], {}, beat_id="reencontro_fila_001")
 
-    assert "desejo sexual concreto e corporal" in context
-    assert "intensidade não significa texto longo" in context
-    assert "pensamento e fala formam uma única reação curta" in context
-    assert "deixar a intensidade sexual explícita no pensamento interno" in context
+    assert "desejo sexual específico em poucas palavras" in context
+    assert "pensamento é espontâneo, malicioso, sexual" in context
+    assert "resposta deve ser curta, humana e sexualmente intensa" in context
+    assert "Mary quer ocupar a cabeça do usuário e aumentar o desejo dele" in context
 
 
 def test_caminho_de_mary_rejeita_intensidade_generica_e_prolixa() -> None:
@@ -83,4 +84,5 @@ def test_caminho_de_mary_rejeita_intensidade_generica_e_prolixa() -> None:
 
     assert "desejo sexual específico em poucas palavras" in context
     assert "quero conhecê-lo melhor" in context
-    assert "curiosidade vaga" in context
+    assert "estou curiosa" in context
+    assert "vontade física imediata" in context

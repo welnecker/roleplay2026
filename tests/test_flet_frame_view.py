@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-
 import flet as ft
 import pytest
 
@@ -10,39 +8,36 @@ from flet_client.frame_view import NovelFrameView
 
 
 class _Page:
-    def __init__(self) -> None:
+    def __init__(self, *, width: float = 390, height: float = 800) -> None:
+        self.width = width
+        self.height = height
         self.updates = 0
 
     def update(self) -> None:
         self.updates += 1
 
 
-def _slide_image(slide: ft.Container) -> ft.Image:
-    column = slide.content
-    assert isinstance(column, ft.Column)
-    image_container = column.controls[0]
+def _stage_column(view: NovelFrameView) -> ft.Column:
+    stage = view.stage.content
+    assert isinstance(stage, ft.Container)
+    assert isinstance(stage.content, ft.Column)
+    return stage.content
+
+
+def _stage_image(view: NovelFrameView) -> ft.Image:
+    image_container = _stage_column(view).controls[0]
     assert isinstance(image_container, ft.Container)
     assert isinstance(image_container.content, ft.Image)
     return image_container.content
 
 
-def _slide_balloon(slide: ft.Container) -> ft.Stack:
-    column = slide.content
-    assert isinstance(column, ft.Column)
-    balloon = column.controls[-1]
+def _stage_balloon(view: NovelFrameView) -> ft.Stack:
+    balloon = _stage_column(view).controls[-1]
     assert isinstance(balloon, ft.Stack)
     return balloon
 
 
-def _interaction_slides(view: NovelFrameView, index: int = 0) -> list[ft.Control]:
-    wrapper = view.track.controls[index]
-    assert isinstance(wrapper, ft.Container)
-    row = wrapper.content
-    assert isinstance(row, ft.Row)
-    return row.controls
-
-
-def test_cada_balao_forma_um_slide_com_sua_imagem_e_cauda_visivel() -> None:
+def test_palco_mostra_um_conteudo_por_vez_e_revela_o_proximo() -> None:
     page = _Page()
     frame = VisualFrame(
         frame_id="encontro_001",
@@ -60,42 +55,28 @@ def test_cada_balao_forma_um_slide_com_sua_imagem_e_cauda_visivel() -> None:
         on_reveal=lambda count: persisted.append(count) is None,
     )
 
-    assert len(view.track.controls) == 1
-    assert len(_interaction_slides(view)) == 1
-    first_slide = _interaction_slides(view)[0]
-    assert isinstance(first_slide, ft.Container)
-    assert _slide_image(first_slide).src == "https://img/mary1.webp"
-    first_balloon = _slide_balloon(first_slide)
-    thought_tails = first_balloon.controls[:-1]
-    assert len(thought_tails) == 3
+    assert _stage_image(view).src == "https://img/mary1.webp"
+    thought_balloon = _stage_balloon(view)
+    assert len(thought_balloon.controls[:-1]) == 3
     assert all(
-        isinstance(tail, ft.Container)
-        and tail.shape == ft.BoxShape.CIRCLE
-        and tail.top is not None
-        and tail.top >= 0
-        for tail in thought_tails
+        isinstance(tail, ft.Container) and tail.shape == ft.BoxShape.CIRCLE
+        for tail in thought_balloon.controls[:-1]
     )
-    assert first_balloon.clip_behavior == ft.ClipBehavior.NONE
 
     view._advance()
 
     assert persisted == [2]
-    assert len(view.track.controls) == 1
-    assert len(_interaction_slides(view)) == 2
-    second_slide = _interaction_slides(view)[1]
-    assert isinstance(second_slide, ft.Container)
-    assert _slide_image(second_slide).src == "https://img/mary2.webp"
-    speech_balloon = _slide_balloon(second_slide)
-    speech_tail = speech_balloon.controls[0]
+    assert view.controller.revealed_entries == 2
+    assert view.stage_cursor.position == 1
+    assert _stage_image(view).src == "https://img/mary2.webp"
+    speech_tail = _stage_balloon(view).controls[0]
     assert isinstance(speech_tail, ft.Container)
     assert speech_tail.top == 5
     assert isinstance(speech_tail.rotate, ft.Rotate)
-    assert view.controller.revealed_entries == 2
 
 
-def test_linha_e_responsiva_e_tem_barra_para_rever_as_imagens() -> None:
-    page = _Page()
-    page.width = 390
+def test_palco_responde_a_largura_e_altura_da_janela() -> None:
+    page = _Page(width=390, height=800)
     frame = VisualFrame(
         frame_id="encontro_001",
         description="Mary entra.",
@@ -107,30 +88,30 @@ def test_linha_e_responsiva_e_tem_barra_para_rever_as_imagens() -> None:
         entry_images=("https://img/mary1.webp",),
     )
 
-    assert isinstance(view.track, ft.Column)
-    assert view.track.scroll == ft.ScrollMode.ALWAYS
-    assert view.track.auto_scroll is False
-    assert view.slide_width == pytest.approx(317.72)
-    first_row = view.track.controls[0].content
-    assert isinstance(first_row, ft.Row)
-    assert first_row.scroll == ft.ScrollMode.ALWAYS
-    assert first_row.auto_scroll is False
-    assert first_row.controls[0].width == pytest.approx(317.72)
+    assert view.stage_width == pytest.approx(342.0)
+    mobile_image = _stage_column(view).controls[0]
+    assert isinstance(mobile_image, ft.Container)
+    assert mobile_image.height is not None
 
-    view._resize(type("Resize", (), {"width": 1400})())
+    view._resize(type("Resize", (), {"width": 1400, "height": 900})())
 
-    assert view.slide_width == 326.5
-    assert _interaction_slides(view)[0].width == 326.5
+    assert view.stage_width == pytest.approx(1080.0)
+    desktop_image = _stage_column(view).controls[0]
+    assert isinstance(desktop_image, ft.Container)
+    assert desktop_image.width == pytest.approx(1080.0)
+    assert desktop_image.height is not None
+    assert desktop_image.height > mobile_image.height
 
 
 def test_controles_respeitam_a_area_segura_inferior_do_android() -> None:
-    page = _Page()
-    frame = VisualFrame(
-        frame_id="encontro_001",
-        description="Mary entra.",
-        entries=(VisualEntry("fala", "mary", "Mary", "Olá."),),
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "encontro_001",
+            "Mary entra.",
+            (VisualEntry("fala", "mary", "Mary", "Olá."),),
+        ),
     )
-    view = NovelFrameView(page, frame)  # type: ignore[arg-type]
 
     layout = view.root.content
     assert isinstance(layout, ft.Column)
@@ -138,153 +119,140 @@ def test_controles_respeitam_a_area_segura_inferior_do_android() -> None:
     assert isinstance(footer, ft.SafeArea)
     assert footer.avoid_intrusions_bottom is True
     assert footer.maintain_bottom_view_padding is True
-    assert footer.minimum_padding == ft.Padding.only(bottom=8)
+    assert footer.minimum_padding == ft.Padding.only(bottom=6)
 
 
-def test_foco_vertical_usa_o_inicio_da_interacao_atual(monkeypatch) -> None:
+def test_voltar_e_rever_movem_apenas_o_cursor_visual() -> None:
     page = _Page()
+    calls: list[int] = []
     frame = VisualFrame(
         frame_id="encontro_003",
         description="Mary reage.",
-        entries=(VisualEntry("fala", "mary", "Mary", "Ai!"),),
+        entries=tuple(
+            VisualEntry("fala", "mary", "Mary", f"Fala {index}.")
+            for index in range(1, 4)
+        ),
     )
-    view = NovelFrameView(page, frame)  # type: ignore[arg-type]
-    calls: list[dict[str, object]] = []
+    view = NovelFrameView(
+        page,  # type: ignore[arg-type]
+        frame,
+        entry_images=tuple(f"https://img/mary{index}.webp" for index in range(1, 4)),
+        revealed_entries=3,
+        on_reveal=lambda count: calls.append(count) is None,
+    )
 
-    async def immediate_sleep(_delay: float) -> None:
-        return None
-
-    async def record_scroll(**kwargs: object) -> None:
-        calls.append(kwargs)
-
-    monkeypatch.setattr("flet_client.frame_view.asyncio.sleep", immediate_sleep)
-    monkeypatch.setattr(view.track, "scroll_to", record_scroll)
-
-    asyncio.run(view._focus_current_after_mount())
-
-    assert calls == [
-        {
-            "scroll_key": "frame-row-encontro_003",
-            "duration": 420,
-        }
-    ]
+    assert view.stage_cursor.position == 2
+    view._review_previous()
+    assert view.stage_cursor.position == 1
+    assert _stage_image(view).src == "https://img/mary2.webp"
+    view._review_next()
+    assert view.stage_cursor.position == 2
+    assert view.controller.revealed_entries == 3
+    assert calls == []
 
 
 def test_fala_balao_recebe_tipografia_de_destaque() -> None:
-    page = _Page()
-    frame = VisualFrame(
-        frame_id="encontro_003",
-        description="Mary reage.",
-        entries=(
-            VisualEntry(
-                "fala",
-                "mary_balao",
-                "Mary",
-                "Ai!!! Que susto!",
-                impact_balloon=True,
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "encontro_003",
+            "Mary reage.",
+            (
+                VisualEntry(
+                    "fala",
+                    "mary_balao",
+                    "Mary",
+                    "Ai!!! Que susto!",
+                    impact_balloon=True,
+                ),
             ),
         ),
     )
-    view = NovelFrameView(page, frame)  # type: ignore[arg-type]
 
-    balloon = _slide_balloon(_interaction_slides(view)[0])
-    card = balloon.controls[-1]
+    card = _stage_balloon(view).controls[-1]
     assert isinstance(card, ft.Container)
-    column = card.content
-    assert isinstance(column, ft.Column)
-    copy = column.controls[-1]
+    assert isinstance(card.content, ft.Column)
+    copy = card.content.controls[-1]
     assert isinstance(copy, ft.Text)
     assert copy.size == 23
     assert copy.weight == ft.FontWeight.BOLD
 
 
-def test_uma_interacao_mantem_quatro_imagens_na_mesma_linha() -> None:
-    page = _Page()
-    frame = VisualFrame(
-        frame_id="encontro_001",
-        description="Mary entra.",
-        entries=tuple(
-            VisualEntry("fala", "mary", "Mary", f"Linha {index}.")
-            for index in range(1, 5)
+def test_quatro_entries_permanecem_revisaveis_no_palco_unico() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "encontro_001",
+            "Mary entra.",
+            tuple(
+                VisualEntry("fala", "mary", "Mary", f"Linha {index}.")
+                for index in range(1, 5)
+            ),
         ),
-    )
-    view = NovelFrameView(
-        page,  # type: ignore[arg-type]
-        frame,
         entry_images=tuple(f"https://img/mary{index}.webp" for index in range(1, 5)),
         revealed_entries=4,
     )
 
-    assert len(view.track.controls) == 1
-    assert len(_interaction_slides(view)) == 4
-    assert [_slide_image(slide).src for slide in _interaction_slides(view)] == [
-        f"https://img/mary{index}.webp" for index in range(1, 5)
-    ]
+    assert len(view._current_row().items) == 4
+    assert view.stage_cursor.position == 3
+    assert _stage_image(view).src == "https://img/mary4.webp"
+    view._review_previous()
+    assert _stage_image(view).src == "https://img/mary3.webp"
 
 
-def test_imagem_da_descricao_nao_e_pulada_quando_primeira_entry_troca_imagem() -> None:
-    page = _Page()
-    frame = VisualFrame(
-        frame_id="capitulo1_003",
-        description="Mary aguarda no escuro.",
-        entries=(VisualEntry("pensamento", "mary", "Mary", "Alguém está vindo."),),
-    )
-    view = NovelFrameView(
-        page,  # type: ignore[arg-type]
-        frame,
+def test_imagem_da_descricao_e_preservada_como_primeira_posicao_visual() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "capitulo1_003",
+            "Mary aguarda no escuro.",
+            (VisualEntry("pensamento", "mary", "Mary", "Alguém está vindo."),),
+        ),
         image="https://img/mary11.webp",
         entry_images=("https://img/mary12.webp",),
     )
 
-    slides = _interaction_slides(view)
+    assert len(view._current_row().items) == 2
+    assert _stage_image(view).src == "https://img/mary12.webp"
+    assert isinstance(_stage_balloon(view), ft.Stack)
 
-    assert len(slides) == 2
-    assert [_slide_image(slide).src for slide in slides] == [
-        "https://img/mary11.webp",
-        "https://img/mary12.webp",
-    ]
-    description_column = slides[0].content
-    assert isinstance(description_column, ft.Column)
-    assert len(description_column.controls) == 1
-    assert isinstance(_slide_balloon(slides[1]), ft.Stack)
+    view._review_previous()
+
+    assert _stage_image(view).src == "https://img/mary11.webp"
+    assert len(_stage_column(view).controls) == 1
 
 
-def test_imagem_herdada_da_descricao_nao_cria_slide_duplicado() -> None:
-    page = _Page()
-    frame = VisualFrame(
-        frame_id="capitulo1_001",
-        description="Mary entra.",
-        entries=(VisualEntry("pensamento", "mary", "Mary", "Cheguei."),),
-    )
-    view = NovelFrameView(
-        page,  # type: ignore[arg-type]
-        frame,
+def test_imagem_herdada_da_descricao_nao_cria_posicao_duplicada() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "capitulo1_001",
+            "Mary entra.",
+            (VisualEntry("pensamento", "mary", "Mary", "Cheguei."),),
+        ),
         image="https://img/mary1.webp",
         entry_images=("https://img/mary1.webp",),
     )
 
-    slides = _interaction_slides(view)
-
-    assert len(slides) == 1
-    assert _slide_image(slides[0]).src == "https://img/mary1.webp"
-    assert isinstance(_slide_balloon(slides[0]), ft.Stack)
+    assert len(view._current_row().items) == 1
+    assert _stage_image(view).src == "https://img/mary1.webp"
+    assert isinstance(_stage_balloon(view), ft.Stack)
 
 
-def test_tela_preserva_no_maximo_cinco_interacoes_de_quatro_imagens() -> None:
+def test_snapshot_preserva_cinco_quadros_sem_renderizar_historico_no_palco() -> None:
     page = _Page()
     history = ()
     current = None
     for frame_index in range(1, 7):
-        entries = tuple(
-            VisualEntry("fala", "mary", "Mary", f"F{frame_index} L{entry_index}.")
-            for entry_index in range(1, 5)
-        )
         current = NovelFrameView(
             page,  # type: ignore[arg-type]
             VisualFrame(
                 f"encontro_{frame_index:03d}",
                 f"Quadro {frame_index}.",
-                entries,
+                tuple(
+                    VisualEntry("fala", "mary", "Mary", f"F{frame_index} L{entry_index}.")
+                    for entry_index in range(1, 5)
+                ),
             ),
             entry_images=tuple(
                 f"https://img/f{frame_index}-{entry_index}.webp"
@@ -296,30 +264,30 @@ def test_tela_preserva_no_maximo_cinco_interacoes_de_quatro_imagens() -> None:
         history = current.history_snapshot()
 
     assert current is not None
-    assert len(current.track.controls) == 5
-    assert [row.key for row in current.track.controls] == [
-        f"frame-row-encontro_{frame_index:03d}" for frame_index in range(2, 7)
+    assert [row.frame_id for row in history] == [
+        f"encontro_{frame_index:03d}" for frame_index in range(2, 7)
     ]
-    assert all(len(_interaction_slides(current, index)) == 4 for index in range(5))
+    assert all(len(row.items) == 4 for row in history)
+    assert current.stage_cursor.position == 3
+    assert _stage_image(current).src == "https://img/f6-4.webp"
 
 
 def test_revelacao_falha_restaura_o_indice_visual() -> None:
-    page = _Page()
-    frame = VisualFrame(
-        frame_id="encontro_001",
-        description="Mary entra.",
-        entries=(
-            VisualEntry("pensamento", "mary", "Mary", "Primeiro."),
-            VisualEntry("pensamento", "mary", "Mary", "Segundo."),
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "encontro_001",
+            "Mary entra.",
+            (
+                VisualEntry("pensamento", "mary", "Mary", "Primeiro."),
+                VisualEntry("pensamento", "mary", "Mary", "Segundo."),
+            ),
         ),
-    )
-    view = NovelFrameView(
-        page,  # type: ignore[arg-type]
-        frame,
         on_reveal=lambda _count: False,
     )
 
     view._advance()
 
     assert view.controller.revealed_entries == 1
+    assert view.stage_cursor.position == 0
     assert view.advance_button.disabled is False
