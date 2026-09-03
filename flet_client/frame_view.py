@@ -6,14 +6,18 @@ from dataclasses import dataclass
 
 import flet as ft
 
-from flet_client.frame_state import FrameRevealController, VisualEntry, VisualFrame
-
+from flet_client.frame_state import (
+    FrameRevealController,
+    VisualEntry,
+    VisualFrame,
+)
 
 BACKGROUND = "#183D3A"
 SCENE_COLOR = "#D24369"
 SPEECH_COLORS = ("#ED8BAE", "#F1B5CB", "#F0CFDD", "#F3D5E6")
 TEXT_COLOR = "#2B1822"
 INTERACTION_LIMIT = 5
+IMAGE_VIEWER_MAX_SCALE = 4.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +188,74 @@ def _image_height(
     return max(190.0, min(desired, available))
 
 
+def _image_viewer_dialog(
+    image: bytes | str,
+    *,
+    viewport_width: float,
+    viewport_height: float,
+    on_close: Callable[[object], None],
+) -> ft.AlertDialog:
+    """Abre a imagem isolada do fluxo narrativo para zoom e deslocamento."""
+
+    width = max(280.0, min(1200.0, float(viewport_width) - 16.0))
+    height = max(320.0, min(850.0, float(viewport_height) - 24.0))
+    viewer = ft.InteractiveViewer(
+        content=ft.Image(src=image, fit=ft.BoxFit.CONTAIN, expand=True),
+        min_scale=1.0,
+        max_scale=IMAGE_VIEWER_MAX_SCALE,
+        pan_enabled=True,
+        scale_enabled=True,
+        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        expand=True,
+    )
+    content = ft.Container(
+        width=width,
+        height=height,
+        bgcolor="#071817",
+        content=ft.SafeArea(
+            expand=True,
+            minimum_padding=ft.Padding.all(8),
+            content=ft.Stack(
+                fit=ft.StackFit.EXPAND,
+                controls=[
+                    viewer,
+                    ft.Container(
+                        left=12,
+                        bottom=12,
+                        padding=ft.Padding.symmetric(horizontal=12, vertical=7),
+                        border_radius=18,
+                        bgcolor="#B0000000",
+                        ignore_interactions=True,
+                        content=ft.Text(
+                            "Use dois dedos para ampliar",
+                            size=12,
+                            color="#FFFFFF",
+                        ),
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.CLOSE,
+                        icon_color="#FFFFFF",
+                        bgcolor="#B0000000",
+                        tooltip="Fechar imagem",
+                        right=12,
+                        top=12,
+                        on_click=on_close,
+                    ),
+                ],
+            ),
+        ),
+    )
+    return ft.AlertDialog(
+        modal=True,
+        bgcolor="#071817",
+        barrier_color="#F0000000",
+        inset_padding=ft.Padding.all(0),
+        content_padding=ft.Padding.all(0),
+        content=content,
+        semantics_label="Imagem ampliada da cena",
+    )
+
+
 class NovelFrameView:
     """Player visual focado: uma imagem grande e um balão por vez."""
 
@@ -207,6 +279,7 @@ class NovelFrameView:
         self.entry_images = tuple(entry_images)
         self.history = tuple(history[-(INTERACTION_LIMIT - 1) :])
         self._busy = False
+        self._image_dialog: ft.AlertDialog | None = None
         self._viewport_width = float(getattr(page, "width", None) or 390)
         self._viewport_height = float(getattr(page, "height", None) or 800)
         self.stage_width = _stage_width(self._viewport_width)
@@ -364,11 +437,34 @@ class NovelFrameView:
                     border_radius=20,
                     clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
                     bgcolor="#102F2D",
-                    content=ft.Image(
-                        src=item.image,
-                        fit=ft.BoxFit.CONTAIN,
-                        border_radius=20,
-                        expand=True,
+                    tooltip="Toque para ampliar",
+                    on_click=lambda _event=None, image=item.image: (
+                        self._open_image_viewer(image)
+                    ),
+                    content=ft.Stack(
+                        fit=ft.StackFit.EXPAND,
+                        controls=[
+                            ft.Image(
+                                src=item.image,
+                                fit=ft.BoxFit.CONTAIN,
+                                border_radius=20,
+                                expand=True,
+                            ),
+                            ft.Container(
+                                right=10,
+                                bottom=10,
+                                padding=7,
+                                border_radius=20,
+                                bgcolor="#99000000",
+                                ignore_interactions=True,
+                                content=ft.Icon(
+                                    ft.Icons.ZOOM_IN,
+                                    color="#FFFFFF",
+                                    size=20,
+                                    semantics_label="Ampliar imagem",
+                                ),
+                            ),
+                        ],
                     ),
                 )
             )
@@ -392,6 +488,21 @@ class NovelFrameView:
 
     def focus_current(self) -> None:
         return None
+
+    def _open_image_viewer(self, image: bytes | str) -> None:
+        self._image_dialog = _image_viewer_dialog(
+            image,
+            viewport_width=self._viewport_width,
+            viewport_height=self._viewport_height,
+            on_close=self._close_image_viewer,
+        )
+        self.page.show_dialog(self._image_dialog)
+
+    def _close_image_viewer(self, _event: object = None) -> None:
+        if self._image_dialog is None:
+            return
+        self.page.pop_dialog()
+        self._image_dialog = None
 
     def _resize(self, event: object) -> None:
         width = float(getattr(event, "width", None) or self._viewport_width)

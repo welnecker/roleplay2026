@@ -12,9 +12,16 @@ class _Page:
         self.width = width
         self.height = height
         self.updates = 0
+        self.dialogs: list[ft.AlertDialog] = []
 
     def update(self) -> None:
         self.updates += 1
+
+    def show_dialog(self, dialog: ft.AlertDialog) -> None:
+        self.dialogs.append(dialog)
+
+    def pop_dialog(self) -> None:
+        self.dialogs.pop()
 
 
 def _stage_column(view: NovelFrameView) -> ft.Column:
@@ -27,8 +34,16 @@ def _stage_column(view: NovelFrameView) -> ft.Column:
 def _stage_image(view: NovelFrameView) -> ft.Image:
     image_container = _stage_column(view).controls[0]
     assert isinstance(image_container, ft.Container)
-    assert isinstance(image_container.content, ft.Image)
-    return image_container.content
+    assert isinstance(image_container.content, ft.Stack)
+    image = image_container.content.controls[0]
+    assert isinstance(image, ft.Image)
+    return image
+
+
+def _image_container(view: NovelFrameView) -> ft.Container:
+    image_container = _stage_column(view).controls[0]
+    assert isinstance(image_container, ft.Container)
+    return image_container
 
 
 def _stage_balloon(view: NovelFrameView) -> ft.Stack:
@@ -101,6 +116,47 @@ def test_palco_responde_a_largura_e_altura_da_janela() -> None:
     assert desktop_image.width == pytest.approx(1080.0)
     assert desktop_image.height is not None
     assert desktop_image.height > mobile_image.height
+
+
+def test_toque_na_imagem_abre_visualizador_com_zoom_sem_alterar_o_quadro() -> None:
+    page = _Page(width=390, height=800)
+    view = NovelFrameView(  # type: ignore[arg-type]
+        page,
+        VisualFrame(
+            "encontro_001",
+            "Mary entra.",
+            (VisualEntry("fala", "mary", "Mary", "Olá."),),
+        ),
+        entry_images=("https://img/mary1.webp",),
+    )
+    container = _image_container(view)
+    assert container.on_click is not None
+
+    container.on_click()  # type: ignore[misc]
+
+    assert view.controller.revealed_entries == 1
+    assert len(page.dialogs) == 1
+    dialog = page.dialogs[0]
+    assert dialog.modal is True
+    assert isinstance(dialog.content, ft.Container)
+    assert isinstance(dialog.content.content, ft.SafeArea)
+    stack = dialog.content.content.content
+    assert isinstance(stack, ft.Stack)
+    viewer = stack.controls[0]
+    assert isinstance(viewer, ft.InteractiveViewer)
+    assert viewer.min_scale == 1.0
+    assert viewer.max_scale == 4.0
+    assert viewer.pan_enabled is True
+    assert viewer.scale_enabled is True
+    assert isinstance(viewer.content, ft.Image)
+    assert viewer.content.src == "https://img/mary1.webp"
+
+    close = stack.controls[-1]
+    assert isinstance(close, ft.IconButton)
+    assert close.on_click is not None
+    close.on_click()  # type: ignore[misc]
+    assert page.dialogs == []
+    assert view._image_dialog is None
 
 
 def test_controles_respeitam_a_area_segura_inferior_do_android() -> None:
