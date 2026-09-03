@@ -26,10 +26,11 @@ def landing_page_html() -> str:
   <meta property="og:site_name" content="EntreCenas">
   <meta property="og:title" content="EntreCenas — Você faz parte da história">
   <meta property="og:description" content="Em cada card, uma história. Em cada história, um papel para você viver.">
-  <meta property="og:url" content="https://entrecenas-roleplay.com.br/">
+  <meta property="og:url" content="https://entrecenas-roleplay.com.br/conhecer">
   <meta property="og:image" content="https://entrecenas-roleplay.com.br/midia/entrecenas-reel-poster.webp">
   <meta property="og:image:width" content="720">
   <meta property="og:image:height" content="1280">
+  <link rel="canonical" href="https://entrecenas-roleplay.com.br/conhecer">
   <link rel="icon" href="/midia/entrecenas-icone.svg" type="image/svg+xml">
   <title>EntreCenas — Você faz parte da história</title>
   <style>
@@ -508,6 +509,7 @@ def install(app: Any) -> Any:
         return app
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    @app.get("/conhecer", response_class=HTMLResponse, include_in_schema=False)
     def landing_page() -> HTMLResponse:
         return HTMLResponse(landing_page_html(), headers=_page_headers())
 

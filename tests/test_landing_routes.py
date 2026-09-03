@@ -29,6 +29,21 @@ def test_landing_page_has_indexing_and_security_headers() -> None:
     assert "default-src 'self'" in response.headers["content-security-policy"]
 
 
+def test_conhecer_serves_landing_without_redirect_or_download() -> None:
+    app = install(FastAPI())
+    client = TestClient(app)
+
+    response = client.get("/conhecer", follow_redirects=False)
+
+    assert response.status_code == 200
+    assert response.history == []
+    assert response.headers["content-type"].startswith("text/html")
+    assert "content-disposition" not in response.headers
+    assert "Você faz parte dela" in response.text
+    assert 'href="/baixar"' in response.text
+    assert 'href="/baixar/android"' not in response.text
+
+
 def test_landing_media_routes_serve_packaged_assets() -> None:
     app = install(FastAPI())
     client = TestClient(app)
@@ -53,6 +68,7 @@ def test_landing_routes_install_is_idempotent() -> None:
 
     paths = [route.path for route in app.routes]
     assert paths.count("/") == 1
+    assert paths.count("/conhecer") == 1
     assert paths.count("/midia/entrecenas-reel.mp4") == 1
     assert paths.count("/midia/entrecenas-reel-poster.webp") == 1
     assert paths.count("/midia/entrecenas-icone.svg") == 1
