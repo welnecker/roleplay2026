@@ -165,6 +165,33 @@ def test_cliente_flet_cria_e_confere_pagamento_pix() -> None:
     assert session.calls[1][2]["json"] == {"payment_order_id": "pay-1"}
 
 
+def test_cliente_flet_consulta_perfil_da_run_antes_de_abrir() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(
+                200,
+                {
+                    "completed": True,
+                    "preferred_name": "Janio",
+                    "story_gender": "Como homem",
+                },
+            )
+        ]
+    )
+    client = FletApiClient("https://api.example.com", session=session)  # type: ignore[arg-type]
+    client.access_token = "token"
+
+    profile = client.run_profile("roleplay2026.camilly")
+
+    assert profile.completed is True
+    assert profile.preferred_name == "Janio"
+    assert profile.story_gender == "Como homem"
+    assert session.calls[0][0] == "GET"
+    assert session.calls[0][1].endswith(
+        "/api/v1/runs/roleplay2026.camilly/profile"
+    )
+
+
 def test_cliente_flet_abre_e_avanca_run_real() -> None:
     first = {
         "run_id": "run-1",

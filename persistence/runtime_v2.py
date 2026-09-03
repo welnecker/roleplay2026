@@ -469,6 +469,50 @@ class GoogleSheetsV2RuntimeRepository:
             return int(metadata["flet_revealed_entries"])
         raise RuntimeConflictError("Quadro atual não encontrado em INTERACTIONS.")
 
+    def persist_run_profile(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        package_id: str,
+        profile: dict[str, str],
+    ) -> None:
+        """Anexa a identidade narrativa ao último quadro de uma run legada."""
+
+        rows = self._interaction_rows_for_owner(
+            run_id=run_id,
+            user_id=user_id,
+            package_id=package_id,
+        )
+        rows.sort(key=lambda row: int(row.get("sequence", 0) or 0), reverse=True)
+        for row in rows:
+            if str(row.get("role", "")) != "assistant":
+                continue
+            raw = str(row.get("metadata_json", "") or "")
+            try:
+                metadata = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                metadata = {}
+            if not isinstance(metadata, dict):
+                metadata = {}
+            if isinstance(metadata.get("immersive_profile"), dict):
+                return
+            metadata["immersive_profile"] = dict(profile)
+            updated = dict(row)
+            updated["metadata_json"] = json.dumps(
+                metadata, ensure_ascii=False, separators=(",", ":")
+            )
+            found = self.interactions.table.find(
+                "interaction_id", str(row.get("interaction_id", ""))
+            )
+            if found is None:
+                raise RuntimeConflictError(
+                    "Interação da run não foi encontrada para salvar o perfil."
+                )
+            self.interactions.table.replace(found[0], updated)
+            return
+        raise RuntimeConflictError("A run não possui quadro para salvar o perfil.")
+
     def update_run_progress(
         self,
         *,

@@ -138,6 +138,12 @@ class RunFrameResponse(BaseModel):
     finished: bool
 
 
+class RunProfileResponse(BaseModel):
+    completed: bool
+    preferred_name: str
+    story_gender: str
+
+
 @dataclass(slots=True)
 class ApiServices:
     accounts: AccountRepository
@@ -448,6 +454,33 @@ def create_api_app(services: ApiServices) -> FastAPI:
                 detail="Runtime ainda não está configurado neste servidor.",
             )
         return services.run_service
+
+    @app.get(
+        "/api/v1/runs/{package_id}/profile",
+        response_model=RunProfileResponse,
+    )
+    def run_profile(
+        package_id: str,
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> RunProfileResponse:
+        user, _token = identity
+        if not any(card.package_id == package_id for card in services.catalog_loader()):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="História não encontrada.",
+            )
+        try:
+            profile = run_service().profile(account=user, package_id=package_id)
+        except (KeyError, ValueError, RuntimeError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc).strip("'"),
+            ) from exc
+        return RunProfileResponse(
+            completed=profile.completed,
+            preferred_name=profile.preferred_name,
+            story_gender=profile.story_gender,
+        )
 
     @app.post("/api/v1/runs/open", response_model=RunFrameResponse)
     def open_run(

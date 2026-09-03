@@ -229,19 +229,31 @@ async def main(page: ft.Page) -> None:
     def select_card(card: StoryCard) -> None:
         if card.access_status == AccessStatus.LOCKED:
             show_payment(card)
-        else:
-            def begin(preferred_name: str, story_gender: str) -> str | None:
-                show_player(card, preferred_name, story_gender)
-                return None
+            return
+        if api_client is None:
+            show_api_error("API não configurada.")
+            return
+        try:
+            profile = api_client.run_profile(card.package_id)
+        except FletApiError as exc:
+            handle_api_error(exc)
+            return
+        if profile.completed:
+            show_player(card, profile.preferred_name, profile.story_gender)
+            return
 
-            show(
-                story_identity_screen(
-                    card,
-                    initial_name=active_display_name,
-                    on_back=lambda: show_library(active_cards, active_display_name),
-                    on_continue=begin,
-                )
+        def begin(preferred_name: str, story_gender: str) -> str | None:
+            show_player(card, preferred_name, story_gender)
+            return None
+
+        show(
+            story_identity_screen(
+                card,
+                initial_name=profile.preferred_name or active_display_name,
+                on_back=lambda: show_library(active_cards, active_display_name),
+                on_continue=begin,
             )
+        )
 
     def show_library(cards: list[StoryCard], display_name: str) -> None:
         nonlocal active_cards, active_display_name

@@ -62,6 +62,13 @@ class RunFrame:
     finished: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class RunProfile:
+    completed: bool
+    preferred_name: str
+    story_gender: str
+
+
 def _is_idempotent_duplicate_advance(
     script: Any,
     *,
@@ -429,7 +436,8 @@ class FletRunService:
                 requested_profile=requested_profile,
             )
             package, script, user, context, state, messages, profile = values
-            if self._current(messages) is None:
+            current = self._current(messages)
+            if current is None:
                 context, state, messages = self._generate(
                     package=package,
                     script=script,
@@ -440,7 +448,43 @@ class FletRunService:
                     profile=profile,
                     target_id="",
                 )
+            elif recover_persistent_profile(messages) is None:
+                memory = persistent_profile_payload(profile)
+                if context.run is None or not memory:
+                    raise RuntimeError("Não foi possível salvar o perfil desta história.")
+                self.repository.persist_run_profile(
+                    run_id=context.run.run_id,
+                    user_id=user.user_id,
+                    package_id=package_id,
+                    profile=memory,
+                )
+                current["immersive_profile"] = memory
             return self._view(package, script, context, state, messages)
+
+    def profile(self, *, account: Any, package_id: str) -> RunProfile:
+        """Consulta a identidade de uma run ativa sem abrir ou carregar o roteiro."""
+
+        with self._lock(account.user_id, package_id):
+            run = self.repository.get_active_run(
+                user_id=account.user_id,
+                package_id=package_id,
+            )
+            if run is None:
+                return RunProfile(False, str(account.display_name or "").strip(), "")
+            messages = self.repository.list_interactions(
+                run_id=run.run_id,
+                limit=500,
+            )
+            recovered = recover_persistent_profile(messages)
+            if not isinstance(recovered, dict):
+                return RunProfile(False, str(account.display_name or "").strip(), "")
+            preferred_name = str(recovered.get("preferred_name", "") or "").strip()
+            story_gender = str(recovered.get("story_gender", "") or "").strip()
+            return RunProfile(
+                identity_is_complete(preferred_name, story_gender),
+                preferred_name,
+                story_gender,
+            )
 
     def advance(
         self,

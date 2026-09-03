@@ -50,6 +50,13 @@ class ApiRunFrame:
     finished: bool
 
 
+@dataclass(frozen=True, slots=True)
+class ApiRunProfile:
+    completed: bool
+    preferred_name: str
+    story_gender: str
+
+
 class FletApiClient:
     def __init__(
         self,
@@ -258,6 +265,19 @@ class FletApiClient:
             )
         )
 
+    def run_profile(self, package_id: str) -> ApiRunProfile:
+        payload = self._request(
+            "GET",
+            f"/api/v1/runs/{package_id}/profile",
+        ).json()
+        if not isinstance(payload, dict):
+            raise FletApiError("Resposta de perfil inválida.")
+        return ApiRunProfile(
+            completed=bool(payload.get("completed", False)),
+            preferred_name=str(payload.get("preferred_name", "") or ""),
+            story_gender=str(payload.get("story_gender", "") or ""),
+        )
+
     def advance_run(
         self,
         *,
@@ -311,4 +331,11 @@ class FletApiClient:
             self.access_token = ""
 
 
-__all__ = ["ApiPayment", "ApiRunFrame", "ApiUser", "FletApiClient", "FletApiError"]
+__all__ = [
+    "ApiPayment",
+    "ApiRunFrame",
+    "ApiRunProfile",
+    "ApiUser",
+    "FletApiClient",
+    "FletApiError",
+]

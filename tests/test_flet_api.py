@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from flet_api.app import ApiServices, create_api_app
 from flet_api.payments import PaymentState
-from flet_api.runs import RunFrame
+from flet_api.runs import RunFrame, RunProfile
 from flet_api.sessions import SessionStore
 from persistence.accounts import AccountUser
 from persistence.google_sheets_retry import GoogleSheetsTemporarilyUnavailable
@@ -70,6 +70,9 @@ class FakePayments:
 
 
 class FakeRuns:
+    def profile(self, *, account: AccountUser, package_id: str) -> RunProfile:
+        return RunProfile(True, "Pessoa", "Como homem")
+
     def open(
         self,
         *,
@@ -359,6 +362,23 @@ def test_run_abre_quadro_persistido_e_bloqueia_avanco_antecipado() -> None:
     )
     assert blocked.status_code == 403
     assert advanced.json()["frame_id"] == "quadro-2"
+
+
+def test_perfil_da_run_e_recuperado_antes_da_abertura() -> None:
+    test_client, _accounts = client()
+    token = login(test_client)
+
+    response = test_client.get(
+        "/api/v1/runs/story.free/profile",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "completed": True,
+        "preferred_name": "Pessoa",
+        "story_gender": "Como homem",
+    }
 
 
 def test_run_exige_nome_e_genero_antes_de_chamar_runtime() -> None:
