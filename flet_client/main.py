@@ -8,7 +8,13 @@ from flet_client.auth_storage import AuthTokenStorage
 from flet_client.frame_state import parse_visual_frame
 from flet_client.frame_view import FrameVisualRow, NovelFrameView
 from flet_client.models import AccessStatus, StoryCard
-from flet_client.screens import BACKGROUND, library_screen, login_screen, payment_screen
+from flet_client.screens import (
+    BACKGROUND,
+    library_screen,
+    login_screen,
+    payment_screen,
+    story_identity_screen,
+)
 from flet_client.story_end_screen import story_end_screen
 
 DEFAULT_FLET_API_URL = "https://entrecenas-roleplay.com.br"
@@ -72,6 +78,8 @@ async def main(page: ft.Page) -> None:
 
     def show_player(
         card: StoryCard,
+        preferred_name: str,
+        story_gender: str,
         current: ApiRunFrame | None = None,
         history: tuple[FrameVisualRow, ...] = (),
     ) -> None:
@@ -79,7 +87,11 @@ async def main(page: ft.Page) -> None:
             show_api_error("API não configurada.")
             return
         try:
-            run_frame = current or api_client.open_run(card.package_id)
+            run_frame = current or api_client.open_run(
+                card.package_id,
+                preferred_name=preferred_name,
+                story_gender=story_gender,
+            )
             frame = parse_visual_frame(run_frame.content)
         except FletApiError as exc:
             handle_api_error(exc)
@@ -110,11 +122,19 @@ async def main(page: ft.Page) -> None:
                     package_id=card.package_id,
                     frame_id=run_frame.frame_id,
                     revealed_entries=len(frame.entries),
+                    preferred_name=preferred_name,
+                    story_gender=story_gender,
                 )
             except FletApiError as exc:
                 handle_api_error(exc)
                 return False
-            show_player(card, following, history=view.history_snapshot())
+            show_player(
+                card,
+                preferred_name,
+                story_gender,
+                following,
+                history=view.history_snapshot(),
+            )
             return True
 
         def persist_reveal(_revealed_entries: int) -> bool:
@@ -126,6 +146,8 @@ async def main(page: ft.Page) -> None:
                 run_frame = api_client.reveal_run_entry(
                     package_id=card.package_id,
                     frame_id=run_frame.frame_id,
+                    preferred_name=preferred_name,
+                    story_gender=story_gender,
                 )
             except FletApiError as exc:
                 handle_api_error(exc)
@@ -208,7 +230,18 @@ async def main(page: ft.Page) -> None:
         if card.access_status == AccessStatus.LOCKED:
             show_payment(card)
         else:
-            show_player(card)
+            def begin(preferred_name: str, story_gender: str) -> str | None:
+                show_player(card, preferred_name, story_gender)
+                return None
+
+            show(
+                story_identity_screen(
+                    card,
+                    initial_name=active_display_name,
+                    on_back=lambda: show_library(active_cards, active_display_name),
+                    on_continue=begin,
+                )
+            )
 
     def show_library(cards: list[StoryCard], display_name: str) -> None:
         nonlocal active_cards, active_display_name

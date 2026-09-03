@@ -101,8 +101,13 @@ def install() -> None:
     if not getattr(original_load, "_completed_run_restart_guard", False):
 
         @wraps(original_load)
-        def load_runtime(self: Any, account: Any, package_id: str):
-            values = original_load(self, account, package_id)
+        def load_runtime(
+            self: Any,
+            account: Any,
+            package_id: str,
+            **kwargs: Any,
+        ):
+            values = original_load(self, account, package_id, **kwargs)
             context = values[3]
             state = values[4]
             messages = values[5]
@@ -121,7 +126,7 @@ def install() -> None:
             # finish_active_run usa seu próprio repositório. Invalide a cópia local
             # para que a segunda carga veja imediatamente o status completed.
             _invalidate_local_story_runs_cache(self)
-            return original_load(self, account, package_id)
+            return original_load(self, account, package_id, **kwargs)
 
         setattr(load_runtime, "_completed_run_restart_guard", True)
         service_cls._load = load_runtime

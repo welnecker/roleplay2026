@@ -66,8 +66,21 @@ def install() -> None:
         return
 
     @wraps(original_open)
-    def open_run(self: Any, *, account: Any, package_id: str) -> RunFrame:
-        frame = original_open(self, account=account, package_id=package_id)
+    def open_run(
+        self: Any,
+        *,
+        account: Any,
+        package_id: str,
+        preferred_name: str,
+        story_gender: str,
+    ) -> RunFrame:
+        frame = original_open(
+            self,
+            account=account,
+            package_id=package_id,
+            preferred_name=preferred_name,
+            story_gender=story_gender,
+        )
         if frame.finished:
             _remember(account.user_id, frame)
         else:
@@ -83,6 +96,8 @@ def install() -> None:
         account: Any,
         package_id: str,
         expected_frame_id: str,
+        preferred_name: str,
+        story_gender: str,
     ) -> RunFrame:
         terminal = _cached(account.user_id, package_id, expected_frame_id)
         if terminal is not None:
@@ -92,6 +107,8 @@ def install() -> None:
             account=account,
             package_id=package_id,
             expected_frame_id=expected_frame_id,
+            preferred_name=preferred_name,
+            story_gender=story_gender,
         )
         _remember(account.user_id, frame)
         return frame
@@ -104,6 +121,8 @@ def install() -> None:
         package_id: str,
         expected_frame_id: str,
         revealed_entries: int,
+        preferred_name: str,
+        story_gender: str,
     ) -> RunFrame:
         terminal = _cached(account.user_id, package_id, expected_frame_id)
         if terminal is not None:
@@ -114,6 +133,8 @@ def install() -> None:
             package_id=package_id,
             expected_frame_id=expected_frame_id,
             revealed_entries=revealed_entries,
+            preferred_name=preferred_name,
+            story_gender=story_gender,
         )
         _remember(account.user_id, frame)
         return frame

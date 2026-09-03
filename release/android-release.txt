@@ -1,3 +1,3 @@
-version=0.1.1
+version=0.1.2
 channel=official
-requested_at=2026-09-02
+requested_at=2026-09-03

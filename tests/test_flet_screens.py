@@ -4,7 +4,12 @@ import base64
 
 import flet as ft
 
-from flet_client.screens import flet_image_source, library_screen, login_screen
+from flet_client.screens import (
+    flet_image_source,
+    library_screen,
+    login_screen,
+    story_identity_screen,
+)
 from platform_core.models import AccessStatus, ProgressStatus, StoryCard
 
 
@@ -115,6 +120,47 @@ def test_capa_data_url_e_convertida_em_base64_puro_para_flet_desktop() -> None:
 
     assert flet_image_source(source) == encoded
     assert flet_image_source("https://example.com/capa.webp") == "https://example.com/capa.webp"
+
+
+def test_identidade_narrativa_exige_nome_e_genero_antes_de_iniciar() -> None:
+    story = StoryCard(
+        package_id="roleplay2026.exemplo",
+        title="História exemplo",
+        subtitle="Uma história para testar.",
+        description="Descrição",
+        genres=("Romance",),
+        access_status=AccessStatus.FREE,
+        progress_status=ProgressStatus.NOT_STARTED,
+    )
+    submitted: list[tuple[str, str]] = []
+    screen = story_identity_screen(
+        story,
+        initial_name="Janio",
+        on_back=lambda: None,
+        on_continue=lambda name, gender: submitted.append((name, gender)) or None,
+    )
+
+    start = next(
+        item
+        for item in _walk(screen)
+        if isinstance(item, ft.FilledButton) and item.content == "Iniciar história"
+    )
+    start.on_click(None)
+    assert submitted == []
+    assert any(
+        "escolha como deseja ser tratado" in text.lower()
+        for text in _texts(screen)
+    )
+
+    woman = next(
+        item
+        for item in _walk(screen)
+        if isinstance(item, ft.OutlinedButton) and item.content == "Como mulher"
+    )
+    woman.on_click(None)
+    start.on_click(None)
+
+    assert submitted == [("Janio", "Como mulher")]
 
 
 def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:

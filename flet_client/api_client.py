@@ -239,9 +239,23 @@ class FletApiClient:
             finished=bool(payload.get("finished", False)),
         )
 
-    def open_run(self, package_id: str) -> ApiRunFrame:
+    def open_run(
+        self,
+        package_id: str,
+        *,
+        preferred_name: str,
+        story_gender: str,
+    ) -> ApiRunFrame:
         return self._run_frame(
-            self._request("POST", "/api/v1/runs/open", json={"package_id": package_id})
+            self._request(
+                "POST",
+                "/api/v1/runs/open",
+                json={
+                    "package_id": package_id,
+                    "preferred_name": preferred_name,
+                    "story_gender": story_gender,
+                },
+            )
         )
 
     def advance_run(
@@ -250,6 +264,8 @@ class FletApiClient:
         package_id: str,
         frame_id: str,
         revealed_entries: int,
+        preferred_name: str,
+        story_gender: str,
     ) -> ApiRunFrame:
         return self._run_frame(
             self._request(
@@ -259,16 +275,30 @@ class FletApiClient:
                     "package_id": package_id,
                     "frame_id": frame_id,
                     "revealed_entries": revealed_entries,
+                    "preferred_name": preferred_name,
+                    "story_gender": story_gender,
                 },
             )
         )
 
-    def reveal_run_entry(self, *, package_id: str, frame_id: str) -> ApiRunFrame:
+    def reveal_run_entry(
+        self,
+        *,
+        package_id: str,
+        frame_id: str,
+        preferred_name: str,
+        story_gender: str,
+    ) -> ApiRunFrame:
         return self._run_frame(
             self._request(
                 "POST",
                 "/api/v1/runs/reveal",
-                json={"package_id": package_id, "frame_id": frame_id},
+                json={
+                    "package_id": package_id,
+                    "frame_id": frame_id,
+                    "preferred_name": preferred_name,
+                    "story_gender": story_gender,
+                },
             )
         )
 

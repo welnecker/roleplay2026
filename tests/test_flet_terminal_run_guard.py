@@ -43,13 +43,24 @@ def test_repeated_terminal_advance_is_served_without_calling_runtime_again() -> 
     saved = _preserve_guard_state()
     calls = {"advance": 0}
 
-    def fake_open(self, *, account, package_id):
+    def fake_open(self, *, account, package_id, preferred_name, story_gender):
         return _frame(finished=False)
 
-    def fake_reveal(self, *, account, package_id, expected_frame_id):
+    def fake_reveal(
+        self, *, account, package_id, expected_frame_id, preferred_name, story_gender
+    ):
         return _frame(finished=True)
 
-    def fake_advance(self, *, account, package_id, expected_frame_id, revealed_entries):
+    def fake_advance(
+        self,
+        *,
+        account,
+        package_id,
+        expected_frame_id,
+        revealed_entries,
+        preferred_name,
+        story_gender,
+    ):
         calls["advance"] += 1
         return _frame(finished=True)
 
@@ -69,6 +80,8 @@ def test_repeated_terminal_advance_is_served_without_calling_runtime_again() -> 
             package_id="story_1",
             expected_frame_id="frame_final",
             revealed_entries=1,
+            preferred_name="Pessoa",
+            story_gender="Como homem",
         )
         second = cls.advance(  # type: ignore[arg-type]
             service,
@@ -76,6 +89,8 @@ def test_repeated_terminal_advance_is_served_without_calling_runtime_again() -> 
             package_id="story_1",
             expected_frame_id="frame_final",
             revealed_entries=1,
+            preferred_name="Pessoa",
+            story_gender="Como homem",
         )
 
         assert first.finished is True
@@ -90,14 +105,25 @@ def test_repeated_terminal_reveal_is_served_without_calling_runtime_again() -> N
     saved = _preserve_guard_state()
     calls = {"reveal": 0}
 
-    def fake_open(self, *, account, package_id):
+    def fake_open(self, *, account, package_id, preferred_name, story_gender):
         return _frame(finished=False)
 
-    def fake_reveal(self, *, account, package_id, expected_frame_id):
+    def fake_reveal(
+        self, *, account, package_id, expected_frame_id, preferred_name, story_gender
+    ):
         calls["reveal"] += 1
         return _frame(finished=True)
 
-    def fake_advance(self, *, account, package_id, expected_frame_id, revealed_entries):
+    def fake_advance(
+        self,
+        *,
+        account,
+        package_id,
+        expected_frame_id,
+        revealed_entries,
+        preferred_name,
+        story_gender,
+    ):
         return _frame(finished=True)
 
     try:
@@ -114,12 +140,16 @@ def test_repeated_terminal_reveal_is_served_without_calling_runtime_again() -> N
             account=account,
             package_id="story_1",
             expected_frame_id="frame_final",
+            preferred_name="Pessoa",
+            story_gender="Como homem",
         )
         second = cls.reveal(  # type: ignore[arg-type]
             service,
             account=account,
             package_id="story_1",
             expected_frame_id="frame_final",
+            preferred_name="Pessoa",
+            story_gender="Como homem",
         )
 
         assert first.finished is True
@@ -134,13 +164,24 @@ def test_opening_non_terminal_run_clears_previous_terminal_cache() -> None:
     saved = _preserve_guard_state()
     calls = {"advance": 0}
 
-    def fake_open(self, *, account, package_id):
+    def fake_open(self, *, account, package_id, preferred_name, story_gender):
         return _frame(finished=False)
 
-    def fake_reveal(self, *, account, package_id, expected_frame_id):
+    def fake_reveal(
+        self, *, account, package_id, expected_frame_id, preferred_name, story_gender
+    ):
         return _frame(finished=True)
 
-    def fake_advance(self, *, account, package_id, expected_frame_id, revealed_entries):
+    def fake_advance(
+        self,
+        *,
+        account,
+        package_id,
+        expected_frame_id,
+        revealed_entries,
+        preferred_name,
+        story_gender,
+    ):
         calls["advance"] += 1
         return _frame(finished=True)
 
@@ -155,13 +196,21 @@ def test_opening_non_terminal_run_clears_previous_terminal_cache() -> None:
         account = SimpleNamespace(user_id="user_1")
         guard._remember("user_1", _frame(finished=True))
 
-        cls.open(service, account=account, package_id="story_1")  # type: ignore[arg-type]
+        cls.open(  # type: ignore[arg-type]
+            service,
+            account=account,
+            package_id="story_1",
+            preferred_name="Pessoa",
+            story_gender="Como homem",
+        )
         cls.advance(  # type: ignore[arg-type]
             service,
             account=account,
             package_id="story_1",
             expected_frame_id="frame_final",
             revealed_entries=1,
+            preferred_name="Pessoa",
+            story_gender="Como homem",
         )
 
         assert calls["advance"] == 1

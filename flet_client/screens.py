@@ -407,6 +407,117 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
     )
 
 
+def story_identity_screen(
+    card: StoryCard,
+    *,
+    initial_name: str,
+    on_back: Callable[[], None],
+    on_continue: Callable[[str, str], str | None],
+) -> ft.Control:
+    """Coleta a identidade narrativa antes de qualquer abertura de roteiro."""
+
+    name = ft.TextField(
+        label="Como a personagem deve chamar você?",
+        hint_text="Nome ou apelido",
+        value=str(initial_name or "").strip(),
+        border_radius=14,
+        autofocus=not bool(str(initial_name or "").strip()),
+    )
+    selected_gender = {"value": ""}
+    selection = ft.Text(
+        "Escolha uma opção.",
+        size=12,
+        color=MUTED,
+    )
+    error = ft.Text(size=12, color="#B42318", visible=False)
+
+    def choose(value: str) -> None:
+        selected_gender["value"] = value
+        selection.value = f"Tratamento selecionado: {value.lower()}."
+        error.visible = False
+        error.value = ""
+        _update_attached(selection)
+
+    def submit(_event: object = None) -> None:
+        preferred_name = str(name.value or "").strip()
+        story_gender = selected_gender["value"]
+        if not preferred_name or not story_gender:
+            message = "Informe o nome ou apelido e escolha como deseja ser tratado."
+        else:
+            message = on_continue(preferred_name, story_gender)
+        if message is None:
+            return
+        error.value = message
+        error.visible = True
+        _update_attached(error)
+
+    gender_buttons = [
+        ft.OutlinedButton(
+            label,
+            on_click=lambda _event, value=value: choose(value),
+        )
+        for label, value in (
+            ("Como homem", "Como homem"),
+            ("Como mulher", "Como mulher"),
+            ("De forma neutra", "De forma neutra"),
+        )
+    ]
+
+    return ft.Container(
+        expand=True,
+        bgcolor=BACKGROUND,
+        alignment=ft.Alignment.CENTER,
+        padding=ft.Padding.symmetric(horizontal=22, vertical=24),
+        content=ft.Column(
+            width=520,
+            scroll=ft.ScrollMode.AUTO,
+            spacing=18,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            controls=[
+                ft.TextButton("← Voltar aos cards", on_click=lambda _event: on_back()),
+                ft.Container(
+                    bgcolor=SURFACE,
+                    border_radius=24,
+                    padding=26,
+                    content=ft.Column(
+                        spacing=17,
+                        controls=[
+                            ft.Text(
+                                "Como você quer entrar nesta história?",
+                                size=27,
+                                weight=ft.FontWeight.BOLD,
+                                color=INK,
+                            ),
+                            ft.Text(
+                                f"Antes de iniciar {card.title}, defina como você será chamado e tratado na trama.",
+                                size=14,
+                                color=MUTED,
+                            ),
+                            name,
+                            ft.Text(
+                                "Como você quer ser tratado nesta história?",
+                                size=14,
+                                weight=ft.FontWeight.BOLD,
+                                color=INK,
+                            ),
+                            ft.Column(spacing=8, controls=gender_buttons),
+                            selection,
+                            error,
+                            ft.FilledButton(
+                                "Iniciar história",
+                                height=50,
+                                bgcolor=ACCENT,
+                                color="#FFFFFF",
+                                on_click=submit,
+                            ),
+                        ],
+                    ),
+                ),
+            ],
+        ),
+    )
+
+
 def payment_screen(
     card: StoryCard,
     *,
@@ -575,4 +686,5 @@ __all__ = [
     "library_screen",
     "login_screen",
     "payment_screen",
+    "story_identity_screen",
 ]

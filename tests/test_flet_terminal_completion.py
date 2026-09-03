@@ -56,7 +56,7 @@ def _service(*, persisted_reveal: int):
     )
     service.repository = repository
     service._lock = lambda *args, **kwargs: nullcontext()  # type: ignore[method-assign]
-    service._load = lambda account, package_id: (  # type: ignore[method-assign]
+    service._load = lambda account, package_id, **kwargs: (  # type: ignore[method-assign]
         SimpleNamespace(),
         SimpleNamespace(),
         SimpleNamespace(),
@@ -86,6 +86,8 @@ def test_terminal_frame_stays_active_until_last_reveal(monkeypatch) -> None:
         account=SimpleNamespace(user_id="user_1"),
         package_id="story_1",
         expected_frame_id="capitulo1_024",
+        preferred_name="Pessoa",
+        story_gender="Como homem",
     )
 
     assert result.finished is False
@@ -107,6 +109,8 @@ def test_last_terminal_reveal_completes_exactly_once(monkeypatch) -> None:
         account=SimpleNamespace(user_id="user_1"),
         package_id="story_1",
         expected_frame_id="capitulo1_024",
+        preferred_name="Pessoa",
+        story_gender="Como homem",
     )
 
     assert result.finished is True

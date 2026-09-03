@@ -23,6 +23,7 @@ from services.editorial_scene_images import (
 )
 from services.immersive_onboarding import (
     build_immersive_context,
+    identity_is_complete,
     persistent_profile_payload,
     recover_persistent_profile,
 )
@@ -128,15 +129,31 @@ class FletRunService:
         return str(message.get("editorial_node") or message.get("beat_id") or "").strip()
 
     @staticmethod
-    def _profile(account: Any, messages: list[dict[str, object]]) -> dict[str, object]:
+    def _requested_profile(*, preferred_name: str, story_gender: str) -> dict[str, object]:
+        name = str(preferred_name or "").strip()
+        gender = str(story_gender or "").strip()
+        if not identity_is_complete(name, gender):
+            raise ValueError("Informe o nome ou apelido e como deseja ser tratado na história.")
+        if gender not in {"Como homem", "Como mulher", "De forma neutra"}:
+            raise ValueError("Tratamento inválido para esta história.")
+        return {
+            "preferred_name": name,
+            "name": name,
+            "user_name": name,
+            "story_gender": gender,
+            "completed": True,
+            "stage": 3,
+        }
+
+    @staticmethod
+    def _profile(
+        messages: list[dict[str, object]],
+        requested_profile: dict[str, object],
+    ) -> dict[str, object]:
         recovered = recover_persistent_profile(messages)
         if isinstance(recovered, dict):
             return dict(recovered)
-        return {
-            "preferred_name": account.display_name,
-            "name": account.display_name,
-            "user_name": account.display_name,
-        }
+        return dict(requested_profile)
 
     def _finish_loaded_run(
         self,
@@ -202,7 +219,13 @@ class FletRunService:
 
         return context
 
-    def _load(self, account: Any, package_id: str):
+    def _load(
+        self,
+        account: Any,
+        package_id: str,
+        *,
+        requested_profile: dict[str, object],
+    ):
         package = require_editorial_package(package_id)
         script = load_editorial_package(self.secrets, package)
         user = self._user(account)
@@ -214,7 +237,7 @@ class FletRunService:
             restart=False,
             instance_id=f"flet_{user.user_id}",
         )
-        profile = self._profile(account, messages)
+        profile = self._profile(messages, requested_profile)
         script = personalize_editorial_script(script, profile)
         if not is_frame_script(script):
             raise ValueError("Esta história ainda não usa quadros V2 compatíveis com o Flet.")
@@ -387,9 +410,24 @@ class FletRunService:
             finished=bool(state.finished),
         )
 
-    def open(self, *, account: Any, package_id: str) -> RunFrame:
+    def open(
+        self,
+        *,
+        account: Any,
+        package_id: str,
+        preferred_name: str,
+        story_gender: str,
+    ) -> RunFrame:
+        requested_profile = self._requested_profile(
+            preferred_name=preferred_name,
+            story_gender=story_gender,
+        )
         with self._lock(account.user_id, package_id):
-            values = self._load(account, package_id)
+            values = self._load(
+                account,
+                package_id,
+                requested_profile=requested_profile,
+            )
             package, script, user, context, state, messages, profile = values
             if self._current(messages) is None:
                 context, state, messages = self._generate(
@@ -411,9 +449,19 @@ class FletRunService:
         package_id: str,
         expected_frame_id: str,
         revealed_entries: int,
+        preferred_name: str,
+        story_gender: str,
     ) -> RunFrame:
+        requested_profile = self._requested_profile(
+            preferred_name=preferred_name,
+            story_gender=story_gender,
+        )
         with self._lock(account.user_id, package_id):
-            package, script, user, context, state, messages, profile = self._load(account, package_id)
+            package, script, user, context, state, messages, profile = self._load(
+                account,
+                package_id,
+                requested_profile=requested_profile,
+            )
             current = self._current(messages)
             if current is None:
                 raise RuntimeError("A run não possui quadro atual.")
@@ -466,10 +514,18 @@ class FletRunService:
         account: Any,
         package_id: str,
         expected_frame_id: str,
+        preferred_name: str,
+        story_gender: str,
     ) -> RunFrame:
+        requested_profile = self._requested_profile(
+            preferred_name=preferred_name,
+            story_gender=story_gender,
+        )
         with self._lock(account.user_id, package_id):
             package, script, _user, context, state, messages, _profile = self._load(
-                account, package_id
+                account,
+                package_id,
+                requested_profile=requested_profile,
             )
             current = self._current(messages)
             if current is None:

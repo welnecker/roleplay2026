@@ -4,13 +4,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
-from typing import Protocol
+from typing import Literal, Protocol
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import FileResponse, JSONResponse
 from gspread.exceptions import APIError
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from flet_api.sessions import SessionStore
 from flet_api.payments import PaymentGateway, PaymentState, build_payment_gateway
@@ -105,18 +105,24 @@ class PaymentResponse(BaseModel):
     master_test_available: bool = False
 
 
-class RunOpenRequest(BaseModel):
+class RunIdentityRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     package_id: str
+    preferred_name: str = Field(min_length=1)
+    story_gender: Literal["Como homem", "Como mulher", "De forma neutra"]
 
 
-class RunAdvanceRequest(RunOpenRequest):
+class RunOpenRequest(RunIdentityRequest):
+    pass
+
+
+class RunAdvanceRequest(RunIdentityRequest):
     frame_id: str
     revealed_entries: int
 
 
-class RunRevealRequest(RunOpenRequest):
+class RunRevealRequest(RunIdentityRequest):
     frame_id: str
 
 
@@ -464,7 +470,12 @@ def create_api_app(services: ApiServices) -> FastAPI:
         ):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="História sem acesso liberado.")
         try:
-            frame = run_service().open(account=user, package_id=payload.package_id)
+            frame = run_service().open(
+                account=user,
+                package_id=payload.package_id,
+                preferred_name=payload.preferred_name,
+                story_gender=payload.story_gender,
+            )
         except (KeyError, ValueError, PermissionError, RuntimeError) as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc).strip("'")) from exc
         return _run_response(frame, request)
@@ -482,6 +493,8 @@ def create_api_app(services: ApiServices) -> FastAPI:
                 package_id=payload.package_id,
                 expected_frame_id=payload.frame_id,
                 revealed_entries=payload.revealed_entries,
+                preferred_name=payload.preferred_name,
+                story_gender=payload.story_gender,
             )
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
@@ -501,6 +514,8 @@ def create_api_app(services: ApiServices) -> FastAPI:
                 account=user,
                 package_id=payload.package_id,
                 expected_frame_id=payload.frame_id,
+                preferred_name=payload.preferred_name,
+                story_gender=payload.story_gender,
             )
         except (KeyError, ValueError, RuntimeError) as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc).strip("'")) from exc

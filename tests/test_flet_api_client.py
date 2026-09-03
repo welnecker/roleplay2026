@@ -185,11 +185,17 @@ def test_cliente_flet_abre_e_avanca_run_real() -> None:
     client = FletApiClient("https://api.example.com", session=session)  # type: ignore[arg-type]
     client.access_token = "token"
 
-    opened = client.open_run("roleplay2026.camilly")
+    opened = client.open_run(
+        "roleplay2026.camilly",
+        preferred_name="Janio",
+        story_gender="Como homem",
+    )
     advanced = client.advance_run(
         package_id=opened.package_id,
         frame_id=opened.frame_id,
         revealed_entries=opened.entry_count,
+        preferred_name="Janio",
+        story_gender="Como homem",
     )
 
     assert opened.run_id == "run-1"
@@ -197,4 +203,11 @@ def test_cliente_flet_abre_e_avanca_run_real() -> None:
         "https://api.example.com/api/v1/runs/image?image_id=mary1.webp",
     )
     assert advanced.frame_id == "quadro-2"
+    assert session.calls[0][2]["json"] == {
+        "package_id": "roleplay2026.camilly",
+        "preferred_name": "Janio",
+        "story_gender": "Como homem",
+    }
     assert session.calls[1][2]["json"]["frame_id"] == "quadro-1"
+    assert session.calls[1][2]["json"]["preferred_name"] == "Janio"
+    assert session.calls[1][2]["json"]["story_gender"] == "Como homem"

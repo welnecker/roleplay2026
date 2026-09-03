@@ -70,7 +70,16 @@ class FakePayments:
 
 
 class FakeRuns:
-    def open(self, *, account: AccountUser, package_id: str) -> RunFrame:
+    def open(
+        self,
+        *,
+        account: AccountUser,
+        package_id: str,
+        preferred_name: str,
+        story_gender: str,
+    ) -> RunFrame:
+        assert preferred_name == "Pessoa"
+        assert story_gender == "Como homem"
         return RunFrame(
             "run-1",
             package_id,
@@ -314,17 +323,33 @@ def test_run_abre_quadro_persistido_e_bloqueia_avanco_antecipado() -> None:
     opened = test_client.post(
         "/api/v1/runs/open",
         headers=headers,
-        json={"package_id": "story.free"},
+        json={
+            "package_id": "story.free",
+            "preferred_name": "Pessoa",
+            "story_gender": "Como homem",
+        },
     )
     blocked = test_client.post(
         "/api/v1/runs/advance",
         headers=headers,
-        json={"package_id": "story.free", "frame_id": "quadro-1", "revealed_entries": 0},
+        json={
+            "package_id": "story.free",
+            "frame_id": "quadro-1",
+            "revealed_entries": 0,
+            "preferred_name": "Pessoa",
+            "story_gender": "Como homem",
+        },
     )
     advanced = test_client.post(
         "/api/v1/runs/advance",
         headers=headers,
-        json={"package_id": "story.free", "frame_id": "quadro-1", "revealed_entries": 1},
+        json={
+            "package_id": "story.free",
+            "frame_id": "quadro-1",
+            "revealed_entries": 1,
+            "preferred_name": "Pessoa",
+            "story_gender": "Como homem",
+        },
     )
 
     assert opened.status_code == 200
@@ -334,3 +359,38 @@ def test_run_abre_quadro_persistido_e_bloqueia_avanco_antecipado() -> None:
     )
     assert blocked.status_code == 403
     assert advanced.json()["frame_id"] == "quadro-2"
+
+
+def test_run_exige_nome_e_genero_antes_de_chamar_runtime() -> None:
+    test_client, _accounts = client()
+    token = login(test_client)
+
+    response = test_client.post(
+        "/api/v1/runs/open",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"package_id": "story.free"},
+    )
+
+    assert response.status_code == 422
+
+    invalid_gender = test_client.post(
+        "/api/v1/runs/open",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "package_id": "story.free",
+            "preferred_name": "Pessoa",
+            "story_gender": "qualquer valor",
+        },
+    )
+    blank_name = test_client.post(
+        "/api/v1/runs/open",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "package_id": "story.free",
+            "preferred_name": "   ",
+            "story_gender": "Como homem",
+        },
+    )
+
+    assert invalid_gender.status_code == 422
+    assert blank_name.status_code == 422
