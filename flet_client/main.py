@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import os
+from collections.abc import Callable
+from typing import Any
+
 import flet as ft
 
 from flet_client.api_client import ApiPayment, ApiRunFrame, FletApiClient, FletApiError
@@ -41,6 +45,11 @@ async def main(
     active_cards: list[StoryCard] = []
     active_display_name = ""
 
+    def run_blocking(operation: Callable[..., Any], *args: Any) -> None:
+        """Executa I/O síncrono sem bloquear o loop do Flet web."""
+
+        page.run_thread(operation, *args)
+
     def show(control: ft.Control) -> None:
         page.controls.clear()
         page.add(control)
@@ -62,7 +71,7 @@ async def main(
         if api_client is not None:
             if revoke_server:
                 try:
-                    api_client.logout()
+                    await asyncio.to_thread(api_client.logout)
                 except FletApiError:
                     api_client.access_token = ""
             else:
@@ -170,6 +179,10 @@ async def main(
             on_frame_complete=completed,
             on_reveal=persist_reveal,
         )
+        # NovelFrameView confirma persistência antes de mudar o quadro. No web,
+        # execute o manipulador inteiro no executor para preservar essa ordem
+        # sem bloquear o loop que também atende a API.
+        view.advance_button.on_click = lambda event: run_blocking(view._advance, event)
         view.root.content.controls.insert(
             0,
             ft.TextButton(
@@ -181,7 +194,7 @@ async def main(
         show(view.root)
         view.focus_current()
 
-    def reload_library() -> None:
+    def _reload_library() -> None:
         if api_client is None:
             show_login()
             return
@@ -192,7 +205,10 @@ async def main(
             return
         show_library(cards, active_display_name)
 
-    def show_payment(card: StoryCard, state: ApiPayment | None = None) -> None:
+    def reload_library() -> None:
+        run_blocking(_reload_library)
+
+    def _show_payment(card: StoryCard, state: ApiPayment | None = None) -> None:
         if api_client is None:
             show_api_error("API não configurada.")
             return
@@ -211,7 +227,7 @@ async def main(
             if updated.approved:
                 reload_library()
                 return
-            show_payment(card, updated)
+            _show_payment(card, updated)
 
         show(
             payment_screen(
@@ -222,17 +238,22 @@ async def main(
                 qr_code_base64=current.qr_code_base64,
                 payment_status=current.status,
                 on_back=lambda: show_library(active_cards, active_display_name),
-                on_create_pix=lambda: run(lambda: api_client.create_pix(card.package_id)),
-                on_master_test=lambda: run(
-                    lambda: api_client.approve_master_test(card.package_id)
+                on_create_pix=lambda: run_blocking(
+                    run, lambda: api_client.create_pix(card.package_id)
                 ),
-                on_refresh=lambda: run(
-                    lambda: api_client.refresh_payment(current.payment_order_id)
+                on_master_test=lambda: run_blocking(
+                    run, lambda: api_client.approve_master_test(card.package_id)
+                ),
+                on_refresh=lambda: run_blocking(
+                    run, lambda: api_client.refresh_payment(current.payment_order_id)
                 ),
             )
         )
 
-    def select_card(card: StoryCard) -> None:
+    def show_payment(card: StoryCard) -> None:
+        run_blocking(_show_payment, card)
+
+    def _select_card(card: StoryCard) -> None:
         if card.access_status == AccessStatus.LOCKED:
             show_payment(card)
             return
@@ -249,7 +270,7 @@ async def main(
             return
 
         def begin(preferred_name: str, story_gender: str) -> str | None:
-            show_player(card, preferred_name, story_gender)
+            run_blocking(show_player, card, preferred_name, story_gender)
             return None
 
         show(
@@ -260,6 +281,9 @@ async def main(
                 on_continue=begin,
             )
         )
+
+    def select_card(card: StoryCard) -> None:
+        run_blocking(_select_card, card)
 
     def show_library(cards: list[StoryCard], display_name: str) -> None:
         nonlocal active_cards, active_display_name
@@ -283,28 +307,35 @@ async def main(
         )
 
     def show_login() -> None:
-        def authenticate(email: str, password: str) -> str | None:
+        def authenticate_request(email: str, password: str) -> None:
             if api_client is None:
-                return "Defina ROLEPLAY_FLET_API_URL antes de entrar."
+                show_api_error("Defina ROLEPLAY_FLET_API_URL antes de entrar.")
+                return
             try:
                 user = api_client.login(email=email, password=password)
                 cards = api_client.catalog()
             except FletApiError as exc:
-                return str(exc)
+                handle_api_error(exc)
+                return
             page.run_task(persist_current_token)
             show_library(cards, user.display_name or user.email)
+
+        def authenticate(email: str, password: str) -> str | None:
+            run_blocking(authenticate_request, email, password)
             return None
 
-        def register(
+        def register_request(
             display_name: str,
             email: str,
             password: str,
             password_confirmation: str,
-        ) -> str | None:
+        ) -> None:
             if api_client is None:
-                return "Defina ROLEPLAY_FLET_API_URL antes de criar a conta."
+                show_api_error("Defina ROLEPLAY_FLET_API_URL antes de criar a conta.")
+                return
             if password != password_confirmation:
-                return "As senhas não coincidem."
+                show_api_error("As senhas não coincidem.")
+                return
             try:
                 user = api_client.register(
                     display_name=display_name,
@@ -313,9 +344,24 @@ async def main(
                 )
                 cards = api_client.catalog()
             except FletApiError as exc:
-                return str(exc)
+                handle_api_error(exc)
+                return
             page.run_task(persist_current_token)
             show_library(cards, user.display_name or user.email)
+
+        def register(
+            display_name: str,
+            email: str,
+            password: str,
+            password_confirmation: str,
+        ) -> str | None:
+            run_blocking(
+                register_request,
+                display_name,
+                email,
+                password,
+                password_confirmation,
+            )
             return None
 
         show(
@@ -340,8 +386,8 @@ async def main(
 
         api_client.access_token = token
         try:
-            user = api_client.me()
-            cards = api_client.catalog()
+            user = await asyncio.to_thread(api_client.me)
+            cards = await asyncio.to_thread(api_client.catalog)
         except FletApiError as exc:
             if exc.is_authentication_error:
                 await clear_local_auth(revoke_server=False)
