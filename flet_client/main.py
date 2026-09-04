@@ -40,7 +40,11 @@ async def main(
     page.theme_mode = ft.ThemeMode.LIGHT
     api_url = str(api_url_override or configured_api_url()).strip().rstrip("/")
     displayed_api_url = str(api_url_label or api_url).strip().rstrip("/")
-    api_client = FletApiClient(api_url) if api_url else None
+    api_client = (
+        FletApiClient(api_url, public_base_url=displayed_api_url)
+        if api_url
+        else None
+    )
     token_storage = AuthTokenStorage()
     active_cards: list[StoryCard] = []
     active_display_name = ""

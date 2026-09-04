@@ -79,6 +79,25 @@ def test_cliente_flet_autentica_e_envia_bearer_ao_catalogo() -> None:
     assert session.calls[1][2]["headers"]["Authorization"] == "Bearer token-opaco"
 
 
+def test_cliente_web_publica_capa_recebida_pelo_loopback() -> None:
+    payload = catalog_payload()
+    payload["items"][0]["cover_url"] = (
+        "http://127.0.0.1:10000/api/v1/catalog/roleplay2026.camilly/cover"
+    )
+    session = FakeSession([FakeResponse(200, payload)])
+    client = FletApiClient(
+        "http://127.0.0.1:10000",
+        public_base_url="https://entrecenas-roleplay.com.br",
+        session=session,  # type: ignore[arg-type]
+    )
+
+    cards = client.catalog()
+
+    assert cards[0].cover_url == (
+        "https://entrecenas-roleplay.com.br/api/v1/catalog/roleplay2026.camilly/cover"
+    )
+
+
 def test_cliente_flet_cadastra_e_guarda_o_token() -> None:
     session = FakeSession(
         [
@@ -238,3 +257,37 @@ def test_cliente_flet_abre_e_avanca_run_real() -> None:
     assert session.calls[1][2]["json"]["frame_id"] == "quadro-1"
     assert session.calls[1][2]["json"]["preferred_name"] == "Janio"
     assert session.calls[1][2]["json"]["story_gender"] == "Como homem"
+
+
+def test_cliente_web_publica_imagens_da_run_recebidas_pelo_loopback() -> None:
+    frame = {
+        "run_id": "run-1",
+        "package_id": "roleplay2026.camilly",
+        "frame_id": "quadro-1",
+        "content": "[QUADRO quadro-1]\n[DESCRIÇÃO]\nCena.\n[/QUADRO]",
+        "image_url": "http://127.0.0.1:10000/api/v1/runs/image?node_id=quadro-1",
+        "entry_image_urls": [
+            "http://127.0.0.1:10000/api/v1/runs/image?image_id=mary1.webp"
+        ],
+        "revealed_entries": 0,
+        "entry_count": 1,
+        "finished": False,
+    }
+    client = FletApiClient(
+        "http://127.0.0.1:10000",
+        public_base_url="https://entrecenas-roleplay.com.br",
+        session=FakeSession([FakeResponse(200, frame)]),  # type: ignore[arg-type]
+    )
+
+    opened = client.open_run(
+        "roleplay2026.camilly",
+        preferred_name="Janio",
+        story_gender="Como homem",
+    )
+
+    assert opened.image_url.startswith(
+        "https://entrecenas-roleplay.com.br/api/v1/runs/image"
+    )
+    assert opened.entry_image_urls[0].startswith(
+        "https://entrecenas-roleplay.com.br/api/v1/runs/image"
+    )

@@ -62,6 +62,7 @@ class FletApiClient:
         self,
         base_url: str,
         *,
+        public_base_url: str | None = None,
         timeout_seconds: float = 15.0,
         session: requests.Session | None = None,
     ) -> None:
@@ -69,9 +70,20 @@ class FletApiClient:
         if not value:
             raise ValueError("URL da API Flet não configurada.")
         self.base_url = value
+        self.public_base_url = str(public_base_url or value).strip().rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.session = session or requests.Session()
         self.access_token = ""
+
+    def _public_media_url(self, value: Any) -> str:
+        """Converte mídias do loopback em URLs acessíveis ao navegador."""
+
+        url = str(value or "").strip()
+        if url.startswith(f"{self.base_url}/"):
+            return f"{self.public_base_url}{url[len(self.base_url):]}"
+        if url.startswith("/"):
+            return f"{self.public_base_url}{url}"
+        return url
 
     def _request(self, method: str, path: str, **kwargs: Any) -> requests.Response:
         headers = dict(kwargs.pop("headers", {}) or {})
@@ -177,7 +189,7 @@ class FletApiClient:
                     progress_status=ProgressStatus.NOT_STARTED,
                     price_label=str(row.get("price_label", "") or ""),
                     chapter_label=str(row.get("chapter_label", "") or ""),
-                    cover_url=str(row.get("cover_url", "") or ""),
+                    cover_url=self._public_media_url(row.get("cover_url", "")),
                     is_tasting=bool(row.get("is_tasting", False)),
                     profile_name=str(row.get("profile_name", "") or ""),
                     profile_identity=str(row.get("profile_identity", "") or ""),
@@ -226,8 +238,7 @@ class FletApiClient:
             )
         )
 
-    @staticmethod
-    def _run_frame(response: requests.Response) -> ApiRunFrame:
+    def _run_frame(self, response: requests.Response) -> ApiRunFrame:
         payload = response.json()
         if not isinstance(payload, dict) or not payload.get("frame_id"):
             raise FletApiError("Resposta de run inválida.")
@@ -236,9 +247,9 @@ class FletApiClient:
             package_id=str(payload.get("package_id", "") or ""),
             frame_id=str(payload.get("frame_id", "") or ""),
             content=str(payload.get("content", "") or ""),
-            image_url=str(payload.get("image_url", "") or ""),
+            image_url=self._public_media_url(payload.get("image_url", "")),
             entry_image_urls=tuple(
-                str(item or "")
+                self._public_media_url(item)
                 for item in payload.get("entry_image_urls", []) or []
             ),
             revealed_entries=int(payload.get("revealed_entries", 0) or 0),
