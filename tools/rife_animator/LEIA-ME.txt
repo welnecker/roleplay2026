@@ -1,0 +1,38 @@
+ENTRECENAS - ANIMADOR DE QUADROS (PROTOTIPO)
+================================================
+
+Objetivo
+--------
+Transformar de 2 a 12 imagens ordenadas em um video MP4 ciclico. O video e
+produzido previamente no PC; o app online apenas o reproduzira futuramente.
+
+FFmpeg
+------
+O caminho informado ja vem preenchido na interface:
+C:\Users\welne\miniconda3\envs\wangp\Lib\site-packages\imageio_ffmpeg\binaries\ffmpeg-win-x86_64-v7.1.exe
+
+Motor recomendado para o primeiro teste
+----------------------------------------
+Use "Vulkan portatil" para validar rapidamente o fluxo. Baixe a versao Windows
+em https://github.com/nihui/rife-ncnn-vulkan/releases e selecione
+rife-ncnn-vulkan.exe. O pacote ja inclui os modelos e nao exige PyTorch/CUDA.
+
+Para comparar com Practical-RIFE 4.25
+--------------------------------------
+1. Clone https://github.com/hzwer/Practical-RIFE
+2. Crie um ambiente Python 3.11 com PyTorch CUDA e Pillow.
+3. Baixe o modelo 4.25 indicado no README oficial e selecione sua pasta.
+4. Na interface, selecione a pasta do repositorio, python.exe do ambiente e a
+   pasta do modelo.
+
+Uso
+---
+1. Abra ABRIR_ANIMADOR.bat.
+2. Selecione e ordene as imagens.
+3. Escolha loop ou pingpong.
+4. Defina 12 segundos, ciclo de 2 segundos e 24 FPS para o primeiro teste.
+5. Escolha Gerar video e informe o arquivo MP4 de saida.
+
+As imagens originais nunca sao alteradas. Imagens de tamanhos diferentes sao
+ajustadas para a dimensao da primeira, com recorte central proporcional.
+
