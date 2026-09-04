@@ -24,12 +24,18 @@ def configured_api_url() -> str:
     return os.getenv("ROLEPLAY_FLET_API_URL", DEFAULT_FLET_API_URL).strip().rstrip("/")
 
 
-async def main(page: ft.Page) -> None:
+async def main(
+    page: ft.Page,
+    *,
+    api_url_override: str | None = None,
+    api_url_label: str | None = None,
+) -> None:
     page.title = "EntreCenas"
     page.bgcolor = BACKGROUND
     page.padding = 0
     page.theme_mode = ft.ThemeMode.LIGHT
-    api_url = configured_api_url()
+    api_url = str(api_url_override or configured_api_url()).strip().rstrip("/")
+    displayed_api_url = str(api_url_label or api_url).strip().rstrip("/")
     api_client = FletApiClient(api_url) if api_url else None
     token_storage = AuthTokenStorage()
     active_cards: list[StoryCard] = []
@@ -316,7 +322,7 @@ async def main(page: ft.Page) -> None:
             login_screen(
                 on_login=authenticate,
                 on_register=register,
-                api_url=api_url,
+                api_url=displayed_api_url,
             )
         )
 

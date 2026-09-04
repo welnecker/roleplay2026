@@ -1,14 +1,34 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import os
 from typing import Any
 
+import flet as ft
 import flet.fastapi as flet_fastapi
 
-from flet_client.main import main as flet_main
+from flet_client.main import configured_api_url, main as flet_main
 
 
 WEB_APP_PATH = "/app"
+
+
+def internal_api_url() -> str:
+    """Mantém o tráfego do cliente web dentro da instância do Render."""
+
+    configured = str(os.getenv("ROLEPLAY_FLET_INTERNAL_API_URL", "") or "").strip()
+    if configured:
+        return configured.rstrip("/")
+    port = str(os.getenv("PORT", "10000") or "10000").strip()
+    return f"http://127.0.0.1:{port}"
+
+
+async def web_main(page: ft.Page) -> None:
+    await flet_main(
+        page,
+        api_url_override=internal_api_url(),
+        api_url_label=configured_api_url(),
+    )
 
 
 def install(app: Any) -> Any:
@@ -33,7 +53,7 @@ def install(app: Any) -> Any:
     app.mount(
         WEB_APP_PATH,
         flet_fastapi.app(
-            flet_main,
+            web_main,
             assets_dir="assets",
             app_name="EntreCenas",
             app_short_name="EntreCenas",
