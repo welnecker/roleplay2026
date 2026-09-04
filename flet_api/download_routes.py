@@ -13,14 +13,8 @@ ANDROID_RELEASE_URL = (
     "https://github.com/welnecker/roleplay2026/"
     "releases/latest/download/entrecenas-roleplay.apk"
 )
-WINDOWS_RELEASE_URL = (
-    "https://github.com/welnecker/roleplay2026/"
-    "releases/latest/download/entrecenas-windows.zip"
-)
 ANDROID_DOWNLOAD_FILENAME = "entrecenas-roleplay.apk"
-WINDOWS_DOWNLOAD_FILENAME = "entrecenas-windows.zip"
 ANDROID_DOWNLOAD_MEDIA_TYPE = "application/vnd.android.package-archive"
-WINDOWS_DOWNLOAD_MEDIA_TYPE = "application/zip"
 # Compatibilidade com consumidores que importavam os nomes anteriores.
 DOWNLOAD_FILENAME = ANDROID_DOWNLOAD_FILENAME
 DOWNLOAD_MEDIA_TYPE = ANDROID_DOWNLOAD_MEDIA_TYPE
@@ -88,16 +82,14 @@ def download_page_html() -> str:
 <body>
   <main>
     <div class="brand">EntreCenas</div>
-    <h1>Escolha seu dispositivo</h1>
+    <h1>EntreCenas para Android</h1>
     <p>Baixe a versão mais recente do EntreCenas diretamente pela página oficial.</p>
     <div class="downloads">
       <a class="button" href="/baixar/android">Instalar no Android</a>
-      <a class="button" href="/baixar/windows">Baixar para Windows</a>
     </div>
     <div class="info">
       <div>O download pode levar alguns minutos, dependendo da sua conexão.</div>
-      <div>No Android, toque no arquivo baixado para iniciar a instalação.</div>
-      <div>No Windows, extraia o pacote e abra o EntreCenas.</div>
+      <div>Quando concluir, toque no arquivo baixado para iniciar a instalação.</div>
     </div>
     <p class="note">O sistema pode exibir um aviso para aplicativos baixados fora da loja. Antes de continuar, confirme que você está em entrecenas-roleplay.com.br.</p>
   </main>
@@ -197,16 +189,6 @@ def install(app: Any) -> Any:
             filename=ANDROID_DOWNLOAD_FILENAME,
             media_type=ANDROID_DOWNLOAD_MEDIA_TYPE,
             platform_name="Android",
-        )
-
-    @app.get("/baixar/windows", include_in_schema=False)
-    def download_windows(request: Request) -> StreamingResponse:
-        return stream_release(
-            request,
-            release_url=WINDOWS_RELEASE_URL,
-            filename=WINDOWS_DOWNLOAD_FILENAME,
-            media_type=WINDOWS_DOWNLOAD_MEDIA_TYPE,
-            platform_name="Windows",
         )
 
     app.state.download_routes_installed = True

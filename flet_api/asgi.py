@@ -6,6 +6,7 @@ from flet_api.landing_routes import install as install_landing_routes
 from flet_api.story_end_card import install as install_story_end_card
 from flet_api.terminal_completion_policy import install as install_terminal_completion_policy
 from flet_api.terminal_run_guard import install as install_terminal_run_guard
+from flet_api.web_client_routes import install as install_web_client_routes
 from persistence.sheets_read_optimization import install as install_sheets_read_optimization
 from persistence.story_run_cache_guard import install as install_story_run_cache_guard
 
@@ -38,6 +39,8 @@ from persistence.sheets_audit import install as install_sheets_audit
 # Entrada futura e independente. Nenhum serviço de produção aponta para ela.
 # As rotas públicas de download ficam isoladas das APIs autenticadas e não
 # alteram os contratos do cliente Flet.
-app = install_landing_routes(
-    install_download_routes(install_sheets_audit(production_app()))
+app = install_web_client_routes(
+    install_landing_routes(
+        install_download_routes(install_sheets_audit(production_app()))
+    )
 )

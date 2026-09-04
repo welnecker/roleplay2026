@@ -15,7 +15,9 @@ def test_landing_page_presents_participant_positioning() -> None:
     assert "Descubra seu papel" in response.text
     assert "Você também é personagem" in response.text
     assert 'href="/baixar"' in response.text
-    assert "Disponível para Android e Windows" in response.text
+    assert 'href="/app/"' in response.text
+    assert "Use online ou instale no Android" in response.text
+    assert "Windows" not in response.text
     assert "Você decide o que acontece" not in response.text
     assert "Suas escolhas mudam" not in response.text
 

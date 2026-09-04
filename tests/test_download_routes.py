@@ -6,8 +6,6 @@ from fastapi.testclient import TestClient
 from flet_api.download_routes import (
     ANDROID_DOWNLOAD_FILENAME,
     ANDROID_RELEASE_URL,
-    WINDOWS_DOWNLOAD_FILENAME,
-    WINDOWS_RELEASE_URL,
     install,
 )
 
@@ -40,9 +38,7 @@ def test_download_page_uses_user_friendly_language() -> None:
     assert response.status_code == 200
     assert "EntreCenas" in response.text
     assert 'href="/baixar/android"' in response.text
-    assert 'href="/baixar/windows"' in response.text
     assert "Instalar no Android" in response.text
-    assert "Baixar para Windows" in response.text
     assert "br.com.entrecenas.roleplay" not in response.text
     assert "Baixar APK" not in response.text
 
@@ -114,28 +110,6 @@ def test_android_download_forwards_range_and_partial_response(monkeypatch) -> No
     assert response.headers["content-range"] == "bytes 3-5/6"
 
 
-def test_windows_download_streams_permanent_release(monkeypatch) -> None:
-    upstream = FakeUpstream(headers={"content-length": "6"})
-    observed: dict[str, object] = {}
-
-    def fake_get(url: str, **kwargs):
-        observed["url"] = url
-        return upstream
-
-    monkeypatch.setattr("flet_api.download_routes.requests.get", fake_get)
-
-    app = install(FastAPI())
-    response = TestClient(app).get("/baixar/windows")
-
-    assert response.status_code == 200
-    assert response.content == b"abcdef"
-    assert observed["url"] == WINDOWS_RELEASE_URL
-    assert response.headers["content-type"].startswith("application/zip")
-    assert response.headers["content-disposition"] == (
-        f'attachment; filename="{WINDOWS_DOWNLOAD_FILENAME}"'
-    )
-
-
 def test_download_routes_install_is_idempotent() -> None:
     app = FastAPI()
     install(app)
@@ -144,4 +118,4 @@ def test_download_routes_install_is_idempotent() -> None:
     paths = [route.path for route in app.routes]
     assert paths.count("/baixar") == 1
     assert paths.count("/baixar/android") == 1
-    assert paths.count("/baixar/windows") == 1
+    assert "/baixar/windows" not in paths

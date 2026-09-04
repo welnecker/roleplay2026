@@ -33,9 +33,10 @@ Por padrão, o cliente usa a API publicada em
 `ROLEPLAY_FLET_API_URL` continua disponível para apontar o cliente para uma API
 local ou para outro ambiente.
 
-## Aplicativos instaláveis para Android e Windows
+## Aplicativo online e instalável para Android
 
-O cliente pode ser empacotado como aplicativo autônomo. Nesse contexto,
+O mesmo cliente funciona online em `/app/` e pode ser empacotado para Android.
+Nesse contexto,
 "autônomo" significa que o aparelho do usuário não precisa ter Python, Flet ou
 o repositório instalados. O aplicativo continua precisando de internet e da API
 publicada, pois login, Pix, roteiros, runs, imagens e geração narrativa seguem
@@ -50,7 +51,7 @@ O `pyproject.toml` da raiz define:
 - Android mínimo API 24 e alvo API 36;
 - somente `flet`, `flet-secure-storage` e `requests` no cliente;
 - exclusão de código de servidor, planilhas, stories e secrets do pacote;
-- ícones próprios para Android e Windows.
+- ícone próprio para Android.
 
 ### Gerar no próprio computador
 
@@ -72,28 +73,15 @@ Android SDK compatível caso não estejam disponíveis. O APK gerado sem uma cha
 privada de produção serve para instalação e validação direta nos aparelhos de
 teste.
 
-Para gerar o aplicativo Windows:
-
-```powershell
-uv run flet build windows --yes --verbose
-```
-
-O resultado fica em `build\windows`. Esse build precisa ser executado no
-Windows com o Visual Studio e a carga de trabalho **Desenvolvimento para desktop
-com C++** instalados.
-
 ### Gerar pelo GitHub Actions
 
 O workflow `Build EntreCenas Clients` pode ser executado manualmente e também
 roda quando os arquivos do cliente são enviados à branch
-`agent/flet-visual-client`. Ele produz, na mesma execução:
-
-- `EntreCenas-Android-APK`;
-- `EntreCenas-Windows`.
+`agent/flet-visual-client`. Ele produz o `EntreCenas-Android-APK` assinado.
 
 Os arquivos ficam nos artefatos da execução por 14 dias. Quando uma publicação
-oficial é solicitada, o APK assinado e o pacote Windows também são anexados à
-mesma release permanente do GitHub. O workflow não publica em loja, não faz
+oficial é solicitada, o APK assinado também é anexado à release permanente do
+GitHub. O workflow não publica em loja, não faz
 deploy e não altera planilhas ou produção.
 
 ## Executar no navegador

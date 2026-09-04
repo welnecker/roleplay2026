@@ -348,7 +348,7 @@ def landing_page_html() -> str:
       <nav aria-label="Navegação principal">
         <a href="#como-funciona">Como funciona</a>
         <a href="#historias">Histórias</a>
-        <a class="button small" href="/baixar">Baixar EntreCenas</a>
+        <a class="button small" href="/app/">Entrar agora</a>
       </nav>
     </div>
   </header>
@@ -360,11 +360,11 @@ def landing_page_html() -> str:
         <h1>Você não assiste à história. <span>Você faz parte dela.</span></h1>
         <p class="lead">Escolha um card, descubra o papel reservado para você e participe diretamente de uma história de romance, tensão e desejo.</p>
         <div class="actions">
-          <a class="button" href="/baixar">Baixar EntreCenas</a>
-          <a class="button secondary" href="#como-funciona">Conhecer a experiência</a>
+          <a class="button" href="/app/">Entrar agora</a>
+          <a class="button secondary" href="/baixar">Instalar no Android</a>
         </div>
         <div class="facts" aria-label="Informações principais">
-          <span>Disponível para Android e Windows</span>
+          <span>Use online ou instale no Android</span>
           <span>Experiência para maiores de 18 anos</span>
         </div>
       </div>
@@ -423,7 +423,7 @@ def landing_page_html() -> str:
               <h3>Conheça o EntreCenas</h3>
               <p>Experimente a dinâmica do aplicativo em uma história envolvente que avança até o limite da sensualidade.</p>
             </div>
-            <a class="button secondary" href="/baixar">Começar a experiência</a>
+            <a class="button secondary" href="/app/">Começar a experiência</a>
           </article>
           <article class="experience featured">
             <div>
@@ -431,7 +431,7 @@ def landing_page_html() -> str:
               <h3>Quer aprofundar esse encontro?</h3>
               <p>Desbloqueie novos roteiros, conheça outros personagens e descubra os papéis reservados para você.</p>
             </div>
-            <a class="button" href="/baixar">Conhecer as histórias</a>
+            <a class="button" href="/app/">Conhecer as histórias</a>
           </article>
         </div>
       </div>
@@ -454,7 +454,7 @@ def landing_page_html() -> str:
           </details>
           <details>
             <summary>Onde o EntreCenas funciona?</summary>
-            <p>A versão atual está disponível para celulares e tablets Android e para computadores com Windows.</p>
+            <p>Você pode usar o EntreCenas online pelo navegador. No Android, também é possível instalar o aplicativo.</p>
           </details>
         </div>
       </div>
@@ -464,8 +464,11 @@ def landing_page_html() -> str:
       <div class="shell final-card">
         <p class="eyebrow">A próxima cena espera por você</p>
         <h2>Entre na história. Descubra o seu papel.</h2>
-        <p>Baixe o EntreCenas para Android ou Windows e comece pela experiência de degustação.</p>
-        <a class="button" href="/baixar">Baixar EntreCenas</a>
+        <p>Entre agora pelo navegador ou instale o EntreCenas no Android.</p>
+        <div class="actions">
+          <a class="button" href="/app/">Entrar agora</a>
+          <a class="button secondary" href="/baixar">Instalar no Android</a>
+        </div>
       </div>
     </section>
   </main>
