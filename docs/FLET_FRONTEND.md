@@ -45,7 +45,7 @@ O `pyproject.toml` da raiz define:
 
 - produto `EntreCenas`;
 - identificador Android estável `br.com.entrecenas.roleplay`;
-- versão inicial `0.1.0`, build `1`;
+- versão atual `0.1.5`, com número de build atribuído pela automação;
 - Python embarcado 3.12;
 - Android mínimo API 24 e alvo API 36;
 - somente `flet`, `flet-secure-storage` e `requests` no cliente;
@@ -91,9 +91,10 @@ roda quando os arquivos do cliente são enviados à branch
 - `EntreCenas-Android-APK`;
 - `EntreCenas-Windows`.
 
-Os arquivos ficam nos artefatos da execução por 14 dias. O workflow apenas
-compila e disponibiliza os pacotes: não publica em loja, não faz deploy e não
-altera planilhas ou produção.
+Os arquivos ficam nos artefatos da execução por 14 dias. Quando uma publicação
+oficial é solicitada, o APK assinado e o pacote Windows também são anexados à
+mesma release permanente do GitHub. O workflow não publica em loja, não faz
+deploy e não altera planilhas ou produção.
 
 ## Executar no navegador
 

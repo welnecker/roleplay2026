@@ -41,6 +41,8 @@ jobs:
       FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       FLET_ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    outputs:
+      publish: ${{ steps.release_request.outputs.publish }}
 
     steps:
       - name: Checkout repository
@@ -182,6 +184,9 @@ jobs:
     name: Build Windows client
     runs-on: windows-latest
     timeout-minutes: 90
+    needs: android
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -194,10 +199,26 @@ jobs:
         shell: bash
         run: uv run flet build windows --yes --verbose --build-number "${{ github.run_number }}"
 
+      - name: Create Windows distribution package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build/windows/* -DestinationPath entrecenas-windows.zip -Force
+
       - name: Upload Windows client
         uses: actions/upload-artifact@v4
         with:
           name: EntreCenas-Windows
-          path: build/windows
+          path: entrecenas-windows.zip
           if-no-files-found: error
           retention-days: 14
+
+      - name: Attach Windows package to permanent release
+        if: ${{ needs.android.outputs.publish == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
+          TAG="android-v${VERSION}-build${{ github.run_number }}"
+          gh release upload "$TAG" "entrecenas-windows.zip#EntreCenas para Windows" --clobber

@@ -13,8 +13,17 @@ ANDROID_RELEASE_URL = (
     "https://github.com/welnecker/roleplay2026/"
     "releases/latest/download/entrecenas-roleplay.apk"
 )
-DOWNLOAD_FILENAME = "entrecenas-roleplay.apk"
-DOWNLOAD_MEDIA_TYPE = "application/vnd.android.package-archive"
+WINDOWS_RELEASE_URL = (
+    "https://github.com/welnecker/roleplay2026/"
+    "releases/latest/download/entrecenas-windows.zip"
+)
+ANDROID_DOWNLOAD_FILENAME = "entrecenas-roleplay.apk"
+WINDOWS_DOWNLOAD_FILENAME = "entrecenas-windows.zip"
+ANDROID_DOWNLOAD_MEDIA_TYPE = "application/vnd.android.package-archive"
+WINDOWS_DOWNLOAD_MEDIA_TYPE = "application/zip"
+# Compatibilidade com consumidores que importavam os nomes anteriores.
+DOWNLOAD_FILENAME = ANDROID_DOWNLOAD_FILENAME
+DOWNLOAD_MEDIA_TYPE = ANDROID_DOWNLOAD_MEDIA_TYPE
 DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 
 
@@ -25,7 +34,7 @@ def download_page_html() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0c2e2d">
-  <title>Baixar EntreCenas para Android</title>
+  <title>Baixar EntreCenas</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -50,9 +59,9 @@ def download_page_html() -> str:
     .brand { font-size: 1.05rem; font-weight: 700; color: #f05b91; }
     h1 { margin: 10px 0 14px; font-size: clamp(2rem, 8vw, 3rem); line-height: 1.05; }
     p { line-height: 1.6; color: #d8e3e2; }
+    .downloads { display: grid; gap: 14px; margin: 28px 0 22px; }
     .button {
       display: block;
-      margin: 28px 0 22px;
       padding: 16px 20px;
       border-radius: 999px;
       background: #f05b91;
@@ -79,15 +88,18 @@ def download_page_html() -> str:
 <body>
   <main>
     <div class="brand">EntreCenas</div>
-    <h1>EntreCenas para Android</h1>
+    <h1>Escolha seu dispositivo</h1>
     <p>Baixe a versão mais recente do EntreCenas diretamente pela página oficial.</p>
-    <a class="button" href="/baixar/android">Baixar EntreCenas</a>
-    <div class="info">
-      <div><strong>Tamanho aproximado:</strong> 135 MB</div>
-      <div>O download pode levar alguns minutos, dependendo da sua conexão.</div>
-      <div>Quando concluir, toque no arquivo baixado para iniciar a instalação.</div>
+    <div class="downloads">
+      <a class="button" href="/baixar/android">Instalar no Android</a>
+      <a class="button" href="/baixar/windows">Baixar para Windows</a>
     </div>
-    <p class="note">O Android pode exibir avisos ao instalar aplicativos baixados fora da loja. Antes de continuar, confirme que você está em entrecenas-roleplay.com.br.</p>
+    <div class="info">
+      <div>O download pode levar alguns minutos, dependendo da sua conexão.</div>
+      <div>No Android, toque no arquivo baixado para iniciar a instalação.</div>
+      <div>No Windows, extraia o pacote e abra o EntreCenas.</div>
+    </div>
+    <p class="note">O sistema pode exibir um aviso para aplicativos baixados fora da loja. Antes de continuar, confirme que você está em entrecenas-roleplay.com.br.</p>
   </main>
 </body>
 </html>
@@ -111,9 +123,9 @@ def _upstream_headers(request: Request) -> dict[str, str]:
     return headers
 
 
-def _download_headers(upstream: requests.Response) -> dict[str, str]:
+def _download_headers(upstream: requests.Response, filename: str) -> dict[str, str]:
     headers = {
-        "Content-Disposition": f'attachment; filename="{DOWNLOAD_FILENAME}"',
+        "Content-Disposition": f'attachment; filename="{filename}"',
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
     }
@@ -140,11 +152,17 @@ def install(app: Any) -> Any:
     def download_page() -> HTMLResponse:
         return HTMLResponse(download_page_html())
 
-    @app.get("/baixar/android", include_in_schema=False)
-    def download_android(request: Request) -> StreamingResponse:
+    def stream_release(
+        request: Request,
+        *,
+        release_url: str,
+        filename: str,
+        media_type: str,
+        platform_name: str,
+    ) -> StreamingResponse:
         try:
             upstream = requests.get(
-                ANDROID_RELEASE_URL,
+                release_url,
                 headers=_upstream_headers(request),
                 stream=True,
                 allow_redirects=True,
@@ -161,14 +179,34 @@ def install(app: Any) -> Any:
             upstream.close()
             raise HTTPException(
                 status_code=502,
-                detail=f"A versão para Android não está disponível no momento ({status_code}).",
+                detail=f"A versão para {platform_name} não está disponível no momento ({status_code}).",
             )
 
         return StreamingResponse(
             _stream_upstream(upstream),
             status_code=upstream.status_code,
-            media_type=DOWNLOAD_MEDIA_TYPE,
-            headers=_download_headers(upstream),
+            media_type=media_type,
+            headers=_download_headers(upstream, filename),
+        )
+
+    @app.get("/baixar/android", include_in_schema=False)
+    def download_android(request: Request) -> StreamingResponse:
+        return stream_release(
+            request,
+            release_url=ANDROID_RELEASE_URL,
+            filename=ANDROID_DOWNLOAD_FILENAME,
+            media_type=ANDROID_DOWNLOAD_MEDIA_TYPE,
+            platform_name="Android",
+        )
+
+    @app.get("/baixar/windows", include_in_schema=False)
+    def download_windows(request: Request) -> StreamingResponse:
+        return stream_release(
+            request,
+            release_url=WINDOWS_RELEASE_URL,
+            filename=WINDOWS_DOWNLOAD_FILENAME,
+            media_type=WINDOWS_DOWNLOAD_MEDIA_TYPE,
+            platform_name="Windows",
         )
 
     app.state.download_routes_installed = True

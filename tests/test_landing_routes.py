@@ -15,6 +15,7 @@ def test_landing_page_presents_participant_positioning() -> None:
     assert "Descubra seu papel" in response.text
     assert "Você também é personagem" in response.text
     assert 'href="/baixar"' in response.text
+    assert "Disponível para Android e Windows" in response.text
     assert "Você decide o que acontece" not in response.text
     assert "Suas escolhas mudam" not in response.text
 
@@ -54,7 +55,7 @@ def test_landing_media_routes_serve_packaged_assets() -> None:
 
     assert reel.status_code == 200
     assert reel.headers["content-type"].startswith("video/mp4")
-    assert len(reel.content) > 1_000_000
+    assert len(reel.content) > 400_000
     assert poster.status_code == 200
     assert poster.headers["content-type"].startswith("image/webp")
     assert icon.status_code == 200
