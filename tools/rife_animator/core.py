@@ -14,6 +14,8 @@ DEFAULT_FFMPEG = Path(
     r"C:\Users\welne\miniconda3\envs\wangp\Lib\site-packages\imageio_ffmpeg\binaries\ffmpeg-win-x86_64-v7.1.exe"
 )
 SUPPORTED_IMAGES = {".jpg", ".jpeg", ".png", ".webp"}
+MIN_IMAGES = 2
+MAX_IMAGES = 48
 Progress = Callable[[str], None]
 
 
@@ -44,8 +46,10 @@ class RenderSettings:
 
 def validate_images(paths: Sequence[Path]) -> list[Path]:
     images = [Path(path) for path in paths]
-    if not 2 <= len(images) <= 12:
-        raise AnimatorError("Selecione entre 2 e 12 imagens.")
+    if not MIN_IMAGES <= len(images) <= MAX_IMAGES:
+        raise AnimatorError(
+            f"Selecione entre {MIN_IMAGES} e {MAX_IMAGES} imagens."
+        )
     missing = [str(path) for path in images if not path.is_file()]
     if missing:
         raise AnimatorError(f"Imagem não encontrada: {missing[0]}")

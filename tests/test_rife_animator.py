@@ -37,10 +37,22 @@ def test_preparo_padroniza_dimensoes_pares_sem_alterar_originais(tmp_path: Path)
     assert Image.open(first).size == (101, 99)
 
 
-def test_exige_entre_duas_e_doze_imagens(tmp_path: Path) -> None:
+def test_exige_ao_menos_duas_imagens(tmp_path: Path) -> None:
     image = make_image(tmp_path / "only.png")
-    with pytest.raises(AnimatorError, match="entre 2 e 12"):
+    with pytest.raises(AnimatorError, match="entre 2 e 48"):
         cycle_sequence([image], "loop")
+
+
+def test_aceita_ate_quarenta_e_oito_imagens(tmp_path: Path) -> None:
+    images = [make_image(tmp_path / f"{index}.png") for index in range(48)]
+    sequence = cycle_sequence(images, "loop")
+    assert len(sequence) == 49
+
+
+def test_rejeita_mais_de_quarenta_e_oito_imagens(tmp_path: Path) -> None:
+    images = [make_image(tmp_path / f"{index}.png") for index in range(49)]
+    with pytest.raises(AnimatorError, match="entre 2 e 48"):
+        cycle_sequence(images, "loop")
 
 
 def test_configuracao_inicial_de_12_segundos_e_valida() -> None:

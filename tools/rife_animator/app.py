@@ -13,6 +13,8 @@ if str(HERE) not in sys.path:
 
 from core import (  # noqa: E402
     DEFAULT_FFMPEG,
+    MAX_IMAGES,
+    MIN_IMAGES,
     AnimatorError,
     RenderSettings,
     render_with_practical_rife,
@@ -39,7 +41,9 @@ class RifeAnimator(tk.Tk):
         self.cycle_var = tk.DoubleVar(value=2.0)
         self.fps_var = tk.IntVar(value=24)
         self.mode_var = tk.StringVar(value="loop")
-        self.status_var = tk.StringVar(value="Selecione entre 2 e 12 imagens.")
+        self.status_var = tk.StringVar(
+            value=f"Selecione entre {MIN_IMAGES} e {MAX_IMAGES} imagens."
+        )
         self._build()
 
     def _build(self) -> None:
@@ -113,8 +117,20 @@ class RifeAnimator(tk.Tk):
 
     def select_images(self) -> None:
         selected = filedialog.askopenfilenames(filetypes=[("Imagens", "*.png *.jpg *.jpeg *.webp")])
-        self.images.extend(Path(path) for path in selected if Path(path) not in self.images)
+        new_images = [
+            Path(path)
+            for path in selected
+            if Path(path) not in self.images
+        ]
+        available = MAX_IMAGES - len(self.images)
+        self.images.extend(new_images[:available])
         self.refresh_list()
+        if len(new_images) > available:
+            messagebox.showwarning(
+                "Limite de imagens",
+                f"Foram adicionadas as primeiras {available} imagens novas. "
+                f"O limite por sequência é {MAX_IMAGES}.",
+            )
 
     def refresh_list(self) -> None:
         self.listbox.delete(0, "end")
@@ -186,4 +202,3 @@ class RifeAnimator(tk.Tk):
 
 if __name__ == "__main__":
     RifeAnimator().mainloop()
-
