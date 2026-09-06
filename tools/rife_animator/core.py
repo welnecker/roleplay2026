@@ -148,6 +148,7 @@ def render_with_vulkan(
                 "-n", str(target_frames), "-m", model,
             ],
             progress=progress,
+            cwd=rife.parent,
         )
         progress("Montando o MP4 final...")
         _run(

@@ -67,8 +67,12 @@ def test_vulkan_gera_ciclo_de_dois_segundos_e_mp4_de_doze(
     ffmpeg = tmp_path / "ffmpeg.exe"
     rife.touch()
     ffmpeg.touch()
-    commands: list[list[str]] = []
-    monkeypatch.setattr(core, "_run", lambda command, **_kwargs: commands.append(command))
+    calls: list[tuple[list[str], dict]] = []
+    monkeypatch.setattr(
+        core,
+        "_run",
+        lambda command, **kwargs: calls.append((command, kwargs)),
+    )
 
     output = core.render_with_vulkan(
         images,
@@ -78,7 +82,9 @@ def test_vulkan_gera_ciclo_de_dois_segundos_e_mp4_de_doze(
         settings=RenderSettings(duration_seconds=12, cycle_seconds=2, fps=24),
     )
 
+    commands = [command for command, _kwargs in calls]
     assert output.name == "scene.mp4"
     assert commands[0][commands[0].index("-n") + 1] == "49"
+    assert calls[0][1]["cwd"] == rife.parent
     assert commands[1][commands[1].index("-t") + 1] == "12.000"
     assert "+faststart" in commands[1]
