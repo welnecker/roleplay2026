@@ -100,12 +100,14 @@ def _build_frame_prompt_with_continuity(
     character_name: str,
     user_name: str,
     movement: Any,
+    actor_names: dict[str, str] | None = None,
 ) -> str:
     assert _original_build_frame_prompt is not None
     prompt = _original_build_frame_prompt(
         character_name=character_name,
         user_name=user_name,
         movement=movement,
+        actor_names=actor_names,
     )
     frame = novel_frame_patch._frame_from_movement(movement)
     if not isinstance(frame, dict):

@@ -518,6 +518,109 @@ def story_identity_screen(
     )
 
 
+def story_cast_screen(
+    card: StoryCard,
+    *,
+    initial_names: dict[str, str] | None,
+    on_back: Callable[[], None],
+    on_continue: Callable[[dict[str, str]], str | None],
+) -> ft.Control:
+    """Personaliza o elenco declarado pelo card antes de consumir a entrada."""
+
+    supplied = dict(initial_names or {})
+    fields = {
+        member.actor_id: ft.TextField(
+            label=member.label,
+            hint_text=member.default_name,
+            value=str(supplied.get(member.actor_id) or member.default_name).strip(),
+            border_radius=14,
+        )
+        for member in card.cast_members
+    }
+    error = ft.Text(size=12, color="#B42318", visible=False)
+
+    def use_defaults(_event: object = None) -> None:
+        for member in card.cast_members:
+            fields[member.actor_id].value = member.default_name
+            _update_attached(fields[member.actor_id])
+        error.visible = False
+        error.value = ""
+        _update_attached(error)
+
+    def submit(_event: object = None) -> None:
+        names = {
+            member.actor_id: str(fields[member.actor_id].value or "").strip()
+            for member in card.cast_members
+        }
+        if any(not value for value in names.values()):
+            message = "Informe um nome para cada personagem."
+        elif len({value.casefold() for value in names.values()}) != len(names):
+            message = "Use um nome diferente para cada personagem."
+        else:
+            message = on_continue(names)
+        if message is None:
+            return
+        error.value = message
+        error.visible = True
+        _update_attached(error)
+
+    return ft.Container(
+        expand=True,
+        bgcolor=BACKGROUND,
+        alignment=ft.Alignment.CENTER,
+        padding=ft.Padding.symmetric(horizontal=22, vertical=24),
+        content=ft.Column(
+            width=520,
+            scroll=ft.ScrollMode.AUTO,
+            spacing=18,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            controls=[
+                ft.TextButton("← Voltar aos cards", on_click=lambda _event: on_back()),
+                ft.Container(
+                    bgcolor=SURFACE,
+                    border_radius=24,
+                    padding=26,
+                    content=ft.Column(
+                        spacing=17,
+                        controls=[
+                            ft.Text(
+                                "Dê nomes à sua fantasia",
+                                size=27,
+                                weight=ft.FontWeight.BOLD,
+                                color=INK,
+                            ),
+                            ft.Text(
+                                "Personalize os personagens desta história ou continue com os nomes originais.",
+                                size=14,
+                                color=MUTED,
+                            ),
+                            *[fields[member.actor_id] for member in card.cast_members],
+                            ft.Text(
+                                "Confira os nomes antes de começar. Eles permanecerão durante toda esta experiência.",
+                                size=12,
+                                color=MUTED,
+                            ),
+                            error,
+                            ft.OutlinedButton(
+                                "Usar nomes originais",
+                                height=46,
+                                on_click=use_defaults,
+                            ),
+                            ft.FilledButton(
+                                "Confirmar e entrar na história",
+                                height=50,
+                                bgcolor=ACCENT,
+                                color="#FFFFFF",
+                                on_click=submit,
+                            ),
+                        ],
+                    ),
+                ),
+            ],
+        ),
+    )
+
+
 def payment_screen(
     card: StoryCard,
     *,
@@ -686,5 +789,6 @@ __all__ = [
     "library_screen",
     "login_screen",
     "payment_screen",
+    "story_cast_screen",
     "story_identity_screen",
 ]

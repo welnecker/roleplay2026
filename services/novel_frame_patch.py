@@ -254,9 +254,22 @@ def _frame_from_movement(movement: Any) -> dict[str, Any] | None:
     return raw if isinstance(raw, dict) else None
 
 
-def _actor_visible_name(actor: str, *, character_name: str, user_name: str) -> str:
+def _actor_visible_name(
+    actor: str,
+    *,
+    character_name: str,
+    user_name: str,
+    actor_names: dict[str, str] | None = None,
+) -> str:
     resolved_actor, _impact_balloon = _actor_balloon_directive(actor)
     clean = _plain(resolved_actor)
+    aliases = {
+        _plain(actor_id): str(name or "").strip()
+        for actor_id, name in dict(actor_names or {}).items()
+        if str(actor_id or "").strip() and str(name or "").strip()
+    }
+    if clean in aliases:
+        return aliases[clean]
     if clean in {"usuario", "user", "protagonista", "voce"}:
         return str(user_name or "Você").strip() or "Você"
     if clean in {_plain(character_name), "personagem", "p1"}:
@@ -269,6 +282,7 @@ def build_frame_prompt(
     character_name: str,
     user_name: str,
     movement: Any,
+    actor_names: dict[str, str] | None = None,
 ) -> str:
     frame = _frame_from_movement(movement)
     if frame is None:
@@ -289,6 +303,7 @@ def build_frame_prompt(
                 str(entry.get("actor", "")),
                 character_name=character_name,
                 user_name=protagonist,
+                actor_names=actor_names,
             )
 
     authored = json.dumps(normalized, ensure_ascii=False, indent=2)
@@ -362,12 +377,20 @@ Não omita, não duplique e não acrescente nenhuma entry.
 """.strip()
 
 
-def _prompt_wrapper(*, character_name: str, user_name: str, movement: Any, suppress_user_name: bool = False) -> str:
+def _prompt_wrapper(
+    *,
+    character_name: str,
+    user_name: str,
+    movement: Any,
+    suppress_user_name: bool = False,
+    actor_names: dict[str, str] | None = None,
+) -> str:
     if _frame_from_movement(movement) is not None:
         return build_frame_prompt(
             character_name=character_name,
             user_name=user_name,
             movement=movement,
+            actor_names=actor_names,
         )
     assert _original_build_novel_prompt is not None
     return _original_build_novel_prompt(

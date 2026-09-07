@@ -60,6 +60,7 @@ def build_immersive_context(profile: dict[str, Any] | None) -> str:
     body_route = str(profile.get("body_route", "") or "").strip()
     appearance = str(profile.get("appearance", "") or "").strip()
     intimate = str(profile.get("intimate", "") or "").strip()
+    cast_names = profile.get("cast_names")
     if name:
         facts.append(f"Nome escolhido pelo usuário: {name}.")
     if story_gender:
@@ -70,6 +71,12 @@ def build_immersive_context(profile: dict[str, Any] | None) -> str:
         facts.append(f"Aparência visível informada para esta sessão: {appearance}")
     if intimate:
         facts.append(f"Detalhes íntimos informados para esta sessão: {intimate}")
+    if isinstance(cast_names, dict) and cast_names:
+        names = ", ".join(
+            f"{str(actor_id)}={str(value)}"
+            for actor_id, value in cast_names.items()
+        )
+        facts.append(f"Nomes personalizados do elenco: {names}.")
     if not facts:
         return ""
     return (
@@ -80,12 +87,12 @@ def build_immersive_context(profile: dict[str, Any] | None) -> str:
     )
 
 
-def persistent_profile_payload(profile: dict[str, Any] | None) -> dict[str, str]:
+def persistent_profile_payload(profile: dict[str, Any] | None) -> dict[str, Any]:
     """Retorna somente texto autorizado para a memória da run; nunca bytes da foto."""
 
     if not profile or not profile.get("completed"):
         return {}
-    return {
+    payload: dict[str, Any] = {
         key: str(profile.get(key, "") or "").strip()
         for key in (
             "preferred_name",
@@ -96,6 +103,16 @@ def persistent_profile_payload(profile: dict[str, Any] | None) -> dict[str, str]
         )
         if str(profile.get(key, "") or "").strip()
     }
+    if str(profile.get("identity_mode", "") or "").strip() == "cast":
+        cast_names = profile.get("cast_names")
+        if isinstance(cast_names, dict) and cast_names:
+            payload["identity_mode"] = "cast"
+            payload["cast_names"] = {
+                str(actor_id): str(value)
+                for actor_id, value in cast_names.items()
+                if str(actor_id).strip() and str(value).strip()
+            }
+    return payload
 
 
 def recover_persistent_profile(messages: list[dict[str, object]]) -> dict[str, Any] | None:
@@ -125,6 +142,18 @@ def recover_persistent_profile(messages: list[dict[str, object]]) -> dict[str, A
                     "Não binário": "De forma neutra",
                     "Prefiro não informar": "De forma neutra",
                 }.get(legacy_gender, legacy_gender)
+            cast_names = payload.get("cast_names")
+            if (
+                str(payload.get("identity_mode", "") or "").strip() == "cast"
+                and isinstance(cast_names, dict)
+                and cast_names
+            ):
+                recovered["identity_mode"] = "cast"
+                recovered["cast_names"] = {
+                    str(actor_id): str(value)
+                    for actor_id, value in cast_names.items()
+                    if str(actor_id).strip() and str(value).strip()
+                }
             return recovered
     return None
 

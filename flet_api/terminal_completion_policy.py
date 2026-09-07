@@ -115,12 +115,14 @@ def install() -> None:
         account: Any,
         package_id: str,
         expected_frame_id: str,
+        **kwargs: Any,
     ) -> RunFrame:
         frame = original_reveal(
             self,
             account=account,
             package_id=package_id,
             expected_frame_id=expected_frame_id,
+            **kwargs,
         )
         fully_revealed = frame.entry_count <= 0 or frame.revealed_entries >= frame.entry_count
         if not fully_revealed or not _frame_is_terminal(self, package_id, expected_frame_id):

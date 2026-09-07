@@ -47,6 +47,12 @@ from services.runtime_persistence import (
 )
 from services.paid_run_access import clear_paid_access_cache
 from services.story_profile import personalize_editorial_script
+from services.story_cast import (
+    active_cast,
+    cast_profile,
+    default_cast_names,
+    enrich_cast_profile,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +73,8 @@ class RunProfile:
     completed: bool
     preferred_name: str
     story_gender: str
+    identity_mode: str = "legacy"
+    cast_names: dict[str, str] | None = None
 
 
 def _is_idempotent_duplicate_advance(
@@ -112,7 +120,20 @@ class FletRunService:
         )
 
     @staticmethod
-    def _character(package: InstalledStoryPackage) -> tuple[str, str]:
+    def _character(
+        package: InstalledStoryPackage,
+        profile: dict[str, object] | None = None,
+    ) -> tuple[str, str]:
+        cast = active_cast(package.manifest)
+        aliases = (profile or {}).get("cast_names")
+        if cast is not None:
+            primary = cast.members[0]
+            visible_name = (
+                str(aliases.get(primary.actor_id, "") or "").strip()
+                if isinstance(aliases, dict)
+                else ""
+            )
+            return visible_name or primary.default_name, primary.actor_id
         profile = package.manifest.card.character_profile
         name = profile.name if profile else package.manifest.card.title
         return name, name.strip().casefold().replace(" ", "_") or "character"
@@ -136,7 +157,17 @@ class FletRunService:
         return str(message.get("editorial_node") or message.get("beat_id") or "").strip()
 
     @staticmethod
-    def _requested_profile(*, preferred_name: str, story_gender: str) -> dict[str, object]:
+    def _requested_profile(
+        *,
+        preferred_name: str,
+        story_gender: str,
+        package: InstalledStoryPackage | None = None,
+        cast_names: dict[str, str] | None = None,
+    ) -> dict[str, object]:
+        if cast_names is not None:
+            if package is None:
+                raise ValueError("Pacote necessário para personalizar os personagens.")
+            return cast_profile(package.manifest, cast_names)
         name = str(preferred_name or "").strip()
         gender = str(story_gender or "").strip()
         if not identity_is_complete(name, gender):
@@ -156,11 +187,16 @@ class FletRunService:
     def _profile(
         messages: list[dict[str, object]],
         requested_profile: dict[str, object],
+        package: InstalledStoryPackage | None = None,
     ) -> dict[str, object]:
         recovered = recover_persistent_profile(messages)
         if isinstance(recovered, dict):
-            return dict(recovered)
-        return dict(requested_profile)
+            profile = dict(recovered)
+        else:
+            profile = dict(requested_profile)
+        if package is not None and str(profile.get("identity_mode", "")) == "cast":
+            return enrich_cast_profile(package.manifest, profile)
+        return profile
 
     def _finish_loaded_run(
         self,
@@ -244,7 +280,7 @@ class FletRunService:
             restart=False,
             instance_id=f"flet_{user.user_id}",
         )
-        profile = self._profile(messages, requested_profile)
+        profile = self._profile(messages, requested_profile, package)
         script = personalize_editorial_script(script, profile)
         if not is_frame_script(script):
             raise ValueError("Esta história ainda não usa quadros V2 compatíveis com o Flet.")
@@ -260,12 +296,14 @@ class FletRunService:
         )
         if not target_id:
             target_id = first_frame_movement(script)[0]
-        character_name, character_id = self._character(package)
+        character_name, character_id = self._character(package, profile)
         user_name = str(profile.get("preferred_name") or user.display_name or "").strip()
+        cast_names = profile.get("cast_names")
         prompt = build_runtime_prompt(
             character_name=character_name,
             user_name=user_name,
             movement=movement,
+            actor_names=(dict(cast_names) if isinstance(cast_names, dict) else None),
         ) + build_immersive_context(profile)
         history = [
             {"role": "assistant", "content": str(item.get("content", ""))}
@@ -422,12 +460,18 @@ class FletRunService:
         *,
         account: Any,
         package_id: str,
-        preferred_name: str,
-        story_gender: str,
+        preferred_name: str = "",
+        story_gender: str = "",
+        cast_names: dict[str, str] | None = None,
     ) -> RunFrame:
+        selected_package = (
+            require_editorial_package(package_id) if cast_names is not None else None
+        )
         requested_profile = self._requested_profile(
             preferred_name=preferred_name,
             story_gender=story_gender,
+            package=selected_package,
+            cast_names=cast_names,
         )
         with self._lock(account.user_id, package_id):
             values = self._load(
@@ -470,6 +514,18 @@ class FletRunService:
                 package_id=package_id,
             )
             if run is None:
+                try:
+                    package = require_editorial_package(package_id)
+                except (KeyError, ValueError):
+                    package = None
+                if package is not None and active_cast(package.manifest) is not None:
+                    return RunProfile(
+                        False,
+                        "",
+                        "",
+                        "cast",
+                        default_cast_names(package.manifest),
+                    )
                 return RunProfile(False, str(account.display_name or "").strip(), "")
             messages = self.repository.list_interactions(
                 run_id=run.run_id,
@@ -478,12 +534,22 @@ class FletRunService:
             recovered = recover_persistent_profile(messages)
             if not isinstance(recovered, dict):
                 return RunProfile(False, str(account.display_name or "").strip(), "")
+            if str(recovered.get("identity_mode", "")) == "cast":
+                try:
+                    package = require_editorial_package(package_id)
+                    recovered = enrich_cast_profile(package.manifest, recovered)
+                except (KeyError, ValueError):
+                    return RunProfile(False, "", "", "cast", {})
             preferred_name = str(recovered.get("preferred_name", "") or "").strip()
             story_gender = str(recovered.get("story_gender", "") or "").strip()
+            cast_names = recovered.get("cast_names")
+            identity_mode = str(recovered.get("identity_mode", "legacy") or "legacy")
             return RunProfile(
                 identity_is_complete(preferred_name, story_gender),
                 preferred_name,
                 story_gender,
+                identity_mode,
+                dict(cast_names) if isinstance(cast_names, dict) else None,
             )
 
     def advance(
@@ -493,12 +559,18 @@ class FletRunService:
         package_id: str,
         expected_frame_id: str,
         revealed_entries: int,
-        preferred_name: str,
-        story_gender: str,
+        preferred_name: str = "",
+        story_gender: str = "",
+        cast_names: dict[str, str] | None = None,
     ) -> RunFrame:
+        selected_package = (
+            require_editorial_package(package_id) if cast_names is not None else None
+        )
         requested_profile = self._requested_profile(
             preferred_name=preferred_name,
             story_gender=story_gender,
+            package=selected_package,
+            cast_names=cast_names,
         )
         with self._lock(account.user_id, package_id):
             package, script, user, context, state, messages, profile = self._load(
@@ -558,12 +630,18 @@ class FletRunService:
         account: Any,
         package_id: str,
         expected_frame_id: str,
-        preferred_name: str,
-        story_gender: str,
+        preferred_name: str = "",
+        story_gender: str = "",
+        cast_names: dict[str, str] | None = None,
     ) -> RunFrame:
+        selected_package = (
+            require_editorial_package(package_id) if cast_names is not None else None
+        )
         requested_profile = self._requested_profile(
             preferred_name=preferred_name,
             story_gender=story_gender,
+            package=selected_package,
+            cast_names=cast_names,
         )
         with self._lock(account.user_id, package_id):
             package, script, _user, context, state, messages, _profile = self._load(

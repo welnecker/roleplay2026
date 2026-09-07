@@ -17,6 +17,7 @@ from flet_client.screens import (
     library_screen,
     login_screen,
     payment_screen,
+    story_cast_screen,
     story_identity_screen,
 )
 from flet_client.story_end_screen import story_end_screen
@@ -99,6 +100,7 @@ async def main(
         card: StoryCard,
         preferred_name: str,
         story_gender: str,
+        cast_names: dict[str, str] | None = None,
         current: ApiRunFrame | None = None,
         history: tuple[FrameVisualRow, ...] = (),
     ) -> None:
@@ -110,6 +112,7 @@ async def main(
                 card.package_id,
                 preferred_name=preferred_name,
                 story_gender=story_gender,
+                cast_names=cast_names,
             )
             frame = parse_visual_frame(run_frame.content)
         except FletApiError as exc:
@@ -143,6 +146,7 @@ async def main(
                     revealed_entries=len(frame.entries),
                     preferred_name=preferred_name,
                     story_gender=story_gender,
+                    cast_names=cast_names,
                 )
             except FletApiError as exc:
                 handle_api_error(exc)
@@ -151,6 +155,7 @@ async def main(
                 card,
                 preferred_name,
                 story_gender,
+                cast_names,
                 following,
                 history=view.history_snapshot(),
             )
@@ -167,6 +172,7 @@ async def main(
                     frame_id=run_frame.frame_id,
                     preferred_name=preferred_name,
                     story_gender=story_gender,
+                    cast_names=cast_names,
                 )
             except FletApiError as exc:
                 handle_api_error(exc)
@@ -270,7 +276,27 @@ async def main(
             handle_api_error(exc)
             return
         if profile.completed:
-            show_player(card, profile.preferred_name, profile.story_gender)
+            show_player(
+                card,
+                profile.preferred_name,
+                profile.story_gender,
+                profile.cast_names if profile.identity_mode == "cast" else None,
+            )
+            return
+
+        if card.cast_members:
+            def begin_cast(cast_names: dict[str, str]) -> str | None:
+                run_blocking(show_player, card, "", "", cast_names)
+                return None
+
+            show(
+                story_cast_screen(
+                    card,
+                    initial_names=profile.cast_names,
+                    on_back=lambda: show_library(active_cards, active_display_name),
+                    on_continue=begin_cast,
+                )
+            )
             return
 
         def begin(preferred_name: str, story_gender: str) -> str | None:

@@ -71,15 +71,21 @@ def install() -> None:
         *,
         account: Any,
         package_id: str,
-        preferred_name: str,
-        story_gender: str,
+        preferred_name: str = "",
+        story_gender: str = "",
+        cast_names: dict[str, str] | None = None,
     ) -> RunFrame:
+        identity: dict[str, object] = {
+            "preferred_name": preferred_name,
+            "story_gender": story_gender,
+        }
+        if cast_names is not None:
+            identity["cast_names"] = cast_names
         frame = original_open(
             self,
             account=account,
             package_id=package_id,
-            preferred_name=preferred_name,
-            story_gender=story_gender,
+            **identity,
         )
         if frame.finished:
             _remember(account.user_id, frame)
@@ -96,19 +102,25 @@ def install() -> None:
         account: Any,
         package_id: str,
         expected_frame_id: str,
-        preferred_name: str,
-        story_gender: str,
+        preferred_name: str = "",
+        story_gender: str = "",
+        cast_names: dict[str, str] | None = None,
     ) -> RunFrame:
         terminal = _cached(account.user_id, package_id, expected_frame_id)
         if terminal is not None:
             return terminal
+        identity: dict[str, object] = {
+            "preferred_name": preferred_name,
+            "story_gender": story_gender,
+        }
+        if cast_names is not None:
+            identity["cast_names"] = cast_names
         frame = original_reveal(
             self,
             account=account,
             package_id=package_id,
             expected_frame_id=expected_frame_id,
-            preferred_name=preferred_name,
-            story_gender=story_gender,
+            **identity,
         )
         _remember(account.user_id, frame)
         return frame
@@ -121,20 +133,26 @@ def install() -> None:
         package_id: str,
         expected_frame_id: str,
         revealed_entries: int,
-        preferred_name: str,
-        story_gender: str,
+        preferred_name: str = "",
+        story_gender: str = "",
+        cast_names: dict[str, str] | None = None,
     ) -> RunFrame:
         terminal = _cached(account.user_id, package_id, expected_frame_id)
         if terminal is not None:
             return terminal
+        identity: dict[str, object] = {
+            "preferred_name": preferred_name,
+            "story_gender": story_gender,
+        }
+        if cast_names is not None:
+            identity["cast_names"] = cast_names
         frame = original_advance(
             self,
             account=account,
             package_id=package_id,
             expected_frame_id=expected_frame_id,
             revealed_entries=revealed_entries,
-            preferred_name=preferred_name,
-            story_gender=story_gender,
+            **identity,
         )
         _remember(account.user_id, frame)
         return frame

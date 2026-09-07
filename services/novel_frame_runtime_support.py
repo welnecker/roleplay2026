@@ -16,7 +16,13 @@ def is_frame_script(script: Any) -> bool:
     return str(raw.get("authoring_source", "") or "").strip() == _AUTHORING_SOURCE
 
 
-def build_runtime_prompt(*, character_name: str, user_name: str, movement: Any) -> str:
+def build_runtime_prompt(
+    *,
+    character_name: str,
+    user_name: str,
+    movement: Any,
+    actor_names: dict[str, str] | None = None,
+) -> str:
     """Seleciona o prompt correto sem depender da ordem de patches do frontend."""
 
     if novel_frame_patch._frame_from_movement(movement) is not None:
@@ -24,6 +30,7 @@ def build_runtime_prompt(*, character_name: str, user_name: str, movement: Any) 
             character_name=character_name,
             user_name=user_name,
             movement=movement,
+            actor_names=actor_names,
         )
 
     from services.novel_v2_adapter import build_novel_prompt

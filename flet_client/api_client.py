@@ -5,7 +5,7 @@ from typing import Any
 
 import requests
 
-from flet_client.models import AccessStatus, ProgressStatus, StoryCard
+from flet_client.models import AccessStatus, ProgressStatus, StoryCard, StoryCastMember
 
 
 class FletApiError(RuntimeError):
@@ -55,6 +55,8 @@ class ApiRunProfile:
     completed: bool
     preferred_name: str
     story_gender: str
+    identity_mode: str = "legacy"
+    cast_names: dict[str, str] | None = None
 
 
 class FletApiClient:
@@ -196,6 +198,16 @@ class FletApiClient:
                     profile_personality=str(row.get("profile_personality", "") or ""),
                     profile_intention=str(row.get("profile_intention", "") or ""),
                     replay_requires_purchase=bool(row.get("replay_requires_purchase", False)),
+                    cast_members=tuple(
+                        StoryCastMember(
+                            actor_id=str(member.get("actor_id", "") or ""),
+                            label=str(member.get("label", "") or ""),
+                            default_name=str(member.get("default_name", "") or ""),
+                            gender=str(member.get("gender", "neutral") or "neutral"),
+                        )
+                        for member in row.get("cast_members", []) or []
+                        if isinstance(member, dict)
+                    ),
                 )
             )
         return result
@@ -261,17 +273,22 @@ class FletApiClient:
         self,
         package_id: str,
         *,
-        preferred_name: str,
-        story_gender: str,
+        preferred_name: str = "",
+        story_gender: str = "",
+        cast_names: dict[str, str] | None = None,
     ) -> ApiRunFrame:
+        identity = (
+            {"cast_names": dict(cast_names)}
+            if cast_names is not None
+            else {"preferred_name": preferred_name, "story_gender": story_gender}
+        )
         return self._run_frame(
             self._request(
                 "POST",
                 "/api/v1/runs/open",
                 json={
                     "package_id": package_id,
-                    "preferred_name": preferred_name,
-                    "story_gender": story_gender,
+                    **identity,
                 },
             )
         )
@@ -287,6 +304,15 @@ class FletApiClient:
             completed=bool(payload.get("completed", False)),
             preferred_name=str(payload.get("preferred_name", "") or ""),
             story_gender=str(payload.get("story_gender", "") or ""),
+            identity_mode=str(payload.get("identity_mode", "legacy") or "legacy"),
+            cast_names=(
+                {
+                    str(actor_id): str(value)
+                    for actor_id, value in payload.get("cast_names", {}).items()
+                }
+                if isinstance(payload.get("cast_names"), dict)
+                else None
+            ),
         )
 
     def advance_run(
@@ -295,9 +321,15 @@ class FletApiClient:
         package_id: str,
         frame_id: str,
         revealed_entries: int,
-        preferred_name: str,
-        story_gender: str,
+        preferred_name: str = "",
+        story_gender: str = "",
+        cast_names: dict[str, str] | None = None,
     ) -> ApiRunFrame:
+        identity = (
+            {"cast_names": dict(cast_names)}
+            if cast_names is not None
+            else {"preferred_name": preferred_name, "story_gender": story_gender}
+        )
         return self._run_frame(
             self._request(
                 "POST",
@@ -306,8 +338,7 @@ class FletApiClient:
                     "package_id": package_id,
                     "frame_id": frame_id,
                     "revealed_entries": revealed_entries,
-                    "preferred_name": preferred_name,
-                    "story_gender": story_gender,
+                    **identity,
                 },
             )
         )
@@ -317,9 +348,15 @@ class FletApiClient:
         *,
         package_id: str,
         frame_id: str,
-        preferred_name: str,
-        story_gender: str,
+        preferred_name: str = "",
+        story_gender: str = "",
+        cast_names: dict[str, str] | None = None,
     ) -> ApiRunFrame:
+        identity = (
+            {"cast_names": dict(cast_names)}
+            if cast_names is not None
+            else {"preferred_name": preferred_name, "story_gender": story_gender}
+        )
         return self._run_frame(
             self._request(
                 "POST",
@@ -327,8 +364,7 @@ class FletApiClient:
                 json={
                     "package_id": package_id,
                     "frame_id": frame_id,
-                    "preferred_name": preferred_name,
-                    "story_gender": story_gender,
+                    **identity,
                 },
             )
         )

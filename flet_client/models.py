@@ -17,6 +17,14 @@ class ProgressStatus(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class StoryCastMember:
+    actor_id: str
+    label: str
+    default_name: str
+    gender: str = "neutral"
+
+
+@dataclass(frozen=True, slots=True)
 class StoryCard:
     """Contrato público do card recebido pelo cliente instalável.
 
@@ -40,6 +48,7 @@ class StoryCard:
     profile_personality: str = ""
     profile_intention: str = ""
     replay_requires_purchase: bool = False
+    cast_members: tuple[StoryCastMember, ...] = ()
 
 
-__all__ = ["AccessStatus", "ProgressStatus", "StoryCard"]
+__all__ = ["AccessStatus", "ProgressStatus", "StoryCard", "StoryCastMember"]

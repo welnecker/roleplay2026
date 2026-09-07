@@ -263,6 +263,7 @@ def test_catalog_marks_free_owned_and_locked_server_side() -> None:
         "access_status", "price_label", "chapter_label", "cover_url",
         "is_tasting", "profile_name", "profile_identity",
         "profile_personality", "profile_intention", "replay_requires_purchase",
+        "cast_members",
     }
 
     cover = test_client.get("/api/v1/catalog/story.owned/cover")
@@ -378,6 +379,8 @@ def test_perfil_da_run_e_recuperado_antes_da_abertura() -> None:
         "completed": True,
         "preferred_name": "Pessoa",
         "story_gender": "Como homem",
+        "identity_mode": "legacy",
+        "cast_names": {},
     }
 
 

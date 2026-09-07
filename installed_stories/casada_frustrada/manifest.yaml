@@ -31,10 +31,21 @@ card:
   chapter_label: ''
   cover: assets/capas/capa1_casada.webp
   character_profile:
-    name: Mary
-    identity: Mary é um tesão de mulher. Ela ama o marido, mas não suporta mais ser ignorada.
-    personality: Seu professor da faculdade já sacou que Mary está triste. Ele tem o antídoto pra tudo isso.
+    name: A esposa
+    identity: Uma mulher desejável que ama o marido, mas não suporta mais ser ignorada.
+    personality: Seu professor da faculdade já percebeu sua frustração. Ele tem o antídoto para tudo isso.
     intention: Enquanto você se estressa no trabalho, sua esposa está prestes a sair do atraso em um seminário fake... na casa do professor...
+cast_customization:
+  enabled: true
+  members:
+    - actor_id: mary
+      label: A esposa
+      default_name: Mary
+      gender: feminine
+    - actor_id: usuario
+      label: O marido
+      default_name: Doni
+      gender: masculine
 commerce:
   access: paid
   price_cents: 990

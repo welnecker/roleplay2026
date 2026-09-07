@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import FileResponse, JSONResponse
 from gspread.exceptions import APIError
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from flet_api.sessions import SessionStore
 from flet_api.payments import PaymentGateway, PaymentState, build_payment_gateway
@@ -60,6 +60,13 @@ class LoginResponse(BaseModel):
     user: UserResponse
 
 
+class StoryCastMemberResponse(BaseModel):
+    actor_id: str
+    label: str
+    default_name: str
+    gender: str
+
+
 class StoryCardResponse(BaseModel):
     package_id: str
     title: str
@@ -76,6 +83,7 @@ class StoryCardResponse(BaseModel):
     profile_personality: str
     profile_intention: str
     replay_requires_purchase: bool
+    cast_members: list[StoryCastMemberResponse]
 
 
 class CatalogResponse(BaseModel):
@@ -109,8 +117,17 @@ class RunIdentityRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     package_id: str
-    preferred_name: str = Field(min_length=1)
-    story_gender: Literal["Como homem", "Como mulher", "De forma neutra"]
+    preferred_name: str = ""
+    story_gender: Literal["Como homem", "Como mulher", "De forma neutra"] | None = None
+    cast_names: dict[str, str] | None = None
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> "RunIdentityRequest":
+        if self.cast_names is not None:
+            return self
+        if not self.preferred_name or self.story_gender is None:
+            raise ValueError("Informe a identidade narrativa ou o elenco personalizado.")
+        return self
 
 
 class RunOpenRequest(RunIdentityRequest):
@@ -142,6 +159,20 @@ class RunProfileResponse(BaseModel):
     completed: bool
     preferred_name: str
     story_gender: str
+    identity_mode: str = "legacy"
+    cast_names: dict[str, str] = Field(default_factory=dict)
+
+
+def _run_identity_kwargs(payload: RunIdentityRequest) -> dict[str, object]:
+    """Preserva a assinatura legada quando o cliente não usa elenco."""
+
+    kwargs: dict[str, object] = {
+        "preferred_name": payload.preferred_name,
+        "story_gender": payload.story_gender or "",
+    }
+    if payload.cast_names is not None:
+        kwargs["cast_names"] = payload.cast_names
+    return kwargs
 
 
 @dataclass(slots=True)
@@ -186,6 +217,15 @@ def _card_response(
         profile_personality=card.profile_personality,
         profile_intention=card.profile_intention,
         replay_requires_purchase=card.replay_requires_purchase,
+        cast_members=[
+            StoryCastMemberResponse(
+                actor_id=member.actor_id,
+                label=member.label,
+                default_name=member.default_name,
+                gender=member.gender,
+            )
+            for member in card.cast_members
+        ],
     )
 
 
@@ -480,6 +520,8 @@ def create_api_app(services: ApiServices) -> FastAPI:
             completed=profile.completed,
             preferred_name=profile.preferred_name,
             story_gender=profile.story_gender,
+            identity_mode=profile.identity_mode,
+            cast_names=dict(profile.cast_names or {}),
         )
 
     @app.post("/api/v1/runs/open", response_model=RunFrameResponse)
@@ -506,8 +548,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
             frame = run_service().open(
                 account=user,
                 package_id=payload.package_id,
-                preferred_name=payload.preferred_name,
-                story_gender=payload.story_gender,
+                **_run_identity_kwargs(payload),
             )
         except (KeyError, ValueError, PermissionError, RuntimeError) as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc).strip("'")) from exc
@@ -526,8 +567,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
                 package_id=payload.package_id,
                 expected_frame_id=payload.frame_id,
                 revealed_entries=payload.revealed_entries,
-                preferred_name=payload.preferred_name,
-                story_gender=payload.story_gender,
+                **_run_identity_kwargs(payload),
             )
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
@@ -547,8 +587,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
                 account=user,
                 package_id=payload.package_id,
                 expected_frame_id=payload.frame_id,
-                preferred_name=payload.preferred_name,
-                story_gender=payload.story_gender,
+                **_run_identity_kwargs(payload),
             )
         except (KeyError, ValueError, RuntimeError) as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc).strip("'")) from exc

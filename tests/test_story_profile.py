@@ -11,6 +11,7 @@ from services.story_profile import (
     opening_with_required_name,
     personalize_editorial_script,
     profile_tags,
+    resolve_movement_text,
     resolve_profile_text,
 )
 
@@ -80,6 +81,38 @@ def test_placeholders_neutros_usam_somente_o_nome() -> None:
         {"preferred_name": "Alex", "story_gender": "De forma neutra"},
     )
     assert rendered == "Alex viu Alex; depois, Alex entrou."
+
+
+def test_elenco_personaliza_marcadores_e_nomes_autorais() -> None:
+    profile = {
+        "preferred_name": "Edu",
+        "story_gender": "Como homem",
+        "cast_names": {"mary": "Sandra", "usuario": "Edu"},
+        "cast_default_names": {"mary": "Mary", "usuario": "Doni"},
+    }
+
+    assert resolve_profile_text(
+        "Mary chamou {{nome:usuario}}. {{mary}} respondeu a Doni.", profile
+    ) == "Sandra chamou Edu. Sandra respondeu a Edu."
+
+
+def test_elenco_nao_altera_ids_estruturais_do_quadro_v2() -> None:
+    movement = (
+        'NOVEL_FRAME_V2\n'
+        '{"frame_id":"quadro-1","entries":['
+        '{"actor":"mary","instruction":"Mary chama {{nome}}."}]}'
+    )
+    profile = {
+        "preferred_name": "Edu",
+        "story_gender": "Como homem",
+        "cast_names": {"mary": "Sandra", "usuario": "Edu"},
+        "cast_default_names": {"mary": "Mary", "usuario": "Doni"},
+    }
+
+    rendered = resolve_movement_text(movement, profile)
+
+    assert '"actor":"mary"' in rendered
+    assert '"instruction":"Sandra chama Edu."' in rendered
 
 
 def test_genero_ausente_tem_fallback_neutro_e_perfis_antigos_sao_aceitos() -> None:

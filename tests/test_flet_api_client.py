@@ -46,6 +46,20 @@ def catalog_payload() -> dict[str, Any]:
                 "profile_personality": "Personalidade",
                 "profile_intention": "Intenção",
                 "replay_requires_purchase": True,
+                "cast_members": [
+                    {
+                        "actor_id": "mary",
+                        "label": "A esposa",
+                        "default_name": "Mary",
+                        "gender": "feminine",
+                    },
+                    {
+                        "actor_id": "usuario",
+                        "label": "O marido",
+                        "default_name": "Doni",
+                        "gender": "masculine",
+                    },
+                ],
             }
         ]
     }
@@ -76,6 +90,7 @@ def test_cliente_flet_autentica_e_envia_bearer_ao_catalogo() -> None:
     assert user.display_name == "Pessoa"
     assert cards[0].access_status == AccessStatus.OWNED
     assert cards[0].cover_url.startswith("https://api.example.com/")
+    assert cards[0].cast_members[0].default_name == "Mary"
     assert session.calls[1][2]["headers"]["Authorization"] == "Bearer token-opaco"
 
 
@@ -257,6 +272,33 @@ def test_cliente_flet_abre_e_avanca_run_real() -> None:
     assert session.calls[1][2]["json"]["frame_id"] == "quadro-1"
     assert session.calls[1][2]["json"]["preferred_name"] == "Janio"
     assert session.calls[1][2]["json"]["story_gender"] == "Como homem"
+
+
+def test_cliente_flet_envia_somente_o_elenco_no_modo_novo() -> None:
+    frame = {
+        "run_id": "run-1",
+        "package_id": "roleplay2026.casada_frustrada",
+        "frame_id": "quadro-1",
+        "content": "[QUADRO quadro-1]\n[/QUADRO]",
+        "image_url": "",
+        "entry_image_urls": [],
+        "revealed_entries": 0,
+        "entry_count": 0,
+        "finished": False,
+    }
+    session = FakeSession([FakeResponse(200, frame)])
+    client = FletApiClient("https://api.example.com", session=session)  # type: ignore[arg-type]
+    client.access_token = "token"
+
+    client.open_run(
+        "roleplay2026.casada_frustrada",
+        cast_names={"mary": "Sandra", "usuario": "Edu"},
+    )
+
+    assert session.calls[0][2]["json"] == {
+        "package_id": "roleplay2026.casada_frustrada",
+        "cast_names": {"mary": "Sandra", "usuario": "Edu"},
+    }
 
 
 def test_cliente_web_publica_imagens_da_run_recebidas_pelo_loopback() -> None:

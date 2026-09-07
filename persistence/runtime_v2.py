@@ -475,7 +475,7 @@ class GoogleSheetsV2RuntimeRepository:
         run_id: str,
         user_id: str,
         package_id: str,
-        profile: dict[str, str],
+        profile: dict[str, Any],
     ) -> None:
         """Anexa a identidade narrativa ao último quadro de uma run legada."""
 

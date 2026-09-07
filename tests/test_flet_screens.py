@@ -8,9 +8,10 @@ from flet_client.screens import (
     flet_image_source,
     library_screen,
     login_screen,
+    story_cast_screen,
     story_identity_screen,
 )
-from platform_core.models import AccessStatus, ProgressStatus, StoryCard
+from platform_core.models import AccessStatus, ProgressStatus, StoryCard, StoryCastMember
 
 
 def _walk(control: ft.Control):
@@ -161,6 +162,52 @@ def test_identidade_narrativa_exige_nome_e_genero_antes_de_iniciar() -> None:
     start.on_click(None)
 
     assert submitted == [("Janio", "Como mulher")]
+
+
+def test_elenco_e_preenchido_com_padrao_e_entrega_todos_os_nomes() -> None:
+    story = StoryCard(
+        package_id="roleplay2026.casada_frustrada",
+        title="Casada frustrada",
+        subtitle="Uma visita inesperada.",
+        description="Descrição",
+        genres=("Romance",),
+        access_status=AccessStatus.OWNED,
+        progress_status=ProgressStatus.NOT_STARTED,
+        cast_members=(
+            StoryCastMember("mary", "A esposa", "Mary", "feminine"),
+            StoryCastMember("usuario", "O marido", "Doni", "masculine"),
+        ),
+    )
+    submitted: list[dict[str, str]] = []
+    screen = story_cast_screen(
+        story,
+        initial_names=None,
+        on_back=lambda: None,
+        on_continue=lambda names: submitted.append(names) or None,
+    )
+    fields = {
+        item.label: item
+        for item in _walk(screen)
+        if isinstance(item, ft.TextField)
+    }
+    assert fields["A esposa"].value == "Mary"
+    assert fields["O marido"].value == "Doni"
+    fields["A esposa"].value = "Sandra"
+    fields["O marido"].value = "Edu"
+
+    start = next(
+        item
+        for item in _walk(screen)
+        if isinstance(item, ft.FilledButton)
+        and item.content == "Confirmar e entrar na história"
+    )
+    start.on_click(None)
+
+    assert submitted == [{"mary": "Sandra", "usuario": "Edu"}]
+    assert not any(
+        isinstance(item, ft.OutlinedButton) and item.content == "Como mulher"
+        for item in _walk(screen)
+    )
 
 
 def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:

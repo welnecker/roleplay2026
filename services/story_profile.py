@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import unicodedata
 from typing import Any, Mapping
 
@@ -15,6 +17,18 @@ _BODY_ROUTE_TAGS = {
     "Corpo masculino": "CORPO_MASCULINO",
     "Corpo feminino": "CORPO_FEMININO",
     "Corpo intersexo": "CORPO_INTERSEXO",
+}
+_FRAME_PREFIX = "NOVEL_FRAME_V2\n"
+_STRUCTURAL_KEYS = {
+    "actor",
+    "actor_id",
+    "beat_id",
+    "block_id",
+    "character_id",
+    "frame_id",
+    "line_id",
+    "next_beat_id",
+    "speaker_id",
 }
 
 
@@ -65,12 +79,75 @@ def resolve_profile_text(text: str, profile: Mapping[str, Any] | None) -> str:
     """Resolve os marcadores autorais de nome e tratamento do protagonista."""
 
     name, article_name, pronoun = _gendered_name_values(profile)
+    source = profile or {}
+    cast_names = source.get("cast_names")
+    cast_defaults = source.get("cast_default_names")
     rendered = str(text or "")
+    if isinstance(cast_names, Mapping):
+        for actor_id, visible_name in cast_names.items():
+            actor = str(actor_id or "").strip()
+            replacement = str(visible_name or "").strip()
+            if actor and replacement:
+                rendered = rendered.replace(f"{{{{nome:{actor}}}}}", replacement)
+                rendered = rendered.replace(f"{{{{{actor}}}}}", replacement)
+    if isinstance(cast_names, Mapping) and isinstance(cast_defaults, Mapping):
+        replacements = sorted(
+            (
+                (str(cast_defaults.get(actor_id, "") or "").strip(), str(value or "").strip())
+                for actor_id, value in cast_names.items()
+            ),
+            key=lambda item: len(item[0]),
+            reverse=True,
+        )
+        for authored_name, visible_name in replacements:
+            if not authored_name or not visible_name or authored_name.casefold() == visible_name.casefold():
+                continue
+            rendered = re.sub(
+                rf"(?<!\w){re.escape(authored_name)}(?!\w)",
+                lambda _match, replacement=visible_name: replacement,
+                rendered,
+                flags=re.IGNORECASE,
+            )
     # Do marcador mais específico para o mais simples, mantendo o roteiro fonte intacto.
     return (
         rendered.replace("{{**nome}}", pronoun)
         .replace("{{*nome}}", article_name)
         .replace("{{nome}}", name)
+    )
+
+
+def _resolve_frame_value(value: Any, profile: Mapping[str, Any], *, key: str = "") -> Any:
+    if key in _STRUCTURAL_KEYS:
+        return value
+    if isinstance(value, str):
+        return resolve_profile_text(value, profile)
+    if isinstance(value, list):
+        return [_resolve_frame_value(item, profile) for item in value]
+    if isinstance(value, dict):
+        return {
+            item_key: _resolve_frame_value(item, profile, key=str(item_key))
+            for item_key, item in value.items()
+        }
+    return value
+
+
+def resolve_movement_text(text: str, profile: Mapping[str, Any]) -> str:
+    """Personalize a frame payload without ever renaming stable actor IDs."""
+
+    source = str(text or "")
+    if not source.startswith(_FRAME_PREFIX):
+        return resolve_profile_text(source, profile)
+    try:
+        frame = json.loads(source[len(_FRAME_PREFIX) :])
+    except json.JSONDecodeError:
+        return resolve_profile_text(source, profile)
+    if not isinstance(frame, dict):
+        return source
+    personalized = _resolve_frame_value(frame, profile)
+    return _FRAME_PREFIX + json.dumps(
+        personalized,
+        ensure_ascii=False,
+        separators=(",", ":"),
     )
 
 
@@ -179,7 +256,7 @@ def personalize_editorial_script(
             str(beat.get("objective", "") or ""), profile
         )
         if "required_movement" in beat:
-            beat["required_movement"] = resolve_profile_text(
+            beat["required_movement"] = resolve_movement_text(
                 str(beat.get("required_movement", "") or ""), profile
             )
     for ending in scene.get("endings", []) or []:
@@ -211,4 +288,5 @@ __all__ = [
     "personalize_editorial_script",
     "profile_tags",
     "resolve_profile_text",
+    "resolve_movement_text",
 ]
