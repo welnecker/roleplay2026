@@ -7,7 +7,7 @@ import unicodedata
 from dataclasses import dataclass
 from io import BytesIO, StringIO
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping, Sequence
 from zipfile import ZIP_DEFLATED, ZipFile
 
 COLUMNS = (
@@ -21,6 +21,8 @@ COLUMNS = (
 )
 
 _TAG_RE = re.compile(r"(?ms)^[ \t]*\[([^\]\n]+)\][ \t]*(.*?)(?=^[ \t]*\[[^\]\n]+\]|\Z)")
+_CAST_NAME_RE = re.compile(r"\{\{nome:([a-zA-Z0-9_-]+)\}\}")
+CAST_GENDERS = ("feminine", "masculine", "neutral")
 
 
 class EditorError(ValueError):
@@ -40,6 +42,134 @@ class Item:
     text: str
     instruction: str
     delivery: str = "adaptavel"
+
+
+def normalize_cast_members(value: object) -> list[dict[str, str]]:
+    """Normaliza o elenco genérico salvo pelo editor e aceito pelo manifesto."""
+
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise EditorError("O elenco deve ser uma lista de personagens.")
+    result: list[dict[str, str]] = []
+    for index, raw in enumerate(value, start=1):
+        if not isinstance(raw, Mapping):
+            raise EditorError(f"Personagem {index}: configuração inválida.")
+        actor_id = slugify(str(raw.get("actor_id", "") or ""), fallback="")
+        label = str(raw.get("label", "") or "").strip()
+        default_name = str(raw.get("default_name", "") or "").strip()
+        gender = str(raw.get("gender", "neutral") or "neutral").strip().casefold()
+        gender = {
+            "feminino": "feminine",
+            "masculino": "masculine",
+            "neutro": "neutral",
+        }.get(gender, gender)
+        if not actor_id:
+            raise EditorError(f"Personagem {index}: informe um ID estrutural.")
+        if not label:
+            raise EditorError(f"Personagem {index}: informe o papel na trama.")
+        if not default_name:
+            raise EditorError(f"Personagem {index}: informe o nome inicial.")
+        if len(default_name) > 40:
+            raise EditorError(f"Personagem {index}: o nome inicial aceita até 40 caracteres.")
+        if any(character in default_name for character in "\r\n\t<>"):
+            raise EditorError(f"Personagem {index}: o nome inicial contém caracteres inválidos.")
+        if gender not in CAST_GENDERS:
+            raise EditorError(f"Personagem {index}: gênero estrutural inválido.")
+        result.append(
+            {
+                "actor_id": actor_id,
+                "label": label,
+                "default_name": default_name,
+                "gender": gender,
+            }
+        )
+    if not result:
+        raise EditorError("Cadastre ao menos um personagem no elenco.")
+    actor_ids = [member["actor_id"] for member in result]
+    if len(actor_ids) != len(set(actor_ids)):
+        raise EditorError("Cada personagem precisa ter um ID estrutural diferente.")
+    names = [member["default_name"].casefold() for member in result]
+    if len(names) != len(set(names)):
+        raise EditorError("Cada personagem precisa ter um nome inicial diferente.")
+    return result
+
+
+def cast_members_from_legacy_actors(value: object) -> list[dict[str, str]]:
+    """Abre projetos antigos, convertendo a lista por vírgulas em elenco editável."""
+
+    actors: list[str] = []
+    for raw in str(value or "").replace(";", ",").split(","):
+        actor_id = slugify(raw.strip(), fallback="")
+        if actor_id and actor_id not in actors:
+            actors.append(actor_id)
+    if not actors:
+        actors = ["usuario"]
+    return [
+        {
+            "actor_id": actor_id,
+            "label": "O participante" if actor_id == "usuario" else "A personagem",
+            "default_name": "Usuário" if actor_id == "usuario" else actor_id.replace("_", " ").title(),
+            "gender": "neutral",
+        }
+        for actor_id in actors
+    ]
+
+
+def validate_draft_cast(draft: str, cast_members: object) -> list[dict[str, str]]:
+    """Garante que tags narrativas e marcadores de nome usem atores declarados."""
+
+    members = normalize_cast_members(cast_members)
+    allowed = {member["actor_id"] for member in members}
+    for item in parse_draft(draft):
+        actor = item.actor.removesuffix("_balao")
+        if actor and actor not in allowed:
+            raise EditorError(
+                f"O ator '{actor}' aparece no roteiro, mas não está cadastrado no elenco."
+            )
+    for match in _CAST_NAME_RE.finditer(str(draft or "")):
+        actor = slugify(match.group(1), fallback="")
+        if actor not in allowed:
+            raise EditorError(
+                f"O marcador '{{{{nome:{actor}}}}}' usa um personagem não cadastrado."
+            )
+    return members
+
+
+def cast_manifest_yaml(cast_members: object) -> str:
+    members = normalize_cast_members(cast_members)
+    lines = ["cast_customization:", "  enabled: true", "  members:"]
+    for member in members:
+        lines.extend(
+            (
+                f"    - actor_id: {member['actor_id']}",
+                f"      label: {json.dumps(member['label'], ensure_ascii=False)}",
+                f"      default_name: {json.dumps(member['default_name'], ensure_ascii=False)}",
+                f"      gender: {member['gender']}",
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
+def cast_tag_guide(cast_members: object) -> str:
+    members = normalize_cast_members(cast_members)
+    lines = [
+        "ELENCO E TAGS DO ROTEIRO",
+        "",
+        "Os IDs são estruturais e não mudam quando o usuário troca os nomes.",
+        "Use {{nome:actor_id}} sempre que um nome visível aparecer no texto.",
+        "",
+    ]
+    for member in members:
+        actor_id = member["actor_id"]
+        lines.extend(
+            (
+                f"{member['label']} — nome inicial: {member['default_name']}",
+                f"  Nome no texto: {{{{nome:{actor_id}}}}}",
+                f"  Fala: [FALA {actor_id}]",
+                f"  Pensamento: [PENSAMENTO {actor_id}]",
+                "",
+            )
+        )
+    return "\n".join(lines)
 
 
 def parse_draft(draft: str) -> list[Item]:
@@ -243,6 +373,16 @@ def export_package(
 
     if project_payload is not None:
         save_project(destination / "projeto_roteiro.json", project_payload)
+        cast_members = project_payload.get("cast_members")
+        if cast_members:
+            (destination / "elenco_manifest.yaml").write_text(
+                cast_manifest_yaml(cast_members),
+                encoding="utf-8",
+            )
+            (destination / "ELENCO-E-TAGS.txt").write_text(
+                cast_tag_guide(cast_members),
+                encoding="utf-8",
+            )
     return destination
 
 

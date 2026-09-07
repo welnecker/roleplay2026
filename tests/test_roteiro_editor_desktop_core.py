@@ -96,6 +96,133 @@ def test_gendered_name_placeholders_are_preserved_in_export() -> None:
     assert rows[2]["instruction"] == "[FALA EXATA camilly] Oi, {{nome}}."
 
 
+def test_elenco_aceita_quantidade_livre_e_tags_por_personagem() -> None:
+    cast = core.normalize_cast_members(
+        [
+            {
+                "actor_id": "Mary",
+                "label": "A esposa",
+                "default_name": "Mary",
+                "gender": "feminine",
+            },
+            {
+                "actor_id": "marido",
+                "label": "O marido",
+                "default_name": "Doni",
+                "gender": "masculine",
+            },
+            {
+                "actor_id": "vizinha",
+                "label": "A vizinha",
+                "default_name": "Sandra",
+                "gender": "feminine",
+            },
+        ]
+    )
+    draft = """[DESCRIÇÃO] {{nome:mary}} observa {{nome:vizinha}}.
+[FALA mary] Oi, {{nome:vizinha}}.
+[PENSAMENTO marido] Conheço {{nome:mary}}.
+"""
+
+    assert [item["actor_id"] for item in core.validate_draft_cast(draft, cast)] == [
+        "mary",
+        "marido",
+        "vizinha",
+    ]
+
+
+def test_elenco_recusa_tag_de_personagem_nao_cadastrado() -> None:
+    cast = [
+        {
+            "actor_id": "mary",
+            "label": "A esposa",
+            "default_name": "Mary",
+            "gender": "feminine",
+        }
+    ]
+    try:
+        core.validate_draft_cast(
+            "[DESCRIÇÃO] Cena.\n[FALA professor] Olá, {{nome:mary}}.",
+            cast,
+        )
+    except core.EditorError as exc:
+        assert "professor" in str(exc)
+    else:
+        raise AssertionError("Ator não cadastrado deveria ser rejeitado")
+
+
+def test_manifesto_exportado_contem_elenco_e_nomes_iniciais() -> None:
+    rendered = core.cast_manifest_yaml(
+        [
+            {
+                "actor_id": "mary",
+                "label": "A esposa",
+                "default_name": "Mary",
+                "gender": "feminine",
+            },
+            {
+                "actor_id": "usuario",
+                "label": "O marido",
+                "default_name": "Doni",
+                "gender": "masculine",
+            },
+        ]
+    )
+
+    assert "cast_customization:" in rendered
+    assert "actor_id: mary" in rendered
+    assert 'default_name: "Doni"' in rendered
+    assert "gender: masculine" in rendered
+
+
+def test_projeto_antigo_e_convertido_para_elenco_editavel() -> None:
+    cast = core.cast_members_from_legacy_actors("Mary, Doni, mary")
+
+    assert cast == [
+        {
+            "actor_id": "mary",
+            "label": "A personagem",
+            "default_name": "Mary",
+            "gender": "neutral",
+        },
+        {
+            "actor_id": "doni",
+            "label": "A personagem",
+            "default_name": "Doni",
+            "gender": "neutral",
+        },
+    ]
+
+
+def test_exportacao_inclui_arquivos_de_elenco(tmp_path: Path) -> None:
+    cast = [
+        {
+            "actor_id": "mary",
+            "label": "A esposa",
+            "default_name": "Mary",
+            "gender": "feminine",
+        }
+    ]
+    rows = core.compile_rows(
+        "[DESCRIÇÃO] {{nome:mary}} chega.",
+        package_id="roleplay2026.casada_frustrada",
+        script_version="200",
+        frame_prefix="encontro",
+    )
+
+    core.export_package(
+        tmp_path,
+        rows=rows,
+        image_sources={},
+        project_payload={"cast_members": cast},
+    )
+
+    manifest = (tmp_path / "elenco_manifest.yaml").read_text(encoding="utf-8")
+    guide = (tmp_path / "ELENCO-E-TAGS.txt").read_text(encoding="utf-8")
+    assert "actor_id: mary" in manifest
+    assert "{{nome:mary}}" in guide
+
+
 def test_speech_delivery_requires_actor() -> None:
     try:
         core.parse_draft("[DESCRIÇÃO] Cena.\n[FALA EXATA] Oi.")

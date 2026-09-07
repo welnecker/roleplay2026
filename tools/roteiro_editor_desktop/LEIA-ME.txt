@@ -1,36 +1,47 @@
 EDITOR DE ROTEIROS ROLEPLAY2026 - WINDOWS
-VERSAO DE AUTORIA: TIMELINE VISUAL / GALERIA DE REFERENCIAS
+VERSAO DE AUTORIA: ELENCO PERSONALIZAVEL / TIMELINE VISUAL / GALERIA
 
 Este programa e independente do Roleplay2026.
 Nao precisa instalar Python, Streamlit, venv ou Miniconda depois de compilado.
 
-FLUXO: IMAGEM PRIMEIRO
+FLUXO: ELENCO + IMAGEM PRIMEIRO
 1. Abra Editor_Roteiros_ROLEPLAY2026.exe.
-2. No painel direito, clique em INFORMAR PASTA DE IMAGENS e escolha onde estão
+2. Clique em CONFIGURAR ELENCO. Cadastre quantos personagens a trama precisar.
+   Para cada personagem, informe:
+   - papel na trama, como A esposa, O marido, A vizinha ou A colega;
+   - nome inicial, como Mary, Doni, Sandra ou Camilly;
+   - genero estrutural;
+   - ID estrutural, como mary, marido, vizinha ou camilly.
+3. O ID estrutural permanece no roteiro. O nome inicial e apresentado ao usuario
+   antes de uma nova run e pode ser trocado sem modificar o roteiro.
+4. Selecione o ator na barra e use + NOME DO ATOR. O editor insere o marcador
+   {{nome:actor_id}}, por exemplo {{nome:mary}} ou {{nome:vizinha}}.
+5. As tags [FALA actor_id] e [PENSAMENTO actor_id] continuam usando o ID
+   estrutural, nunca o nome escolhido pelo usuario.
+6. Projetos antigos continuam abrindo. A lista antiga de atores e convertida
+   para um elenco editavel na primeira abertura.
+7. No painel direito, clique em INFORMAR PASTA DE IMAGENS e escolha onde estão
    as imagens que alimentarão o roteiro. A pasta pode estar em qualquer local.
-3. O caminho escolhido fica visível acima da galeria e é salvo junto com o projeto.
-4. Todas as imagens compatíveis da pasta aparecem como miniaturas na GALERIA DE REFERENCIAS.
-5. Clique em qualquer miniatura para torna-la a imagem atual e exibi-la no preview grande.
-6. Clique em + DESCRICAO DESTA IMAGEM para criar um novo quadro ligado a imagem atual.
-7. Escreva a DESCRICAO, FALAS e PENSAMENTOS olhando para a referencia visual.
-8. Use + FALA para ajustes mínimos, + FALA EXATA para texto literal e
+8. O caminho escolhido fica visível acima da galeria e é salvo junto com o projeto.
+9. Todas as imagens compatíveis da pasta aparecem como miniaturas na GALERIA DE REFERENCIAS.
+10. Clique em qualquer miniatura para torna-la a imagem atual e exibi-la no preview grande.
+11. Clique em + DESCRICAO DESTA IMAGEM para criar um novo quadro ligado a imagem atual.
+12. Escreva a DESCRICAO, FALAS e PENSAMENTOS olhando para a referencia visual.
+13. Use + FALA para ajustes mínimos, + FALA EXATA para texto literal e
    + FALA INTERPRETADA para permitir que o modelo desenvolva o núcleo autoral.
-9. Use + FALA BALAO para gerar [FALA ator_balao]. Na edição de uma linha,
+14. Use + FALA BALAO para gerar [FALA ator_balao]. Na edição de uma linha,
    as modalidades exata e interpretada também podem ser combinadas com BALÃO.
-10. Use {{nome}} para o nome cadastrado, {{*nome}} para o/a + nome e
-    {{**nome}} para ele/ela. Se o tratamento escolhido for neutro, os três
-    marcadores resultam somente no nome cadastrado.
-11. Na timeline, cada [DESCRICAO] abre um quadro expansivel com suas FALAS e PENSAMENTOS.
-12. A primeira imagem fica no image_id da [DESCRICAO] e e herdada pelas linhas seguintes ate aparecer outro image_id explicito.
-13. Para trocar a imagem durante o quadro, selecione a linha desejada, clique na miniatura da galeria e use USAR IMAGEM ATUAL NESTA LINHA.
-14. Imagens ja utilizadas aparecem com um marcador de confirmacao na galeria.
-15. A timeline mostra um thumbnail apenas nas linhas que possuem image_id proprio; linhas que apenas herdam a imagem anterior ficam sem thumbnail.
-16. Para editar uma linha ja gerada, selecione-a e clique em EDITAR LINHA SELECIONADA ou de duplo clique nela.
-17. Em linhas de dialogo, voce pode alternar entre FALA, FALA EXATA, FALA INTERPRETADA, PENSAMENTO e suas variantes de BALAO, alem de trocar o ator. Uma DESCRICAO permanece DESCRICAO para preservar a estrutura V2.
-18. Ao salvar a alteracao, line_id e order sao recompilados automaticamente e a imagem ja atribuida aquela linha e preservada.
-19. Anterior / Proxima continuam disponiveis como navegacao auxiliar, mas nao sao necessarios para trabalhar com lotes grandes.
-20. Salve o projeto JSON para continuar outro dia.
-21. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
+15. Na timeline, cada [DESCRICAO] abre um quadro expansivel com suas FALAS e PENSAMENTOS.
+16. A primeira imagem fica no image_id da [DESCRICAO] e e herdada pelas linhas seguintes ate aparecer outro image_id explicito.
+17. Para trocar a imagem durante o quadro, selecione a linha desejada, clique na miniatura da galeria e use USAR IMAGEM ATUAL NESTA LINHA.
+18. Imagens ja utilizadas aparecem com um marcador de confirmacao na galeria.
+19. A timeline mostra um thumbnail apenas nas linhas que possuem image_id proprio; linhas que apenas herdam a imagem anterior ficam sem thumbnail.
+20. Para editar uma linha ja gerada, selecione-a e clique em EDITAR LINHA SELECIONADA ou de duplo clique nela.
+21. Em linhas de dialogo, voce pode alternar entre FALA, FALA EXATA, FALA INTERPRETADA, PENSAMENTO e suas variantes de BALAO, alem de trocar o ator. Uma DESCRICAO permanece DESCRICAO para preservar a estrutura V2.
+22. Ao salvar a alteracao, line_id e order sao recompilados automaticamente e a imagem ja atribuida aquela linha e preservada.
+23. Anterior / Proxima continuam disponiveis como navegacao auxiliar, mas nao sao necessarios para trabalhar com lotes grandes.
+24. Salve o projeto JSON para continuar outro dia.
+25. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
 
 SAIDA
 A pasta exportada contem:
@@ -38,7 +49,13 @@ A pasta exportada contem:
 - roteiro.csv
 - roteiro.tsv
 - projeto_roteiro.json
+- elenco_manifest.yaml
+- ELENCO-E-TAGS.txt
 - imagens/*.webp
+
+O arquivo elenco_manifest.yaml contem o bloco cast_customization pronto para ser
+copiado ao manifest.yaml do card. O arquivo ELENCO-E-TAGS.txt resume os marcadores
+de nome, fala e pensamento de todos os personagens cadastrados.
 
 CABECALHO OFICIAL
 package_id | script_version | line_id | order | instruction | status | image_id
