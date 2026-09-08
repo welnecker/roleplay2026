@@ -31,17 +31,20 @@ FLUXO: ELENCO + IMAGEM PRIMEIRO
    + FALA INTERPRETADA para permitir que o modelo desenvolva o núcleo autoral.
 14. Use + FALA BALAO para gerar [FALA ator_balao]. Na edição de uma linha,
    as modalidades exata e interpretada também podem ser combinadas com BALÃO.
-15. Na timeline, cada [DESCRICAO] abre um quadro expansivel com suas FALAS e PENSAMENTOS.
-16. A primeira imagem fica no image_id da [DESCRICAO] e e herdada pelas linhas seguintes ate aparecer outro image_id explicito.
-17. Para trocar a imagem durante o quadro, selecione a linha desejada, clique na miniatura da galeria e use USAR IMAGEM ATUAL NESTA LINHA.
-18. Imagens ja utilizadas aparecem com um marcador de confirmacao na galeria.
-19. A timeline mostra um thumbnail apenas nas linhas que possuem image_id proprio; linhas que apenas herdam a imagem anterior ficam sem thumbnail.
-20. Para editar uma linha ja gerada, selecione-a e clique em EDITAR LINHA SELECIONADA ou de duplo clique nela.
-21. Em linhas de dialogo, voce pode alternar entre FALA, FALA EXATA, FALA INTERPRETADA, PENSAMENTO e suas variantes de BALAO, alem de trocar o ator. Uma DESCRICAO permanece DESCRICAO para preservar a estrutura V2.
-22. Ao salvar a alteracao, line_id e order sao recompilados automaticamente e a imagem ja atribuida aquela linha e preservada.
-23. Anterior / Proxima continuam disponiveis como navegacao auxiliar, mas nao sao necessarios para trabalhar com lotes grandes.
-24. Salve o projeto JSON para continuar outro dia.
-25. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
+15. Use + FIM DA HISTORIA para inserir [FIM_HISTORIA] como a ultima linha.
+    Sem texto, a tag encerra o ultimo quadro. Com texto, cria uma despedida final
+    deterministica, que tambem pode receber uma imagem propria na timeline.
+16. Na timeline, cada [DESCRICAO] abre um quadro expansivel com suas FALAS e PENSAMENTOS.
+17. A primeira imagem fica no image_id da [DESCRICAO] e e herdada pelas linhas seguintes ate aparecer outro image_id explicito.
+18. Para trocar a imagem durante o quadro, selecione a linha desejada, clique na miniatura da galeria e use USAR IMAGEM ATUAL NESTA LINHA.
+19. Imagens ja utilizadas aparecem com um marcador de confirmacao na galeria.
+20. A timeline mostra um thumbnail apenas nas linhas que possuem image_id proprio; linhas que apenas herdam a imagem anterior ficam sem thumbnail.
+21. Para editar uma linha ja gerada, selecione-a e clique em EDITAR LINHA SELECIONADA ou de duplo clique nela.
+22. Em linhas de dialogo, voce pode alternar entre FALA, FALA EXATA, FALA INTERPRETADA, PENSAMENTO e suas variantes de BALAO, alem de trocar o ator. Uma DESCRICAO permanece DESCRICAO para preservar a estrutura V2.
+23. Ao salvar a alteracao, line_id e order sao recompilados automaticamente e a imagem ja atribuida aquela linha e preservada.
+24. Anterior / Proxima continuam disponiveis como navegacao auxiliar, mas nao sao necessarios para trabalhar com lotes grandes.
+25. Salve o projeto JSON para continuar outro dia.
+26. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
 
 SAIDA
 A pasta exportada contem:

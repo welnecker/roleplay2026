@@ -5,6 +5,9 @@ import sys
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "roteiro_editor_desktop" / "core.py"
+EDITOR_DIR = MODULE_PATH.parent
+if str(EDITOR_DIR) not in sys.path:
+    sys.path.insert(0, str(EDITOR_DIR))
 spec = importlib.util.spec_from_file_location("roteiro_editor_desktop_core", MODULE_PATH)
 assert spec and spec.loader
 core = importlib.util.module_from_spec(spec)
@@ -221,6 +224,89 @@ def test_exportacao_inclui_arquivos_de_elenco(tmp_path: Path) -> None:
     guide = (tmp_path / "ELENCO-E-TAGS.txt").read_text(encoding="utf-8")
     assert "actor_id: mary" in manifest
     assert "{{nome:mary}}" in guide
+
+
+def test_fim_historia_sem_texto_encerra_o_ultimo_quadro() -> None:
+    rows = core.compile_rows(
+        "[DESCRIÇÃO] Último encontro.\n[FALA mary] Até logo.\n[FIM_HISTORIA]",
+        package_id="roleplay2026.casada_frustrada",
+        script_version="200",
+        frame_prefix="encontro",
+    )
+
+    assert rows[-1]["line_id"] == "encontro_001_fim_historia"
+    assert rows[-1]["instruction"] == "[FIM_HISTORIA]"
+    assert rows[-1]["image_id"] == ""
+
+
+def test_fim_historia_com_texto_aceita_nome_e_imagem_propria() -> None:
+    draft = (
+        "[DESCRIÇÃO] Último encontro.\n"
+        "[FALA mary] Até logo.\n"
+        "[FIM_HISTORIA] Gostou da aventura de {{nome:mary}}?"
+    )
+    rows = core.compile_rows(
+        draft,
+        package_id="roleplay2026.casada_frustrada",
+        script_version="200",
+        frame_prefix="encontro",
+        image_map={"encontro_001_fim_historia": "mary99.webp"},
+    )
+
+    assert rows[-1]["instruction"] == (
+        "[FIM_HISTORIA] Gostou da aventura de {{nome:mary}}?"
+    )
+    assert rows[-1]["image_id"] == "mary99.webp"
+    core.validate_draft_cast(
+        draft,
+        [
+            {
+                "actor_id": "mary",
+                "label": "A esposa",
+                "default_name": "Mary",
+                "gender": "feminine",
+            }
+        ],
+    )
+
+
+def test_fim_historia_deve_ser_unico_e_ultima_linha() -> None:
+    invalid_drafts = (
+        "[DESCRIÇÃO] Cena.\n[FIM_HISTORIA]\n[FALA mary] Depois.",
+        "[DESCRIÇÃO] Cena.\n[FIM_HISTORIA]\n[FIM_HISTORIA]",
+    )
+
+    for draft in invalid_drafts:
+        try:
+            core.parse_draft(draft)
+        except core.EditorError as exc:
+            assert "[FIM_HISTORIA]" in str(exc)
+        else:
+            raise AssertionError("Encerramento inválido deveria ser rejeitado")
+
+
+def test_fim_historia_exige_quadro_anterior() -> None:
+    try:
+        core.parse_draft("[FIM_HISTORIA]")
+    except core.EditorError as exc:
+        assert "[DESCRIÇÃO]" in str(exc)
+    else:
+        raise AssertionError("Encerramento sem quadro deveria ser rejeitado")
+
+
+def test_timeline_edita_fim_historia_com_texto_opcional() -> None:
+    from app_image_first_timeline import ScriptEditor as TimelineEditor
+
+    assert TimelineEditor._parse_instruction(  # type: ignore[arg-type]
+        None,
+        "[FIM_HISTORIA] Até a próxima!",
+    ) == ("FIM_HISTORIA", "", "Até a próxima!")
+    assert TimelineEditor._instruction_from_editor(  # type: ignore[arg-type]
+        None,
+        "FIM_HISTORIA",
+        "",
+        "",
+    ) == "[FIM_HISTORIA]"
 
 
 def test_speech_delivery_requires_actor() -> None:

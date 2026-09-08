@@ -76,6 +76,14 @@ class ScriptEditor(GalleryScriptEditor):
             if button is not None:
                 button.pack_forget()
 
+        validate_button = self._find_button("Validar / atualizar")
+        if validate_button is not None:
+            ttk.Button(
+                validate_button.master,
+                text="+ FIM DA HISTÓRIA",
+                command=lambda: self.insert_tag("[FIM_HISTORIA]"),
+            ).pack(side="right", padx=4, before=validate_button)
+
     def _refresh_actor_values(self) -> None:
         try:
             members = normalize_cast_members(self.cast_members)

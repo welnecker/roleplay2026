@@ -87,6 +87,8 @@ class ScriptEditor(BalloonScriptEditor):
         arguments = parts[1:]
         if kind == "DESCRIÇÃO" or kind == "DESCRICAO":
             return "DESCRIÇÃO", "", body
+        if kind == "FIM_HISTORIA":
+            return "FIM_HISTORIA", "", body
         delivery = ""
         if kind == "FALA" and arguments and arguments[0].upper() in {
             "EXATA", "INTERPRETADA", "INTERPRETATIVA"
@@ -106,6 +108,8 @@ class ScriptEditor(BalloonScriptEditor):
 
     def _instruction_from_editor(self, kind: str, actor: str, body: str) -> str:
         clean_body = str(body or "").strip()
+        if kind == "FIM_HISTORIA":
+            return "[FIM_HISTORIA]" + (f" {clean_body}" if clean_body else "")
         if not clean_body:
             raise ValueError("O texto da linha não pode ficar vazio.")
         if kind == "DESCRIÇÃO":
@@ -191,6 +195,7 @@ class ScriptEditor(BalloonScriptEditor):
 
         kind, actor, body = self._parse_instruction(str(row.get("instruction", "")))
         is_description = kind == "DESCRIÇÃO"
+        is_ending = kind == "FIM_HISTORIA"
 
         dialog = tk.Toplevel(self)
         dialog.title(f"Editar — {line_id}")
@@ -207,9 +212,15 @@ class ScriptEditor(BalloonScriptEditor):
             dialog,
             textvariable=kind_var,
             state="readonly",
-            values=("DESCRIÇÃO",) if is_description else (
-                "FALA", "FALA EXATA", "FALA INTERPRETADA", "PENSAMENTO",
-                "FALA BALÃO", "FALA EXATA BALÃO", "FALA INTERPRETADA BALÃO",
+            values=(
+                ("DESCRIÇÃO",)
+                if is_description
+                else ("FIM_HISTORIA",)
+                if is_ending
+                else (
+                    "FALA", "FALA EXATA", "FALA INTERPRETADA", "PENSAMENTO",
+                    "FALA BALÃO", "FALA EXATA BALÃO", "FALA INTERPRETADA BALÃO",
+                )
             ),
         )
         kind_combo.grid(row=1, column=0, sticky="ew", padx=14)
@@ -225,14 +236,17 @@ class ScriptEditor(BalloonScriptEditor):
         actor_var = tk.StringVar(value=actor or (actor_values[0] if actor_values else "usuario"))
         actor_combo = ttk.Combobox(dialog, textvariable=actor_var, state="readonly", values=actor_values)
         actor_combo.grid(row=3, column=0, sticky="ew", padx=14)
-        if is_description:
+        if is_description or is_ending:
             actor_combo.configure(state="disabled")
 
         text_frame = ttk.Frame(dialog)
         text_frame.grid(row=4, column=0, sticky="nsew", padx=14, pady=(12, 8))
         text_frame.columnconfigure(0, weight=1)
         text_frame.rowconfigure(1, weight=1)
-        ttk.Label(text_frame, text="Texto").grid(row=0, column=0, sticky="w", pady=(0, 3))
+        ttk.Label(
+            text_frame,
+            text="Texto (opcional)" if is_ending else "Texto",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 3))
         editor = tk.Text(text_frame, wrap="word", undo=True, font=("Segoe UI", 11), padx=8, pady=8)
         editor.grid(row=1, column=0, sticky="nsew")
         editor.insert("1.0", body)
@@ -351,7 +365,9 @@ class ScriptEditor(BalloonScriptEditor):
 
             label = "FALA"
             upper = instruction.upper()
-            if upper.startswith("[PENSAMENTO"):
+            if upper.startswith("[FIM_HISTORIA]"):
+                label = "FIM DA HISTÓRIA"
+            elif upper.startswith("[PENSAMENTO"):
                 label = "PENSAMENTO"
             elif upper.startswith("[FALA EXATA"):
                 label = "FALA EXATA"
@@ -364,8 +380,9 @@ class ScriptEditor(BalloonScriptEditor):
             if image_id:
                 label += f"  •  {image_id}"
 
+            parent = "" if upper.startswith("[FIM_HISTORIA]") else current_parent
             self.tree.insert(
-                current_parent if current_parent and self.tree.exists(current_parent) else "",
+                parent if parent and self.tree.exists(parent) else "",
                 "end",
                 iid=line_id,
                 text=label,

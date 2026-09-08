@@ -189,6 +189,14 @@ def parse_draft(draft: str) -> list[Item]:
         kind_raw = unicodedata.normalize("NFKD", parts[0]).encode("ascii", "ignore").decode("ascii").upper()
         actor = parts[1].strip() if len(parts) > 1 else ""
         text = str(match.group(2) or "").strip()
+
+        if kind_raw == "FIM_HISTORIA":
+            if actor:
+                raise EditorError("[FIM_HISTORIA] não recebe argumentos dentro da tag.")
+            instruction = "[FIM_HISTORIA]" + (f" {text}" if text else "")
+            items.append(Item("FIM_HISTORIA", "", text, instruction, ""))
+            continue
+
         if not text:
             raise EditorError(f"[{header}] precisa de conteúdo.")
 
@@ -221,12 +229,20 @@ def parse_draft(draft: str) -> list[Item]:
 
     if not any(item.kind == "DESCRICAO" for item in items):
         raise EditorError("O roteiro precisa ter ao menos uma [DESCRIÇÃO].")
+    endings = [index for index, item in enumerate(items) if item.kind == "FIM_HISTORIA"]
+    if len(endings) > 1:
+        raise EditorError("O roteiro deve possuir no máximo uma tag [FIM_HISTORIA].")
+    if endings and endings[0] != len(items) - 1:
+        raise EditorError("[FIM_HISTORIA] deve ser a última linha do roteiro.")
     frame_open = False
     for index, item in enumerate(items, start=1):
         if item.kind == "DESCRICAO":
             frame_open = True
         elif not frame_open:
-            raise EditorError(f"Linha autoral {index}: [{item.kind} {item.actor}] precisa de [DESCRIÇÃO] anterior.")
+            tag = item.kind if not item.actor else f"{item.kind} {item.actor}"
+            raise EditorError(
+                f"Linha autoral {index}: [{tag}] precisa de [DESCRIÇÃO] anterior."
+            )
     return items
 
 
@@ -266,6 +282,8 @@ def compile_rows(
             current_frame = f"{prefix}_{frame_number:03d}"
             occurrences = {}
             line_id = f"{current_frame}_descricao"
+        elif item.kind == "FIM_HISTORIA":
+            line_id = f"{current_frame}_fim_historia"
         else:
             key = (item.actor, item.kind)
             occurrences[key] = occurrences.get(key, 0) + 1
