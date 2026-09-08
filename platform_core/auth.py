@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -8,6 +9,12 @@ class AuthenticatedUser:
     user_id: str
     email: str
     display_name: str
+
+
+def demo_auth_allowed(secrets: Any) -> bool:
+    """Permite login demonstrativo apenas quando não há infraestrutura real configurada."""
+
+    return not bool(secrets.get("gcp_service_account"))
 
 
 def authenticate_demo(email: str, password: str) -> AuthenticatedUser | None:

@@ -24,11 +24,13 @@ def test_pendencia_conversacional_dura_apenas_ate_o_proximo_beat() -> None:
     assert consume_pending_obligation(facts) == ""
 
 
-def test_orientacao_de_pensamento_traz_anseio_sem_inflar_prompt() -> None:
+def test_orientacao_de_pensamento_reforca_motor_sem_inflar_prompt() -> None:
     prompt = with_optional_thought_guidance("BASE")
 
-    assert "humor sobre a própria situação conjugal" in prompt
-    assert "pista emocional" in prompt
-    assert "não antecipe o roteiro" in prompt
+    assert "desejo sexual é motor da personagem" in prompt
+    assert "Não invente conflito moral" in prompt
+    assert "não executa ação, convite ou acontecimento de beat futuro" in prompt
     assert "no máximo duas frases curtas" in prompt
-    assert len(prompt) < 1500
+    assert "humor sobre a própria situação conjugal" not in prompt
+    assert "Prefira uma contradição viva" not in prompt
+    assert len(prompt) < 2200

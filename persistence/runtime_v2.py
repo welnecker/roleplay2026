@@ -11,13 +11,14 @@ from narrative_v2.models import StoryRun
 from narrative_v2.repository import RuntimeConflictError
 from persistence.models import new_id, utc_now_iso
 from persistence.v2_google_sheets import (
+    _SheetTable,
     GoogleSheetsNarrativeInteractionRepository,
     GoogleSheetsStoryRunRepository,
 )
 
 
 MAX_RECOVERED_INTERACTIONS = 500
-RUNTIME_REPOSITORY_CONTRACT_VERSION = 4
+RUNTIME_REPOSITORY_CONTRACT_VERSION = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +43,8 @@ class GoogleSheetsV2RuntimeRepository:
         self.spreadsheet = spreadsheet
         self.runs = GoogleSheetsStoryRunRepository(spreadsheet)
         self.interactions = GoogleSheetsNarrativeInteractionRepository(spreadsheet)
-        self.sessions = spreadsheet.worksheet("SESSIONS")
+        self._session_table = _SheetTable(spreadsheet, "SESSIONS")
+        self.sessions = self._session_table.worksheet
 
     @classmethod
     def from_service_account(
@@ -51,7 +53,13 @@ class GoogleSheetsV2RuntimeRepository:
         credentials: dict[str, Any],
         spreadsheet_id: str,
     ) -> "GoogleSheetsV2RuntimeRepository":
-        client = gspread.service_account_from_dict(credentials)
+        # O cliente com backoff respeita Retry-After/429 do Google Sheets em
+        # picos breves, em vez de transformar imediatamente a cota transitória
+        # em erro visível para o usuário.
+        client = gspread.service_account_from_dict(
+            credentials,
+            http_client=gspread.BackOffHTTPClient,
+        )
         return cls(client.open_by_key(spreadsheet_id))
 
     def get_active_run(self, *, user_id: str, package_id: str) -> StoryRun | None:
@@ -64,15 +72,72 @@ class GoogleSheetsV2RuntimeRepository:
         _row_number, row = found
         return self.runs._from_row(row)
 
+    @staticmethod
+    def _assert_interaction_owner(
+        row: dict[str, Any],
+        *,
+        run_id: str,
+        user_id: str,
+        package_id: str,
+    ) -> None:
+        row_user_id = str(row.get("user_id", "") or "").strip()
+        row_package_id = str(row.get("package_id", "") or "").strip()
+        if row_user_id != user_id or row_package_id != package_id:
+            raise RuntimeConflictError(
+                "INTERACTIONS contém uma linha com run_id correto, mas proprietário "
+                "incompatível: "
+                f"run_id={run_id}, esperado=({user_id}, {package_id}), "
+                f"encontrado=({row_user_id}, {row_package_id})."
+            )
+
+    def _interaction_rows_for_owner(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        package_id: str,
+    ) -> list[dict[str, Any]]:
+        """Lê uma run usando a chave composta run + usuário + pacote e falha fechado.
+
+        ``run_id`` continua sendo o identificador principal da execução, porém a
+        recuperação nunca confia apenas nele. Toda linha correspondente precisa
+        pertencer também ao mesmo usuário autenticado e ao mesmo ``package_id``.
+        """
+
+        clean_run_id = str(run_id or "").strip()
+        clean_user_id = str(user_id or "").strip()
+        clean_package_id = str(package_id or "").strip()
+        if not clean_run_id or not clean_user_id or not clean_package_id:
+            raise RuntimeConflictError(
+                "Recuperação de INTERACTIONS exige run_id, user_id e package_id."
+            )
+
+        rows: list[dict[str, Any]] = []
+        for raw in self.interactions.table.records():
+            row = dict(raw)
+            if str(row.get("run_id", "") or "").strip() != clean_run_id:
+                continue
+            self._assert_interaction_owner(
+                row,
+                run_id=clean_run_id,
+                user_id=clean_user_id,
+                package_id=clean_package_id,
+            )
+            rows.append(row)
+        return rows
+
     def _was_false_message_ending(self, run: StoryRun) -> bool:
         if run.status != "terminated" or run.ending_code != "mary_lost_interest":
             return False
 
         rows = [
             row
-            for row in self.interactions.table.records()
-            if str(row.get("run_id", "")).strip() == run.run_id
-            and str(row.get("role", "")).strip() == "assistant"
+            for row in self._interaction_rows_for_owner(
+                run_id=run.run_id,
+                user_id=run.user_id,
+                package_id=run.package_id,
+            )
+            if str(row.get("role", "")).strip() == "assistant"
         ]
         rows.sort(key=lambda row: int(row.get("sequence", 0) or 0))
         nodes: list[str] = []
@@ -101,7 +166,12 @@ class GoogleSheetsV2RuntimeRepository:
         user_id: str,
         package_id: str,
     ) -> StoryRun | None:
-        """Retorna conclusão normal ou o falso encerramento conhecido da primeira mensagem."""
+        """Recupera apenas o falso encerramento legado da primeira mensagem.
+
+        Uma conclusão normal é terminal para o crédito que criou a execução. Mesmo
+        que o roteiro publicado depois ganhe novos quadros, essa run não é reativada:
+        um replay exige novo crédito e uma nova ``run_id`` desde o primeiro quadro.
+        """
 
         candidates: list[StoryRun] = []
         for row in self.runs.runs.records():
@@ -110,11 +180,7 @@ class GoogleSheetsV2RuntimeRepository:
             if str(row.get("package_id", "")).strip() != package_id:
                 continue
             run = self.runs._from_row(row)
-            normal_completion = (
-                run.status == "completed"
-                and run.ending_code in {"", "normal_completion", "pilot_complete"}
-            )
-            if normal_completion or self._was_false_message_ending(run):
+            if self._was_false_message_ending(run):
                 candidates.append(run)
 
         if not candidates:
@@ -138,6 +204,35 @@ class GoogleSheetsV2RuntimeRepository:
         package_id: str,
         instance_id: str,
     ) -> RuntimeSession:
+        existing = [
+            dict(row)
+            for row in self._session_table.records()
+            if str(row.get("run_id", "") or "").strip() == run_id
+            and str(row.get("user_id", "") or "").strip() == user_id
+            and str(row.get("package_id", "") or "").strip() == package_id
+            and str(row.get("instance_id", "") or "").strip() == instance_id
+            and str(row.get("status", "") or "").strip() == "active"
+        ]
+        if existing:
+            existing.sort(
+                key=lambda row: str(
+                    row.get("last_seen_at", "") or row.get("started_at", "") or ""
+                ),
+                reverse=True,
+            )
+            row = existing[0]
+            return RuntimeSession(
+                session_id=str(row.get("session_id", "") or ""),
+                run_id=str(row.get("run_id", "") or ""),
+                user_id=str(row.get("user_id", "") or ""),
+                package_id=str(row.get("package_id", "") or ""),
+                instance_id=str(row.get("instance_id", "") or ""),
+                status=str(row.get("status", "") or "active"),
+                started_at=str(row.get("started_at", "") or ""),
+                last_seen_at=str(row.get("last_seen_at", "") or ""),
+                ended_at=str(row.get("ended_at", "") or ""),
+            )
+
         now = utc_now_iso()
         session = RuntimeSession(
             session_id=new_id("sess"),
@@ -149,7 +244,6 @@ class GoogleSheetsV2RuntimeRepository:
             started_at=now,
             last_seen_at=now,
         )
-        headers = [str(value).strip() for value in self.sessions.row_values(1)]
         data = {
             "session_id": session.session_id,
             "run_id": session.run_id,
@@ -161,22 +255,28 @@ class GoogleSheetsV2RuntimeRepository:
             "last_seen_at": session.last_seen_at,
             "ended_at": session.ended_at,
         }
-        self.sessions.append_row(
-            [data.get(header, "") for header in headers],
-            value_input_option="RAW",
-        )
+        self._session_table.append(data)
         return session
 
     def _existing_interaction(
         self,
         *,
         run_id: str,
+        user_id: str,
+        package_id: str,
         sequence: int,
         role: str,
     ) -> dict[str, Any] | None:
-        for row in self.interactions.table.records():
+        for raw in self.interactions.table.records():
+            row = dict(raw)
             if str(row.get("run_id", "")).strip() != run_id:
                 continue
+            self._assert_interaction_owner(
+                row,
+                run_id=run_id,
+                user_id=user_id,
+                package_id=package_id,
+            )
             if int(row.get("sequence", 0) or 0) != int(sequence):
                 continue
             if str(row.get("role", "")).strip() != role:
@@ -201,6 +301,8 @@ class GoogleSheetsV2RuntimeRepository:
     ) -> None:
         existing = self._existing_interaction(
             run_id=run_id,
+            user_id=user_id,
+            package_id=package_id,
             sequence=sequence,
             role=role,
         )
@@ -270,12 +372,18 @@ class GoogleSheetsV2RuntimeRepository:
         return sorted(values)
 
     def list_interactions(self, *, run_id: str, limit: int = 100) -> list[dict[str, object]]:
+        run = self.get_run(run_id=run_id)
+        if run is None:
+            raise RuntimeConflictError(
+                f"Não é possível recuperar INTERACTIONS de run inexistente: {run_id}."
+            )
+
         requested_limit = max(1, min(int(limit), MAX_RECOVERED_INTERACTIONS))
-        rows = [
-            row
-            for row in self.interactions.table.records()
-            if str(row.get("run_id", "")).strip() == run_id
-        ]
+        rows = self._interaction_rows_for_owner(
+            run_id=run.run_id,
+            user_id=run.user_id,
+            package_id=run.package_id,
+        )
         rows.sort(key=lambda row: int(row.get("sequence", 0) or 0))
         rows = rows[-requested_limit:]
 
@@ -301,7 +409,7 @@ class GoogleSheetsV2RuntimeRepository:
                 }
             )
 
-        active_ids = self.list_run_memory_ids(run_id=run_id)
+        active_ids = self.list_run_memory_ids(run_id=run.run_id)
         if active_ids:
             for message in reversed(result):
                 pilot_state = message.get("pilot_state")
@@ -312,6 +420,98 @@ class GoogleSheetsV2RuntimeRepository:
                     facts["_active_memory_ids"] = ",".join(active_ids)
                 break
         return result
+
+    def persist_frame_reveal(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        package_id: str,
+        frame_id: str,
+        revealed_entries: int,
+    ) -> int:
+        """Atualiza o checkpoint visual na interação assistente do quadro atual."""
+
+        rows = self._interaction_rows_for_owner(
+            run_id=run_id,
+            user_id=user_id,
+            package_id=package_id,
+        )
+        indexed = list(enumerate(rows))
+        indexed.sort(key=lambda item: int(item[1].get("sequence", 0) or 0), reverse=True)
+        for _index, row in indexed:
+            if str(row.get("role", "")) != "assistant":
+                continue
+            content = str(row.get("content", "") or "")
+            from services.novel_frame_reveal import frame_entry_count, frame_id as content_frame_id
+
+            if content_frame_id(content) != frame_id:
+                continue
+            total = frame_entry_count(content)
+            value = min(max(0, int(revealed_entries)), total)
+            raw = str(row.get("metadata_json", "") or "")
+            try:
+                metadata = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                metadata = {}
+            if not isinstance(metadata, dict):
+                metadata = {}
+            previous = int(metadata.get("flet_revealed_entries", 0) or 0)
+            metadata["flet_revealed_entries"] = max(previous, value)
+            updated = dict(row)
+            updated["metadata_json"] = json.dumps(
+                metadata, ensure_ascii=False, separators=(",", ":")
+            )
+            found = self.interactions.table.find("interaction_id", str(row.get("interaction_id", "")))
+            if found is None:
+                raise RuntimeConflictError("Interação do quadro não foi encontrada para checkpoint.")
+            self.interactions.table.replace(found[0], updated)
+            return int(metadata["flet_revealed_entries"])
+        raise RuntimeConflictError("Quadro atual não encontrado em INTERACTIONS.")
+
+    def persist_run_profile(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        package_id: str,
+        profile: dict[str, Any],
+    ) -> None:
+        """Anexa a identidade narrativa ao último quadro de uma run legada."""
+
+        rows = self._interaction_rows_for_owner(
+            run_id=run_id,
+            user_id=user_id,
+            package_id=package_id,
+        )
+        rows.sort(key=lambda row: int(row.get("sequence", 0) or 0), reverse=True)
+        for row in rows:
+            if str(row.get("role", "")) != "assistant":
+                continue
+            raw = str(row.get("metadata_json", "") or "")
+            try:
+                metadata = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                metadata = {}
+            if not isinstance(metadata, dict):
+                metadata = {}
+            if isinstance(metadata.get("immersive_profile"), dict):
+                return
+            metadata["immersive_profile"] = dict(profile)
+            updated = dict(row)
+            updated["metadata_json"] = json.dumps(
+                metadata, ensure_ascii=False, separators=(",", ":")
+            )
+            found = self.interactions.table.find(
+                "interaction_id", str(row.get("interaction_id", ""))
+            )
+            if found is None:
+                raise RuntimeConflictError(
+                    "Interação da run não foi encontrada para salvar o perfil."
+                )
+            self.interactions.table.replace(found[0], updated)
+            return
+        raise RuntimeConflictError("A run não possui quadro para salvar o perfil.")
 
     def update_run_progress(
         self,

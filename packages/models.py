@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class PackageAuthor(BaseModel):
@@ -33,6 +33,52 @@ class PackageCard(BaseModel):
     chapter_label: str = ""
     cover: str = ""
     character_profile: PackageCharacterProfile | None = None
+
+
+class PackageCastMember(BaseModel):
+    """A stable authored role whose visible name can vary per paid run."""
+
+    model_config = ConfigDict(frozen=True)
+
+    actor_id: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    default_name: str = Field(min_length=1, max_length=40)
+    gender: str = "neutral"
+
+    @field_validator("actor_id")
+    @classmethod
+    def validate_actor_id(cls, value: str) -> str:
+        clean = value.strip().casefold()
+        allowed = set("abcdefghijklmnopqrstuvwxyz0123456789_-")
+        if any(character not in allowed for character in clean):
+            raise ValueError("cast.actor_id contém caracteres inválidos")
+        return clean
+
+    @field_validator("gender")
+    @classmethod
+    def validate_gender(cls, value: str) -> str:
+        clean = value.strip().casefold()
+        if clean not in {"masculine", "feminine", "neutral"}:
+            raise ValueError("cast.gender deve ser masculine, feminine ou neutral")
+        return clean
+
+
+class PackageCastCustomization(BaseModel):
+    """Optional run-scoped cast personalization declared by a story package."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = False
+    members: tuple[PackageCastMember, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_members(self) -> "PackageCastCustomization":
+        if self.enabled and not self.members:
+            raise ValueError("cast_customization habilitado exige ao menos um personagem")
+        actor_ids = [member.actor_id for member in self.members]
+        if len(actor_ids) != len(set(actor_ids)):
+            raise ValueError("cast_customization contém actor_id duplicado")
+        return self
 
 
 class PackageCommerce(BaseModel):
@@ -104,6 +150,7 @@ class StoryPackageManifest(BaseModel):
     entrypoint: str = "story.yaml"
     runtime: PackageRuntime = PackageRuntime()
     card: PackageCard
+    cast_customization: PackageCastCustomization = PackageCastCustomization()
     commerce: PackageCommerce = PackageCommerce()
 
     @field_validator("package_id")

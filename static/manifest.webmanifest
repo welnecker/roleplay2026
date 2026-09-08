@@ -1,0 +1,30 @@
+{
+  "id": "/",
+  "name": "EntreCenas",
+  "short_name": "EntreCenas",
+  "description": "Histórias visuais para viver quadro a quadro.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0C2E2D",
+  "theme_color": "#0C2E2D",
+  "categories": ["entertainment", "games"],
+  "icons": [
+    {
+      "src": "/app/static/entrecenas-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/app/static/entrecenas-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

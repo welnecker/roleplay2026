@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 
 from narrative_v2.models import RunCredit, StoryRun
 from services import paid_run_access
@@ -69,6 +70,20 @@ class ConcurrentFakeRuns:
 class FakeRepositories:
     credits: FakeCredits
     runs: object
+    interactions: object | None = None
+
+
+class FakeTable:
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        self.rows = rows
+
+    def records(self) -> list[dict[str, object]]:
+        return self.rows
+
+
+@dataclass
+class FakeInteractions:
+    table: FakeTable
 
 
 def _clear_caches() -> None:
@@ -171,4 +186,55 @@ def test_encerramento_recarrega_run_apos_versao_concorrente(monkeypatch) -> None
     assert finished.state_version == 4
     assert runs.read_count == 2
     assert runs.update_count == 2
+    _clear_caches()
+
+
+def test_fim_persistido_reconcilia_run_antiga_e_bloqueia_apenas_seu_card(monkeypatch) -> None:
+    _clear_caches()
+    run = StoryRun(
+        run_id="run_mary",
+        credit_id="credit_mary",
+        user_id="user_1",
+        package_id="roleplay2026.casada_frustrada",
+        script_version="1.0.0",
+        current_block_id="patio_final",
+        current_beat_id="fim",
+    )
+    metadata = {
+        "editorial_end_event": "END_RUN",
+        "editorial_run_status": "completed",
+        "editorial_ending_code": "story_complete",
+        "_story_state": {"finished": True},
+    }
+    repositories = FakeRepositories(
+        credits=FakeCredits(),
+        runs=FakeRuns(run),
+        interactions=FakeInteractions(
+            FakeTable(
+                [
+                    {
+                        "run_id": "run_mary",
+                        "role": "assistant",
+                        "sequence": 99,
+                        "metadata_json": json.dumps(metadata),
+                    }
+                ]
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        paid_run_access,
+        "build_v2_narrative_repositories",
+        lambda secrets: repositories,
+    )
+
+    access = paid_run_access.get_paid_run_access(
+        secrets={},
+        user_id="user_1",
+        package_id="roleplay2026.casada_frustrada",
+    )
+
+    assert access.state == "locked"
+    assert run.status == "completed"
+    assert run.ending_code == "story_complete"
     _clear_caches()

@@ -48,6 +48,8 @@ class _Runs:
 def _assistant(sequence: int, node: str, ending_code: str = "") -> dict[str, object]:
     return {
         "run_id": "run-1",
+        "user_id": "user-1",
+        "package_id": "roleplay2026.casada_frustrada",
         "role": "assistant",
         "sequence": sequence,
         "metadata_json": json.dumps(
@@ -110,6 +112,32 @@ def test_nao_recupera_perda_de_interesse_em_outra_cena() -> None:
             _assistant(12, "end_lost_interest", "mary_lost_interest"),
         ]
     )
+
+    recovered = repository.get_resumable_completed_run(
+        user_id="user-1",
+        package_id="roleplay2026.casada_frustrada",
+    )
+
+    assert recovered is None
+
+
+def test_conclusao_normal_nunca_e_retomavel() -> None:
+    run = StoryRun(
+        run_id="run-1",
+        credit_id="credit-1",
+        user_id="user-1",
+        package_id="roleplay2026.casada_frustrada",
+        script_version="1",
+        current_block_id="capitulo1",
+        current_beat_id="capitulo1_024",
+        status="completed",
+        ending_code="normal_completion",
+        state_version=8,
+        updated_at="2026-09-01T18:09:12Z",
+    )
+    repository = object.__new__(GoogleSheetsV2RuntimeRepository)
+    repository.runs = _Runs(run)
+    repository.interactions = _Interactions([])
 
     recovered = repository.get_resumable_completed_run(
         user_id="user-1",

@@ -9,12 +9,20 @@ from persistence.factory import build_google_sheets_repository
 from platform_core.auth import AuthenticatedUser
 from roleplay.models import StoryState
 from roleplay.openrouter import OpenRouterError, generate_response
-from services.dialogue_presentation import render_dialogue_html, with_optional_thought_guidance
+from services.dialogue_presentation import (
+    render_dialogue_html,
+    with_scripted_thought_guidance,
+)
 from services.editorial_content import find_editorial_package, load_editorial_package
 from services.editorial_diagnostics import (
     build_editorial_turn_diagnostics,
     log_editorial_exception,
     log_editorial_turn,
+)
+from services.editorial_decision_gate import (
+    activate_decision_for_beat,
+    evaluate_pending_decision,
+    pending_decision_gate,
 )
 from services.editorial_metadata import (
     build_editorial_bridge_metadata,
@@ -39,19 +47,42 @@ from services.editorial_runtime import (
     clean_editorial_model_response,
     decide_editorial_turn,
     editorial_opening_text,
+    editorial_scene_opening_text,
 )
-from services.editorial_scene_images import render_editorial_scene_image
+from services.editorial_scene_images import (
+    message_allows_beat_image,
+    render_editorial_scene_image,
+)
+from services.editorial_script_snapshot import (
+    clear_script_snapshot as clear_script_snapshot_state,
+    load_script_snapshot,
+)
 from services.editorial_transaction import (
     commit_editorial_turn,
     prepare_pending_editorial_turn,
+)
+from services.immersive_onboarding import (
+    build_immersive_context,
+    clear_immersive_profile,
+    persistent_profile_payload,
+    profile_key,
+    recover_persistent_profile,
+    render_immersive_onboarding,
+    restore_profile_for_run,
 )
 from services.paid_run_access import get_paid_run_access, terminate_paid_access
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
+    persist_opening_message,
     persist_assistant_message,
     persist_turn,
 )
+from services.story_profile import (
+    opening_with_required_name,
+    personalize_editorial_script,
+)
+from services.visual_novel_history import current_assistant_messages
 from ui_components import CARD_CSS
 
 
@@ -85,18 +116,49 @@ except Exception as exc:
 PACKAGE_ID = PACKAGE.manifest.package_id
 PACKAGE_TITLE = PACKAGE.manifest.card.title
 PACKAGE_SUBTITLE = PACKAGE.manifest.card.subtitle
+CHARACTER_NAME = (
+    PACKAGE.manifest.card.character_profile.name
+    if PACKAGE.manifest.card.character_profile
+    else PACKAGE_TITLE
+)
+CHARACTER_ID = CHARACTER_NAME.strip().casefold().replace(" ", "_") or "character"
 END_CONFIRMATION_KEY = f"confirm_end:{PACKAGE_ID}"
+DECISION_FREE_INPUT_KEY = f"decision_free_input:{PACKAGE_ID}"
 
 st.set_page_config(page_title=PACKAGE_TITLE, page_icon="📖", layout="centered")
 st.markdown(CARD_CSS, unsafe_allow_html=True)
 
 
-@st.cache_resource(show_spinner=False)
 def load_script(package_id: str) -> EditorialScript:
+    """Lê e compila a versão vigente de ROTEIROS."""
+
     package = find_editorial_package(package_id)
     if package is None:
         raise RuntimeError(f"Pacote editorial não encontrado: {package_id}")
     return load_editorial_package(st.secrets, package)
+
+
+def clear_script_snapshot(user_id: str) -> None:
+    clear_script_snapshot_state(
+        st.session_state, user_id=user_id, package_id=PACKAGE_ID
+    )
+
+
+def session_script(user: AuthenticatedUser, *, refresh: bool = False) -> EditorialScript:
+    """Mantém um snapshot coerente durante a permanência na história.
+
+    Reruns comuns reutilizam o objeto compilado. Nova entrada, novo pagamento ou
+    encerramento removem a cópia e fazem a próxima abertura reler ROTEIROS.
+    """
+
+    return load_script_snapshot(
+        st.session_state,
+        user_id=user.user_id,
+        package_id=PACKAGE_ID,
+        loader=lambda: load_script(PACKAGE_ID),
+        expected_type=EditorialScript,
+        refresh=refresh,
+    )
 
 
 @st.cache_resource(show_spinner=False)
@@ -204,9 +266,19 @@ def clear_session(user: AuthenticatedUser) -> None:
     for key in session_keys(user.user_id):
         st.session_state.pop(key, None)
     st.session_state.pop(END_CONFIRMATION_KEY, None)
+    clear_script_snapshot(user.user_id)
+    clear_immersive_profile(
+        st.session_state, user_id=user.user_id, package_id=PACKAGE_ID
+    )
 
 
 def return_to_library() -> None:
+    user = authenticated_user()
+    if user is not None:
+        clear_script_snapshot(user.user_id)
+        clear_immersive_profile(
+            st.session_state, user_id=user.user_id, package_id=PACKAGE_ID
+        )
     st.session_state.pop(END_CONFIRMATION_KEY, None)
     st.session_state.page = "library"
     st.session_state.selected_package_id = None
@@ -238,14 +310,21 @@ def end_story_and_return(user: AuthenticatedUser) -> None:
 
 
 def render_message(role: str, content: str) -> None:
-    st.markdown(render_dialogue_html(role, content), unsafe_allow_html=True)
+    st.markdown(
+        render_dialogue_html(role, content, character_name=CHARACTER_NAME),
+        unsafe_allow_html=True,
+    )
 
 
 def render_current_scene(state: EditorialState) -> None:
     """Renderiza apoio visual sem interferir no input ou no motor narrativo."""
 
     try:
-        render_editorial_scene_image(PACKAGE_ID, state.node_id)
+        render_editorial_scene_image(
+            PACKAGE_ID,
+            state.node_id,
+            ordered_beat_ids=tuple(script.beats),
+        )
     except Exception as exc:
         log_editorial_exception(
             "render_editorial_scene_image",
@@ -272,8 +351,10 @@ if user is None:
     st.stop()
 
 fresh_start = prepare_after_payment(user)
+api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
+model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
 try:
-    script = load_script(PACKAGE_ID)
+    script = session_script(user, refresh=fresh_start)
 except Exception as exc:
     log_editorial_exception("load_editorial_script", exc, package_id=PACKAGE_ID)
     st.error(f"Não foi possível carregar o roteiro editorial: {exc}")
@@ -294,6 +375,29 @@ except Exception as exc:
     )
     st.error(f"Não foi possível abrir a história: {exc}")
     st.stop()
+
+restore_profile_for_run(
+    st.session_state,
+    user_id=user.user_id,
+    package_id=PACKAGE_ID,
+    messages=messages,
+)
+if not render_immersive_onboarding(
+    user_id=user.user_id,
+    package_id=PACKAGE_ID,
+    title=PACKAGE_TITLE,
+    character_name=(
+        PACKAGE.manifest.card.character_profile.name
+        if PACKAGE.manifest.card.character_profile
+        else PACKAGE_TITLE
+    ),
+    api_key=api_key,
+    model=model,
+):
+    st.stop()
+immersive_profile = st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
+if isinstance(immersive_profile, dict):
+    script = personalize_editorial_script(script, immersive_profile)
 
 if not editorial_state.finished and not story_state.finished:
     try:
@@ -344,9 +448,93 @@ st.title(PACKAGE_TITLE)
 st.caption(PACKAGE_SUBTITLE or "História editorial")
 
 if not messages:
-    render_message("assistant", editorial_opening_text(script))
-for message in messages:
-    render_message(str(message.get("role", "assistant")), str(message.get("content", "")))
+    scene_opening = editorial_scene_opening_text(script)
+    opening = scene_opening or editorial_opening_text(script)
+    if not scene_opening and isinstance(immersive_profile, dict):
+        opening = opening_with_required_name(opening, immersive_profile)
+    opening_editorial_state = EditorialState.from_dict(editorial_state.to_dict())
+    opening_editorial_state.node_id = "" if scene_opening else script.first_beat_id
+    opening_editorial_state.pending_next_beat_id = (
+        script.first_beat_id if scene_opening else ""
+    )
+    opening_editorial_state.facts["_runtime_phase"] = "canonical"
+    if not scene_opening:
+        opening_editorial_state = activate_decision_for_beat(
+            script, opening_editorial_state, script.first_beat_id
+        )
+    opening_metadata = build_editorial_metadata(
+        node_id="" if scene_opening else script.first_beat_id,
+        engagement="scene_opening" if scene_opening else "opening",
+        state=opening_editorial_state.to_dict(),
+        finished=False,
+        run_status="active",
+        ending_code="",
+    )
+    opening_metadata["character_id"] = "narrator" if scene_opening else CHARACTER_ID
+    opening_metadata["scene_opening"] = bool(scene_opening)
+    opening_metadata["editorial_block"] = str(
+        (script.beats.get(script.first_beat_id) or {}).get("block_id", "") or ""
+    )
+    opening_memory = persistent_profile_payload(
+        st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
+    )
+    if opening_memory:
+        opening_metadata["immersive_profile"] = opening_memory
+    repository = runtime_repository()
+    if repository is None:
+        st.error("Google Sheets ficou indisponível ao registrar a abertura.")
+        st.stop()
+    try:
+        context = persist_opening_message(
+            repository,
+            context=context,
+            user=user,
+            state=story_state,
+            assistant_text=opening,
+            assistant_metadata=opening_metadata,
+        )
+    except Exception as exc:
+        log_editorial_exception(
+            "persist_opening_message",
+            exc,
+            user_id=user.user_id,
+            package_id=PACKAGE_ID,
+            node_id=script.first_beat_id,
+        )
+        st.error(f"Não foi possível registrar a abertura: {exc}")
+        st.stop()
+    messages.append({"role": "assistant", "content": opening, **opening_metadata})
+    editorial_state = opening_editorial_state
+    save_session(user, context, story_state, messages, editorial_state)
+for message in current_assistant_messages(messages):
+    if (
+        str(message.get("role", "assistant")) == "assistant"
+        and message_allows_beat_image(message)
+    ):
+        message_node_id = str(
+            message.get("editorial_node") or message.get("beat_id") or ""
+        ).strip()
+        if message_node_id:
+            try:
+                render_editorial_scene_image(
+                    PACKAGE_ID,
+                    message_node_id,
+                    render_memory=False,
+                    ordered_beat_ids=tuple(script.beats),
+                )
+            except Exception as exc:
+                log_editorial_exception(
+                    "render_editorial_message_image",
+                    exc,
+                    package_id=PACKAGE_ID,
+                    node_id=message_node_id,
+                )
+    presentation_role = (
+        "scene"
+        if bool(message.get("scene_opening", False))
+        else str(message.get("role", "assistant"))
+    )
+    render_message(presentation_role, str(message.get("content", "")))
 
 if editorial_state.finished or story_state.finished:
     if editorial_state.run_status == "completed":
@@ -358,13 +546,126 @@ if editorial_state.finished or story_state.finished:
         return_to_library()
     st.stop()
 
-render_current_scene(editorial_state)
-user_text = st.chat_input("Responda")
+last_message_node_id = ""
+if messages and str(messages[-1].get("role", "")) == "assistant":
+    last_message_node_id = str(
+        messages[-1].get("editorial_node") or messages[-1].get("beat_id") or ""
+    ).strip()
+if last_message_node_id != editorial_state.node_id:
+    render_current_scene(editorial_state)
+else:
+    # A imagem do beat já foi exibida junto da fala; mantém apenas o controle de memória.
+    render_editorial_scene_image(
+        PACKAGE_ID,
+        "",
+        user.user_id,
+        ordered_beat_ids=tuple(script.beats),
+    )
+input_source = "typed"
+decision_gate = pending_decision_gate(script, editorial_state)
+user_text = ""
+if decision_gate is not None:
+    free_input = bool(st.session_state.get(DECISION_FREE_INPUT_KEY, False))
+    if free_input:
+        st.warning(str(decision_gate.get("try_your_luck", "") or ""))
+        user_text = st.chat_input("Escreva sua resposta") or ""
+    else:
+        st.info(str(decision_gate.get("suggested_response", "") or ""))
+        proceed_column, luck_column = st.columns(2)
+        with proceed_column:
+            if st.button("Prossiga", type="primary", use_container_width=True):
+                user_text = str(decision_gate["suggested_response"])
+                input_source = "suggested_response"
+        with luck_column:
+            if st.button("Tentar a sorte", use_container_width=True):
+                st.session_state[DECISION_FREE_INPUT_KEY] = True
+                st.rerun()
+else:
+    st.session_state.pop(DECISION_FREE_INPUT_KEY, None)
+    user_text = st.chat_input("Responda") or ""
 if not user_text:
     st.stop()
 
+if decision_gate is not None:
+    def _decision_classifier(system_prompt: str, request: str) -> str:
+        try:
+            return generate_response(
+                api_key=api_key,
+                model=model,
+                system_prompt=system_prompt,
+                history=[],
+                user_text=request,
+            )
+        except OpenRouterError:
+            st.error(OPERATIONAL_GENERATION_ERROR)
+            st.stop()
+            return '{"result":"not_accepted"}'
+
+    editorial_state, decision_outcome = evaluate_pending_decision(
+        script,
+        editorial_state,
+        user_text,
+        classifier=_decision_classifier,
+        input_source=input_source,
+    )
+    if decision_outcome.result in {"warning", "terminated"}:
+        fixed_story_state = advance_story_state(
+            story_state, finished=decision_outcome.result == "terminated"
+        )
+        fixed_metadata = build_editorial_metadata(
+            node_id=editorial_state.node_id,
+            engagement="decision_gate",
+            state=editorial_state.to_dict(),
+            finished=editorial_state.finished,
+            run_status=editorial_state.run_status,
+            ending_code=editorial_state.ending_code,
+        )
+        fixed_metadata.update(
+            {
+                "character_id": CHARACTER_ID,
+                "editorial_block": str(
+                    (script.beats.get(editorial_state.node_id) or {}).get("block_id", "")
+                ),
+                "decision_message": True,
+                "input_source": input_source,
+            }
+        )
+        repository = runtime_repository()
+        if repository is None:
+            st.error("Google Sheets ficou indisponível durante a decisão.")
+            st.stop()
+        context = persist_turn(
+            repository,
+            context=context,
+            user=user,
+            state=fixed_story_state,
+            user_text=user_text,
+            assistant_text=decision_outcome.response,
+            assistant_metadata=fixed_metadata,
+            input_source=input_source,
+        )
+        messages.extend(
+            [
+                {"role": "user", "content": user_text, "input_source": input_source},
+                {"role": "assistant", "content": decision_outcome.response, **fixed_metadata},
+            ]
+        )
+        st.session_state.pop(DECISION_FREE_INPUT_KEY, None)
+        save_session(user, context, fixed_story_state, messages, editorial_state)
+        st.rerun()
+
+history = [
+    {"role": str(item.get("role", "assistant")), "content": str(item.get("content", ""))}
+    for item in messages[-12:]
+]
+
 try:
-    proposed_turn = decide_editorial_turn(script, editorial_state, user_text)
+    proposed_turn = decide_editorial_turn(
+        script,
+        editorial_state,
+        user_text,
+        history=history,
+    )
     pending = prepare_pending_editorial_turn(script, editorial_state, proposed_turn)
 except Exception as exc:
     log_editorial_exception(
@@ -379,8 +680,6 @@ except Exception as exc:
     st.error("Não foi possível decidir o próximo movimento da história.")
     st.stop()
 
-api_key = str(st.secrets.get("OPENROUTER_API_KEY", "") or "").strip()
-model = str(st.secrets.get("OPENROUTER_MODEL", MODEL_DEFAULT) or MODEL_DEFAULT).strip()
 if not api_key:
     log_editorial_exception(
         "openrouter_not_configured",
@@ -393,34 +692,49 @@ if not api_key:
     st.error(OPERATIONAL_GENERATION_ERROR)
     st.stop()
 
-history = [
-    {"role": str(item.get("role", "assistant")), "content": str(item.get("content", ""))}
-    for item in messages[-12:]
-]
-base_prompt = with_optional_thought_guidance(pending.prompt)
+base_prompt = with_scripted_thought_guidance(
+    pending.prompt,
+    authored_thought=pending.context.authored_thought,
+    interpreted_thought=pending.context.interpreted_thought,
+    character_name=CHARACTER_NAME,
+)
+private_context = build_immersive_context(
+    st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
+)
 evaluation_prompt = build_semantic_evaluation_prompt(pending.context)
 raw_model_response = ""
 assistant_text = ""
-violations: tuple[str, ...] = ()
+previous_violations: tuple[str, ...] = ()
+final_violations: tuple[str, ...] = ()
 attempts = 0
 
-for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
+force_fixed_response = (
+    str(pending.proposed_state.facts.get("_force_fixed_response", "") or "") == "true"
+)
+if force_fixed_response:
+    assistant_text = str(pending.turn.visible_fallback or "").strip()
+    raw_model_response = assistant_text
+    attempts = 0
+
+for attempt in range(1, 1 if force_fixed_response else MAX_GENERATION_ATTEMPTS + 1):
     attempts = attempt
+    current_violations: tuple[str, ...] = ()
     generation_prompt = (
         base_prompt
         if attempt == 1
         else build_regeneration_prompt(
             base_prompt=base_prompt,
-            violations=violations,
+            violations=previous_violations,
         )
     )
     try:
         raw_model_response = generate_response(
             api_key=api_key,
             model=model,
-            system_prompt=generation_prompt,
+            system_prompt=generation_prompt + private_context,
             history=history,
             user_text=user_text,
+            debug_logging=not bool(private_context),
         )
         candidate = clean_editorial_model_response(raw_model_response, "")
         deterministic = evaluate_deterministic_response(candidate, pending.context)
@@ -434,7 +748,11 @@ for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
                 candidate=candidate,
             ),
         )
-        semantic = parse_semantic_evaluation(semantic_raw)
+        semantic = parse_semantic_evaluation(
+            semantic_raw,
+            candidate=candidate,
+            context=pending.context,
+        )
         combined = merge_evaluations(deterministic, semantic)
     except OpenRouterError as exc:
         log_editorial_exception(
@@ -451,9 +769,11 @@ for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
 
     if combined.valid:
         assistant_text = candidate
-        violations = ()
+        final_violations = ()
         break
-    violations = combined.violations
+    current_violations = combined.violations
+    previous_violations = current_violations
+    final_violations = current_violations
 
 if not assistant_text:
     log_editorial_exception(
@@ -464,7 +784,7 @@ if not assistant_text:
         node_id=editorial_state.node_id,
         target_id=proposed_turn.target_id,
         attempts=attempts,
-        violations=violations,
+        violations=final_violations,
     )
     st.error(OPERATIONAL_GENERATION_ERROR)
     st.stop()
@@ -472,6 +792,10 @@ if not assistant_text:
 committed = commit_editorial_turn(pending, assistant_text)
 turn = committed.turn
 final_editorial_state = committed.state
+final_editorial_state.input_source = input_source
+final_editorial_state = activate_decision_for_beat(
+    script, final_editorial_state, turn.target_id
+)
 
 diagnostics = build_editorial_turn_diagnostics(
     user_text=user_text,
@@ -486,7 +810,7 @@ diagnostics = build_editorial_turn_diagnostics(
     system_prompt=base_prompt,
 )
 diagnostics["generation_attempts"] = attempts
-diagnostics["evaluation_violations"] = list(violations)
+diagnostics["evaluation_violations"] = list(final_violations)
 diagnostics["state_committed_after_approval"] = True
 log_editorial_turn(diagnostics)
 
@@ -500,6 +824,15 @@ metadata = build_editorial_metadata(
     ending_code=turn.ending_code,
     diagnostics=diagnostics,
 )
+metadata["character_id"] = CHARACTER_ID
+metadata["editorial_block"] = str(
+    (script.beats.get(turn.target_id) or {}).get("block_id", "") or ""
+)
+immersive_memory = persistent_profile_payload(
+    st.session_state.get(profile_key(user.user_id, PACKAGE_ID))
+)
+if immersive_memory and recover_persistent_profile(messages) is None:
+    metadata["immersive_profile"] = immersive_memory
 repository = runtime_repository()
 if repository is None:
     st.error("Google Sheets ficou indisponível durante a interação.")
@@ -514,9 +847,10 @@ try:
         user_text=user_text,
         assistant_text=assistant_text,
         assistant_metadata=metadata,
+        input_source=input_source,
     )
 
-    messages.append({"role": "user", "content": user_text})
+    messages.append({"role": "user", "content": user_text, "input_source": input_source})
     messages.append({"role": "assistant", "content": assistant_text, **metadata})
 
     is_organic_interstitial = final_editorial_state.facts.get("_organic_interstitial") == "true"
@@ -530,6 +864,13 @@ try:
             followup_metadata = build_editorial_bridge_metadata(
                 node_id=str(followup["target_id"]),
                 state=final_editorial_state.to_dict(),
+            )
+            followup_metadata["character_id"] = CHARACTER_ID
+            followup_metadata["editorial_block"] = str(
+                (script.beats.get(str(followup["target_id"])) or {}).get(
+                    "block_id", ""
+                )
+                or ""
             )
             updated_context = persist_assistant_message(
                 repository,

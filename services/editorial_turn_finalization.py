@@ -71,7 +71,6 @@ def _current_user_text(prompt: str) -> str:
 
 def finalize_editorial_turn(script: EditorialScript, turn: EditorialTurn) -> EditorialTurn:
     previous_ids = _memory_ids(turn.state)
-    narrative_context = build_narrative_context(script.raw, previous_ids, turn.state.facts)
     writes = _memory_writes_for_target(script, turn.target_id)
     updated = EditorialState.from_dict(turn.state.to_dict())
     updated.facts["_active_memory_ids"] = ",".join(dict.fromkeys([*previous_ids, *writes]))
@@ -79,11 +78,22 @@ def finalize_editorial_turn(script: EditorialScript, turn: EditorialTurn) -> Edi
     updated = state_for_target(script, updated, turn.target_id)
 
     runtime_phase = str(updated.facts.get("_runtime_phase", "canonical") or "canonical")
+    narrative_context = build_narrative_context(
+        script.raw,
+        previous_ids,
+        updated.facts,
+        beat_id=str(turn.target_id or turn.state.node_id or ""),
+        runtime_phase=runtime_phase,
+    )
     canonical_member = _is_strict_canonical_beat(script, turn.target_id)
     inject_canonical_prompt = runtime_phase == "canonical" and canonical_member
     strict_policy = _strict_canonical_policy(script)
     state_fact = str(strict_policy.get("state_fact", "") or "").strip()
-    updated.facts["_force_fixed_response"] = "false"
+    updated.facts["_force_fixed_response"] = (
+        "true"
+        if turn.ending_code == "intimacy_correspondence_broken"
+        else "false"
+    )
     if state_fact:
         updated.facts[state_fact] = "true" if canonical_member else "false"
 

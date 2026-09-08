@@ -18,7 +18,6 @@ class SpreadsheetIds:
             for name, value in (
                 ("ROLEPLAY_ACCOUNTS_BILLING_SPREADSHEET_ID", self.accounts_billing),
                 ("ROLEPLAY_RUNTIME_SPREADSHEET_ID", self.runtime),
-                ("ROLEPLAY_EDITORIAL_SPREADSHEET_ID", self.editorial),
             )
             if not value.strip()
         ]
@@ -31,15 +30,16 @@ class SpreadsheetIds:
 def read_spreadsheet_ids(secrets: Any) -> SpreadsheetIds:
     """Lê os IDs sem criar conexões ou modificar o runtime atual."""
 
+    runtime_id = str(
+        secrets.get("ROLEPLAY_RUNTIME_SPREADSHEET_ID", "") or ""
+    ).strip()
     ids = SpreadsheetIds(
         accounts_billing=str(
             secrets.get("ROLEPLAY_ACCOUNTS_BILLING_SPREADSHEET_ID", "") or ""
         ).strip(),
-        runtime=str(
-            secrets.get("ROLEPLAY_RUNTIME_SPREADSHEET_ID", "") or ""
-        ).strip(),
+        runtime=runtime_id,
         editorial=str(
-            secrets.get("ROLEPLAY_EDITORIAL_SPREADSHEET_ID", "") or ""
+            secrets.get("ROLEPLAY_EDITORIAL_SPREADSHEET_ID", "") or runtime_id
         ).strip(),
     )
     ids.validate()

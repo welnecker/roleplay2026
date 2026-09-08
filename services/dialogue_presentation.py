@@ -19,26 +19,69 @@ class PresentedDialogue:
     speech: str
 
 
-def with_optional_thought_guidance(system_prompt: str) -> str:
-    """Acrescenta subtexto opcional sem transformar pensamento em beat obrigatório."""
+def with_optional_thought_guidance(
+    system_prompt: str, *, character_name: str = "Mary"
+) -> str:
+    """Acrescenta subtexto opcional coerente com o núcleo vivo da personagem."""
 
     return (
         f"{system_prompt.rstrip()}\n\n"
         "SUBTEXTO INTERNO OPCIONAL:\n"
-        "- Use um pensamento curto quando Mary sentir algo que ainda não diria diretamente.\n"
-        "- Não inclua pensamento em toda resposta; use-o somente quando acrescentar subtexto emocional real.\n"
-        "- O pensamento pode revelar desejo, carência, expectativa, cautela ou humor sobre a própria situação conjugal.\n"
-        "- Prefira uma contradição viva entre o que Mary deseja e o que considera prudente, habitual ou seguro.\n"
-        "- O pensamento deve oferecer uma pista emocional sobre como a aproximação está sendo recebida, sem instruir o usuário.\n"
-        "- Não resuma o casamento, não explique a psicologia, não antecipe o roteiro e não descreva ações ou cenário.\n"
+        f"- Use um pensamento curto somente quando ele revelar algo que {character_name} ainda não diria em voz alta.\n"
+        "- O pensamento deve nascer do desejo, da malícia, da curiosidade, da fantasia, da expectativa ou da estratégia do instante.\n"
+        f"- O desejo sexual é motor da personagem: quando houver atração e reciprocidade, o pensamento deve avançar para o que {character_name} quer, imagina ou pretende provocar, em vez de recuar para culpa ou sentimentalismo.\n"
+        f"- Não invente conflito moral. {character_name} não precisa se convencer de que pode desejar; quando hesita, a hesitação é prática ou estratégica: como, onde, quando, discrição, oportunidade ou ritmo.\n"
+        "- Não use carência romântica, medo de sentir, culpa conjugal, prudência emocional, linguagem de confissão ou frases como 'mais do que eu queria admitir' para fabricar profundidade.\n"
+        "- O casamento só entra no pensamento quando for concretamente relevante ao segredo, à logística ou à brincadeira do beat atual.\n"
+        "- O pensamento pode ser mais franco que a fala externa, mas não executa ação, convite ou acontecimento de beat futuro.\n"
+        "- Nunca atribua ao usuário intenção, motivação, fantasia, ação ou sentimento que ele não tenha declarado.\n"
         "- Use primeira pessoa e no máximo duas frases curtas; não inclua pensamento quando ele não acrescentar direção real.\n"
-        "- Depois do pensamento, escreva a fala de Mary normalmente.\n"
+        f"- Depois do pensamento, escreva a fala de {character_name} normalmente.\n"
         "- Quando usar pensamento, empregue exatamente este formato:\n"
         "[PENSAMENTO]\n"
-        "pensamento curto de Mary em primeira pessoa\n"
+        f"pensamento curto de {character_name} em primeira pessoa\n"
         "[/PENSAMENTO]\n\n"
-        "fala direta de Mary\n"
+        f"fala direta de {character_name}\n"
         "- Não escreva os marcadores quando não houver pensamento."
+    )
+
+
+def with_scripted_thought_guidance(
+    system_prompt: str,
+    *,
+    authored_thought: str,
+    interpreted_thought: bool = False,
+    character_name: str = "Mary",
+) -> str:
+    """Permite pensamento somente quando ele foi escrito no beat atual."""
+
+    thought = str(authored_thought or "").strip()
+    if not thought:
+        return (
+            f"{system_prompt.rstrip()}\n\n"
+            "CONTRATO DE PENSAMENTO:\n"
+            "- Este beat não contém pensamento autoral.\n"
+            f"- Escreva somente a fala audível de {character_name}.\n"
+            "- Não crie pensamento, monólogo interno ou subtexto oculto.\n"
+            "- Não escreva os marcadores [PENSAMENTO] e [/PENSAMENTO]."
+        )
+
+    if interpreted_thought:
+        return (
+            f"{system_prompt.rstrip()}\n\n"
+            "CONTRATO DE PENSAMENTO INTERPRETADO:\n"
+            "- Use o pensamento autoral como núcleo psicológico obrigatório e reconhecível.\n"
+            "- Desenvolva-o em primeira pessoa como consciência íntima, incorporando desejo, conflito e sensações próprias compatíveis.\n"
+            "- Não seja neutro ou protocolar, não atribua estados ao usuário e não antecipe beats.\n"
+            "- Use um único bloco [PENSAMENTO]...[/PENSAMENTO] antes da fala audível."
+        )
+    return (
+        f"{system_prompt.rstrip()}\n\n"
+        "CONTRATO DE PENSAMENTO AUTORAL:\n"
+        "- Este beat contém pensamento autoral obrigatório.\n"
+        "- Reproduza literalmente o texto fornecido pelo contrato do beat.\n"
+        "- Não substitua, amplie nem acrescente outro pensamento.\n"
+        "- Use um único bloco [PENSAMENTO]...[/PENSAMENTO] antes da fala audível."
     )
 
 
@@ -62,15 +105,22 @@ def has_balanced_thought_markers(content: str) -> bool:
     return opens == closes and opens <= 1
 
 
-def render_dialogue_html(role: str, content: str) -> str:
+def render_dialogue_html(
+    role: str, content: str, *, character_name: str = "Mary"
+) -> str:
     dialogue = split_dialogue(content)
     role_name = str(role or "assistant").casefold()
     is_user = role_name == "user"
-    wrapper_class = "dialogue-message dialogue-user" if is_user else "dialogue-message dialogue-mary"
-    speaker = "Você" if is_user else "Mary"
+    is_scene = role_name == "scene"
+    wrapper_class = (
+        "dialogue-message dialogue-user"
+        if is_user
+        else "dialogue-message dialogue-mary"
+    )
+    speaker = "Você" if is_user else ("Cena" if is_scene else character_name)
 
     thought_html = ""
-    if not is_user and dialogue.thought:
+    if not is_user and not is_scene and dialogue.thought:
         thought_html = (
             '<div class="mary-thought">'
             '<div class="mary-thought-label"><span>✦</span> pensamento</div>'

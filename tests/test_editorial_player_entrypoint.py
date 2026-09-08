@@ -21,7 +21,10 @@ def test_pagina_editorial_e_apenas_entrypoint_generico() -> None:
 def test_entrypoint_nao_conhece_historia_ou_cenario() -> None:
     source = ENTRYPOINT.read_text(encoding="utf-8").casefold()
 
-    assert "editorial_player_runtime" in source
+    assert "novel_player_runtime.py" in source
+    assert "runpy.run_path" in source
+    assert "import importlib" not in source
+    assert ".reload(" not in source
     assert "casada_frustrada" not in source
     assert "supermercado" not in source
     assert "mary" not in source

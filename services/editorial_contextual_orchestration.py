@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 
 from services.editorial_contextual_destination import (
@@ -16,6 +17,25 @@ from services.editorial_runtime_types import EditorialScript, EditorialState, Ed
 
 ClassifierCall = Callable[[str, str], str]
 TurnDecisionCall = Callable[[EditorialScript, EditorialState, str], EditorialTurn]
+
+_SPREADSHEET_RUPTURE_CANDIDATE = re.compile(
+    r"\b(?:matar|mato|bater|socar|agredir|machucar|ameaçar|ameacar|arma|faca|"
+    r"forçar|forcar|estuprar|filmar|gravar|câmera|camera|postar|publicar|"
+    r"internet|humilhar|ridicularizar|expor|vou embora|indo embora|saio daqui|"
+    r"não quero continuar|nao quero continuar|me deixa em paz|adeus|"
+    r"ambulância|ambulancia|hospital|polícia|policia|delegacia|"
+    r"agora estamos|vamos para outro|te levo para)\b",
+    re.IGNORECASE,
+)
+
+
+def _spreadsheet_needs_contextual_classifier(
+    script: EditorialScript,
+    user_text: str,
+) -> bool:
+    if str(script.raw.get("authoring_source", "") or "") != "spreadsheet":
+        return True
+    return bool(_SPREADSHEET_RUPTURE_CANDIDATE.search(str(user_text or "")))
 
 
 def classify_contextual_destination_for_turn(
@@ -34,6 +54,9 @@ def classify_contextual_destination_for_turn(
     context = current_interaction_context(script, state)
     if not contextual_classification_required(context):
         destination = ContextualDestination(reason="contextual_classification_not_required")
+        return state_with_contextual_destination(state, destination), destination
+    if not _spreadsheet_needs_contextual_classifier(script, user_text):
+        destination = ContextualDestination(reason="spreadsheet_rupture_prefilter_clear")
         return state_with_contextual_destination(state, destination), destination
 
     raw = classifier_call(
@@ -68,5 +91,6 @@ __all__ = [
     "ClassifierCall",
     "TurnDecisionCall",
     "classify_contextual_destination_for_turn",
+    "_spreadsheet_needs_contextual_classifier",
     "decide_contextual_editorial_turn",
 ]

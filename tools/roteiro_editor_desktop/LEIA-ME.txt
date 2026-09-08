@@ -1,0 +1,73 @@
+EDITOR DE ROTEIROS ROLEPLAY2026 - WINDOWS
+VERSAO DE AUTORIA: ELENCO PERSONALIZAVEL / TIMELINE VISUAL / GALERIA
+
+Este programa e independente do Roleplay2026.
+Nao precisa instalar Python, Streamlit, venv ou Miniconda depois de compilado.
+
+FLUXO: ELENCO + IMAGEM PRIMEIRO
+1. Abra Editor_Roteiros_ROLEPLAY2026.exe.
+2. Clique em CONFIGURAR ELENCO. Cadastre quantos personagens a trama precisar.
+   Para cada personagem, informe:
+   - papel na trama, como A esposa, O marido, A vizinha ou A colega;
+   - nome inicial, como Mary, Doni, Sandra ou Camilly;
+   - genero estrutural;
+   - ID estrutural, como mary, marido, vizinha ou camilly.
+3. O ID estrutural permanece no roteiro. O nome inicial e apresentado ao usuario
+   antes de uma nova run e pode ser trocado sem modificar o roteiro.
+4. Selecione o ator na barra e use + NOME DO ATOR. O editor insere o marcador
+   {{nome:actor_id}}, por exemplo {{nome:mary}} ou {{nome:vizinha}}.
+5. As tags [FALA actor_id] e [PENSAMENTO actor_id] continuam usando o ID
+   estrutural, nunca o nome escolhido pelo usuario.
+6. Projetos antigos continuam abrindo. A lista antiga de atores e convertida
+   para um elenco editavel na primeira abertura.
+7. No painel direito, clique em INFORMAR PASTA DE IMAGENS e escolha onde estão
+   as imagens que alimentarão o roteiro. A pasta pode estar em qualquer local.
+8. O caminho escolhido fica visível acima da galeria e é salvo junto com o projeto.
+9. Todas as imagens compatíveis da pasta aparecem como miniaturas na GALERIA DE REFERENCIAS.
+10. Clique em qualquer miniatura para torna-la a imagem atual e exibi-la no preview grande.
+11. Clique em + DESCRICAO DESTA IMAGEM para criar um novo quadro ligado a imagem atual.
+12. Escreva a DESCRICAO, FALAS e PENSAMENTOS olhando para a referencia visual.
+13. Use + FALA para ajustes mínimos, + FALA EXATA para texto literal e
+   + FALA INTERPRETADA para permitir que o modelo desenvolva o núcleo autoral.
+14. Use + FALA BALAO para gerar [FALA ator_balao]. Na edição de uma linha,
+   as modalidades exata e interpretada também podem ser combinadas com BALÃO.
+15. Use + FIM DA HISTORIA para inserir [FIM_HISTORIA] como a ultima linha.
+    Sem texto, a tag encerra o ultimo quadro. Com texto, cria uma despedida final
+    deterministica, que tambem pode receber uma imagem propria na timeline.
+16. Na timeline, cada [DESCRICAO] abre um quadro expansivel com suas FALAS e PENSAMENTOS.
+17. A primeira imagem fica no image_id da [DESCRICAO] e e herdada pelas linhas seguintes ate aparecer outro image_id explicito.
+18. Para trocar a imagem durante o quadro, selecione a linha desejada, clique na miniatura da galeria e use USAR IMAGEM ATUAL NESTA LINHA.
+19. Imagens ja utilizadas aparecem com um marcador de confirmacao na galeria.
+20. A timeline mostra um thumbnail apenas nas linhas que possuem image_id proprio; linhas que apenas herdam a imagem anterior ficam sem thumbnail.
+21. Para editar uma linha ja gerada, selecione-a e clique em EDITAR LINHA SELECIONADA ou de duplo clique nela.
+22. Em linhas de dialogo, voce pode alternar entre FALA, FALA EXATA, FALA INTERPRETADA, PENSAMENTO e suas variantes de BALAO, alem de trocar o ator. Uma DESCRICAO permanece DESCRICAO para preservar a estrutura V2.
+23. Ao salvar a alteracao, line_id e order sao recompilados automaticamente e a imagem ja atribuida aquela linha e preservada.
+24. Anterior / Proxima continuam disponiveis como navegacao auxiliar, mas nao sao necessarios para trabalhar com lotes grandes.
+25. Salve o projeto JSON para continuar outro dia.
+26. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
+
+SAIDA
+A pasta exportada contem:
+- roteiro.xlsx
+- roteiro.csv
+- roteiro.tsv
+- projeto_roteiro.json
+- elenco_manifest.yaml
+- ELENCO-E-TAGS.txt
+- imagens/*.webp
+
+O arquivo elenco_manifest.yaml contem o bloco cast_customization pronto para ser
+copiado ao manifest.yaml do card. O arquivo ELENCO-E-TAGS.txt resume os marcadores
+de nome, fala e pensamento de todos os personagens cadastrados.
+
+CABECALHO OFICIAL
+package_id | script_version | line_id | order | instruction | status | image_id
+
+As imagens sao convertidas para WebP e recebem numeracao automatica, por exemplo:
+camilly1.webp
+camilly2.webp
+camilly3.webp
+
+O arquivo projeto_roteiro.json permite continuar a edicao posteriormente enquanto as imagens originais permanecerem acessiveis no PC.
+
+O programa nao envia nem altera arquivos no GitHub ou Google Sheets. A transferencia final continua manual e controlada por voce.

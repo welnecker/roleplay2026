@@ -27,12 +27,16 @@ def load_application_secrets() -> dict[str, Any]:
         "ROLEPLAY_RUNTIME_SPREADSHEET_ID",
         "ROLEPLAY_EDITORIAL_SPREADSHEET_ID",
         "V2_SHEETS_ADMIN_TOKEN",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_MODEL",
+        "OPENROUTER_INTENT_MODEL",
         "MERCADO_PAGO_ACCESS_TOKEN",
         "MERCADOPAGO_ACCESS_TOKEN",
         "MP_ACCESS_TOKEN",
         "MERCADO_PAGO_WEBHOOK_SECRET",
         "MERCADOPAGO_WEBHOOK_SECRET",
         "MP_WEBHOOK_SECRET",
+        "PAYMENT_TEST_MASTER_EMAILS",
     )
     for name in aliases:
         value = os.getenv(name)

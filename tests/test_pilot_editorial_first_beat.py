@@ -1,4 +1,10 @@
-from services.editorial_runtime_impl import PilotScript, PilotState, decide_turn, opening_text
+from services.editorial_runtime_impl import (
+    PilotScript,
+    PilotState,
+    decide_turn,
+    opening_text,
+    scene_opening_text,
+)
 
 
 def _script() -> PilotScript:
@@ -6,6 +12,7 @@ def _script() -> PilotScript:
         {
             "engagement_policy": {"categories": {}},
             "scene": {
+                "introduction": "Eu caminho até a praia quando avisto Doni no carro.",
                 "first_beat_id": "encontro_acidental_001",
                 "beats": [
                     {
@@ -57,6 +64,19 @@ def test_abertura_usa_primeiro_beat_editorial() -> None:
     script = _script()
     assert script.first_beat_id == "encontro_acidental_001"
     assert opening_text(script) == "Eita, caralho... desculpa!"
+
+
+def test_cena_aparece_sem_consumir_primeiro_beat() -> None:
+    script = _script()
+    state = PilotState(pending_next_beat_id=script.first_beat_id)
+
+    assert scene_opening_text(script) == (
+        "Eu caminho até a praia quando avisto Doni no carro."
+    )
+    turn = decide_turn(script, state, "Oi, Camilly!")
+    assert turn.target_id == "encontro_acidental_001"
+    assert turn.visible_fallback == "Eita, caralho... desculpa!"
+    assert turn.state.node_id == "encontro_acidental_001"
 
 
 def test_estado_antigo_collision_migra_para_primeiro_beat() -> None:

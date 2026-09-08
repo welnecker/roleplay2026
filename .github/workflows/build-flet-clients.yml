@@ -1,0 +1,182 @@
+name: Build EntreCenas Clients
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publicar o APK assinado como a versão Android oficial"
+        required: true
+        default: false
+        type: boolean
+  push:
+    branches:
+      - agent/flet-visual-client
+      - agent/customizable-story-cast
+    paths:
+      - "assets/**"
+      - "flet_client/**"
+      - "roleplay_shared/**"
+      - "main.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "release/android-release.txt"
+      - ".github/workflows/build-flet-clients.yml"
+
+permissions:
+  contents: read
+
+env:
+  UV_PYTHON: "3.12"
+  PYTHONUTF8: "1"
+  FLET_CLI_NO_RICH_OUTPUT: "1"
+
+jobs:
+  android:
+    name: Build signed Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      FLET_ANDROID_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      FLET_ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    outputs:
+      publish: ${{ steps.release_request.outputs.publish }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Determine release publication
+        id: release_request
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUBLISH_INPUT: ${{ inputs.publish_release || false }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          publish=false
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$PUBLISH_INPUT" = "true" ]; then
+            publish=true
+          elif [ "$EVENT_NAME" = "push" ] && [ -f release/android-release.txt ]; then
+            if [ -n "${BEFORE_SHA:-}" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+              if ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+                git fetch --no-tags --depth=1 origin "$BEFORE_SHA" || true
+              fi
+              if git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null && \
+                 git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" | grep -Fxq "release/android-release.txt"; then
+                publish=true
+              fi
+            fi
+          fi
+
+          echo "publish=$publish" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Require production signing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 FLET_ANDROID_SIGNING_KEY_ALIAS FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD FLET_ANDROID_SIGNING_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required Android production signing secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Refusing to build an Android production artifact with the debug signing key."
+            exit 1
+          fi
+
+      - name: Restore production keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="${RUNNER_TEMP}/entrecenas-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "FLET_ANDROID_SIGNING_KEY_STORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+
+      - name: Build signed Android APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run flet build apk --yes --verbose --build-number "${{ github.run_number }}"
+
+      - name: Verify APK signature and publish metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="$(find build/apk -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::Signed APK was not produced."
+            exit 1
+          fi
+
+          APKSIGNER="$(find "${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools" -type f -name apksigner -print 2>/dev/null | sort -V | tail -n 1)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner was not found in Android build-tools."
+            exit 1
+          fi
+
+          "$APKSIGNER" verify --verbose --print-certs "$APK_PATH" | tee build/apk/signature.txt
+          SHA256="$(sha256sum "$APK_PATH" | awk '{print $1}')"
+          APK_NAME="$(basename "$APK_PATH")"
+
+          {
+            echo "product=EntreCenas"
+            echo "package_id=br.com.entrecenas.roleplay"
+            echo "git_commit=${GITHUB_SHA}"
+            echo "build_number=${{ github.run_number }}"
+            echo "apk=${APK_NAME}"
+            echo "sha256=${SHA256}"
+          } | tee build/apk/release-metadata.txt
+
+      - name: Remove temporary keystore
+        if: always()
+        shell: bash
+        run: rm -f "${RUNNER_TEMP}/entrecenas-release.jks"
+
+      - name: Upload signed Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: EntreCenas-Android-APK-signed
+          path: build/apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish permanent Android release
+        if: ${{ steps.release_request.outputs.publish == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          APK_PATH="$(find build/apk -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          VERSION="$(python - <<'PY'
+          import tomllib
+          with open('pyproject.toml', 'rb') as handle:
+              print(tomllib.load(handle)['project']['version'])
+          PY
+          )"
+          TAG="android-v${VERSION}-build${{ github.run_number }}"
+          PUBLIC_APK="${RUNNER_TEMP}/entrecenas-roleplay.apk"
+          cp "$APK_PATH" "$PUBLIC_APK"
+
+          gh release create "$TAG" \
+            "$PUBLIC_APK#EntreCenas Android APK" \
+            "build/apk/release-metadata.txt#Metadados da build" \
+            "build/apk/signature.txt#Verificação da assinatura" \
+            --target "$GITHUB_SHA" \
+            --title "EntreCenas Android ${VERSION} (build ${{ github.run_number }})" \
+            --notes "APK oficial do EntreCenas para Android. Pacote: br.com.entrecenas.roleplay. Build assinada e verificada automaticamente pelo GitHub Actions." \
+            --latest

@@ -11,12 +11,39 @@ soberano sobre IDs, transições, pátios e encerramentos declarados pelo card.
 """
 
 from collections.abc import Callable
+from typing import Mapping, Sequence
 
 from services.editorial_contextual_orchestration import (
     classify_contextual_destination_for_turn,
 )
+from services.editorial_contextual_destination import (
+    ContextualDestination,
+    state_with_contextual_destination,
+)
+from services.editorial_intimacy_checkpoint import (
+    BREAK_SIGNAL,
+    build_intimacy_checkpoint_prompt,
+    build_intimacy_checkpoint_request,
+    confirm_active_intimate_step,
+    intimate_exact_active,
+    parse_intimacy_correspondence,
+)
+from services.editorial_bridge import (
+    automatic_gate_enabled,
+    automatic_gate_policy,
+    bridge_active,
+)
 from services.editorial_progression import decide_editorial_progression_turn
 from services.editorial_runtime_types import EditorialScript, EditorialState, EditorialTurn
+from services.editorial_semantic_reconciliation import (
+    build_reconciliation_prompt,
+    build_reconciliation_request,
+    immediate_reconciliation_steps,
+    parse_reconciliation,
+    preserve_character_owned_target_beats,
+    reconciliation_terminal_destination,
+    state_with_reconciliation,
+)
 
 
 ClassifierCall = Callable[[str, str], str]
@@ -48,6 +75,7 @@ def decide_editorial_turn(
     user_text: str,
     *,
     classifier_call: ClassifierCall | None = None,
+    history: Sequence[Mapping[str, str]] = (),
 ) -> EditorialTurn:
     """Executa a ponte contextual antes da progressão editorial normal.
 
@@ -57,9 +85,122 @@ def decide_editorial_turn(
     """
 
     effective_classifier = classifier_call or _classifier_call
+    reconciled_state = EditorialState.from_dict(state.to_dict())
+    intimate_corresponds = False
+    if intimate_exact_active(script, state):
+        raw_intimacy = effective_classifier(
+            build_intimacy_checkpoint_prompt(),
+            build_intimacy_checkpoint_request(user_text),
+        )
+        intimate_result = parse_intimacy_correspondence(raw_intimacy, user_text)
+        if intimate_result is False:
+            ended_state = state_with_contextual_destination(
+                state,
+                ContextualDestination(
+                    route="immediate_ending",
+                    signal=BREAK_SIGNAL,
+                    reason="quebra de correspondência no checkpoint íntimo",
+                    confidence=1.0,
+                ),
+            )
+            return decide_editorial_progression_turn(script, ended_state, user_text)
+        intimate_corresponds = intimate_result is True
+    if str(state.facts.get("_runtime_phase", "") or "") != "terminal_yard":
+        steps = immediate_reconciliation_steps(script, state)
+        if steps:
+            raw = effective_classifier(
+                build_reconciliation_prompt(script, state),
+                build_reconciliation_request(user_text, history),
+            )
+            reconciliation = parse_reconciliation(
+                raw,
+                allowed_step_ids=(item["step_id"] for item in steps),
+                active_response_step_ids=(
+                    item["step_id"]
+                    for item in steps
+                    if item.get("kind") == "active_beat_response"
+                ),
+                user_text=user_text,
+                history=history,
+            )
+            # Um beat alvo ainda não executado pertence à personagem. Mesmo que a
+            # mensagem do usuário seja semanticamente parecida com seu objetivo,
+            # ela não pode consumir a fala ou o movimento autoral reservado.
+            reconciliation = preserve_character_owned_target_beats(
+                reconciliation,
+                steps,
+            )
+            if intimate_corresponds:
+                reconciliation = confirm_active_intimate_step(
+                    reconciliation,
+                    step_id=str(state.node_id or "").strip(),
+                    user_text=user_text,
+                )
+            reconciled_state = state_with_reconciliation(state, reconciliation)
+            active_id = (
+                str(state.facts.get("_bridge_origin_beat_id", "") or "").strip()
+                if bridge_active(state)
+                else str(state.node_id or "").strip()
+            )
+            active_assessment = next(
+                (item for item in reconciliation.steps if item.step_id == active_id),
+                None,
+            )
+            if automatic_gate_enabled(script) and active_assessment is not None:
+                gate_policy = automatic_gate_policy(script)
+                automatic_retry = (
+                    bridge_active(state)
+                    and str(state.facts.get("_automatic_gate_active", "") or "") == "true"
+                )
+                attempts = int(state.facts.get("_automatic_gate_attempts", "0") or 0)
+                max_redirects = max(0, int(gate_policy.get("max_redirects", 1) or 0))
+                failure_signal = ""
+                if active_assessment.status == "contradicted":
+                    failure_signal = str(
+                        gate_policy.get("on_refusal", "required_outcome_refused")
+                        or "required_outcome_refused"
+                    )
+                elif (
+                    automatic_retry
+                    and attempts >= max_redirects
+                    and active_assessment.status in {"pending", "partial"}
+                ):
+                    failure_signal = str(
+                        gate_policy.get("on_unresolved", "required_outcome_unresolved")
+                        or "required_outcome_unresolved"
+                    )
+                if failure_signal:
+                    reconciled_state = state_with_contextual_destination(
+                        reconciled_state,
+                        ContextualDestination(
+                            route="immediate_ending",
+                            signal=failure_signal,
+                            reason=active_assessment.reason or failure_signal,
+                            confidence=1.0,
+                        ),
+                    )
+                    return decide_editorial_progression_turn(
+                        script, reconciled_state, user_text
+                    )
+            terminal, signal, reason = reconciliation_terminal_destination(
+                reconciled_state
+            )
+            if terminal:
+                reconciled_state = state_with_contextual_destination(
+                    reconciled_state,
+                    ContextualDestination(
+                        route="terminal_yard",
+                        signal=signal,
+                        reason=reason,
+                        confidence=1.0,
+                    ),
+                )
+                return decide_editorial_progression_turn(
+                    script, reconciled_state, user_text
+                )
     classified_state, _destination = classify_contextual_destination_for_turn(
         script,
-        state,
+        reconciled_state,
         user_text,
         classifier_call=effective_classifier,
     )

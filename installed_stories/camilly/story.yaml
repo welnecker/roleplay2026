@@ -1,0 +1,10 @@
+story_id: camilly
+title: Camilly
+entry_route: abertura
+routes:
+  - id: abertura
+    beats:
+      - id: abertura_001
+        movements:
+          - order: 1
+            content: Camilly inicia a conversa seguindo o roteiro editorial ativo.

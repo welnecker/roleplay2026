@@ -62,6 +62,8 @@ def _clear_story_session(package_id: str, user_id: str = "") -> None:
     st.session_state.pop(f"pix_order:{package_id}", None)
     st.session_state.pop(f"pix_qr_base64:{package_id}", None)
     st.session_state.pop("payment_access_ready", None)
+    if user_id:
+        st.session_state.pop(f"immersive_profile:{user_id}:{package_id}", None)
 
     if user_id:
         prefix = f"editorial:{user_id}:{package_id}:"

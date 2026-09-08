@@ -19,6 +19,10 @@ _LAST_EVALUATION_CONTEXT: ContextVar[BeatContext | None] = ContextVar(
     "editorial_last_evaluation_context",
     default=None,
 )
+_LAST_REJECTED_EVIDENCE: ContextVar[tuple[str, ...]] = ContextVar(
+    "editorial_last_rejected_evidence",
+    default=(),
+)
 _TECHNICAL_MARKERS = (
     "<end_run",
     "end_run",
@@ -45,6 +49,7 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
         "failed_to_request_explicit_decision",
         "treated_postpone_as_refusal",
         "treated_question_as_acceptance",
+        "unauthorized_conversational_extension",
         "character_voice_broken",
         "semantic_evaluator_invalid_json",
         "semantic_evaluator_invalid_payload",
@@ -52,7 +57,29 @@ _ALLOWED_SEMANTIC_VIOLATIONS = frozenset(
         "semantic_rejection_without_reason",
     }
 )
+_BLOCKING_SEMANTIC_VIOLATIONS = frozenset(
+    {
+        "contradicted_confirmed_fact",
+        "failed_required_outcome",
+        "performed_forbidden_outcome",
+        "presumed_user_decision",
+        "anticipated_future_beat",
+        "closed_pending_route",
+        "failed_to_answer_user_question",
+        "failed_to_request_explicit_decision",
+        "treated_postpone_as_refusal",
+        "treated_question_as_acceptance",
+        "unauthorized_conversational_extension",
+    }
+)
 _VIOLATION_GUIDANCE = {
+    "authored_transition_invalid": "Inclua literalmente o salto temporal autoral uma única vez na primeira linha, antes do pensamento e da fala.",
+    "authored_thought_missing": "Inclua literalmente o pensamento autoral obrigatório dentro de um único bloco [PENSAMENTO].",
+    "unexpected_thought": "Remova integralmente o pensamento: o beat atual não contém [PENSAMENTO] autoral.",
+    "exact_speech_missing": "Inclua literalmente a fala autoral exata obrigatória na parte audível da resposta.",
+    "exact_speech_extension": "Use somente a fala autoral exata, sem nenhuma palavra audível antes ou depois.",
+    "forbidden_literal_text_repeated": "Remova o pensamento ou a fala autoral já consumida ou reservada a outro beat; produza apenas uma reação nova.",
+    "bridge_question_created": "Remova a nova pergunta. A ponte deve reagir ao usuário sem criar assunto ou obrigação para o turno seguinte.",
     "invented_unconfirmed_detail": (
         "Não trate metáfora, flerte, humor, duplo sentido ou improviso plausível como fato novo. "
         "Corrija apenas contradições, ações presumidas do usuário ou avanço indevido do roteiro."
@@ -67,6 +94,9 @@ _VIOLATION_GUIDANCE = {
     "failed_to_request_explicit_decision": "Ao final, peça uma decisão explícita sem pressão.",
     "treated_postpone_as_refusal": "Reconheça o adiamento sem convertê-lo em recusa.",
     "treated_question_as_acceptance": "Trate a pergunta como pedido de esclarecimento, não como aceite.",
+    "unauthorized_conversational_extension": (
+        "Remova a pergunta, pedido, promessa ou assunto que não realiza nenhuma finalidade pendente do beat atual."
+    ),
     "character_voice_broken": "Preserve a voz natural da personagem.",
 }
 
@@ -88,16 +118,36 @@ def _visible_dialogue(text: str) -> str:
     return _THOUGHT_PATTERN.sub("", str(text or "")).strip()
 
 
+def _without_authored_transition(text: str, transition: str) -> str:
+    visible = _visible_dialogue(text)
+    expected = str(transition or "").strip()
+    if expected and visible.startswith(expected):
+        return visible[len(expected):].strip()
+    return visible
+
+
 def _sentence_count(text: str) -> int:
     body = _visible_dialogue(text)
     if not body:
         return 0
-    chunks = re.split(r"(?<=[.!?])(?:\s+|$)", body)
+    # Reticências internas marcam pausa de voz, não encerramento autônomo.
+    # Substituí-las antes da divisão impede que "Você... vem comigo." conte
+    # como duas frases.
+    protected = re.sub(r"\.{2,}", "<ELLIPSIS>", body)
+    chunks = re.split(r"(?<=[.!?])(?:\s+|$)", protected)
     return sum(1 for chunk in chunks if chunk.strip())
+
+
+def _word_count(text: str) -> int:
+    return len(re.findall(r"\w+", str(text or ""), flags=re.UNICODE))
 
 
 def _normalized(value: str) -> str:
     return " ".join(re.findall(r"\w+", str(value or "").casefold(), flags=re.UNICODE))
+
+
+def _whitespace_normalized(value: str) -> str:
+    return " ".join(str(value or "").split())
 
 
 def _context_allows_violation(code: str, context: BeatContext | None) -> bool:
@@ -110,6 +160,13 @@ def _context_allows_violation(code: str, context: BeatContext | None) -> bool:
 
     if code == "invented_unconfirmed_detail":
         return False
+    if code == "unauthorized_conversational_extension":
+        # Na ponte, responder ao conteúdo atual dentro do assunto vigente é a
+        # própria finalidade estrutural. Novos assuntos continuam protegidos
+        # por bridge_question_created; repetição literal e avanço futuro têm
+        # validadores próprios. Deixar este código semântico amplo bloquear a
+        # ponte cria falso positivo e força a regeneração a copiar a origem.
+        return context.transition_status != "bridge_pending"
     if code == "failed_to_answer_user_question":
         return context.user_intent == "question" or (
             "responder" in required and "pergunta" in required
@@ -156,12 +213,70 @@ def evaluate_deterministic_response(
     if "[PENSAMENTO]" in residual.upper() or "[/PENSAMENTO]" in residual.upper():
         violations.append("malformed_thought_block")
 
-    visible = _visible_dialogue(text)
+    if context.authored_thought and context.interpreted_thought:
+        if not thought_matches:
+            violations.append("authored_thought_missing")
+    elif context.authored_thought:
+        required_thought = _whitespace_normalized(context.authored_thought)
+        rendered_thoughts = " ".join(
+            _whitespace_normalized(
+                re.sub(
+                    r"^\[PENSAMENTO\]|\[/PENSAMENTO\]$",
+                    "",
+                    item.strip(),
+                    flags=re.IGNORECASE,
+                )
+            )
+            for item in thought_matches
+        )
+        if required_thought not in rendered_thoughts:
+            violations.append("authored_thought_missing")
+    elif thought_matches:
+        violations.append("unexpected_thought")
+
+    if context.authored_transition:
+        expected_transition = context.authored_transition.strip()
+        if not text.startswith(expected_transition) or text.count(expected_transition) != 1:
+            violations.append("authored_transition_invalid")
+
+    visible = _without_authored_transition(text, context.authored_transition)
+    canonical_visible = _without_authored_transition(
+        context.canonical_line,
+        context.authored_transition,
+    )
+    if context.forbid_new_questions and "?" in visible:
+        violations.append("bridge_question_created")
+    if context.exact_speech and _whitespace_normalized(
+        context.exact_speech
+    ) not in _whitespace_normalized(visible):
+        violations.append("exact_speech_missing")
+    elif context.exact_speech and _whitespace_normalized(visible) != _whitespace_normalized(
+        context.exact_speech
+    ):
+        violations.append("exact_speech_extension")
+
+    normalized_response = _whitespace_normalized(text)
+    if any(
+        _whitespace_normalized(fragment) in normalized_response
+        for fragment in context.forbidden_literal_texts
+        if _whitespace_normalized(fragment)
+    ):
+        violations.append("forbidden_literal_text_repeated")
+
     style_advisories: list[str] = []
     if context.max_sentences and _sentence_count(visible) > context.max_sentences:
         style_advisories.append("max_sentences_exceeded")
     if context.max_questions and visible.count("?") > context.max_questions:
         style_advisories.append("max_questions_exceeded")
+    if (
+        context.strict_response_economy
+        and not context.free_speech
+        and context.canonical_line
+        and context.max_extra_words
+        and _word_count(visible)
+        > _word_count(canonical_visible) + context.max_extra_words
+    ):
+        style_advisories.append("max_extra_words_exceeded")
 
     result = ResponseEvaluation(not violations, tuple(violations))
     _log_evaluation(
@@ -179,13 +294,22 @@ def build_semantic_evaluation_prompt(context: BeatContext) -> str:
     allowed = ", ".join(sorted(_ALLOWED_SEMANTIC_VIOLATIONS))
     return "\n".join(
         (
-            "Você é um avaliador editorial consultivo. Não reescreva a resposta.",
-            "Aponte riscos sem assumir autoridade para bloquear ou regenerar a fala.",
+            "Você é um avaliador editorial do contrato narrativo. Não reescreva a resposta.",
+            "Sua avaliação pode bloquear somente violações narrativas objetivas permitidas neste contrato.",
             "Faça uma auditoria factual: compare cada afirmação concreta da candidata com o conteúdo autorizado pelo contrato.",
+            "Avalie a autorização pelo conjunto Movimento obrigatório + Referência semântica, nunca apenas pela pontuação da referência.",
+            "Uma pergunta, pedido ou complemento que realize uma finalidade ainda pendente do Movimento obrigatório é autorizado, mesmo ausente da Referência semântica.",
+            "Para Fala autoral adaptável, exija reação adicional somente quando a mensagem trouxer pergunta, informação, correção, condição, pedido adicional ou provocação pertinente.",
+            "Confirmação simples de continuidade, autorização ou sustentação da ação não exige frase introdutória: se a candidata realiza o Movimento obrigatório e preserva a Referência semântica, isso já é reação suficiente e nunca deve ser failed_required_outcome apenas por não acrescentar outra frase.",
+            "Para Fala interpretada, exija que o núcleo autoral permaneça reconhecível e que a atuação incorpore concretamente ao menos um impulso vigente da personagem; neutralidade protocolar é failed_required_outcome.",
+            "Para Pensamento interpretado, exija núcleo psicológico reconhecível em primeira pessoa, com desenvolvimento íntimo compatível; não exija reprodução literal.",
+            "Marque unauthorized_conversational_extension somente quando uma pergunta, pedido, promessa ou assunto não realizar finalidade do beat, abrir nova pendência ou exceder os assuntos permitidos.",
+            "Em ponte, retomar uma única vez a mesma solicitação ou pergunta ainda sem decisão é autorizado quando constar nos resultados obrigatórios; nunca classifique essa retomada como unauthorized_conversational_extension.",
+            "Em ponte, uma reação ao comando, pergunta, elogio ou provocação atual que permaneça na mesma ação e no mesmo assunto também não é unauthorized_conversational_extension; use anticipated_future_beat para avanço real e presumed_user_decision para ação não declarada.",
             "Não rejeite metáfora, flerte, humor, duplo sentido, opinião, reação emocional ou improviso plausível apenas por não aparecer literalmente no roteiro.",
             "A infração invented_unconfirmed_detail é informativa e não bloqueia a resposta.",
             "Limites de frases e perguntas são orientação de estilo, não motivo autônomo para rejeição.",
-            "Concentre os apontamentos em contradição de fatos confirmados, ação ou decisão presumida do usuário, resultado proibido e antecipação de beat.",
+            "Concentre os apontamentos em contradição de fatos confirmados, finalidade obrigatória ausente, ação ou decisão presumida do usuário, resultado proibido, extensão conversacional não autorizada e antecipação de beat.",
             "Para cada risco, cite em evidence o menor trecho literal da candidata que demonstra o problema.",
             "Só marque failed_to_answer_user_question quando a intenção detectada for question ou quando responder à pergunta estiver nos resultados obrigatórios.",
             "Só marque presumed_user_decision ou closed_pending_route quando a transição estiver pendente.",
@@ -211,10 +335,17 @@ def build_semantic_evaluation_request(
     )
 
 
-def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
+def parse_semantic_evaluation(
+    raw: str,
+    *,
+    candidate: str | None = None,
+    context: BeatContext | None = None,
+) -> ResponseEvaluation:
     text = str(raw or "").strip()
-    context = _LAST_EVALUATION_CONTEXT.get()
-    candidate = _LAST_EVALUATED_CANDIDATE.get()
+    effective_context = context or _LAST_EVALUATION_CONTEXT.get()
+    effective_candidate = (
+        str(candidate) if candidate is not None else _LAST_EVALUATED_CANDIDATE.get()
+    )
     try:
         payload: Any = json.loads(text)
     except (TypeError, ValueError, json.JSONDecodeError):
@@ -239,6 +370,7 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
         return result
 
     violations: list[str] = []
+    rejected_evidence: list[str] = []
     discarded: list[dict[str, str]] = []
     for item in raw_violations:
         if isinstance(item, dict):
@@ -247,7 +379,7 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
             if not code or not evidence:
                 violations.append("semantic_evaluator_invalid_violations")
                 continue
-            if _normalized(evidence) not in _normalized(candidate):
+            if _normalized(evidence) not in _normalized(effective_candidate):
                 violations.append("semantic_evaluator_invalid_violations")
                 continue
         else:
@@ -259,12 +391,15 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
         if code not in _ALLOWED_SEMANTIC_VIOLATIONS:
             violations.append("semantic_evaluator_invalid_violations")
             continue
-        if not _context_allows_violation(code, context):
+        if not _context_allows_violation(code, effective_context):
             discarded.append({"code": code, "reason": "non_blocking_or_incompatible_with_context"})
             continue
         violations.append(code)
+        if evidence:
+            rejected_evidence.append(evidence)
 
     unique = tuple(dict.fromkeys(violations))
+    _LAST_REJECTED_EVIDENCE.set(tuple(dict.fromkeys(rejected_evidence)))
     declared_valid = payload["valid"] is True
     if declared_valid and unique:
         result = ResponseEvaluation(False, unique)
@@ -286,11 +421,12 @@ def parse_semantic_evaluation(raw: str) -> ResponseEvaluation:
 
 
 def merge_evaluations(*evaluations: ResponseEvaluation) -> ResponseEvaluation:
-    """Mantém o determinístico soberano e registra os demais como consultivos.
+    """Combina integridade determinística e violações narrativas semânticas fechadas.
 
-    O primeiro resultado deve ser sempre o avaliador determinístico. Avaliações
-    posteriores podem apontar riscos para diagnóstico, mas não rejeitam nem
-    regeneram uma resposta por interpretação subjetiva isolada.
+    O primeiro resultado deve ser o avaliador determinístico. Avaliações
+    posteriores bloqueiam somente códigos narrativos explicitamente autorizados;
+    estilo, voz, detalhes informativos e falhas do próprio avaliador permanecem
+    consultivos para não derrubar uma resposta válida por julgamento subjetivo.
     """
 
     if not evaluations:
@@ -303,24 +439,35 @@ def merge_evaluations(*evaluations: ResponseEvaluation) -> ResponseEvaluation:
         )
         return result
 
-    authoritative = evaluations[0]
+    deterministic = evaluations[0]
+    semantic_blockers = tuple(
+        dict.fromkeys(
+            violation
+            for evaluation in evaluations[1:]
+            for violation in evaluation.violations
+            if violation in _BLOCKING_SEMANTIC_VIOLATIONS
+        )
+    )
     advisories = tuple(
         dict.fromkeys(
             violation
             for evaluation in evaluations[1:]
             for violation in evaluation.violations
+            if violation not in _BLOCKING_SEMANTIC_VIOLATIONS
         )
     )
+    blocking = tuple(dict.fromkeys((*deterministic.violations, *semantic_blockers)))
     result = ResponseEvaluation(
-        authoritative.valid and not authoritative.violations,
-        authoritative.violations,
+        not blocking,
+        blocking,
     )
     _log_evaluation(
         "combined_result",
         valid=result.valid,
         violations=result.violations,
         semantic_advisories=advisories,
-        semantic_authority="consultive",
+        semantic_blockers=semantic_blockers,
+        semantic_authority="closed_blocking_set",
     )
     return result
 
@@ -339,6 +486,7 @@ def build_regeneration_prompt(
     reasons = "\n".join(f"- {item}" for item in unique) or "- resposta_rejeitada"
     instructions = "\n".join(f"- {item}" for item in guidance)
     rejected = str(rejected_candidate or _LAST_EVALUATED_CANDIDATE.get() or "").strip()
+    rejected_evidence = _LAST_REJECTED_EVIDENCE.get()
     rejected_block = (
         "\nRESPOSTA REJEITADA — use apenas para identificar e remover os erros; não a parafraseie:\n"
         f"{rejected}\n"
@@ -346,6 +494,14 @@ def build_regeneration_prompt(
         else ""
     )
     _LAST_EVALUATED_CANDIDATE.set("")
+    _LAST_REJECTED_EVIDENCE.set(())
+    evidence_block = (
+        "\nTRECHOS EXATOS REJEITADOS — remova-os integralmente e não os reformule:\n"
+        + "\n".join(f"- {item}" for item in rejected_evidence)
+        + "\n"
+        if rejected_evidence
+        else ""
+    )
     return (
         f"{str(base_prompt or '').strip()}\n\n"
         "REGENERAÇÃO EDITORIAL CONTROLADA:\n"
@@ -356,6 +512,7 @@ def build_regeneration_prompt(
         "Quando faltar um fato necessário, formule de modo neutro em vez de completar a lacuna.\n"
         "Não comente a avaliação e não repita nenhum detalhe realmente rejeitado.\n"
         f"{rejected_block}"
+        f"{evidence_block}"
         "MOTIVOS OBJETIVOS DA REJEIÇÃO:\n"
         f"{reasons}\n"
         "INSTRUÇÕES DE CORREÇÃO:\n"

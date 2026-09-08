@@ -27,10 +27,14 @@ def test_perfil_do_card_vem_do_manifesto() -> None:
 
     card = package_to_story_card(package)
 
-    assert card.profile_name == "Mary"
+    assert card.profile_name == "A esposa"
     assert card.profile_identity == profile.identity
     assert card.profile_personality == profile.personality
     assert card.profile_intention == profile.intention
+    assert [(member.actor_id, member.default_name) for member in card.cast_members] == [
+        ("mary", "Mary"),
+        ("usuario", "Doni"),
+    ]
 
 
 def test_replay_pago_e_declarado_sem_package_id_especial() -> None:

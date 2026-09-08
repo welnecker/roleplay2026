@@ -5,6 +5,7 @@ from services.dialogue_presentation import (
     render_dialogue_html,
     split_dialogue,
     with_optional_thought_guidance,
+    with_scripted_thought_guidance,
 )
 
 
@@ -72,14 +73,59 @@ def test_renderizacao_escapa_html_do_usuario() -> None:
     assert "&lt;script&gt;" in html
 
 
+def test_cena_tem_rotulo_narrativo_sem_pensamento_de_personagem() -> None:
+    html = render_dialogue_html(
+        "scene",
+        "[PENSAMENTO]Texto de cena[/PENSAMENTO] Introdução.",
+        character_name="Camilly",
+    )
+
+    assert "Cena" in html
+    assert ">Camilly<" not in html
+    assert "mary-thought" not in html
+
+
 def test_orientacao_mantem_pensamento_opcional() -> None:
     prompt = with_optional_thought_guidance("PROMPT BASE")
 
-    assert "Não inclua pensamento em toda resposta" in prompt
+    assert "não inclua pensamento" in prompt.casefold()
     assert "[PENSAMENTO]" in prompt
     assert "primeira pessoa" in prompt
+
+
+def test_subtexto_reforca_desejo_sem_inventar_conflito_romantico() -> None:
+    prompt = with_optional_thought_guidance("PROMPT BASE").casefold()
+
+    assert "desejo sexual é motor da personagem" in prompt
+    assert "não invente conflito moral" in prompt
+    assert "o casamento só entra" in prompt
+    assert "nunca atribua ao usuário intenção" in prompt
+    assert "prefira uma contradição viva" not in prompt
+    assert "carência, expectativa, cautela" not in prompt
 
 
 def test_marcadores_precisam_ser_balanceados() -> None:
     assert has_balanced_thought_markers("[PENSAMENTO]Oi[/PENSAMENTO]\nFala") is True
     assert has_balanced_thought_markers("[PENSAMENTO]Oi\nFala") is False
+
+
+def test_contrato_sem_pensamento_proibe_criacao_do_modelo() -> None:
+    prompt = with_scripted_thought_guidance(
+        "PROMPT BASE", authored_thought="", character_name="Camilly"
+    )
+
+    assert "não contém pensamento autoral" in prompt
+    assert "somente a fala audível de Camilly" in prompt
+    assert "Não crie pensamento" in prompt
+
+
+def test_contrato_com_pensamento_exige_texto_autoral_sem_ampliacao() -> None:
+    prompt = with_scripted_thought_guidance(
+        "PROMPT BASE",
+        authored_thought="Quero provocá-lo.",
+        character_name="Camilly",
+    )
+
+    assert "pensamento autoral obrigatório" in prompt
+    assert "Reproduza literalmente" in prompt
+    assert "Não substitua, amplie nem acrescente" in prompt

@@ -25,7 +25,7 @@ def test_ficha_e_memorias_entram_no_contexto_do_modelo() -> None:
     )
 
     assert "NÚCLEO VIVO E AUTORITATIVO DE MARY" in context
-    assert "25 anos" in context
+    assert "29 anos" in context
     assert "PSICOLOGIA ESTÁVEL" in context
     assert "REGRAS DO PENSAMENTO INTERNO" in context
     assert "Mary e Janio se conheceram" in context

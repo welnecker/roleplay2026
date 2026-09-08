@@ -91,9 +91,17 @@ class GoogleSheetsV2SchemaManager:
             if not current:
                 worksheet.append_row(list(headers), value_input_option="RAW")
             elif current != headers:
-                raise RuntimeError(
-                    f"Cabeçalhos incompatíveis em {spreadsheet_name}/{sheet_name}: "
-                    f"esperado={headers}, atual={current}"
+                # Migração aditiva segura: somente novas colunas ao final. Dados
+                # existentes preservam suas posições; schemas reordenados falham.
+                if headers[: len(current)] != current:
+                    raise RuntimeError(
+                        f"Cabeçalhos incompatíveis em {spreadsheet_name}/{sheet_name}: "
+                        f"esperado={headers}, atual={current}"
+                    )
+                worksheet.update(
+                    range_name="A1",
+                    values=[list(headers)],
+                    value_input_option="RAW",
                 )
 
             (created if was_created else existing).append(sheet_name)

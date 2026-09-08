@@ -14,6 +14,7 @@ _CONTEXT_SCALAR_FIELDS = (
     "mutual_attraction_confirmed",
     "terminal_yard_target",
     "immediate_ending_target",
+    "required_outcome_ending_target",
 )
 _CONTEXT_LIST_FIELDS = (
     "allowed_interactions",
@@ -33,6 +34,7 @@ class ResolvedInteractionContext:
     mutual_attraction_confirmed: bool = False
     terminal_yard_target: str = ""
     immediate_ending_target: str = ""
+    required_outcome_ending_target: str = ""
     allowed_interactions: tuple[str, ...] = ()
     recoverable_tensions: tuple[str, ...] = ()
     terminal_violations: tuple[str, ...] = ()
@@ -113,7 +115,11 @@ def validate_interaction_context(value: Any, *, location: str = "interaction_con
     for field in _CONTEXT_LIST_FIELDS:
         if field in context:
             _strings(context[field], field=f"{location}.{field}")
-    for field in ("terminal_yard_target", "immediate_ending_target"):
+    for field in (
+        "terminal_yard_target",
+        "immediate_ending_target",
+        "required_outcome_ending_target",
+    ):
         if field in context and not isinstance(context[field], str):
             raise ValueError(f"{location}.{field} deve ser texto")
     progression = context.get("progression") or []
@@ -182,6 +188,9 @@ def resolve_interaction_context(
         ),
         terminal_yard_target=str(resolved.get("terminal_yard_target", "") or "").strip(),
         immediate_ending_target=str(resolved.get("immediate_ending_target", "") or "").strip(),
+        required_outcome_ending_target=str(
+            resolved.get("required_outcome_ending_target", "") or ""
+        ).strip(),
         allowed_interactions=tuple(
             _strings(resolved.get("allowed_interactions"), field="allowed_interactions")
         ),

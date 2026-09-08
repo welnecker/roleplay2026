@@ -93,6 +93,44 @@ def test_fallback_da_ponte_e_neutro_e_nao_revela_linha_futura() -> None:
         assert line not in bridge.visible_fallback
 
 
+def test_ponte_autoral_respira_antes_de_entrar_no_patio_final() -> None:
+    script = EditorialScript(
+        {
+            "bridge_policy": {"mode": "required"},
+            "scene": {
+                "first_beat_id": "intimidade_006",
+                "beats": [
+                    {
+                        "beat_id": "intimidade_006",
+                        "has_authored_bridge": True,
+                        "units": [],
+                        "on_user": {"engaged": "despedida_007"},
+                    },
+                    {
+                        "beat_id": "despedida_007",
+                        "terminal_yard_id": "despedida",
+                        "units": [],
+                        "on_user": {},
+                    },
+                ],
+                "endings": [],
+            },
+        }
+    )
+    previous = EditorialState(node_id="intimidade_006")
+
+    bridge = create_bridge_turn(
+        script,
+        previous,
+        _turn("despedida_007"),
+        "Eu ainda quero falar sobre isso.",
+    )
+
+    assert bridge.target_id == "intimidade_006"
+    assert bridge_active(bridge.state) is True
+    assert bridge.state.pending_next_beat_id == "despedida_007"
+
+
 def test_memoria_futura_nunca_e_gravada_na_ponte_e_entra_uma_vez_na_liberacao() -> None:
     script = _script()
     audited_targets: set[str] = set()

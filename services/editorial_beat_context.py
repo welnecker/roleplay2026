@@ -28,6 +28,17 @@ class BeatContext:
     max_sentences: int
     max_questions: int
     response_boundary: str
+    strict_response_economy: bool = False
+    max_extra_words: int = 0
+    authored_thought: str = ""
+    exact_speech: str = ""
+    free_speech: bool = False
+    interpreted_speech: bool = False
+    interpreted_thought: bool = False
+    authored_transition: str = ""
+    forbidden_literal_texts: tuple[str, ...] = ()
+    forbid_new_questions: bool = False
+    character_name: str = "Mary"
     interaction_context: ResolvedInteractionContext = field(
         default_factory=ResolvedInteractionContext
     )
@@ -173,6 +184,27 @@ def build_beat_context(
         target.get("interaction_context") or source.get("interaction_context") or {},
         turn.state.facts,
     )
+    exact_speech = str(target.get("exact_speech", "") or "").strip()
+    free_speech = bool(target.get("free_speech", False))
+    required_outcomes = effect.required_outcomes
+    required_outcomes = tuple(
+        dict.fromkeys(
+            (
+                *required_outcomes,
+                "reagir brevemente ao sentido do conteúdo mais recente do usuário sem abandonar o contrato do beat atual",
+            )
+        )
+    )
+    if canonical_line and not exact_speech and not free_speech:
+        required_outcomes = tuple(
+            dict.fromkeys(
+                (
+                    *required_outcomes,
+                    "quando a mensagem trouxer pergunta, informação, correção, condição, pedido adicional ou provocação pertinente, reagir brevemente antes ou junto da fala autoral adaptada; confirmação simples de continuidade não exige frase introdutória",
+                    "preservar reconhecivelmente a fala autoral e completar todas as finalidades pendentes do movimento obrigatório",
+                )
+            )
+        )
     return BeatContext(
         source_beat_id=source_id,
         target_beat_id=target_id,
@@ -181,7 +213,7 @@ def build_beat_context(
         dramatic_direction=dramatic_direction,
         user_intent=user_intent,
         transition_status=effect.status,
-        required_outcomes=effect.required_outcomes,
+        required_outcomes=required_outcomes,
         forbidden_outcomes=effect.forbidden_outcomes,
         allowed_topics=_declared_tuple(source, target, "allowed_topics", legacy_field="fact_scope"),
         confirmed_facts=tuple(dict.fromkeys((*declared_confirmed, *_state_facts(turn.state)))),
@@ -189,6 +221,22 @@ def build_beat_context(
         max_sentences=int(target.get("max_sentences", 0) or 0),
         max_questions=int(target.get("max_questions", 0) or 0),
         response_boundary=str(target.get("response_boundary", "") or "").strip(),
+        strict_response_economy=bool(
+            target.get("strict_response_economy", False)
+        ),
+        max_extra_words=max(0, int(target.get("max_extra_words", 0) or 0)),
+        authored_thought=str(target.get("authored_thought", "") or "").strip(),
+        exact_speech=exact_speech,
+        free_speech=free_speech,
+        interpreted_speech=bool(target.get("interpreted_speech", False)),
+        interpreted_thought=bool(target.get("interpreted_thought", False)),
+        authored_transition=str(
+            target.get("authored_transition", "") or ""
+        ).strip(),
+        character_name=str(
+            (script.raw.get("character") or {}).get("name", "Mary")
+            or "Mary"
+        ),
         interaction_context=interaction_context,
     )
 
@@ -224,7 +272,7 @@ def render_beat_context(context: BeatContext) -> str:
             f"  - ambiente: {relational.setting}",
             f"  - privacidade: {relational.privacy}",
             f"  - nível de intimidade: {relational.intimacy_level}",
-            f"  - desejo de Mary revelado: {'sim' if relational.mary_disclosed_desire else 'não'}",
+            f"  - desejo de {context.character_name} revelado: {'sim' if relational.mary_disclosed_desire else 'não'}",
             f"  - atração mútua confirmada: {'sim' if relational.mutual_attraction_confirmed else 'não'}",
         )
     )
@@ -257,6 +305,70 @@ def render_beat_context(context: BeatContext) -> str:
         lines.append(f"- Máximo de perguntas: {context.max_questions}")
     if context.response_boundary:
         lines.append(f"- Limite de resposta: {context.response_boundary}")
+    if context.strict_response_economy:
+        lines.append(
+            "- Economia de estilo: seja breve e evite somente conteúdo sem função narrativa. "
+            "Esta orientação não impede reagir ao usuário nem acrescentar pergunta, pedido ou "
+            "complemento necessário para realizar o movimento obrigatório do beat."
+        )
+        if context.max_extra_words:
+            lines.append(
+                f"- Referência de concisão: prefira até {context.max_extra_words} palavras adicionais, "
+                "mas ultrapasse esse valor quando necessário para responder ao usuário e cumprir o beat."
+            )
+    if context.free_speech:
+        lines.append(
+            "- Fala livre autoral: concretize a direção dramática com liberdade de redação, "
+            "respeitando os fatos e o máximo de frases, sem limite relativo de palavras."
+        )
+    elif context.interpreted_speech:
+        lines.extend(
+            (
+                "- Fala interpretada: use a fala autoral como núcleo obrigatório e reconhecível, mas desenvolva uma atuação intensa, humana e particular.",
+                "- Incorpore concretamente a psicologia, o desejo, o estado corporal próprio e o estágio relacional vigentes; não produza resposta tímida, neutra ou apenas protocolar.",
+                "- Expresse iniciativa, tensão, prazer, humor, vulnerabilidade ou lascívia compatíveis com o beat, sem inventar reação ou consentimento do usuário.",
+            )
+        )
+    elif context.canonical_line and not context.exact_speech:
+        lines.extend(
+            (
+                "- Fala autoral adaptável: preserve de forma reconhecível o sentido, o vocabulário "
+                "central e o tom da referência semântica; não precisa reproduzi-la literalmente.",
+                "- Antes ou junto da fala autoral, reaja brevemente quando a mensagem trouxer "
+                "pergunta, informação, correção, condição, pedido adicional ou provocação pertinente. "
+                "Uma confirmação simples de continuidade não exige frase introdutória: "
+                "Se o usuário apenas confirmar ou sustentar a continuidade, a própria execução do "
+                "movimento e da fala autoral já constitui reação suficiente.",
+                "- Complete na mesma resposta todas as finalidades ainda pendentes do movimento "
+                "obrigatório, inclusive perguntas ou pedidos que não estejam escritos na referência.",
+                "- A adaptação não pode abrir assunto independente, antecipar outro beat nem "
+                "presumir resposta, decisão ou ação do usuário.",
+            )
+        )
+    if context.authored_thought and context.interpreted_thought:
+        lines.append(
+            "- Pensamento interpretado obrigatório — preserve reconhecivelmente este núcleo psicológico e desenvolva-o em primeira pessoa, sem antecipar beats nem atribuir estados ao usuário: "
+            + context.authored_thought
+        )
+    elif context.authored_thought:
+        lines.append(
+            "- Pensamento autoral obrigatório — reproduza literalmente dentro de [PENSAMENTO]: "
+            + context.authored_thought
+        )
+    if context.authored_transition:
+        lines.append(
+            "- Salto temporal autoral obrigatório — escreva literalmente uma única vez, "
+            "na primeira linha da resposta, antes de pensamento e fala: "
+            + context.authored_transition
+        )
+    if context.exact_speech:
+        lines.append(
+            "- Fala autoral exata obrigatória — reproduza literalmente na parte audível: "
+            + context.exact_speech
+        )
+        lines.append(
+            "- A fala exata é fechada: não escreva nenhuma palavra audível antes ou depois dela."
+        )
     lines.extend(
         (
             "- O contexto relacional descreve o estágio vigente; não presume consentimento nem decisão do usuário.",
@@ -264,7 +376,7 @@ def render_beat_context(context: BeatContext) -> str:
             "- Não presuma aceite, recusa ou qualquer decisão que o usuário não tenha declarado explicitamente.",
             "- Não avance para outro beat, local ou acontecimento sem autorização da decisão de transição.",
             "- Não antecipe acontecimentos, locais ou decisões de beats posteriores.",
-            "- A referência semântica orienta o sentido; não a repita mecanicamente.",
+            "- A referência semântica orienta o sentido; somente campos declarados como autorais obrigatórios exigem reprodução literal.",
         )
     )
     return "\n".join(lines)

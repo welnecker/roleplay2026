@@ -4,6 +4,7 @@ from typing import Any
 
 from services.editorial_runtime_types import EditorialScript, EditorialState
 from services.organic_interaction import extract_user_facts
+from services.editorial_semantic_reconciliation import reconciled_step
 
 
 def normal_editorial_target(
@@ -85,13 +86,34 @@ def routing_state_for_declared_skips(
     final_target, skipped = resolve_declared_editorial_target(
         script, initial_target, state.facts
     )
-    if not skipped:
+    semantic_skipped: list[str] = []
+    visited = set(skipped)
+    while final_target in script.beats:
+        assessment = reconciled_step(state, final_target)
+        if assessment.status != "satisfied":
+            break
+        if final_target in visited:
+            raise ValueError(f"Ciclo na reconciliação semântica: {final_target}")
+        visited.add(final_target)
+        semantic_skipped.append(final_target)
+        target_beat = script.beats[final_target]
+        transitions = target_beat.get("on_user") or {}
+        final_target = str(
+            transitions.get("engaged")
+            or target_beat.get("terminal_transition")
+            or ""
+        ).strip()
+
+    if not skipped and not semantic_skipped:
         return state
 
     routed = EditorialState.from_dict(state.to_dict())
     routed.pending_next_beat_id = final_target
     routed.facts["_declared_skip_applied"] = ",".join(skipped)
     routed.facts["_declared_skip_origin_beat_id"] = current_id
+    if semantic_skipped:
+        routed.facts["_semantic_skip_applied"] = ",".join(semantic_skipped)
+        routed.facts["_semantic_skip_origin_beat_id"] = current_id
 
     for fact_name, value in list(routed.facts.items()):
         if fact_name.startswith("_") or original_facts.get(fact_name) == value:

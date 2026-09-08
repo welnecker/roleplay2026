@@ -56,15 +56,8 @@ def test_card_independente_compila_e_executa_primeiro_turno() -> None:
 def test_entrypoint_reexecuta_runtime_ja_importado(monkeypatch) -> None:
     import services.editorial_player as entrypoint
 
-    runtime = ModuleType("services.editorial_player_runtime")
-    monkeypatch.setitem(sys.modules, "services.editorial_player_runtime", runtime)
-    reloaded: list[ModuleType] = []
-
-    def fake_reload(module: ModuleType) -> ModuleType:
-        reloaded.append(module)
-        return module
-
-    monkeypatch.setattr(importlib, "reload", fake_reload)
+    executed: list[bool] = []
+    monkeypatch.setattr(entrypoint, "_execute_runtime", lambda: executed.append(True))
     entrypoint.run_editorial_player()
 
-    assert reloaded == [runtime]
+    assert executed == [True]

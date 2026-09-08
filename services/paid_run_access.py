@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any, Literal
@@ -105,6 +106,49 @@ def _cached_active_run(*, secrets: Any, user_id: str, package_id: str) -> StoryR
     return access.run
 
 
+def _persisted_end_for_run(repositories: Any, run_id: str) -> tuple[str, str] | None:
+    """Reconcilia runs antigas que salvaram o FIM antes de atualizar RUNS."""
+
+    interactions = getattr(repositories, "interactions", None)
+    table = getattr(interactions, "table", None)
+    records = getattr(table, "records", None)
+    if not callable(records):
+        return None
+    candidates = [
+        row
+        for row in records()
+        if str(row.get("run_id", "") or "").strip() == run_id
+        and str(row.get("role", "") or "").strip() == "assistant"
+    ]
+    candidates.sort(key=lambda row: int(row.get("sequence", 0) or 0), reverse=True)
+    for row in candidates:
+        try:
+            metadata = json.loads(str(row.get("metadata_json", "") or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if not isinstance(metadata, dict):
+            continue
+        story_state = metadata.get("_story_state")
+        ended = metadata.get("editorial_end_event") == "END_RUN" or (
+            isinstance(story_state, dict) and bool(story_state.get("finished"))
+        )
+        if not ended:
+            return None
+        requested = str(
+            metadata.get("editorial_run_status")
+            or metadata.get("pilot_run_status")
+            or "completed"
+        )
+        status = "terminated" if requested == "terminated" else "completed"
+        ending_code = str(
+            metadata.get("editorial_ending_code")
+            or metadata.get("pilot_ending_code")
+            or "normal_completion"
+        )
+        return status, ending_code
+    return None
+
+
 def get_paid_run_access(*, secrets: Any, user_id: str, package_id: str) -> PaidRunAccess:
     cache_key = _access_cache_key(
         secrets=secrets,
@@ -118,6 +162,17 @@ def get_paid_run_access(*, secrets: Any, user_id: str, package_id: str) -> PaidR
 
     repositories = _repositories(secrets)
     active = repositories.runs.get_active_run(user_id=user_id, package_id=package_id)
+    if active is not None:
+        persisted_end = _persisted_end_for_run(repositories, active.run_id)
+        if persisted_end is not None:
+            finish_active_run(
+                secrets=secrets,
+                user_id=user_id,
+                package_id=package_id,
+                status=persisted_end[0],  # type: ignore[arg-type]
+                ending_code=persisted_end[1],
+            )
+            active = None
     if active is not None:
         result = PaidRunAccess(state="active", run=active)
     else:

@@ -13,6 +13,7 @@ from persistence.editorial import GoogleSheetsEditorialRepository
 from persistence.editorial_publisher import publish_editorial_document
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from services import editorial_runtime_impl as runtime_impl
+from services.editorial_compiler import compile_editorial_document
 from services.editorial_package_loader import (
     compile_editorial_package,
     editorial_story_start,
@@ -21,12 +22,16 @@ from services.editorial_package_loader import (
 from services.editorial_progression import (
     clean_editorial_progression_response,
     decide_editorial_progression_turn,
+    prepare_editorial_script,
 )
 from services.editorial_runtime import EditorialScript
+from services.spreadsheet_story_compiler import compile_spreadsheet_story
 
 
 INSTALLED_STORIES_ROOT = Path(__file__).resolve().parent.parent / "installed_stories"
+LEGACY_EDITORIAL_PACKAGE_ID = "roleplay2026.casada_frustrada"
 _EDITORIAL_REPOSITORY: GoogleSheetsEditorialRepository | None = None
+_SCRIPT_REPOSITORY: GoogleSheetsEditorialRepository | None = None
 _PUBLISHED_PACKAGES: set[str] = set()
 _FREE_TEXT_KEYS = {
     "introduction",
@@ -40,6 +45,8 @@ _FREE_TEXT_KEYS = {
 _FREE_TEXT_PATTERN = re.compile(
     r"^(?P<indent>\s*)(?P<key>" + "|".join(sorted(_FREE_TEXT_KEYS)) + r"):\s*(?P<value>.*)$"
 )
+_END_STORY_MARKER = re.compile(r"^\s*\[\s*fim_historia\s*\]\s*$", re.IGNORECASE)
+_FRAME_PREFIX = "NOVEL_FRAME_V2\n"
 
 # Compatibilidade interna enquanto a implementação histórica ainda delega sua
 # decisão avançada ao módulo de progressão editorial.
@@ -102,20 +109,36 @@ def find_editorial_package(package_id: str) -> InstalledStoryPackage | None:
     )
 
 
-def _default_editorial_package() -> InstalledStoryPackage:
-    packages = editorial_packages()
-    if len(packages) != 1:
+def require_editorial_package(package_id: str) -> InstalledStoryPackage:
+    """Resolve uma história sem depender da quantidade ou da ordem dos pacotes."""
+
+    clean = str(package_id or "").strip().lower()
+    if not clean:
+        raise ValueError("package_id da história é obrigatório")
+    package = find_editorial_package(clean)
+    if package is None:
+        available = [item.manifest.package_id for item in editorial_packages()]
         raise ValueError(
-            "Era esperado exatamente um pacote editorial para a fachada legada; "
-            f"encontrados: {[item.manifest.package_id for item in packages]}"
+            f"História editorial não encontrada: {clean!r}. Disponíveis: {available}"
         )
-    return packages[0]
+    return package
+
+
+def _default_editorial_package() -> InstalledStoryPackage:
+    """Compatibilidade determinística para chamadas antigas específicas da Mary."""
+
+    return require_editorial_package(LEGACY_EDITORIAL_PACKAGE_ID)
 
 
 def load_source_document(
-    package: InstalledStoryPackage | None = None,
+    package: InstalledStoryPackage | str | None = None,
 ) -> dict[str, Any]:
-    return load_editorial_document(package or _default_editorial_package())
+    selected = (
+        require_editorial_package(package)
+        if isinstance(package, str)
+        else package or _default_editorial_package()
+    )
+    return load_editorial_document(selected)
 
 
 def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
@@ -131,6 +154,25 @@ def build_editorial_repository(secrets: Any) -> GoogleSheetsEditorialRepository:
         spreadsheet_id=ids.editorial,
     )
     return _EDITORIAL_REPOSITORY
+
+
+def build_runtime_script_repository(
+    secrets: Any,
+) -> GoogleSheetsEditorialRepository:
+    """Abre somente ROTEIROS na planilha ROLEPLAY_RUNTIME."""
+
+    global _SCRIPT_REPOSITORY
+    if _SCRIPT_REPOSITORY is not None:
+        return _SCRIPT_REPOSITORY
+    credentials = secrets.get("gcp_service_account")
+    if not credentials:
+        raise ValueError("[gcp_service_account] não está configurado")
+    ids = read_spreadsheet_ids(secrets)
+    _SCRIPT_REPOSITORY = GoogleSheetsEditorialRepository.from_service_account(
+        credentials=dict(credentials),
+        spreadsheet_id=ids.runtime,
+    )
+    return _SCRIPT_REPOSITORY
 
 
 def ensure_editorial_package(
@@ -153,12 +195,103 @@ def ensure_editorial_pilot(secrets: Any) -> GoogleSheetsEditorialRepository:
     return ensure_editorial_package(secrets, _default_editorial_package())
 
 
+def _mark_explicit_story_end(
+    document: dict[str, Any],
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Aplica [FIM_HISTORIA] ao último quadro V2 sem criar uma entry visual."""
+
+    active = [
+        dict(row)
+        for row in rows
+        if str(row.get("status", "active") or "active").strip().casefold() == "active"
+    ]
+    active.sort(key=lambda row: (int(row.get("order", 0) or 0), str(row.get("line_id", ""))))
+    markers = [
+        index
+        for index, row in enumerate(active)
+        if _END_STORY_MARKER.fullmatch(str(row.get("instruction", "") or ""))
+    ]
+    if not markers:
+        return document
+    if len(markers) > 1:
+        raise ValueError("O roteiro V2 deve possuir no máximo uma tag [FIM_HISTORIA].")
+    marker_index = markers[0]
+    if marker_index != len(active) - 1:
+        raise ValueError("[FIM_HISTORIA] deve ser a última linha ativa do roteiro V2.")
+
+    blocks = [item for item in document.get("blocks", []) if isinstance(item, dict)]
+    beats = [
+        beat
+        for block in blocks
+        for beat in block.get("beats", []) or []
+        if isinstance(beat, dict)
+    ]
+    if not beats:
+        raise ValueError("[FIM_HISTORIA] apareceu sem um quadro V2 anterior.")
+    last = beats[-1]
+    instruction = str(last.get("required_movement", "") or "")
+    if not instruction.startswith(_FRAME_PREFIX):
+        raise ValueError("[FIM_HISTORIA] só pode encerrar um quadro V2.")
+    try:
+        payload = json.loads(instruction[len(_FRAME_PREFIX) :])
+    except json.JSONDecodeError as exc:
+        raise ValueError("Quadro V2 final inválido ao aplicar [FIM_HISTORIA].") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Quadro V2 final inválido ao aplicar [FIM_HISTORIA].")
+    payload["is_ending"] = True
+    last["required_movement"] = _FRAME_PREFIX + json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    last["next_beat_id"] = ""
+    last["allowed_transitions"] = {}
+    return document
+
+
+def load_effective_editorial_document(
+    secrets: Any,
+    package: InstalledStoryPackage,
+) -> dict[str, Any]:
+    """Prefere ROTEIROS e preserva o YAML como fallback de migração."""
+
+    script_repository = build_runtime_script_repository(secrets)
+    base_document = load_editorial_document(package)
+    script_version, rows = script_repository.load_active_story_lines(
+        package.manifest.package_id
+    )
+    if not rows:
+        return base_document
+    from services import novel_frame_patch
+
+    is_frame_story = novel_frame_patch.is_novel_frame_rows(rows)
+    compiler = (
+        novel_frame_patch.compile_novel_frame_story
+        if is_frame_story
+        else compile_spreadsheet_story
+    )
+    document = compiler(base_document, rows, script_version=script_version)
+    if is_frame_story:
+        # O vínculo imagem/linha é parte do roteiro compartilhado. Antes ele era
+        # instalado apenas pelo player Streamlit e desaparecia na API Flet.
+        from services.novel_frame_images import (
+            enrich_compiled_document_with_image_ids,
+        )
+
+        document = enrich_compiled_document_with_image_ids(document, rows)
+        document = _mark_explicit_story_end(document, list(rows))
+    return document
+
+
 def load_editorial_package(
     secrets: Any,
     package: InstalledStoryPackage,
 ) -> EditorialScript:
-    ensure_editorial_package(secrets, package)
-    return compile_editorial_package(package)
+    document = load_effective_editorial_document(secrets, package)
+    return prepare_editorial_script(
+        EditorialScript(compile_editorial_document(document))
+    )
 
 
 def load_editorial_pilot(secrets: Any) -> EditorialScript:
@@ -175,5 +308,13 @@ def load_editorial_story_start(
     package = find_editorial_package(package_id)
     if package is None:
         return None
-    ensure_editorial_package(secrets, package)
-    return editorial_story_start(package)
+    document = load_effective_editorial_document(secrets, package)
+    blocks = [item for item in document.get("blocks", []) if isinstance(item, dict)]
+    if not blocks:
+        return None
+    first = min(blocks, key=lambda item: int(item.get("order", 0) or 0))
+    return (
+        str(document.get("script_version", "")),
+        str(first.get("block_id", "")),
+        str(first.get("entry_beat_id", "")),
+    )

@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import json
+from threading import RLock
+from time import monotonic
 from typing import Any
 
 import gspread
 from gspread import Spreadsheet, Worksheet
 
+from persistence.google_sheets_retry import (
+    is_quota_error,
+    quota_unavailable,
+    with_transient_retry,
+)
 from persistence.models import utc_now_iso
 from persistence.v2_schemas import EDITORIAL_SCHEMAS
 
@@ -16,6 +23,8 @@ class GoogleSheetsEditorialRepository:
     def __init__(self, spreadsheet: Spreadsheet) -> None:
         self.spreadsheet = spreadsheet
         self._worksheets: dict[str, Worksheet] = {}
+        self._records_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        self._records_lock = RLock()
 
     @classmethod
     def from_service_account(
@@ -25,7 +34,7 @@ class GoogleSheetsEditorialRepository:
         spreadsheet_id: str,
     ) -> "GoogleSheetsEditorialRepository":
         client = gspread.service_account_from_dict(credentials)
-        return cls(client.open_by_key(spreadsheet_id))
+        return cls(with_transient_retry(lambda: client.open_by_key(spreadsheet_id)))
 
     def ensure_schema(self) -> None:
         for name, headers in EDITORIAL_SCHEMAS.items():
@@ -227,6 +236,46 @@ class GoogleSheetsEditorialRepository:
             },
         }
 
+    def load_active_story_lines(
+        self,
+        package_id: str,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Lê em lote a versão ativa mais recente da aba autoral ROTEIROS."""
+
+        rows = [
+            row
+            for row in self._records("ROTEIROS")
+            if str(row.get("package_id", "")).strip() == package_id
+            and str(row.get("status", "active") or "active").strip().casefold() == "active"
+        ]
+        if not rows:
+            return "", []
+
+        versions = sorted(
+            {str(row.get("script_version", "") or "").strip() for row in rows},
+            key=self._version_key,
+        )
+        version = versions[-1]
+        selected = [
+            row
+            for row in rows
+            if str(row.get("script_version", "") or "").strip() == version
+        ]
+        selected.sort(
+            key=lambda row: (
+                int(row.get("order", 0) or 0),
+                str(row.get("line_id", "")),
+            )
+        )
+        return version, selected
+
+    @staticmethod
+    def _version_key(value: str) -> tuple[tuple[int, str], ...]:
+        parts: list[tuple[int, str]] = []
+        for item in str(value or "").replace("-", ".").split("."):
+            parts.append((0, f"{int(item):012d}") if item.isdigit() else (1, item))
+        return tuple(parts)
+
     def _worksheet(self, name: str) -> Worksheet:
         if name not in self._worksheets:
             self._worksheets[name] = self.spreadsheet.worksheet(name)
@@ -241,12 +290,41 @@ class GoogleSheetsEditorialRepository:
             return worksheet
 
     def _records(self, name: str) -> list[dict[str, Any]]:
-        return [dict(row) for row in self._worksheet(name).get_all_records(default_blank="")]
+        # ROTEIROS é fonte autoral, mas não precisa ser baixada novamente a
+        # cada balão. O TTL mantém alterações editoriais visíveis rapidamente
+        # e a cópia anterior sustenta a leitura durante uma cota 429.
+        now = monotonic()
+        cached = self._records_cache.get(name)
+        if cached is not None and now < cached[0]:
+            return [dict(row) for row in cached[1]]
+        with self._records_lock:
+            now = monotonic()
+            cached = self._records_cache.get(name)
+            if cached is not None and now < cached[0]:
+                return [dict(row) for row in cached[1]]
+            try:
+                rows = with_transient_retry(
+                    lambda: [
+                        dict(row)
+                        for row in self._worksheet(name).get_all_records(default_blank="")
+                    ],
+                    attempts=3,
+                    base_delay_seconds=0.5,
+                )
+            except gspread.exceptions.APIError as exc:
+                if is_quota_error(exc):
+                    if cached is not None:
+                        return [dict(row) for row in cached[1]]
+                    raise quota_unavailable(exc) from exc
+                raise
+            self._records_cache[name] = (now + 30.0, rows)
+            return [dict(row) for row in rows]
 
     def _append(self, name: str, data: dict[str, Any]) -> None:
         worksheet = self._worksheet(name)
         headers = [str(item).strip() for item in worksheet.row_values(1)]
         worksheet.append_row([data.get(header, "") for header in headers], value_input_option="RAW")
+        self._records_cache.pop(name, None)
 
     @staticmethod
     def _json(value: Any) -> str:

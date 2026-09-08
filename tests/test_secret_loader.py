@@ -28,6 +28,19 @@ def test_loads_google_service_account_from_json_environment(monkeypatch: pytest.
     assert "\n" in secrets["gcp_service_account"]["private_key"]
 
 
+def test_loads_openrouter_configuration_from_environment(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-key")
+    monkeypatch.setenv("OPENROUTER_MODEL", "provider/story-model")
+    monkeypatch.setenv("OPENROUTER_INTENT_MODEL", "provider/intent-model")
+
+    secrets = load_application_secrets()
+
+    assert secrets["OPENROUTER_API_KEY"] == "openrouter-key"
+    assert secrets["OPENROUTER_MODEL"] == "provider/story-model"
+    assert secrets["OPENROUTER_INTENT_MODEL"] == "provider/intent-model"
+
+
 def test_loads_google_service_account_from_individual_environment(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("GCP_SERVICE_ACCOUNT_JSON", raising=False)
