@@ -118,6 +118,61 @@ def test_palco_responde_a_largura_e_altura_da_janela() -> None:
     assert desktop_image.height > mobile_image.height
 
 
+def test_desktop_baixo_reserva_faixa_de_navegacao_abaixo_do_balao() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(width=1348, height=580),
+        VisualFrame(
+            "encontro_001",
+            "Martha entra.",
+            (
+                VisualEntry(
+                    "fala",
+                    "martha",
+                    "Martha",
+                    "Foi tudo bem, professor... mas confesso que hesitei um pouco "
+                    "antes de cruzar aquela porta e deixar a realidade para trás.",
+                ),
+            ),
+        ),
+        entry_images=("https://img/martha.webp",),
+    )
+
+    assert view.stage.expand is False
+    assert view.layout.scroll == ft.ScrollMode.AUTO
+    assert view.layout.controls.index(view.review_navigation) == (
+        view.layout.controls.index(view.stage) + 1
+    )
+    assert _image_container(view).height == pytest.approx(210.0)
+
+
+def test_mobile_preserva_palco_expansivel_sem_rolagem_externa() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(width=390, height=800),
+        VisualFrame(
+            "encontro_001",
+            "Mary entra.",
+            (VisualEntry("fala", "mary", "Mary", "Olá."),),
+        ),
+    )
+
+    assert view.stage.expand is True
+    assert view.layout.scroll is None
+
+
+def test_desktop_alto_preserva_layout_expansivel_original() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(width=1920, height=1080),
+        VisualFrame(
+            "encontro_001",
+            "Mary entra.",
+            (VisualEntry("fala", "mary", "Mary", "Olá."),),
+        ),
+    )
+
+    assert view.stage.expand is True
+    assert view.layout.scroll is None
+
+
 def test_toque_na_imagem_abre_visualizador_com_zoom_sem_alterar_o_quadro() -> None:
     page = _Page(width=390, height=800)
     view = NovelFrameView(  # type: ignore[arg-type]

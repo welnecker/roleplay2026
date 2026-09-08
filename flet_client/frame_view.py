@@ -18,6 +18,7 @@ SPEECH_COLORS = ("#ED8BAE", "#F1B5CB", "#F0CFDD", "#F3D5E6")
 TEXT_COLOR = "#2B1822"
 INTERACTION_LIMIT = 5
 IMAGE_VIEWER_MAX_SCALE = 4.0
+COMPACT_DESKTOP_MAX_HEIGHT = 700.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,10 +181,10 @@ def _image_height(
 
     if width >= 1200:
         desired = min(610.0, max(390.0, stage_width * 0.56))
-        return max(280.0, min(desired, available))
+        return max(210.0, min(desired, available))
     if width >= 760:
         desired = min(520.0, max(330.0, stage_width * 0.56))
-        return max(250.0, min(desired, available))
+        return max(210.0, min(desired, available))
     desired = min(360.0, max(220.0, stage_width * 0.62))
     return max(190.0, min(desired, available))
 
@@ -312,55 +313,58 @@ class NovelFrameView:
             on_click=self._advance,
         )
 
+        self.review_navigation = ft.Row(
+            [
+                self.previous_button,
+                self.position_indicator,
+                self.review_next_button,
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            spacing=14,
+        )
+        self.layout = ft.Column(
+            controls=[
+                ft.Container(
+                    padding=ft.Padding.symmetric(horizontal=18, vertical=14),
+                    border_radius=16,
+                    bgcolor=SCENE_COLOR,
+                    content=ft.Column(
+                        spacing=6,
+                        controls=[
+                            ft.Text(
+                                "CENA",
+                                size=12,
+                                weight=ft.FontWeight.BOLD,
+                                color="#FFFFFFCC",
+                            ),
+                            self.scene_description,
+                        ],
+                    ),
+                ),
+                self.stage,
+                self.review_navigation,
+                ft.SafeArea(
+                    content=ft.Row(
+                        [self.progress, self.advance_button],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    avoid_intrusions_left=False,
+                    avoid_intrusions_top=False,
+                    avoid_intrusions_right=False,
+                    avoid_intrusions_bottom=True,
+                    maintain_bottom_view_padding=True,
+                    minimum_padding=ft.Padding.only(bottom=6),
+                ),
+            ],
+            spacing=10,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            expand=True,
+        )
+        self._apply_responsive_layout()
         self.root = ft.Container(
             padding=ft.Padding.symmetric(horizontal=18, vertical=10),
             bgcolor=BACKGROUND,
-            content=ft.Column(
-                controls=[
-                    ft.Container(
-                        padding=ft.Padding.symmetric(horizontal=18, vertical=14),
-                        border_radius=16,
-                        bgcolor=SCENE_COLOR,
-                        content=ft.Column(
-                            spacing=6,
-                            controls=[
-                                ft.Text(
-                                    "CENA",
-                                    size=12,
-                                    weight=ft.FontWeight.BOLD,
-                                    color="#FFFFFFCC",
-                                ),
-                                self.scene_description,
-                            ],
-                        ),
-                    ),
-                    self.stage,
-                    ft.Row(
-                        [
-                            self.previous_button,
-                            self.position_indicator,
-                            self.review_next_button,
-                        ],
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        spacing=14,
-                    ),
-                    ft.SafeArea(
-                        content=ft.Row(
-                            [self.progress, self.advance_button],
-                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        ),
-                        avoid_intrusions_left=False,
-                        avoid_intrusions_top=False,
-                        avoid_intrusions_right=False,
-                        avoid_intrusions_bottom=True,
-                        maintain_bottom_view_padding=True,
-                        minimum_padding=ft.Padding.only(bottom=6),
-                    ),
-                ],
-                spacing=10,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                expand=True,
-            ),
+            content=self.layout,
             expand=True,
             on_size_change=self._resize,
         )
@@ -517,7 +521,22 @@ class NovelFrameView:
         self._viewport_width = width
         self._viewport_height = height
         self.stage_width = next_width
+        self._apply_responsive_layout()
         self._refresh()
+
+    def _apply_responsive_layout(self) -> None:
+        """Em desktop baixo, mede o conteúdo e oferece rolagem de segurança.
+
+        Celulares e desktops altos mantêm o palco ocupando o espaço restante,
+        preservando os layouts que já cabem integralmente na tela.
+        """
+
+        is_compact_desktop = (
+            self._viewport_width >= 760
+            and self._viewport_height < COMPACT_DESKTOP_MAX_HEIGHT
+        )
+        self.stage.expand = not is_compact_desktop
+        self.layout.scroll = ft.ScrollMode.AUTO if is_compact_desktop else None
 
     def _review_previous(self, _event: object = None) -> None:
         items = self._current_row().items
