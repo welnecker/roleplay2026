@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
+from hashlib import sha256
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -75,6 +77,37 @@ class RunProfile:
     story_gender: str
     identity_mode: str = "legacy"
     cast_names: dict[str, str] | None = None
+
+
+@lru_cache(maxsize=1024)
+def _cached_image_content_version(
+    path_text: str,
+    size: int,
+    modified_ns: int,
+) -> str:
+    """Retorna uma versão estável do conteúdo sem reler imagens já conhecidas."""
+
+    del size, modified_ns
+    digest = sha256()
+    with Path(path_text).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()[:16]
+
+
+def _image_content_version(image: Any) -> str:
+    """Cria um cache-buster que muda quando o arquivo de uma cena é substituído."""
+
+    try:
+        path = Path(str(image["path"])).resolve()
+        stat = path.stat()
+        return _cached_image_content_version(
+            str(path),
+            stat.st_size,
+            stat.st_mtime_ns,
+        )
+    except (KeyError, OSError, TypeError, ValueError):
+        return ""
 
 
 def _is_idempotent_duplicate_advance(
@@ -393,12 +426,20 @@ class FletRunService:
         return last
 
     @staticmethod
-    def _image_url(package_id: str, *, image_id: str = "", node_id: str = "") -> str:
+    def _image_url(
+        package_id: str,
+        *,
+        image_id: str = "",
+        node_id: str = "",
+        version: str = "",
+    ) -> str:
         query = "package_id=" + quote(package_id)
         if image_id:
             query += "&image_id=" + quote(image_id)
         elif node_id:
             query += "&node_id=" + quote(node_id)
+        if version:
+            query += "&v=" + quote(version)
         return "/api/v1/runs/image?" + query
 
     def _view(self, package, script, context, state, messages) -> RunFrame:
@@ -418,7 +459,11 @@ class FletRunService:
             image = resolve_numbered_beat_image(package.root, node_id, tuple(script.beats))
         image_url = ""
         if image is not None:
-            image_url = self._image_url(package.manifest.package_id, node_id=node_id)
+            image_url = self._image_url(
+                package.manifest.package_id,
+                node_id=node_id,
+                version=_image_content_version(image),
+            )
         entry_image_urls: tuple[str, ...] = ()
         if isinstance(frame, dict):
             inherited = self._previous_image_id(script, node_id)
@@ -426,17 +471,33 @@ class FletRunService:
                 frame,
                 inherited_image_id=inherited,
             )
-            if base_image_id and resolve_narrative_image_id(package.root, base_image_id):
+            base_image = (
+                resolve_narrative_image_id(package.root, base_image_id)
+                if base_image_id
+                else None
+            )
+            if base_image is not None:
                 image_url = self._image_url(
                     package.manifest.package_id,
                     image_id=base_image_id,
+                    version=_image_content_version(base_image),
                 )
-            entry_image_urls = tuple(
-                self._image_url(package.manifest.package_id, image_id=image_id)
-                if image_id and resolve_narrative_image_id(package.root, image_id)
-                else image_url
-                for image_id in image_ids
-            )
+
+            def entry_image_url(image_id: str) -> str:
+                resolved = (
+                    resolve_narrative_image_id(package.root, image_id)
+                    if image_id
+                    else None
+                )
+                if resolved is None:
+                    return image_url
+                return self._image_url(
+                    package.manifest.package_id,
+                    image_id=image_id,
+                    version=_image_content_version(resolved),
+                )
+
+            entry_image_urls = tuple(entry_image_url(image_id) for image_id in image_ids)
         return RunFrame(
             run_id=context.run.run_id if context.run is not None else "",
             package_id=package.manifest.package_id,
