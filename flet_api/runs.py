@@ -8,6 +8,7 @@ from threading import Lock
 from typing import Any
 from urllib.parse import quote
 
+from flet_api.public_media import public_story_media_url
 from narrative_v2.repository import RuntimeConflictError
 from packages.models import InstalledStoryPackage
 from persistence.factory import build_google_sheets_repository
@@ -432,7 +433,11 @@ class FletRunService:
         image_id: str = "",
         node_id: str = "",
         version: str = "",
+        filename: str | Path = "",
     ) -> str:
+        external_url = public_story_media_url(package_id, "scenes", filename)
+        if external_url:
+            return external_url
         query = "package_id=" + quote(package_id)
         if image_id:
             query += "&image_id=" + quote(image_id)
@@ -463,6 +468,7 @@ class FletRunService:
                 package.manifest.package_id,
                 node_id=node_id,
                 version=_image_content_version(image),
+                filename=image,
             )
         entry_image_urls: tuple[str, ...] = ()
         if isinstance(frame, dict):
@@ -481,6 +487,7 @@ class FletRunService:
                     package.manifest.package_id,
                     image_id=base_image_id,
                     version=_image_content_version(base_image),
+                    filename=base_image,
                 )
 
             def entry_image_url(image_id: str) -> str:
@@ -495,6 +502,7 @@ class FletRunService:
                     package.manifest.package_id,
                     image_id=image_id,
                     version=_image_content_version(resolved),
+                    filename=resolved,
                 )
 
             entry_image_urls = tuple(entry_image_url(image_id) for image_id in image_ids)

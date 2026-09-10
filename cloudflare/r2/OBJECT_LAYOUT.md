@@ -2,6 +2,18 @@
 
 Os objetos devem usar chaves estáveis e independentes do servidor Render:
 
+- `stories/<package_id>/cover/<arquivo>` para capas do catálogo;
+- `stories/<package_id>/scenes/<arquivo>` para imagens das interações.
+
+Depois de enviar todos os objetos, configure no serviço Render:
+
+```text
+ENTRECENAS_MEDIA_URL=https://midia.entrecenas-roleplay.com.br
+```
+
+Sem essa variável, a API mantém automaticamente o fallback para os arquivos
+locais. Isso permite validar o upload antes de transferir o tráfego de mídia.
+
 ```text
 brand/entrecenas-icone.svg
 landing/entrecenas-reel.mp4

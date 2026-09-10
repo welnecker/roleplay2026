@@ -8,12 +8,13 @@ from typing import Literal, Protocol
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from gspread.exceptions import APIError
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from flet_api.sessions import SessionStore
 from flet_api.payments import PaymentGateway, PaymentState, build_payment_gateway
+from flet_api.public_media import public_story_media_url
 from flet_api.runs import FletRunService, RunFrame
 from persistence.accounts import AccountUser, build_account_repository
 from persistence.google_sheets_retry import (
@@ -389,10 +390,13 @@ def create_api_app(services: ApiServices) -> FastAPI:
                 else AccessStatus.LOCKED
             )
             cover_url = ""
-            if services.cover_resolver(card.package_id) is not None:
-                cover_url = str(
-                    request.url_for("catalog_cover", package_id=card.package_id)
-                )
+            cover = services.cover_resolver(card.package_id)
+            if cover is not None:
+                cover_url = public_story_media_url(
+                    card.package_id,
+                    "cover",
+                    cover,
+                ) or str(request.url_for("catalog_cover", package_id=card.package_id))
             items.append(
                 _card_response(
                     card,
@@ -403,10 +407,19 @@ def create_api_app(services: ApiServices) -> FastAPI:
         return CatalogResponse(items=items)
 
     @app.get("/api/v1/catalog/{package_id}/cover", name="catalog_cover")
-    def catalog_cover(package_id: str) -> FileResponse:
+    def catalog_cover(package_id: str) -> Response:
         cover = services.cover_resolver(package_id)
         if cover is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Capa não encontrada.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Capa não encontrada.",
+            )
+        external_url = public_story_media_url(package_id, "cover", cover)
+        if external_url:
+            return RedirectResponse(
+                external_url,
+                status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            )
         return FileResponse(cover)
 
     def payment_gateway() -> PaymentGateway:
@@ -598,14 +611,23 @@ def create_api_app(services: ApiServices) -> FastAPI:
         package_id: str,
         node_id: str = "",
         image_id: str = "",
-    ) -> FileResponse:
+    ) -> Response:
         image = run_service().image(
             package_id=package_id,
             node_id=node_id,
             image_id=image_id,
         )
         if image is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imagem não encontrada.")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Imagem não encontrada.",
+            )
+        external_url = public_story_media_url(package_id, "scenes", image)
+        if external_url:
+            return RedirectResponse(
+                external_url,
+                status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            )
         return FileResponse(image)
 
     return app

@@ -45,3 +45,24 @@ def test_url_da_imagem_inclui_versao_do_conteudo(tmp_path: Path) -> None:
         "/api/v1/runs/image?package_id=roleplay2026.casada_frustrada"
         f"&image_id=mary5.webp&v={version}"
     )
+
+
+def test_url_da_imagem_usa_r2_quando_habilitado(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    image = tmp_path / "mary5.webp"
+    image.write_bytes(b"imagem atual")
+    monkeypatch.setenv("ENTRECENAS_MEDIA_URL", "https://midia.example.com")
+
+    url = FletRunService._image_url(
+        "roleplay2026.casada_frustrada",
+        image_id="mary5.webp",
+        version="abc123",
+        filename=image,
+    )
+
+    assert url == (
+        "https://midia.example.com/stories/roleplay2026.casada_frustrada/"
+        "scenes/mary5.webp"
+    )
