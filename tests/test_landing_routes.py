@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from flet_api.landing_routes import install
+from flet_api.landing_routes import install, landing_page_html
 
 
 def test_landing_page_presents_participant_positioning() -> None:
@@ -14,9 +14,10 @@ def test_landing_page_presents_participant_positioning() -> None:
     assert "Você faz parte dela" in response.text
     assert "Descubra seu papel" in response.text
     assert "Você também é personagem" in response.text
-    assert 'href="/baixar"' in response.text
     assert 'href="/app/"' in response.text
-    assert "Use online ou instale no Android" in response.text
+    assert 'href="/baixar"' not in response.text
+    assert "Use online pelo celular ou computador" in response.text
+    assert "sem instalar nada" in response.text
     assert "Windows" not in response.text
     assert "Você decide o que acontece" not in response.text
     assert "Suas escolhas mudam" not in response.text
@@ -43,7 +44,7 @@ def test_conhecer_serves_landing_without_redirect_or_download() -> None:
     assert response.headers["content-type"].startswith("text/html")
     assert "content-disposition" not in response.headers
     assert "Você faz parte dela" in response.text
-    assert 'href="/baixar"' in response.text
+    assert 'href="/baixar"' not in response.text
     assert 'href="/baixar/android"' not in response.text
 
 
@@ -54,6 +55,8 @@ def test_landing_media_routes_serve_packaged_assets() -> None:
     reel = client.get("/midia/entrecenas-reel.mp4")
     poster = client.get("/midia/entrecenas-reel-poster.webp")
     icon = client.get("/midia/entrecenas-icone.svg")
+    organized_reel = client.get("/midia/landing/entrecenas-reel.mp4")
+    organized_icon = client.get("/midia/brand/entrecenas-icone.svg")
 
     assert reel.status_code == 200
     assert reel.headers["content-type"].startswith("video/mp4")
@@ -62,6 +65,8 @@ def test_landing_media_routes_serve_packaged_assets() -> None:
     assert poster.headers["content-type"].startswith("image/webp")
     assert icon.status_code == 200
     assert icon.headers["content-type"].startswith("image/svg+xml")
+    assert organized_reel.status_code == 200
+    assert organized_icon.status_code == 200
 
 
 def test_landing_routes_install_is_idempotent() -> None:
@@ -75,3 +80,15 @@ def test_landing_routes_install_is_idempotent() -> None:
     assert paths.count("/midia/entrecenas-reel.mp4") == 1
     assert paths.count("/midia/entrecenas-reel-poster.webp") == 1
     assert paths.count("/midia/entrecenas-icone.svg") == 1
+
+
+def test_landing_page_accepts_cloudflare_destinations() -> None:
+    html = landing_page_html(
+        app_url="https://app.entrecenas-roleplay.com.br",
+        media_base_url="https://midia.entrecenas-roleplay.com.br",
+        site_url="https://entrecenas-roleplay.com.br",
+    )
+
+    assert 'href="https://app.entrecenas-roleplay.com.br/"' in html
+    assert "https://midia.entrecenas-roleplay.com.br/landing/entrecenas-reel.mp4" in html
+    assert "https://midia.entrecenas-roleplay.com.br/brand/entrecenas-icone.svg" in html

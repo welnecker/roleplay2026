@@ -1,0 +1,7 @@
+/*
+  Cache-Control: public, max-age=300
+  Content-Security-Policy: default-src 'self'; img-src 'self' data: https://midia.entrecenas-roleplay.com.br; media-src https://midia.entrecenas-roleplay.com.br; style-src 'self' 'unsafe-inline'; base-uri 'self'; frame-ancestors 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()

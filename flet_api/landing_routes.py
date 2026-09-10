@@ -10,10 +10,18 @@ LANDING_MEDIA_DIR = Path(__file__).resolve().parent.parent / "static" / "landing
 REEL_PATH = LANDING_MEDIA_DIR / "entrecenas-reel.mp4"
 REEL_POSTER_PATH = LANDING_MEDIA_DIR / "entrecenas-reel-poster.webp"
 BRAND_ICON_PATH = Path(__file__).resolve().parent.parent / "static" / "entrecenas-icon.svg"
+DEFAULT_APP_URL = "/app/"
+DEFAULT_MEDIA_BASE_URL = "/midia"
+DEFAULT_SITE_URL = "https://entrecenas-roleplay.com.br"
 
 
-def landing_page_html() -> str:
-    return """<!doctype html>
+def landing_page_html(
+    *,
+    app_url: str = DEFAULT_APP_URL,
+    media_base_url: str = DEFAULT_MEDIA_BASE_URL,
+    site_url: str = DEFAULT_SITE_URL,
+) -> str:
+    html = """<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
@@ -26,12 +34,12 @@ def landing_page_html() -> str:
   <meta property="og:site_name" content="EntreCenas">
   <meta property="og:title" content="EntreCenas — Você faz parte da história">
   <meta property="og:description" content="Em cada card, uma história. Em cada história, um papel para você viver.">
-  <meta property="og:url" content="https://entrecenas-roleplay.com.br/conhecer">
-  <meta property="og:image" content="https://entrecenas-roleplay.com.br/midia/entrecenas-reel-poster.webp">
+  <meta property="og:url" content="__SITE_URL__/conhecer">
+  <meta property="og:image" content="__MEDIA_BASE_URL__/landing/entrecenas-reel-poster.webp">
   <meta property="og:image:width" content="720">
   <meta property="og:image:height" content="1280">
-  <link rel="canonical" href="https://entrecenas-roleplay.com.br/conhecer">
-  <link rel="icon" href="/midia/entrecenas-icone.svg" type="image/svg+xml">
+  <link rel="canonical" href="__SITE_URL__/conhecer">
+  <link rel="icon" href="__MEDIA_BASE_URL__/brand/entrecenas-icone.svg" type="image/svg+xml">
   <title>EntreCenas — Você faz parte da história</title>
   <style>
     :root {
@@ -342,13 +350,13 @@ def landing_page_html() -> str:
   <header>
     <div class="shell nav">
       <a class="brand" href="/" aria-label="EntreCenas — início">
-        <img src="/midia/entrecenas-icone.svg" alt="">
+        <img src="__MEDIA_BASE_URL__/brand/entrecenas-icone.svg" alt="">
         <span>EntreCenas</span>
       </a>
       <nav aria-label="Navegação principal">
         <a href="#como-funciona">Como funciona</a>
         <a href="#historias">Histórias</a>
-        <a class="button small" href="/app/">Entrar agora</a>
+        <a class="button small" href="__APP_URL__">Entrar agora</a>
       </nav>
     </div>
   </header>
@@ -360,19 +368,18 @@ def landing_page_html() -> str:
         <h1>Você não assiste à história. <span>Você faz parte dela.</span></h1>
         <p class="lead">Escolha um card, descubra o papel reservado para você e participe diretamente de uma história de romance, tensão e desejo.</p>
         <div class="actions">
-          <a class="button" href="/app/">Entrar agora</a>
-          <a class="button secondary" href="/baixar">Instalar no Android</a>
+          <a class="button" href="__APP_URL__">Entrar agora</a>
         </div>
         <div class="facts" aria-label="Informações principais">
-          <span>Use online ou instale no Android</span>
+          <span>Use online pelo celular ou computador</span>
           <span>Experiência para maiores de 18 anos</span>
         </div>
       </div>
 
       <div class="phone-wrap" aria-label="Apresentação em vídeo do EntreCenas">
         <div class="phone">
-          <video autoplay muted loop playsinline preload="metadata" poster="/midia/entrecenas-reel-poster.webp" aria-label="Uma personagem chega para iniciar uma história do EntreCenas">
-            <source src="/midia/entrecenas-reel.mp4" type="video/mp4">
+          <video autoplay muted loop playsinline preload="metadata" poster="__MEDIA_BASE_URL__/landing/entrecenas-reel-poster.webp" aria-label="Uma personagem chega para iniciar uma história do EntreCenas">
+            <source src="__MEDIA_BASE_URL__/landing/entrecenas-reel.mp4" type="video/mp4">
           </video>
         </div>
         <div class="phone-label">Você também é personagem</div>
@@ -405,7 +412,7 @@ def landing_page_html() -> str:
 
     <section class="manifesto" aria-label="Proposta do EntreCenas">
       <div class="shell manifesto-grid">
-        <img class="mark" src="/midia/entrecenas-icone.svg" alt="Ícone do EntreCenas">
+        <img class="mark" src="__MEDIA_BASE_URL__/brand/entrecenas-icone.svg" alt="Ícone do EntreCenas">
         <blockquote>Em cada card, uma história. Em cada história, <strong>um papel para você viver.</strong></blockquote>
       </div>
     </section>
@@ -423,7 +430,7 @@ def landing_page_html() -> str:
               <h3>Conheça o EntreCenas</h3>
               <p>Experimente a dinâmica do aplicativo em uma história envolvente que avança até o limite da sensualidade.</p>
             </div>
-            <a class="button secondary" href="/app/">Começar a experiência</a>
+            <a class="button secondary" href="__APP_URL__">Começar a experiência</a>
           </article>
           <article class="experience featured">
             <div>
@@ -431,7 +438,7 @@ def landing_page_html() -> str:
               <h3>Quer aprofundar esse encontro?</h3>
               <p>Desbloqueie novos roteiros, conheça outros personagens e descubra os papéis reservados para você.</p>
             </div>
-            <a class="button" href="/app/">Conhecer as histórias</a>
+            <a class="button" href="__APP_URL__">Conhecer as histórias</a>
           </article>
         </div>
       </div>
@@ -454,7 +461,7 @@ def landing_page_html() -> str:
           </details>
           <details>
             <summary>Onde o EntreCenas funciona?</summary>
-            <p>Você pode usar o EntreCenas online pelo navegador. No Android, também é possível instalar o aplicativo.</p>
+            <p>Você pode usar o EntreCenas diretamente pelo navegador, tanto no celular quanto no computador, sem instalar nada.</p>
           </details>
         </div>
       </div>
@@ -464,10 +471,9 @@ def landing_page_html() -> str:
       <div class="shell final-card">
         <p class="eyebrow">A próxima cena espera por você</p>
         <h2>Entre na história. Descubra o seu papel.</h2>
-        <p>Entre agora pelo navegador ou instale o EntreCenas no Android.</p>
+        <p>Entre agora pelo navegador, no celular ou no computador.</p>
         <div class="actions">
-          <a class="button" href="/app/">Entrar agora</a>
-          <a class="button secondary" href="/baixar">Instalar no Android</a>
+          <a class="button" href="__APP_URL__">Entrar agora</a>
         </div>
       </div>
     </section>
@@ -482,6 +488,11 @@ def landing_page_html() -> str:
 </body>
 </html>
 """
+    return (
+        html.replace("__APP_URL__", app_url.rstrip("/") + "/")
+        .replace("__MEDIA_BASE_URL__", media_base_url.rstrip("/"))
+        .replace("__SITE_URL__", site_url.rstrip("/"))
+    )
 
 
 def _page_headers() -> dict[str, str]:
@@ -517,14 +528,17 @@ def install(app: Any) -> Any:
         return HTMLResponse(landing_page_html(), headers=_page_headers())
 
     @app.get("/midia/entrecenas-reel.mp4", include_in_schema=False)
+    @app.get("/midia/landing/entrecenas-reel.mp4", include_in_schema=False)
     def landing_reel() -> FileResponse:
         return _media_response(REEL_PATH, "video/mp4")
 
     @app.get("/midia/entrecenas-reel-poster.webp", include_in_schema=False)
+    @app.get("/midia/landing/entrecenas-reel-poster.webp", include_in_schema=False)
     def landing_reel_poster() -> FileResponse:
         return _media_response(REEL_POSTER_PATH, "image/webp")
 
     @app.get("/midia/entrecenas-icone.svg", include_in_schema=False)
+    @app.get("/midia/brand/entrecenas-icone.svg", include_in_schema=False)
     def landing_icon() -> FileResponse:
         return _media_response(BRAND_ICON_PATH, "image/svg+xml")
 
