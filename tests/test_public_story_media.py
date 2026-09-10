@@ -22,3 +22,18 @@ def test_public_story_media_builds_stable_r2_url(monkeypatch) -> None:
         "https://midia.example.com/stories/roleplay2026.hist%C3%B3ria%20livre/"
         "scenes/cena%2001.webp"
     )
+
+
+def test_public_story_media_accepts_runtime_image_mapping(monkeypatch) -> None:
+    monkeypatch.setenv("ENTRECENAS_MEDIA_URL", "https://midia.example.com")
+
+    url = public_story_media_url(
+        "roleplay2026.casada_frustrada",
+        "scenes",
+        {"path": Path("/tmp/mary100.webp")},
+    )
+
+    assert url == (
+        "https://midia.example.com/stories/roleplay2026.casada_frustrada/"
+        "scenes/mary100.webp"
+    )
