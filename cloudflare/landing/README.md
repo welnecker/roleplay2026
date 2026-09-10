@@ -14,7 +14,7 @@ versões divergentes da página.
 O build usa estes endereços por padrão:
 
 - site: `https://entrecenas-roleplay.com.br`
-- app: `https://app.entrecenas-roleplay.com.br`
+- app: `https://app.entrecenas-roleplay.com.br/app/`
 - mídia: `https://midia.entrecenas-roleplay.com.br`
 
 Eles podem ser substituídos pelas variáveis `ENTRECENAS_SITE_URL`,

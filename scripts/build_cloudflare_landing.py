@@ -32,7 +32,9 @@ def _landing_template() -> str:
 
 def build() -> Path:
     site_url = _https_url("ENTRECENAS_SITE_URL", "https://entrecenas-roleplay.com.br")
-    app_url = _https_url("ENTRECENAS_APP_URL", "https://app.entrecenas-roleplay.com.br")
+    app_url = _https_url(
+        "ENTRECENAS_APP_URL", "https://app.entrecenas-roleplay.com.br/app"
+    )
     media_url = _https_url("ENTRECENAS_MEDIA_URL", "https://midia.entrecenas-roleplay.com.br")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
