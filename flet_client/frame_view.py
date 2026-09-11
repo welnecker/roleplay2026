@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
 import flet as ft
+import flet_video as fv
 
 from flet_client.frame_state import (
     FrameRevealController,
@@ -27,6 +29,7 @@ class FrameVisualItem:
     entry_index: int
     entry: VisualEntry | None
     image: bytes | str | None
+    video: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +69,13 @@ class FrameStageCursor:
         return self.position
 
 
-def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
+def _entry_card(
+    entry: VisualEntry,
+    index: int,
+    *,
+    width: float,
+    initially_hidden: bool = False,
+) -> ft.Control:
     is_thought = entry.kind == "pensamento"
     is_impact_balloon = not is_thought and entry.impact_balloon
     label = entry.visible_name or entry.actor or "Personagem"
@@ -96,6 +105,8 @@ def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
                     italic=is_thought,
                     color=TEXT_COLOR,
                     selectable=True,
+                    opacity=0 if initially_hidden else 1,
+                    animate_opacity=550,
                 ),
             ],
         ),
@@ -129,6 +140,10 @@ def _entry_card(entry: VisualEntry, index: int, *, width: float) -> ft.Control:
         controls=[*tails, card],
         width=width + 22,
         clip_behavior=ft.ClipBehavior.NONE,
+        opacity=0 if initially_hidden else 1,
+        offset=ft.Offset(0, 0.08 if initially_hidden else 0),
+        animate_opacity=550,
+        animate_offset=550,
     )
 
 
@@ -266,6 +281,7 @@ class NovelFrameView:
         frame: VisualFrame,
         *,
         image: bytes | str | None = None,
+        video: str | None = None,
         entry_images: tuple[str, ...] = (),
         history: tuple[FrameVisualRow, ...] = (),
         revealed_entries: int = 0,
@@ -277,10 +293,16 @@ class NovelFrameView:
         self.on_frame_complete = on_frame_complete
         self.on_reveal = on_reveal
         self.base_image = image
+        self.base_video = str(video or "").strip() or None
         self.entry_images = tuple(entry_images)
         self.history = tuple(history[-(INTERACTION_LIMIT - 1) :])
         self._busy = False
         self._image_dialog: ft.AlertDialog | None = None
+        self._animate_next_render = True
+        self._animation_generation = 0
+        self._media_control: ft.Control | None = None
+        self._balloon_control: ft.Control | None = None
+        self._balloon_text_control: ft.Control | None = None
         self._viewport_width = float(getattr(page, "width", None) or 390)
         self._viewport_height = float(getattr(page, "height", None) or 800)
         self.stage_width = _stage_width(self._viewport_width)
@@ -322,25 +344,28 @@ class NovelFrameView:
             alignment=ft.MainAxisAlignment.CENTER,
             spacing=14,
         )
+        self.scene_header = ft.Container(
+            padding=ft.Padding.symmetric(horizontal=18, vertical=14),
+            border_radius=16,
+            bgcolor=SCENE_COLOR,
+            opacity=0,
+            animate_opacity=600,
+            content=ft.Column(
+                spacing=6,
+                controls=[
+                    ft.Text(
+                        "CENA",
+                        size=12,
+                        weight=ft.FontWeight.BOLD,
+                        color="#FFFFFFCC",
+                    ),
+                    self.scene_description,
+                ],
+            ),
+        )
         self.layout = ft.Column(
             controls=[
-                ft.Container(
-                    padding=ft.Padding.symmetric(horizontal=18, vertical=14),
-                    border_radius=16,
-                    bgcolor=SCENE_COLOR,
-                    content=ft.Column(
-                        spacing=6,
-                        controls=[
-                            ft.Text(
-                                "CENA",
-                                size=12,
-                                weight=ft.FontWeight.BOLD,
-                                color="#FFFFFFCC",
-                            ),
-                            self.scene_description,
-                        ],
-                    ),
-                ),
+                self.scene_header,
                 self.stage,
                 self.review_navigation,
                 ft.SafeArea(
@@ -385,6 +410,7 @@ class NovelFrameView:
                 entry_index=index,
                 entry=entry,
                 image=self._entry_image(index),
+                video=self.base_video if index == 0 else None,
             )
             for index, entry in enumerate(self.controller.visible_entries)
         ]
@@ -397,6 +423,7 @@ class NovelFrameView:
                     entry_index=-1,
                     entry=None,
                     image=self.base_image,
+                    video=self.base_video,
                 ),
             )
         return FrameVisualRow(self.controller.frame.frame_id, tuple(items))
@@ -419,6 +446,9 @@ class NovelFrameView:
         return items[index]
 
     def _stage_control(self, item: FrameVisualItem | None) -> ft.Control:
+        self._media_control = None
+        self._balloon_control = None
+        self._balloon_text_control = None
         if item is None:
             return ft.Container(
                 width=self.stage_width,
@@ -428,8 +458,52 @@ class NovelFrameView:
 
         controls: list[ft.Control] = []
         if item.image:
-            controls.append(
-                ft.Container(
+            visual_stack: list[ft.Control] = [
+                ft.Image(
+                    src=item.image,
+                    fit=ft.BoxFit.CONTAIN,
+                    border_radius=20,
+                    expand=True,
+                )
+            ]
+            video_control: fv.Video | None = None
+            if item.video:
+                video_control = fv.Video(
+                    playlist=[fv.VideoMedia(item.video)],
+                    autoplay=True,
+                    muted=True,
+                    fit=ft.BoxFit.CONTAIN,
+                    fill_color="#102F2D",
+                    controls={mode: None for mode in fv.VideoControlsMode},
+                    expand=True,
+                )
+
+                def show_fallback(_event: object = None) -> None:
+                    if video_control is None:
+                        return
+                    video_control.visible = False
+                    self.page.update()
+
+                video_control.on_error = show_fallback
+                visual_stack.append(video_control)
+            if not item.video:
+                visual_stack.append(
+                    ft.Container(
+                        right=10,
+                        bottom=10,
+                        padding=7,
+                        border_radius=20,
+                        bgcolor="#99000000",
+                        ignore_interactions=True,
+                        content=ft.Icon(
+                            ft.Icons.ZOOM_IN,
+                            color="#FFFFFF",
+                            size=20,
+                            semantics_label="Ampliar imagem",
+                        ),
+                    )
+                )
+            media = ft.Container(
                     width=self.stage_width,
                     height=_image_height(
                         self.stage_width,
@@ -447,39 +521,25 @@ class NovelFrameView:
                     ),
                     content=ft.Stack(
                         fit=ft.StackFit.EXPAND,
-                        controls=[
-                            ft.Image(
-                                src=item.image,
-                                fit=ft.BoxFit.CONTAIN,
-                                border_radius=20,
-                                expand=True,
-                            ),
-                            ft.Container(
-                                right=10,
-                                bottom=10,
-                                padding=7,
-                                border_radius=20,
-                                bgcolor="#99000000",
-                                ignore_interactions=True,
-                                content=ft.Icon(
-                                    ft.Icons.ZOOM_IN,
-                                    color="#FFFFFF",
-                                    size=20,
-                                    semantics_label="Ampliar imagem",
-                                ),
-                            ),
-                        ],
+                        controls=visual_stack,
                     ),
+                    opacity=0 if self._animate_next_render else 1,
+                    animate_opacity=700,
                 )
-            )
+            self._media_control = media
+            controls.append(media)
         if item.entry is not None:
-            controls.append(
-                _entry_card(
+            balloon = _entry_card(
                     item.entry,
                     max(0, item.entry_index),
                     width=_balloon_width(self.stage_width, self._viewport_width),
+                    initially_hidden=self._animate_next_render,
                 )
-            )
+            self._balloon_control = balloon
+            card = balloon.controls[-1]
+            if isinstance(card, ft.Container) and isinstance(card.content, ft.Column):
+                self._balloon_text_control = card.content.controls[-1]
+            controls.append(balloon)
         return ft.Container(
             width=self.stage_width,
             alignment=ft.Alignment.TOP_CENTER,
@@ -491,7 +551,42 @@ class NovelFrameView:
         )
 
     def focus_current(self) -> None:
-        return None
+        self._start_stage_animation(include_scene=True)
+
+    def _start_stage_animation(self, *, include_scene: bool) -> None:
+        if not self._animate_next_render:
+            return
+        self._animate_next_render = False
+        runner = getattr(self.page, "run_task", None)
+        if callable(runner):
+            runner(self._animate_current_stage, include_scene)
+
+    async def _animate_current_stage(self, include_scene: bool) -> None:
+        self._animation_generation += 1
+        generation = self._animation_generation
+
+        if include_scene:
+            self.scene_header.opacity = 1
+            self.page.update()
+        await asyncio.sleep(0.35 if include_scene else 0.05)
+        if generation != self._animation_generation:
+            return
+        if self._media_control is not None:
+            self._media_control.opacity = 1
+            self.page.update()
+        await asyncio.sleep(0.85 if include_scene else 0.45)
+        if generation != self._animation_generation:
+            return
+        if self._balloon_control is not None:
+            self._balloon_control.opacity = 1
+            self._balloon_control.offset = ft.Offset(0, 0)
+            self.page.update()
+        await asyncio.sleep(0.35)
+        if generation != self._animation_generation:
+            return
+        if self._balloon_text_control is not None:
+            self._balloon_text_control.opacity = 1
+            self.page.update()
 
     def _open_image_viewer(self, image: bytes | str) -> None:
         self._image_dialog = _image_viewer_dialog(
@@ -597,4 +692,6 @@ class NovelFrameView:
                 self.controller.revealed_entries = previous_revealed
         self._busy = False
         self.stage_cursor.latest(len(self._current_row().items))
+        self._animate_next_render = True
         self._refresh()
+        self._start_stage_animation(include_scene=False)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import flet as ft
+import flet_video as fv
 import pytest
 
 from flet_client.frame_state import VisualEntry, VisualFrame
@@ -348,6 +349,31 @@ def test_imagem_herdada_da_descricao_nao_cria_posicao_duplicada() -> None:
     assert len(view._current_row().items) == 1
     assert _stage_image(view).src == "https://img/mary1.webp"
     assert isinstance(_stage_balloon(view), ft.Stack)
+
+
+def test_video_opcional_fica_sobre_a_imagem_de_seguranca() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (VisualEntry("pensamento", "mary", "Mary", "Cheguei."),),
+        ),
+        image="https://img/mary1.webp",
+        video="https://midia.example/videos/1_v1.mp4",
+        entry_images=("https://img/mary1.webp",),
+    )
+
+    media = _image_container(view)
+    assert isinstance(media.content, ft.Stack)
+    assert isinstance(media.content.controls[0], ft.Image)
+    video = media.content.controls[1]
+    assert isinstance(video, fv.Video)
+    assert video.playlist[0].resource.endswith("/1_v1.mp4")
+    assert video.autoplay is True
+    assert video.muted is True
+    assert media.opacity == 0
+    assert _stage_balloon(view).opacity == 0
 
 
 def test_snapshot_preserva_cinco_quadros_sem_renderizar_historico_no_palco() -> None:

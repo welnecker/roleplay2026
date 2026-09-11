@@ -37,3 +37,14 @@ def test_public_story_media_accepts_runtime_image_mapping(monkeypatch) -> None:
         "https://midia.example.com/stories/roleplay2026.casada_frustrada/"
         "scenes/mary100.webp"
     )
+
+
+def test_public_story_media_supports_story_videos(monkeypatch) -> None:
+    monkeypatch.setenv("ENTRECENAS_MEDIA_URL", "https://midia.example")
+
+    assert public_story_media_url(
+        "roleplay2026.casada_frustrada", "videos", "1_v1.mp4"
+    ) == (
+        "https://midia.example/stories/roleplay2026.casada_frustrada/"
+        "videos/1_v1.mp4"
+    )

@@ -150,6 +150,7 @@ class RunFrameResponse(BaseModel):
     frame_id: str
     content: str
     image_url: str
+    video_url: str = ""
     entry_image_urls: list[str]
     revealed_entries: int
     entry_count: int
@@ -260,6 +261,7 @@ def _run_response(frame: RunFrame, request: Request) -> RunFrameResponse:
         frame_id=frame.frame_id,
         content=frame.content,
         image_url=image_url,
+        video_url=absolute(frame.video_url),
         entry_image_urls=[absolute(url) for url in frame.entry_image_urls],
         revealed_entries=frame.revealed_entries,
         entry_count=frame.entry_count,

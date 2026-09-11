@@ -44,6 +44,7 @@ class ApiRunFrame:
     frame_id: str
     content: str
     image_url: str
+    video_url: str
     entry_image_urls: tuple[str, ...]
     revealed_entries: int
     entry_count: int
@@ -260,6 +261,7 @@ class FletApiClient:
             frame_id=str(payload.get("frame_id", "") or ""),
             content=str(payload.get("content", "") or ""),
             image_url=self._public_media_url(payload.get("image_url", "")),
+            video_url=self._public_media_url(payload.get("video_url", "")),
             entry_image_urls=tuple(
                 self._public_media_url(item)
                 for item in payload.get("entry_image_urls", []) or []

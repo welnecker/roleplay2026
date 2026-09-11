@@ -58,6 +58,14 @@ from services.story_cast import (
 )
 
 
+# Piloto de vídeo: somente o primeiro quadro desta história recebe mídia em
+# movimento. O mapa explícito evita sondagens HTTP no R2 e mantém todos os
+# outros cards no fluxo de imagem já estabilizado.
+INTRO_VIDEO_BY_PACKAGE = {
+    "roleplay2026.casada_frustrada": "1_v1.mp4",
+}
+
+
 @dataclass(frozen=True, slots=True)
 class RunFrame:
     run_id: str
@@ -68,6 +76,7 @@ class RunFrame:
     revealed_entries: int
     entry_count: int
     entry_image_urls: tuple[str, ...] = ()
+    video_url: str = ""
     finished: bool = False
 
 
@@ -447,6 +456,15 @@ class FletRunService:
             query += "&v=" + quote(version)
         return "/api/v1/runs/image?" + query
 
+    @staticmethod
+    def _intro_video_url(package_id: str, *, node_id: str, first_node_id: str) -> str:
+        if node_id != first_node_id:
+            return ""
+        filename = INTRO_VIDEO_BY_PACKAGE.get(package_id, "")
+        if not filename:
+            return ""
+        return public_story_media_url(package_id, "videos", filename)
+
     def _view(self, package, script, context, state, messages) -> RunFrame:
         current = self._current(messages)
         if current is None:
@@ -506,6 +524,11 @@ class FletRunService:
                 )
 
             entry_image_urls = tuple(entry_image_url(image_id) for image_id in image_ids)
+        video_url = self._intro_video_url(
+            package.manifest.package_id,
+            node_id=node_id,
+            first_node_id=str(script.first_beat_id),
+        )
         return RunFrame(
             run_id=context.run.run_id if context.run is not None else "",
             package_id=package.manifest.package_id,
@@ -521,6 +544,7 @@ class FletRunService:
             ),
             entry_count=entry_count,
             entry_image_urls=entry_image_urls,
+            video_url=video_url,
             finished=bool(state.finished),
         )
 

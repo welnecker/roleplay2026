@@ -183,6 +183,7 @@ async def main(
             page,
             frame,
             image=run_frame.image_url or None,
+            video=run_frame.video_url or None,
             entry_images=run_frame.entry_image_urls,
             history=history,
             revealed_entries=run_frame.revealed_entries,
