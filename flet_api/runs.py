@@ -58,11 +58,11 @@ from services.story_cast import (
 )
 
 
-# Piloto de vídeo: somente o primeiro quadro desta história recebe mídia em
-# movimento. O mapa explícito evita sondagens HTTP no R2 e mantém todos os
-# outros cards no fluxo de imagem já estabilizado.
-INTRO_VIDEO_BY_PACKAGE = {
-    "roleplay2026.casada_frustrada": "1_v2.mp4",
+# Piloto de mídia em movimento: somente o primeiro quadro desta história
+# recebe o WebP animado. O mapa explícito evita sondagens HTTP no R2 e mantém
+# todos os outros cards no fluxo de imagem já estabilizado.
+INTRO_MOTION_BY_PACKAGE = {
+    "roleplay2026.casada_frustrada": "1_motion_v1.webp",
 }
 
 
@@ -76,7 +76,7 @@ class RunFrame:
     revealed_entries: int
     entry_count: int
     entry_image_urls: tuple[str, ...] = ()
-    video_url: str = ""
+    motion_url: str = ""
     finished: bool = False
 
 
@@ -457,10 +457,10 @@ class FletRunService:
         return "/api/v1/runs/image?" + query
 
     @staticmethod
-    def _intro_video_url(package_id: str, *, node_id: str, first_node_id: str) -> str:
+    def _intro_motion_url(package_id: str, *, node_id: str, first_node_id: str) -> str:
         if node_id != first_node_id:
             return ""
-        filename = INTRO_VIDEO_BY_PACKAGE.get(package_id, "")
+        filename = INTRO_MOTION_BY_PACKAGE.get(package_id, "")
         if not filename:
             return ""
         return public_story_media_url(package_id, "videos", filename)
@@ -524,7 +524,7 @@ class FletRunService:
                 )
 
             entry_image_urls = tuple(entry_image_url(image_id) for image_id in image_ids)
-        video_url = self._intro_video_url(
+        motion_url = self._intro_motion_url(
             package.manifest.package_id,
             node_id=node_id,
             first_node_id=str(script.first_beat_id),
@@ -544,7 +544,7 @@ class FletRunService:
             ),
             entry_count=entry_count,
             entry_image_urls=entry_image_urls,
-            video_url=video_url,
+            motion_url=motion_url,
             finished=bool(state.finished),
         )
 

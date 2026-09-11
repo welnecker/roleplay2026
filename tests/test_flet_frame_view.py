@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import flet as ft
-import flet_video as fv
 import pytest
 
 from flet_client.frame_state import VisualEntry, VisualFrame
@@ -351,7 +350,7 @@ def test_imagem_herdada_da_descricao_nao_cria_posicao_duplicada() -> None:
     assert isinstance(_stage_balloon(view), ft.Stack)
 
 
-def test_video_opcional_fica_sobre_a_imagem_de_seguranca() -> None:
+def test_movimento_opcional_fica_sobre_a_imagem_de_seguranca() -> None:
     view = NovelFrameView(  # type: ignore[arg-type]
         _Page(),
         VisualFrame(
@@ -360,30 +359,27 @@ def test_video_opcional_fica_sobre_a_imagem_de_seguranca() -> None:
             (VisualEntry("pensamento", "mary", "Mary", "Cheguei."),),
         ),
         image="https://img/mary1.webp",
-        video="https://midia.example/videos/1_v1.mp4",
+        motion="https://midia.example/videos/1_motion_v1.webp",
         entry_images=("https://img/mary1.webp",),
     )
 
-    # Antes do fade há somente a imagem; o vídeo ainda não foi montado e,
-    # portanto, não pode terminar escondido.
+    # Antes do fade há somente a imagem; o WebP ainda não foi montado e,
+    # portanto, sua animação ainda não começou escondida.
     media = _image_container(view)
     assert isinstance(media.content, ft.Stack)
     assert isinstance(media.content.controls[0], ft.Image)
     assert len(media.content.controls) == 1
-    assert view._pending_video_url.endswith("/1_v1.mp4")
+    assert view._pending_motion_url.endswith("/1_motion_v1.webp")
 
-    # Em uma renderização já visível (por exemplo, Rever), o player nasce com
-    # autoplay local, sem chamada play() pelo WebSocket.
+    # Em uma renderização já visível (por exemplo, Rever), a animação nasce
+    # diretamente sobre a imagem estática de segurança.
     view._animate_next_render = False
     view._refresh(update_page=False)
     media = _image_container(view)
     assert isinstance(media.content, ft.Stack)
-    video = media.content.controls[1]
-    assert isinstance(video, fv.Video)
-    assert video.playlist[0].resource.endswith("/1_v1.mp4")
-    assert video.autoplay is True
-    assert video.muted is True
-    assert video.on_error is not None
+    motion = media.content.controls[1]
+    assert isinstance(motion, ft.Image)
+    assert motion.src.endswith("/1_motion_v1.webp")
 
 
 def test_snapshot_preserva_cinco_quadros_sem_renderizar_historico_no_palco() -> None:

@@ -29,7 +29,6 @@ def test_standalone_client_has_stable_identity_and_minimal_dependencies() -> Non
     assert project["dependencies"] == [
         "flet==0.86.5",
         "flet-secure-storage==0.86.5",
-        "flet-video==0.86.5",
         "requests>=2.32,<3",
     ]
     assert flet["bundle_id"] == "br.com.entrecenas.roleplay"

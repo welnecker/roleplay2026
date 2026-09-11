@@ -6,7 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import flet as ft
-import flet_video as fv
 
 from flet_client.frame_state import (
     FrameRevealController,
@@ -29,7 +28,7 @@ class FrameVisualItem:
     entry_index: int
     entry: VisualEntry | None
     image: bytes | str | None
-    video: str | None = None
+    motion: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,7 +280,7 @@ class NovelFrameView:
         frame: VisualFrame,
         *,
         image: bytes | str | None = None,
-        video: str | None = None,
+        motion: str | None = None,
         entry_images: tuple[str, ...] = (),
         history: tuple[FrameVisualRow, ...] = (),
         revealed_entries: int = 0,
@@ -293,7 +292,7 @@ class NovelFrameView:
         self.on_frame_complete = on_frame_complete
         self.on_reveal = on_reveal
         self.base_image = image
-        self.base_video = str(video or "").strip() or None
+        self.base_motion = str(motion or "").strip() or None
         self.entry_images = tuple(entry_images)
         self.history = tuple(history[-(INTERACTION_LIMIT - 1) :])
         self._busy = False
@@ -301,8 +300,8 @@ class NovelFrameView:
         self._animate_next_render = True
         self._animation_generation = 0
         self._media_control: ft.Control | None = None
-        self._video_stack: ft.Stack | None = None
-        self._pending_video_url: str | None = None
+        self._media_stack: ft.Stack | None = None
+        self._pending_motion_url: str | None = None
         self._balloon_control: ft.Control | None = None
         self._balloon_text_control: ft.Control | None = None
         self._viewport_width = float(getattr(page, "width", None) or 390)
@@ -412,7 +411,7 @@ class NovelFrameView:
                 entry_index=index,
                 entry=entry,
                 image=self._entry_image(index),
-                video=self.base_video if index == 0 else None,
+                motion=self.base_motion if index == 0 else None,
             )
             for index, entry in enumerate(self.controller.visible_entries)
         ]
@@ -425,7 +424,7 @@ class NovelFrameView:
                     entry_index=-1,
                     entry=None,
                     image=self.base_image,
-                    video=self.base_video,
+                    motion=self.base_motion,
                 ),
             )
         return FrameVisualRow(self.controller.frame.frame_id, tuple(items))
@@ -449,8 +448,8 @@ class NovelFrameView:
 
     def _stage_control(self, item: FrameVisualItem | None) -> ft.Control:
         self._media_control = None
-        self._video_stack = None
-        self._pending_video_url = None
+        self._media_stack = None
+        self._pending_motion_url = None
         self._balloon_control = None
         self._balloon_text_control = None
         if item is None:
@@ -470,15 +469,14 @@ class NovelFrameView:
                     expand=True,
                 )
             ]
-            if item.video:
+            if item.motion:
                 if self._animate_next_render:
-                    # Monte o vídeo somente quando a mídia ficar visível. No
-                    # navegador, autoplay mudo começa no próprio componente e
-                    # não depende de uma chamada play() via WebSocket.
-                    self._pending_video_url = item.video
+                    # Monte o WebP animado somente quando a mídia ficar
+                    # visível, para a animação começar no instante da revelação.
+                    self._pending_motion_url = item.motion
                 else:
-                    visual_stack.append(self._story_video_control(item.video))
-            if not item.video:
+                    visual_stack.append(self._motion_image_control(item.motion))
+            if not item.motion:
                 visual_stack.append(
                     ft.Container(
                         right=10,
@@ -499,7 +497,7 @@ class NovelFrameView:
                 fit=ft.StackFit.EXPAND,
                 controls=visual_stack,
             )
-            self._video_stack = media_stack
+            self._media_stack = media_stack
             media = ft.Container(
                     width=self.stage_width,
                     height=_image_height(
@@ -547,25 +545,14 @@ class NovelFrameView:
     def focus_current(self) -> None:
         self._start_stage_animation(include_scene=True)
 
-    def _story_video_control(self, video_url: str) -> fv.Video:
-        video = fv.Video(
-            playlist=[fv.VideoMedia(video_url)],
-            autoplay=True,
-            muted=True,
+    @staticmethod
+    def _motion_image_control(motion_url: str) -> ft.Image:
+        return ft.Image(
+            src=motion_url,
             fit=ft.BoxFit.CONTAIN,
-            fill_color="#102F2D",
-            controls={mode: None for mode in fv.VideoControlsMode},
+            border_radius=20,
             expand=True,
         )
-
-        def show_fallback(event: object = None) -> None:
-            data = getattr(event, "data", "") if event is not None else ""
-            print(f"[STORY_VIDEO] load_failed url={video_url!r} error={data!r}")
-            video.visible = False
-            self.page.update()
-
-        video.on_error = show_fallback
-        return video
 
     def _start_stage_animation(self, *, include_scene: bool) -> None:
         if not self._animate_next_render:
@@ -585,11 +572,11 @@ class NovelFrameView:
         await asyncio.sleep(0.35 if include_scene else 0.05)
         if generation != self._animation_generation:
             return
-        if self._pending_video_url and self._video_stack is not None:
-            self._video_stack.controls.append(
-                self._story_video_control(self._pending_video_url)
+        if self._pending_motion_url and self._media_stack is not None:
+            self._media_stack.controls.append(
+                self._motion_image_control(self._pending_motion_url)
             )
-            self._pending_video_url = None
+            self._pending_motion_url = None
         if self._media_control is not None:
             self._media_control.opacity = 1
             self.page.update()
