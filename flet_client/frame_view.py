@@ -304,6 +304,8 @@ class NovelFrameView:
         self._video_control: fv.Video | None = None
         self._video_loaded = False
         self._video_should_play = False
+        self._video_starting = False
+        self._video_started = False
         self._balloon_control: ft.Control | None = None
         self._balloon_text_control: ft.Control | None = None
         self._viewport_width = float(getattr(page, "width", None) or 390)
@@ -453,6 +455,8 @@ class NovelFrameView:
         self._video_control = None
         self._video_loaded = False
         self._video_should_play = not self._animate_next_render
+        self._video_starting = False
+        self._video_started = False
         self._balloon_control = None
         self._balloon_text_control = None
         if item is None:
@@ -487,16 +491,10 @@ class NovelFrameView:
                     expand=True,
                 )
 
-                async def restart_video() -> None:
-                    if video_control is None:
-                        return
-                    await video_control.seek(0)
-                    await video_control.play()
-
                 async def video_loaded(_event: object = None) -> None:
                     self._video_loaded = True
                     if self._video_should_play:
-                        await restart_video()
+                        await self._play_video_once()
 
                 def show_fallback(_event: object = None) -> None:
                     if video_control is None:
@@ -575,6 +573,30 @@ class NovelFrameView:
     def focus_current(self) -> None:
         self._start_stage_animation(include_scene=True)
 
+    async def _play_video_once(self) -> None:
+        video = self._video_control
+        if (
+            video is None
+            or self._video_starting
+            or self._video_started
+            or not self._video_loaded
+            or not self._video_should_play
+        ):
+            return
+        self._video_starting = True
+        try:
+            # Cada render cria um player novo, já posicionado em zero. Uma
+            # única chamada evita a corrida seek/play observada no Flet web.
+            await video.play()
+            self._video_started = True
+        except RuntimeError as exc:
+            resource = video.playlist[0].resource if video.playlist else ""
+            print(f"[STORY_VIDEO] play_failed url={resource!r} error={exc}")
+            video.visible = False
+            self.page.update()
+        finally:
+            self._video_starting = False
+
     def _start_stage_animation(self, *, include_scene: bool) -> None:
         if not self._animate_next_render:
             return
@@ -598,8 +620,7 @@ class NovelFrameView:
             self.page.update()
         self._video_should_play = True
         if self._video_control is not None and self._video_loaded:
-            await self._video_control.seek(0)
-            await self._video_control.play()
+            await self._play_video_once()
         await asyncio.sleep(0.85 if include_scene else 0.45)
         if generation != self._animation_generation:
             return
