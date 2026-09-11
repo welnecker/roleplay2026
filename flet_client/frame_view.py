@@ -302,6 +302,7 @@ class NovelFrameView:
         self._media_control: ft.Control | None = None
         self._media_stack: ft.Stack | None = None
         self._pending_motion_url: str | None = None
+        self._motion_replay_nonce = 0
         self._balloon_control: ft.Control | None = None
         self._balloon_text_control: ft.Control | None = None
         self._viewport_width = float(getattr(page, "width", None) or 390)
@@ -545,10 +546,15 @@ class NovelFrameView:
     def focus_current(self) -> None:
         self._start_stage_animation(include_scene=True)
 
-    @staticmethod
-    def _motion_image_control(motion_url: str) -> ft.Image:
+    def _motion_image_control(self, motion_url: str) -> ft.Image:
+        separator = "&" if "?" in motion_url else "?"
+        replay_url = (
+            f"{motion_url}{separator}replay={self._motion_replay_nonce}"
+            if self._motion_replay_nonce
+            else motion_url
+        )
         return ft.Image(
-            src=motion_url,
+            src=replay_url,
             fit=ft.BoxFit.CONTAIN,
             border_radius=20,
             expand=True,
@@ -642,11 +648,19 @@ class NovelFrameView:
     def _review_previous(self, _event: object = None) -> None:
         items = self._current_row().items
         self.stage_cursor.previous(len(items))
+        selected = self._selected_item()
+        if selected is not None and selected.motion:
+            # Flutter reutiliza o decoder da mesma URL no último frame do WebP.
+            # Uma URL lógica nova força o replay desde o primeiro frame.
+            self._motion_replay_nonce += 1
         self._refresh()
 
     def _review_next(self, _event: object = None) -> None:
         items = self._current_row().items
         self.stage_cursor.next(len(items))
+        selected = self._selected_item()
+        if selected is not None and selected.motion:
+            self._motion_replay_nonce += 1
         self._refresh()
 
     def _refresh(self, *, update_page: bool = True) -> None:

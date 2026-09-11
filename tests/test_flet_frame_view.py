@@ -382,6 +382,35 @@ def test_movimento_opcional_fica_sobre_a_imagem_de_seguranca() -> None:
     assert motion.src.endswith("/1_motion_v1.webp")
 
 
+def test_voltar_para_movimento_reinicia_webp_com_url_logica_nova() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (
+                VisualEntry("pensamento", "mary", "Mary", "Cheguei."),
+                VisualEntry("fala", "mary", "Mary", "Olá."),
+            ),
+        ),
+        image="https://img/mary1.webp",
+        motion="https://midia.example/videos/1_motion_v1.webp",
+        entry_images=("https://img/mary1.webp", "https://img/mary2.webp"),
+        revealed_entries=2,
+    )
+    view._animate_next_render = False
+    view._refresh(update_page=False)
+
+    assert view.stage_cursor.position == 1
+    view._review_previous()
+
+    media = _image_container(view)
+    assert isinstance(media.content, ft.Stack)
+    motion = media.content.controls[1]
+    assert isinstance(motion, ft.Image)
+    assert motion.src.endswith("/1_motion_v1.webp?replay=1")
+
+
 def test_snapshot_preserva_cinco_quadros_sem_renderizar_historico_no_palco() -> None:
     page = _Page()
     history = ()
