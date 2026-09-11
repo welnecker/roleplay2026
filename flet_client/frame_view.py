@@ -301,6 +301,9 @@ class NovelFrameView:
         self._animate_next_render = True
         self._animation_generation = 0
         self._media_control: ft.Control | None = None
+        self._video_control: fv.Video | None = None
+        self._video_loaded = False
+        self._video_should_play = False
         self._balloon_control: ft.Control | None = None
         self._balloon_text_control: ft.Control | None = None
         self._viewport_width = float(getattr(page, "width", None) or 390)
@@ -447,6 +450,9 @@ class NovelFrameView:
 
     def _stage_control(self, item: FrameVisualItem | None) -> ft.Control:
         self._media_control = None
+        self._video_control = None
+        self._video_loaded = False
+        self._video_should_play = not self._animate_next_render
         self._balloon_control = None
         self._balloon_text_control = None
         if item is None:
@@ -470,13 +476,27 @@ class NovelFrameView:
             if item.video:
                 video_control = fv.Video(
                     playlist=[fv.VideoMedia(item.video)],
-                    autoplay=True,
+                    # O autoplay declarativo pode começar antes de o controle
+                    # entrar no palco. A reprodução é disparada abaixo, depois
+                    # do carregamento e do início do fade da mídia.
+                    autoplay=False,
                     muted=True,
                     fit=ft.BoxFit.CONTAIN,
                     fill_color="#102F2D",
                     controls={mode: None for mode in fv.VideoControlsMode},
                     expand=True,
                 )
+
+                async def restart_video() -> None:
+                    if video_control is None:
+                        return
+                    await video_control.seek(0)
+                    await video_control.play()
+
+                async def video_loaded(_event: object = None) -> None:
+                    self._video_loaded = True
+                    if self._video_should_play:
+                        await restart_video()
 
                 def show_fallback(_event: object = None) -> None:
                     if video_control is None:
@@ -485,6 +505,8 @@ class NovelFrameView:
                     self.page.update()
 
                 video_control.on_error = show_fallback
+                video_control.on_load = video_loaded
+                self._video_control = video_control
                 visual_stack.append(video_control)
             if not item.video:
                 visual_stack.append(
@@ -574,6 +596,10 @@ class NovelFrameView:
         if self._media_control is not None:
             self._media_control.opacity = 1
             self.page.update()
+        self._video_should_play = True
+        if self._video_control is not None and self._video_loaded:
+            await self._video_control.seek(0)
+            await self._video_control.play()
         await asyncio.sleep(0.85 if include_scene else 0.45)
         if generation != self._animation_generation:
             return

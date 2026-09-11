@@ -370,8 +370,9 @@ def test_video_opcional_fica_sobre_a_imagem_de_seguranca() -> None:
     video = media.content.controls[1]
     assert isinstance(video, fv.Video)
     assert video.playlist[0].resource.endswith("/1_v1.mp4")
-    assert video.autoplay is True
+    assert video.autoplay is False
     assert video.muted is True
+    assert video.on_load is not None
     assert media.opacity == 0
     assert _stage_balloon(view).opacity == 0
 
