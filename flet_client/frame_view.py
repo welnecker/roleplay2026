@@ -301,11 +301,8 @@ class NovelFrameView:
         self._animate_next_render = True
         self._animation_generation = 0
         self._media_control: ft.Control | None = None
-        self._video_control: fv.Video | None = None
-        self._video_loaded = False
-        self._video_should_play = False
-        self._video_starting = False
-        self._video_started = False
+        self._video_stack: ft.Stack | None = None
+        self._pending_video_url: str | None = None
         self._balloon_control: ft.Control | None = None
         self._balloon_text_control: ft.Control | None = None
         self._viewport_width = float(getattr(page, "width", None) or 390)
@@ -452,11 +449,8 @@ class NovelFrameView:
 
     def _stage_control(self, item: FrameVisualItem | None) -> ft.Control:
         self._media_control = None
-        self._video_control = None
-        self._video_loaded = False
-        self._video_should_play = not self._animate_next_render
-        self._video_starting = False
-        self._video_started = False
+        self._video_stack = None
+        self._pending_video_url = None
         self._balloon_control = None
         self._balloon_text_control = None
         if item is None:
@@ -476,36 +470,14 @@ class NovelFrameView:
                     expand=True,
                 )
             ]
-            video_control: fv.Video | None = None
             if item.video:
-                video_control = fv.Video(
-                    playlist=[fv.VideoMedia(item.video)],
-                    # O autoplay declarativo pode começar antes de o controle
-                    # entrar no palco. A reprodução é disparada abaixo, depois
-                    # do carregamento e do início do fade da mídia.
-                    autoplay=False,
-                    muted=True,
-                    fit=ft.BoxFit.CONTAIN,
-                    fill_color="#102F2D",
-                    controls={mode: None for mode in fv.VideoControlsMode},
-                    expand=True,
-                )
-
-                async def video_loaded(_event: object = None) -> None:
-                    self._video_loaded = True
-                    if self._video_should_play:
-                        await self._play_video_once()
-
-                def show_fallback(_event: object = None) -> None:
-                    if video_control is None:
-                        return
-                    video_control.visible = False
-                    self.page.update()
-
-                video_control.on_error = show_fallback
-                video_control.on_load = video_loaded
-                self._video_control = video_control
-                visual_stack.append(video_control)
+                if self._animate_next_render:
+                    # Monte o vídeo somente quando a mídia ficar visível. No
+                    # navegador, autoplay mudo começa no próprio componente e
+                    # não depende de uma chamada play() via WebSocket.
+                    self._pending_video_url = item.video
+                else:
+                    visual_stack.append(self._story_video_control(item.video))
             if not item.video:
                 visual_stack.append(
                     ft.Container(
@@ -523,6 +495,11 @@ class NovelFrameView:
                         ),
                     )
                 )
+            media_stack = ft.Stack(
+                fit=ft.StackFit.EXPAND,
+                controls=visual_stack,
+            )
+            self._video_stack = media_stack
             media = ft.Container(
                     width=self.stage_width,
                     height=_image_height(
@@ -539,10 +516,7 @@ class NovelFrameView:
                     on_click=lambda _event=None, image=item.image: (
                         self._open_image_viewer(image)
                     ),
-                    content=ft.Stack(
-                        fit=ft.StackFit.EXPAND,
-                        controls=visual_stack,
-                    ),
+                    content=media_stack,
                     opacity=0 if self._animate_next_render else 1,
                     animate_opacity=700,
                 )
@@ -573,29 +547,25 @@ class NovelFrameView:
     def focus_current(self) -> None:
         self._start_stage_animation(include_scene=True)
 
-    async def _play_video_once(self) -> None:
-        video = self._video_control
-        if (
-            video is None
-            or self._video_starting
-            or self._video_started
-            or not self._video_loaded
-            or not self._video_should_play
-        ):
-            return
-        self._video_starting = True
-        try:
-            # Cada render cria um player novo, já posicionado em zero. Uma
-            # única chamada evita a corrida seek/play observada no Flet web.
-            await video.play()
-            self._video_started = True
-        except RuntimeError as exc:
-            resource = video.playlist[0].resource if video.playlist else ""
-            print(f"[STORY_VIDEO] play_failed url={resource!r} error={exc}")
+    def _story_video_control(self, video_url: str) -> fv.Video:
+        video = fv.Video(
+            playlist=[fv.VideoMedia(video_url)],
+            autoplay=True,
+            muted=True,
+            fit=ft.BoxFit.CONTAIN,
+            fill_color="#102F2D",
+            controls={mode: None for mode in fv.VideoControlsMode},
+            expand=True,
+        )
+
+        def show_fallback(event: object = None) -> None:
+            data = getattr(event, "data", "") if event is not None else ""
+            print(f"[STORY_VIDEO] load_failed url={video_url!r} error={data!r}")
             video.visible = False
             self.page.update()
-        finally:
-            self._video_starting = False
+
+        video.on_error = show_fallback
+        return video
 
     def _start_stage_animation(self, *, include_scene: bool) -> None:
         if not self._animate_next_render:
@@ -615,12 +585,14 @@ class NovelFrameView:
         await asyncio.sleep(0.35 if include_scene else 0.05)
         if generation != self._animation_generation:
             return
+        if self._pending_video_url and self._video_stack is not None:
+            self._video_stack.controls.append(
+                self._story_video_control(self._pending_video_url)
+            )
+            self._pending_video_url = None
         if self._media_control is not None:
             self._media_control.opacity = 1
             self.page.update()
-        self._video_should_play = True
-        if self._video_control is not None and self._video_loaded:
-            await self._play_video_once()
         await asyncio.sleep(0.85 if include_scene else 0.45)
         if generation != self._animation_generation:
             return
