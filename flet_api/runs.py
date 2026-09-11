@@ -62,7 +62,7 @@ from services.story_cast import (
 # movimento. O mapa explícito evita sondagens HTTP no R2 e mantém todos os
 # outros cards no fluxo de imagem já estabilizado.
 INTRO_VIDEO_BY_PACKAGE = {
-    "roleplay2026.casada_frustrada": "1_v1.mp4",
+    "roleplay2026.casada_frustrada": "1_v2.mp4",
 }
 
 
