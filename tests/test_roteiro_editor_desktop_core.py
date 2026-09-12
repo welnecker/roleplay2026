@@ -4,6 +4,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "roteiro_editor_desktop" / "core.py"
 EDITOR_DIR = MODULE_PATH.parent
 if str(EDITOR_DIR) not in sys.path:
@@ -82,6 +84,40 @@ def test_exact_and_interpreted_speech_tags_are_preserved_in_export() -> None:
     assert rows[1]["line_id"] == "encontro_001_camilly_fala_01"
     assert rows[2]["instruction"] == "[FALA INTERPRETADA usuario_balao] Eu reajo com intensidade."
     assert rows[2]["line_id"] == "encontro_001_usuario_balao_fala_01"
+
+
+def test_smack_e_exportado_antes_da_fala_sem_consumir_ator_ou_imagem() -> None:
+    rows = core.compile_rows(
+        """[DESCRIÇÃO] O professor se aproxima do ombro de Mary.
+[FALA professor] Fique tranquila... sou eu.
+[ONOMATOPEIA smack x=69 y=48 delay=350]
+[FALA mary] Ai!!! Que susto, prof... rsrs
+""",
+        package_id="roleplay2026.casada_frustrada",
+        script_version="204",
+        frame_prefix="mascara",
+    )
+
+    assert rows[2]["line_id"] == "mascara_001_onomatopeia_01"
+    assert rows[2]["instruction"] == (
+        "[ONOMATOPEIA smack x=69 y=48 delay=350 duracao=1200 dx=32 dy=-10]"
+    )
+    assert rows[2]["image_id"] == ""
+    assert rows[3]["line_id"] == "mascara_001_mary_fala_01"
+
+
+def test_smack_precisa_ficar_imediatamente_antes_da_fala_alvo() -> None:
+    with pytest.raises(core.EditorError, match="imediatamente antes"):
+        core.compile_rows(
+            """[DESCRIÇÃO] Cena.
+[ONOMATOPEIA smack x=69 y=48]
+[DESCRIÇÃO] Outra cena.
+[FALA mary] Oi.
+""",
+            package_id="roleplay2026.casada_frustrada",
+            script_version="204",
+            frame_prefix="mascara",
+        )
 
 
 def test_gendered_name_placeholders_are_preserved_in_export() -> None:

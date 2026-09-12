@@ -7,6 +7,8 @@ from copy import deepcopy
 from html import escape
 from typing import Any, Iterable
 
+from roleplay_shared.onomatopoeia import parse_onomatopoeia_header
+
 _FRAME_PREFIX = "NOVEL_FRAME_V2\n"
 _BALLOON_ACTOR_SUFFIX = "_balao"
 _MARKER = re.compile(r"^\s*\[([^\]]+)\]\s*(.*)$", re.DOTALL)
@@ -110,6 +112,7 @@ def compile_novel_frame_story(
     source_rows = _active_sorted(rows)
     frames: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
+    pending_effects: list[dict[str, object]] = []
     seen_line_ids: set[str] = set()
 
     for row in source_rows:
@@ -120,6 +123,8 @@ def compile_novel_frame_story(
         kind, actor, text = _tag(row.get("instruction"))
 
         if kind == "descricao":
+            if pending_effects:
+                raise ValueError("ONOMATOPEIA precisa ficar imediatamente antes de uma FALA ou PENSAMENTO.")
             current = {
                 "frame_id": _frame_id_from_description(line_id, len(frames) + 1),
                 "description": text,
@@ -128,6 +133,22 @@ def compile_novel_frame_story(
             frames.append(current)
             continue
 
+        if kind == "onomatopeia":
+            if current is None:
+                raise ValueError(f"{line_id}: ONOMATOPEIA apareceu antes da primeira [DESCRIÇÃO].")
+            if pending_effects:
+                raise ValueError("ONOMATOPEIA precisa ficar imediatamente antes de uma FALA ou PENSAMENTO.")
+            header_match = _MARKER.match(str(row.get("instruction", "") or "").strip())
+            assert header_match is not None
+            try:
+                effect = parse_onomatopoeia_header(header_match.group(1))
+            except ValueError as exc:
+                raise ValueError(f"{line_id}: {exc}") from exc
+            pending_effects.append(effect.to_dict())
+            continue
+
+        if pending_effects and kind not in {"fala", "pensamento"}:
+            raise ValueError("ONOMATOPEIA precisa ficar imediatamente antes de uma FALA ou PENSAMENTO.")
         if kind not in {"fala", "pensamento"}:
             continue
         if not actor:
@@ -145,8 +166,13 @@ def compile_novel_frame_story(
                     if kind == "fala"
                     else {}
                 ),
+                **({"effects_before": pending_effects.copy()} if pending_effects else {}),
             }
         )
+        pending_effects.clear()
+
+    if pending_effects:
+        raise ValueError("A última ONOMATOPEIA do roteiro não possui FALA/PENSAMENTO posterior.")
 
     if not frames:
         raise ValueError("Roteiro V2 não contém quadros com [DESCRIÇÃO].")

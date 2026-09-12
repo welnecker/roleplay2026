@@ -5,7 +5,7 @@ import unicodedata
 
 _OUTPUT_MARKER = re.compile(r"^\s*\[([^\]]+)\]\s*$", re.MULTILINE)
 _INLINE_MARKER = re.compile(
-    r"(?mi)^\s*(\[(?:QUADRO\s+[^\]]+|DESCRI(?:Ç|C)ÃO|FALA\s+[^\]]+|PENSAMENTO\s+[^\]]+|/QUADRO)\])\s+([^\r\n]+)$"
+    r"(?mi)^\s*(\[(?:QUADRO\s+[^\]]+|DESCRI(?:Ç|C)ÃO|FALA\s+[^\]]+|PENSAMENTO\s+[^\]]+|ONOMATOPEIA\s+[^\]]+|/QUADRO)\])\s+([^\r\n]+)$"
 )
 
 
@@ -77,6 +77,7 @@ def reveal_frame_content(content: str, revealed_entries: int) -> str:
     limit = max(0, int(revealed_entries or 0))
     visible: list[tuple[str, str]] = []
     entries_seen = 0
+    pending_effects: list[tuple[str, str]] = []
     closing = False
 
     for header, body in sections:
@@ -91,9 +92,14 @@ def reveal_frame_content(content: str, revealed_entries: int) -> str:
         if first == "descricao":
             visible.append((header, body))
             continue
+        if first == "onomatopeia":
+            pending_effects.append((header, body))
+            continue
         if first in {"fala", "pensamento"} and bool(body.strip()):
             if entries_seen < limit:
+                visible.extend(pending_effects)
                 visible.append((header, body))
+            pending_effects.clear()
             entries_seen += 1
 
     output: list[str] = []
@@ -119,4 +125,3 @@ __all__ = [
     "reveal_complete",
     "reveal_frame_content",
 ]
-

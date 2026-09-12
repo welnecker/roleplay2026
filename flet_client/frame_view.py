@@ -12,6 +12,7 @@ from flet_client.frame_state import (
     VisualEntry,
     VisualFrame,
 )
+from roleplay_shared.onomatopoeia import OnomatopoeiaEffect
 
 BACKGROUND = "#183D3A"
 SCENE_COLOR = "#D24369"
@@ -305,6 +306,7 @@ class NovelFrameView:
         self._motion_replay_nonce = 0
         self._balloon_control: ft.Control | None = None
         self._balloon_text_control: ft.Control | None = None
+        self._effect_controls: list[tuple[ft.Container, OnomatopoeiaEffect]] = []
         self._viewport_width = float(getattr(page, "width", None) or 390)
         self._viewport_height = float(getattr(page, "height", None) or 800)
         self.stage_width = _stage_width(self._viewport_width)
@@ -453,6 +455,7 @@ class NovelFrameView:
         self._pending_motion_url = None
         self._balloon_control = None
         self._balloon_text_control = None
+        self._effect_controls = []
         if item is None:
             return ft.Container(
                 width=self.stage_width,
@@ -462,6 +465,16 @@ class NovelFrameView:
 
         controls: list[ft.Control] = []
         if item.image:
+            image_height = _image_height(
+                self.stage_width,
+                self._viewport_width,
+                self._viewport_height,
+                item.entry,
+            )
+            # As imagens editoriais atuais usam 16:9. O Stack acompanha a área
+            # realmente desenhada, não as barras laterais do palco, para que
+            # x/y continuem relativos à própria imagem em qualquer tela.
+            visual_width = min(self.stage_width, image_height * (16.0 / 9.0))
             visual_stack: list[ft.Control] = [
                 ft.Image(
                     src=item.image,
@@ -494,19 +507,58 @@ class NovelFrameView:
                         ),
                     )
                 )
+            if item.entry is not None:
+                for effect in item.entry.effects_before:
+                    effect_width = min(180.0, max(112.0, visual_width * 0.28))
+                    effect_height = 58.0
+                    left = min(
+                        max(0.0, visual_width * effect.x / 100.0 - effect_width / 2.0),
+                        max(0.0, visual_width - effect_width),
+                    )
+                    top = min(
+                        max(0.0, image_height * effect.y / 100.0 - effect_height / 2.0),
+                        max(0.0, image_height - effect_height),
+                    )
+                    effect_control = ft.Container(
+                        left=left,
+                        top=top,
+                        width=effect_width,
+                        height=effect_height,
+                        alignment=ft.Alignment.CENTER,
+                        ignore_interactions=True,
+                        opacity=0,
+                        scale=ft.Scale(scale=0.55),
+                        rotate=ft.Rotate(angle=-0.087),
+                        animate_opacity=180,
+                        animate_scale=180,
+                        animate_offset=180,
+                        content=ft.Text(
+                            effect.text,
+                            size=34 if visual_width >= 520 else 27,
+                            weight=ft.FontWeight.BOLD,
+                            italic=True,
+                            color="#FFF4F7",
+                            text_align=ft.TextAlign.CENTER,
+                            style=ft.TextStyle(
+                                shadow=ft.BoxShadow(
+                                    blur_radius=8,
+                                    color="#B0000000",
+                                    offset=ft.Offset(2, 2),
+                                )
+                            ),
+                        ),
+                    )
+                    visual_stack.append(effect_control)
+                    self._effect_controls.append((effect_control, effect))
             media_stack = ft.Stack(
-                fit=ft.StackFit.EXPAND,
+                width=visual_width,
+                height=image_height,
                 controls=visual_stack,
             )
             self._media_stack = media_stack
             media = ft.Container(
                     width=self.stage_width,
-                    height=_image_height(
-                        self.stage_width,
-                        self._viewport_width,
-                        self._viewport_height,
-                        item.entry,
-                    ),
+                    height=image_height,
                     alignment=ft.Alignment.CENTER,
                     border_radius=20,
                     clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
@@ -586,6 +638,10 @@ class NovelFrameView:
         if self._media_control is not None:
             self._media_control.opacity = 1
             self.page.update()
+        if self._effect_controls:
+            runner = getattr(self.page, "run_task", None)
+            if callable(runner):
+                runner(self._animate_effects, generation)
         await asyncio.sleep(0.85 if include_scene else 0.45)
         if generation != self._animation_generation:
             return
@@ -598,6 +654,33 @@ class NovelFrameView:
             return
         if self._balloon_text_control is not None:
             self._balloon_text_control.opacity = 1
+            self.page.update()
+
+    async def _animate_effects(self, generation: int) -> None:
+        for control, effect in self._effect_controls:
+            await asyncio.sleep(effect.delay / 1000.0)
+            if generation != self._animation_generation:
+                return
+            control.opacity = 1
+            control.scale = ft.Scale(scale=1.15)
+            control.rotate = ft.Rotate(angle=0.035)
+            self.page.update()
+            await asyncio.sleep(0.18)
+            if generation != self._animation_generation:
+                return
+            control.scale = ft.Scale(scale=1.0)
+            self.page.update()
+            remaining = max(300, effect.duration - 180)
+            await asyncio.sleep(0.12)
+            if generation != self._animation_generation:
+                return
+            control.animate_opacity = remaining
+            control.animate_scale = remaining
+            control.animate_offset = remaining
+            control.opacity = 0
+            control.scale = ft.Scale(scale=0.65)
+            # Offset do Flet é proporcional ao tamanho do próprio controle.
+            control.offset = ft.Offset(effect.dx / 120.0, effect.dy / 58.0)
             self.page.update()
 
     def _open_image_viewer(self, image: bytes | str) -> None:
@@ -653,7 +736,11 @@ class NovelFrameView:
             # Flutter reutiliza o decoder da mesma URL no último frame do WebP.
             # Uma URL lógica nova força o replay desde o primeiro frame.
             self._motion_replay_nonce += 1
+        replay_effect = bool(selected and selected.entry and selected.entry.effects_before)
+        self._animate_next_render = replay_effect
         self._refresh()
+        if replay_effect:
+            self._start_stage_animation(include_scene=False)
 
     def _review_next(self, _event: object = None) -> None:
         items = self._current_row().items
@@ -661,7 +748,11 @@ class NovelFrameView:
         selected = self._selected_item()
         if selected is not None and selected.motion:
             self._motion_replay_nonce += 1
+        replay_effect = bool(selected and selected.entry and selected.entry.effects_before)
+        self._animate_next_render = replay_effect
         self._refresh()
+        if replay_effect:
+            self._start_stage_animation(include_scene=False)
 
     def _refresh(self, *, update_page: bool = True) -> None:
         items = self._current_row().items

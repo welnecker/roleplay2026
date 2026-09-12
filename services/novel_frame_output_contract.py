@@ -5,6 +5,7 @@ from typing import Any
 
 from services import novel_frame_patch
 from services.novel_frame_reveal import frame_id, normalize_frame_markers
+from roleplay_shared.onomatopoeia import effect_from_mapping
 
 
 class FrameOutputContractError(ValueError):
@@ -112,7 +113,11 @@ def enforce_frame_output_contract(movement: Any, content: str) -> str:
         if not description:
             raise FrameOutputContractError("O modelo omitiu a descrição do quadro.")
         output.extend(("[DESCRIÇÃO]", description))
-    for kind, actor, visible_name, body in selected:
+    for authored, (kind, actor, visible_name, body) in zip(expected_entries, selected):
+        for raw_effect in authored.get("effects_before", []) or []:
+            if isinstance(raw_effect, dict):
+                effect = effect_from_mapping(raw_effect)
+                output.append(f"[{effect.canonical_header()}]")
         label = "PENSAMENTO" if kind == "pensamento" else "FALA"
         actor_spec = actor + (f"|{visible_name}" if visible_name else "")
         output.extend((f"[{label} {actor_spec}]", body))

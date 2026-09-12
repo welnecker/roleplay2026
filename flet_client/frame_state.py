@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from roleplay_shared.novel_frame_reveal import frame_sections
+from roleplay_shared.onomatopoeia import OnomatopoeiaEffect, parse_onomatopoeia_header
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,6 +13,7 @@ class VisualEntry:
     visible_name: str
     body: str
     impact_balloon: bool = False
+    effects_before: tuple[OnomatopoeiaEffect, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +35,7 @@ def parse_visual_frame(content: str) -> VisualFrame:
     current_id = ""
     description = ""
     entries: list[VisualEntry] = []
+    pending_effects: list[OnomatopoeiaEffect] = []
     for header, body in frame_sections(content):
         normalized = header.strip()
         upper = normalized.upper()
@@ -40,6 +43,8 @@ def parse_visual_frame(content: str) -> VisualFrame:
             current_id = normalized.split(maxsplit=1)[1].strip()
         elif upper in {"DESCRIÇÃO", "DESCRICAO"}:
             description = body.strip()
+        elif upper.startswith("ONOMATOPEIA "):
+            pending_effects.append(parse_onomatopoeia_header(normalized))
         elif upper.startswith("FALA ") or upper.startswith("PENSAMENTO "):
             kind = "pensamento" if upper.startswith("PENSAMENTO ") else "fala"
             actor, visible_name = _actor_and_name(normalized)
@@ -57,8 +62,10 @@ def parse_visual_frame(content: str) -> VisualFrame:
                             kind == "fala"
                             and actor.casefold().endswith("_balao")
                         ),
+                        effects_before=tuple(pending_effects),
                     )
                 )
+                pending_effects.clear()
 
     if not current_id:
         raise ValueError("Conteúdo não contém um [QUADRO id] válido.")

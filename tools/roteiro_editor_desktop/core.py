@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from roleplay_shared.onomatopoeia import OnomatopoeiaEffect, parse_onomatopoeia_header
+
 COLUMNS = (
     "package_id",
     "script_version",
@@ -42,6 +44,7 @@ class Item:
     text: str
     instruction: str
     delivery: str = "adaptavel"
+    effect: OnomatopoeiaEffect | None = None
 
 
 def normalize_cast_members(value: object) -> list[dict[str, str]]:
@@ -197,6 +200,25 @@ def parse_draft(draft: str) -> list[Item]:
             items.append(Item("FIM_HISTORIA", "", text, instruction, ""))
             continue
 
+        if kind_raw == "ONOMATOPEIA":
+            if text:
+                raise EditorError("[ONOMATOPEIA] não recebe texto fora da tag.")
+            try:
+                effect = parse_onomatopoeia_header(header)
+            except ValueError as exc:
+                raise EditorError(str(exc)) from exc
+            items.append(
+                Item(
+                    "ONOMATOPEIA",
+                    "",
+                    "",
+                    f"[{effect.canonical_header()}]",
+                    "",
+                    effect,
+                )
+            )
+            continue
+
         if not text:
             raise EditorError(f"[{header}] precisa de conteúdo.")
 
@@ -243,6 +265,13 @@ def parse_draft(draft: str) -> list[Item]:
             raise EditorError(
                 f"Linha autoral {index}: [{tag}] precisa de [DESCRIÇÃO] anterior."
             )
+    for index, item in enumerate(items):
+        if item.kind != "ONOMATOPEIA":
+            continue
+        if index + 1 >= len(items) or items[index + 1].kind not in {"FALA", "PENSAMENTO"}:
+            raise EditorError(
+                "[ONOMATOPEIA] precisa ficar imediatamente antes da FALA ou PENSAMENTO correspondente."
+            )
     return items
 
 
@@ -284,6 +313,10 @@ def compile_rows(
             line_id = f"{current_frame}_descricao"
         elif item.kind == "FIM_HISTORIA":
             line_id = f"{current_frame}_fim_historia"
+        elif item.kind == "ONOMATOPEIA":
+            key = ("", item.kind)
+            occurrences[key] = occurrences.get(key, 0) + 1
+            line_id = f"{current_frame}_onomatopeia_{occurrences[key]:02d}"
         else:
             key = (item.actor, item.kind)
             occurrences[key] = occurrences.get(key, 0) + 1

@@ -139,3 +139,43 @@ Oi, Janio... cheguei.
     result = enforce_frame_output_contract(movement, content)
 
     assert "Oi, Janio... cheguei." in result
+
+
+def test_reinsere_smack_autoral_antes_da_fala_sem_depender_do_modelo() -> None:
+    frame = {
+        "frame_id": "mascara_001",
+        "description": "O professor beija o ombro de Mary.",
+        "entries": [
+            {
+                "kind": "fala",
+                "actor": "mary",
+                "instruction": "Ai!!! Que susto, prof... rsrs",
+                "effects_before": [
+                    {
+                        "kind": "smack",
+                        "text": "SMACK!",
+                        "x": 69,
+                        "y": 48,
+                        "delay": 350,
+                        "duration": 1200,
+                        "dx": 32,
+                        "dy": -10,
+                    }
+                ],
+            }
+        ],
+    }
+    movement = SimpleNamespace(
+        instruction="NOVEL_FRAME_V2\n" + json.dumps(frame, ensure_ascii=False)
+    )
+    content = """[QUADRO mascara_001]
+[DESCRIÇÃO]
+O professor beija o ombro de Mary.
+[FALA mary|Mary]
+Ai!!! Que susto, prof... rsrs
+[/QUADRO]"""
+
+    result = enforce_frame_output_contract(movement, content)
+
+    assert "[ONOMATOPEIA smack x=69 y=48 delay=350 duracao=1200 dx=32 dy=-10]" in result
+    assert result.index("[ONOMATOPEIA") < result.index("[FALA mary|Mary]")

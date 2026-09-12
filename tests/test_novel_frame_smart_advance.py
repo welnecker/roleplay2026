@@ -1,6 +1,25 @@
 from __future__ import annotations
 
 from services import novel_frame_reveal_patch as reveal_patch
+from roleplay_shared.novel_frame_reveal import frame_entry_count, reveal_frame_content
+
+
+def test_smack_so_aparece_quando_a_fala_alvo_e_revelada() -> None:
+    content = """[QUADRO mascara_001]
+[DESCRIÇÃO]
+Mary aguarda vendada.
+[FALA professor|Professor]
+Fique tranquila.
+[ONOMATOPEIA smack x=69 y=48 delay=350 duracao=1200 dx=32 dy=-10]
+[FALA mary|Mary]
+Ai!!! Que susto, prof... rsrs
+[/QUADRO]"""
+
+    assert frame_entry_count(content) == 2
+    assert "[ONOMATOPEIA" not in reveal_frame_content(content, 1)
+    revealed = reveal_frame_content(content, 2)
+    assert "[ONOMATOPEIA" in revealed
+    assert revealed.index("[ONOMATOPEIA") < revealed.index("[FALA mary|Mary]")
 
 
 def test_quadro_novo_comeca_com_primeiro_card_visivel(monkeypatch) -> None:

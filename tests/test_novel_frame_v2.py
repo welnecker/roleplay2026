@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from services.editorial_compiler import compile_editorial_document
 from services.editorial_runtime import EditorialScript
 from services.novel_frame_patch import (
@@ -144,6 +146,47 @@ def _rows() -> list[dict]:
             "instruction": "[PENSAMENTO usuario] Ela parece mais solta e isso desperta minha curiosidade.",
             "status": "active",
         },
+    ]
+
+
+def test_compilador_anexa_smack_a_proxima_fala_sem_criar_entry() -> None:
+    rows = [
+        {
+            "line_id": "mascara_001_descricao",
+            "order": 10,
+            "instruction": "[DESCRIÇÃO] O professor beija o ombro de Mary.",
+            "status": "active",
+        },
+        {
+            "line_id": "mascara_001_onomatopeia_01",
+            "order": 20,
+            "instruction": "[ONOMATOPEIA smack x=69 y=48 delay=350]",
+            "status": "active",
+        },
+        {
+            "line_id": "mascara_001_mary_fala_01",
+            "order": 30,
+            "instruction": "[FALA mary] Ai!!! Que susto, prof... rsrs",
+            "status": "active",
+        },
+    ]
+
+    document = compile_novel_frame_story(_base_document(), rows, script_version="204")
+    payload = document["blocks"][0]["beats"][0]["required_movement"]
+    frame = json.loads(payload.removeprefix("NOVEL_FRAME_V2\n"))
+
+    assert len(frame["entries"]) == 1
+    assert frame["entries"][0]["effects_before"] == [
+        {
+            "kind": "smack",
+            "text": "SMACK!",
+            "x": 69.0,
+            "y": 48.0,
+            "delay": 350,
+            "duration": 1200,
+            "dx": 32,
+            "dy": -10,
+        }
     ]
 
 
@@ -398,3 +441,30 @@ Ela está animada demais para ser só simpatia.
     assert "pensamento" in rendered
     assert "Oi, Donisete!" in rendered
     assert "Oi, Camilly... chega mais." in rendered
+
+
+def test_onomatopeia_exige_uma_fala_ou_pensamento_imediatamente_depois() -> None:
+    rows = _rows()
+    rows.insert(
+        1,
+        {
+            "line_id": "encontro_001_onomatopeia_01",
+            "order": 15,
+            "instruction": "[ONOMATOPEIA smack x=69 y=48 delay=350]",
+            "status": "active",
+            "image_id": "",
+        },
+    )
+    rows.insert(
+        2,
+        {
+            "line_id": "encontro_001_ignorada",
+            "order": 16,
+            "instruction": "[NOTA] esta linha quebra a associação",
+            "status": "active",
+            "image_id": "",
+        },
+    )
+
+    with pytest.raises(ValueError, match="imediatamente antes"):
+        compile_novel_frame_story(_base_document(), rows, script_version="203")

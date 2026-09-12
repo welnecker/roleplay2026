@@ -7,6 +7,7 @@ from tkinter import messagebox, ttk
 
 from app_image_first_balao import ScriptEditor as BalloonScriptEditor
 from app_image_first import normalize_image_name, slugify
+from roleplay_shared.onomatopoeia import parse_onomatopoeia_header
 
 _TAG = re.compile(r"^\s*\[([^\]]+)\]\s*(.*)$", re.DOTALL)
 
@@ -89,6 +90,8 @@ class ScriptEditor(BalloonScriptEditor):
             return "DESCRIÇÃO", "", body
         if kind == "FIM_HISTORIA":
             return "FIM_HISTORIA", "", body
+        if kind == "ONOMATOPEIA":
+            return "ONOMATOPEIA", "", " ".join(arguments)
         delivery = ""
         if kind == "FALA" and arguments and arguments[0].upper() in {
             "EXATA", "INTERPRETADA", "INTERPRETATIVA"
@@ -110,6 +113,9 @@ class ScriptEditor(BalloonScriptEditor):
         clean_body = str(body or "").strip()
         if kind == "FIM_HISTORIA":
             return "[FIM_HISTORIA]" + (f" {clean_body}" if clean_body else "")
+        if kind == "ONOMATOPEIA":
+            effect = parse_onomatopoeia_header(f"ONOMATOPEIA {clean_body}")
+            return f"[{effect.canonical_header()}]"
         if not clean_body:
             raise ValueError("O texto da linha não pode ficar vazio.")
         if kind == "DESCRIÇÃO":
@@ -196,6 +202,7 @@ class ScriptEditor(BalloonScriptEditor):
         kind, actor, body = self._parse_instruction(str(row.get("instruction", "")))
         is_description = kind == "DESCRIÇÃO"
         is_ending = kind == "FIM_HISTORIA"
+        is_effect = kind == "ONOMATOPEIA"
 
         dialog = tk.Toplevel(self)
         dialog.title(f"Editar — {line_id}")
@@ -217,6 +224,8 @@ class ScriptEditor(BalloonScriptEditor):
                 if is_description
                 else ("FIM_HISTORIA",)
                 if is_ending
+                else ("ONOMATOPEIA",)
+                if is_effect
                 else (
                     "FALA", "FALA EXATA", "FALA INTERPRETADA", "PENSAMENTO",
                     "FALA BALÃO", "FALA EXATA BALÃO", "FALA INTERPRETADA BALÃO",
@@ -236,7 +245,7 @@ class ScriptEditor(BalloonScriptEditor):
         actor_var = tk.StringVar(value=actor or (actor_values[0] if actor_values else "usuario"))
         actor_combo = ttk.Combobox(dialog, textvariable=actor_var, state="readonly", values=actor_values)
         actor_combo.grid(row=3, column=0, sticky="ew", padx=14)
-        if is_description or is_ending:
+        if is_description or is_ending or is_effect:
             actor_combo.configure(state="disabled")
 
         text_frame = ttk.Frame(dialog)
@@ -245,7 +254,13 @@ class ScriptEditor(BalloonScriptEditor):
         text_frame.rowconfigure(1, weight=1)
         ttk.Label(
             text_frame,
-            text="Texto (opcional)" if is_ending else "Texto",
+            text=(
+                "Texto (opcional)"
+                if is_ending
+                else "Configuração (tipo, posição e atraso)"
+                if is_effect
+                else "Texto"
+            ),
         ).grid(row=0, column=0, sticky="w", pady=(0, 3))
         editor = tk.Text(text_frame, wrap="word", undo=True, font=("Segoe UI", 11), padx=8, pady=8)
         editor.grid(row=1, column=0, sticky="nsew")

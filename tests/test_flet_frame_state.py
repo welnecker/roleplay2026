@@ -39,6 +39,23 @@ Ai! Que susto!
     assert entry.impact_balloon is True
 
 
+def test_parser_anexa_smack_a_fala_seguinte_sem_criar_entry() -> None:
+    frame = parse_visual_frame("""[QUADRO mascara_001]
+[DESCRIÇÃO]
+O professor beija o ombro de Mary.
+[ONOMATOPEIA smack x=69 y=48 delay=350 duracao=1200 dx=32 dy=-10]
+[FALA mary|Mary]
+Ai!!! Que susto, prof... rsrs
+[/QUADRO]""")
+
+    assert len(frame.entries) == 1
+    effect = frame.entries[0].effects_before[0]
+    assert effect.text == "SMACK!"
+    assert effect.x == 69
+    assert effect.y == 48
+    assert effect.delay == 350
+
+
 def test_controller_revela_entries_antes_de_liberar_proximo_quadro() -> None:
     controller = FrameRevealController(parse_visual_frame(CONTENT))
 

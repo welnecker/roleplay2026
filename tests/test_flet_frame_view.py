@@ -5,6 +5,7 @@ import pytest
 
 from flet_client.frame_state import VisualEntry, VisualFrame
 from flet_client.frame_view import NovelFrameView
+from roleplay_shared.onomatopoeia import OnomatopoeiaEffect
 
 
 class _Page:
@@ -287,6 +288,44 @@ def test_fala_balao_recebe_tipografia_de_destaque() -> None:
     assert isinstance(copy, ft.Text)
     assert copy.size == 23
     assert copy.weight == ft.FontWeight.BOLD
+
+
+def test_smack_fica_sobre_a_imagem_da_fala_sem_criar_novo_item() -> None:
+    effect = OnomatopoeiaEffect(x=69, y=48, delay=350)
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(width=1348, height=754),
+        VisualFrame(
+            "mascara_001",
+            "O professor beija o ombro de Mary.",
+            (
+                VisualEntry("fala", "professor", "Professor", "Fique tranquila."),
+                VisualEntry(
+                    "fala",
+                    "mary",
+                    "Mary",
+                    "Ai!!! Que susto, prof... rsrs",
+                    effects_before=(effect,),
+                ),
+            ),
+        ),
+        entry_images=("https://img/mary3.webp", "https://img/mary4.webp"),
+        revealed_entries=2,
+    )
+
+    assert len(view._current_row().items) == 2
+    assert _stage_image(view).src == "https://img/mary4.webp"
+    media = _image_container(view)
+    assert isinstance(media.content, ft.Stack)
+    smack = next(
+        control
+        for control in media.content.controls
+        if isinstance(control, ft.Container)
+        and isinstance(control.content, ft.Text)
+        and control.content.value == "SMACK!"
+    )
+    assert smack.opacity == 0
+    assert smack.left is not None
+    assert smack.top is not None
 
 
 def test_quatro_entries_permanecem_revisaveis_no_palco_unico() -> None:
