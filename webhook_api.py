@@ -11,6 +11,11 @@ from fastapi import FastAPI, Header, HTTPException, Query, Request
 from billing.mercado_pago import MercadoPagoClient, validate_webhook_signature
 from billing.service import PaymentValidationError, PixCheckoutService, read_secret
 from persistence.accounts import GoogleSheetsAccountRepository
+from persistence.backend_config import POSTGRES_BACKEND, operational_backend
+from persistence.postgres_accounts import PostgresAccountRepository
+from persistence.postgres_database import shared_postgres_database
+from persistence.postgres_narrative import PostgresStoryCreditRepository
+from persistence.postgres_payments import PostgresPaymentRepository
 from persistence.payments import GoogleSheetsPaymentRepository
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from persistence.v2_google_sheets import GoogleSheetsStoryCreditRepository
@@ -21,15 +26,9 @@ from services.v2_schema_initializer import initialize_v2_sheet_schemas
 app = FastAPI(title="Roleplay 2026 Webhooks", version="0.4.0")
 
 
-def build_services() -> tuple[PixCheckoutService, GoogleSheetsPaymentRepository, str]:
+def build_services() -> tuple[PixCheckoutService, Any, str]:
     secrets = load_application_secrets()
-    credentials = secrets.get("gcp_service_account")
-    if not credentials:
-        raise RuntimeError("Google Sheets não configurado.")
-
-    spreadsheet_ids = read_spreadsheet_ids(secrets)
-    client = gspread.service_account_from_dict(dict(credentials))
-    accounts_billing = client.open_by_key(spreadsheet_ids.accounts_billing)
+    backend = operational_backend(secrets)
 
     access_token = read_secret(
         secrets,
@@ -44,10 +43,23 @@ def build_services() -> tuple[PixCheckoutService, GoogleSheetsPaymentRepository,
         "MP_WEBHOOK_SECRET",
     )
 
-    payments = GoogleSheetsPaymentRepository(accounts_billing)
-    payments.ensure_schema()
-    accounts = GoogleSheetsAccountRepository(accounts_billing)
-    story_credits = GoogleSheetsStoryCreditRepository(accounts_billing)
+    if backend == POSTGRES_BACKEND:
+        database = shared_postgres_database(secrets)
+        database.ensure_schema()
+        payments = PostgresPaymentRepository(database)
+        accounts = PostgresAccountRepository(database)
+        story_credits = PostgresStoryCreditRepository(database)
+    else:
+        credentials = secrets.get("gcp_service_account")
+        if not credentials:
+            raise RuntimeError("Google Sheets não configurado.")
+        spreadsheet_ids = read_spreadsheet_ids(secrets)
+        client = gspread.service_account_from_dict(dict(credentials))
+        accounts_billing = client.open_by_key(spreadsheet_ids.accounts_billing)
+        payments = GoogleSheetsPaymentRepository(accounts_billing)
+        payments.ensure_schema()
+        accounts = GoogleSheetsAccountRepository(accounts_billing)
+        story_credits = GoogleSheetsStoryCreditRepository(accounts_billing)
     service = PixCheckoutService(
         client=MercadoPagoClient(access_token),
         payments=payments,
@@ -78,6 +90,12 @@ def config_status() -> dict[str, Any]:
     service_account = secrets.get("gcp_service_account")
     return {
         "status": "ok" if not loader_error else "configuration_error",
+        "persistence_backend": (
+            operational_backend(secrets) if not loader_error else "unavailable"
+        ),
+        "database_url_present": bool(
+            str(secrets.get("DATABASE_URL", "") or "").strip()
+        ),
         "secrets_file_path": configured_path,
         "secrets_file_exists": path.is_file(),
         "spreadsheet_id_present": bool(
