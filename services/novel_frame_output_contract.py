@@ -67,21 +67,14 @@ def frame_requires_generation(movement: Any) -> bool:
     )
 
 
-def authored_frame_content(
-    movement: Any,
+def _compose_frame_content(
+    frame: dict[str, Any],
     *,
     character_name: str,
     user_name: str,
-    actor_names: dict[str, str] | None = None,
+    actor_names: dict[str, str] | None,
+    interpreted: dict[str, str],
 ) -> str:
-    """Serializa um quadro fechado sem chamar o modelo de linguagem."""
-
-    frame = novel_frame_patch._frame_from_movement(movement)
-    if not isinstance(frame, dict):
-        raise FrameOutputContractError("O movimento não contém um quadro V2 autoral.")
-    if frame_requires_generation(movement):
-        raise FrameOutputContractError("O quadro contém fala interpretada e exige geração.")
-
     protagonist = str(user_name or "Você").strip() or "Você"
 
     def personalized(value: object) -> str:
@@ -111,10 +104,151 @@ def authored_frame_content(
                 output.append(f"[{effect.canonical_header()}]")
         label = "PENSAMENTO" if kind == "pensamento" else "FALA"
         actor_spec = actor + (f"|{visible_name}" if visible_name else "")
-        output.extend((f"[{label} {actor_spec}]", personalized(entry.get("instruction", ""))))
+        line_id = str(entry.get("line_id", "") or "").strip()
+        body = (
+            interpreted.get(line_id, "")
+            if kind == "fala" and _plain(entry.get("delivery", "")) == "interpretada"
+            else personalized(entry.get("instruction", ""))
+        )
+        if not body:
+            raise FrameOutputContractError(f"{line_id or actor}: conteúdo vazio no quadro.")
+        output.extend((f"[{label} {actor_spec}]", body.strip()))
 
     output.append("[/QUADRO]")
     return "\n".join(output)
+
+
+def authored_frame_content(
+    movement: Any,
+    *,
+    character_name: str,
+    user_name: str,
+    actor_names: dict[str, str] | None = None,
+) -> str:
+    """Serializa um quadro fechado sem chamar o modelo de linguagem."""
+
+    frame = novel_frame_patch._frame_from_movement(movement)
+    if not isinstance(frame, dict):
+        raise FrameOutputContractError("O movimento não contém um quadro V2 autoral.")
+    if frame_requires_generation(movement):
+        raise FrameOutputContractError("O quadro contém fala interpretada e exige geração.")
+    return _compose_frame_content(
+        frame,
+        character_name=character_name,
+        user_name=user_name,
+        actor_names=actor_names,
+        interpreted={},
+    )
+
+
+def interpreted_lines_prompt(
+    movement: Any,
+    *,
+    character_name: str,
+    user_name: str,
+    actor_names: dict[str, str] | None = None,
+    recent_context: str = "",
+) -> str:
+    """Cria um prompt curto restrito às falas interpretadas do quadro."""
+
+    frame = novel_frame_patch._frame_from_movement(movement)
+    if not isinstance(frame, dict):
+        raise FrameOutputContractError("O movimento não contém um quadro V2 autoral.")
+    protagonist = str(user_name or "Você").strip() or "Você"
+    context_lines = []
+    targets = []
+    for entry in frame.get("entries", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        kind = _plain(entry.get("kind", ""))
+        actor = str(entry.get("actor", "") or "").strip()
+        instruction = str(entry.get("instruction", "") or "").replace(
+            "{{nome}}", protagonist
+        ).strip()
+        if kind == "fala" and _plain(entry.get("delivery", "")) == "interpretada":
+            targets.append(
+                {
+                    "line_id": str(entry.get("line_id", "") or "").strip(),
+                    "actor": actor,
+                    "visible_name": novel_frame_patch._actor_visible_name(
+                        actor,
+                        character_name=character_name,
+                        user_name=protagonist,
+                        actor_names=actor_names,
+                    ),
+                    "instruction": instruction,
+                }
+            )
+        else:
+            context_lines.append(f"{kind}:{actor}: {instruction}")
+
+    if not targets:
+        raise FrameOutputContractError("O quadro não possui fala interpretada.")
+
+    target_text = "\n".join(
+        f"- {item['line_id']} | {item['visible_name']}: {item['instruction']}"
+        for item in targets
+    )
+    context_text = "\n".join(context_lines)
+    previous = str(recent_context or "").strip()[-2000:]
+    return f"""Você escreve somente as falas interpretadas de um quadro de visual novel.
+Personagem principal: {character_name}. Protagonista: {protagonist}.
+Descrição do quadro: {str(frame.get('description', '') or '').replace('{{nome}}', protagonist)}
+Contexto autoral do quadro:
+{context_text}
+Contexto recente:
+{previous}
+
+Transforme cada orientação abaixo em uma fala curta, natural e coerente, preservando intenção, intensidade e personalidade:
+{target_text}
+
+Não reescreva descrição, pensamentos ou falas já prontas. Não crie ações nem linhas.
+Responda exatamente uma vez para cada line_id, nesta ordem:
+[FALA_INTERPRETADA <line_id>]
+<somente a fala final>
+[/FALA_INTERPRETADA]""".strip()
+
+
+def merge_interpreted_lines(
+    movement: Any,
+    generated: str,
+    *,
+    character_name: str,
+    user_name: str,
+    actor_names: dict[str, str] | None = None,
+) -> str:
+    """Valida as falas geradas e as injeta no quadro autoral intacto."""
+
+    import re
+
+    frame = novel_frame_patch._frame_from_movement(movement)
+    if not isinstance(frame, dict):
+        raise FrameOutputContractError("O movimento não contém um quadro V2 autoral.")
+    expected = [
+        str(entry.get("line_id", "") or "").strip()
+        for entry in frame.get("entries", []) or []
+        if isinstance(entry, dict)
+        and _plain(entry.get("kind", "")) == "fala"
+        and _plain(entry.get("delivery", "")) == "interpretada"
+    ]
+    pattern = re.compile(
+        r"\[FALA_INTERPRETADA\s+([^\]]+)\]\s*(.*?)\s*\[/FALA_INTERPRETADA\]",
+        re.DOTALL,
+    )
+    matches = [(line_id.strip(), body.strip()) for line_id, body in pattern.findall(str(generated or ""))]
+    if [line_id for line_id, _body in matches] != expected or any(
+        not body for _line_id, body in matches
+    ):
+        raise FrameOutputContractError(
+            "O modelo não devolveu exatamente as falas interpretadas solicitadas."
+        )
+    return _compose_frame_content(
+        frame,
+        character_name=character_name,
+        user_name=user_name,
+        actor_names=actor_names,
+        interpreted=dict(matches),
+    )
 
 
 def enforce_frame_output_contract(movement: Any, content: str) -> str:
@@ -194,6 +328,8 @@ __all__ = [
     "FrameOutputContractError",
     "authored_frame_content",
     "enforce_frame_output_contract",
+    "interpreted_lines_prompt",
+    "merge_interpreted_lines",
     "frame_generation_instruction",
     "frame_requires_generation",
 ]
