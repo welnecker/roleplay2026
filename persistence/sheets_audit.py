@@ -50,6 +50,18 @@ def _increment(sheet: str, metric: str, amount: int) -> None:
     _COUNTERS[key] = _COUNTERS.get(key, 0) + amount
 
 
+def counters_snapshot() -> dict[str, dict[str, int]]:
+    """Retorna apenas contadores agregados, nunca conteúdo das planilhas."""
+
+    with _COUNTERS_LOCK:
+        sheets = sorted({sheet for sheet, _metric in _COUNTERS})
+        metrics = sorted({metric for _sheet, metric in _COUNTERS})
+        return {
+            sheet: {metric: _COUNTERS.get((sheet, metric), 0) for metric in metrics}
+            for sheet in sheets
+        }
+
+
 def emit(
     *,
     sheet: str,

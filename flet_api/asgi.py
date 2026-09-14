@@ -33,6 +33,7 @@ install_story_end_card()
 install_terminal_run_guard()
 
 from flet_api.app import production_app
+from flet_api.observability import install as install_observability
 from persistence.sheets_audit import install as install_sheets_audit
 
 
@@ -41,6 +42,8 @@ from persistence.sheets_audit import install as install_sheets_audit
 # alteram os contratos do cliente Flet.
 app = install_web_client_routes(
     install_landing_routes(
-        install_download_routes(install_sheets_audit(production_app()))
+        install_download_routes(
+            install_observability(install_sheets_audit(production_app()))
+        )
     )
 )
