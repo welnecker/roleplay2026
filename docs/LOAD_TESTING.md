@@ -31,4 +31,4 @@ aparecem no painel e em linhas `[TRAFFIC_AUDIT]` dos logs do Render, permitindo 
 uma falha do Locust com o processamento interno do backend.
 
 Sondagens técnicas (`/api/v1/health`), o próprio painel e pedidos automáticos de
-`/favicon.ico` não entram nas estatísticas da carga.
+`/favicon.ico` ou `HEAD` não entram nas estatísticas da carga.

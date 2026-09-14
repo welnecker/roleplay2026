@@ -167,7 +167,7 @@ def install(app: Any) -> Any:
 
     @app.middleware("http")
     async def observability_middleware(request: Request, call_next: Any) -> Any:
-        if request.url.path in _IGNORED_PATHS:
+        if request.method == "HEAD" or request.url.path in _IGNORED_PATHS:
             return await call_next(request)
         started = monotonic()
         test_id = _clean_header(request.headers.get("X-Load-Test-ID"), "ordinary")

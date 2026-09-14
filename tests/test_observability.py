@@ -77,6 +77,7 @@ def test_technical_probes_do_not_pollute_load_metrics(monkeypatch) -> None:
     client = TestClient(install(app))
     assert client.get("/api/v1/health").status_code == 200
     assert client.get("/favicon.ico").status_code == 404
+    assert client.head("/").status_code in {404, 405}
     payload = client.get(
         "/api/v1/admin/observability/metrics",
         headers={"X-Observability-Token": "token"},
