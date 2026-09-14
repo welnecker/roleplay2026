@@ -127,7 +127,7 @@ class ServerPaymentGateway:
 def build_payment_gateway(
     secrets: dict[str, object],
     *,
-    accounts: GoogleSheetsAccountRepository,
+    accounts: Any,
     stories_root: Path,
 ) -> ServerPaymentGateway:
     backend = operational_backend(secrets)
@@ -140,7 +140,7 @@ def build_payment_gateway(
     if not access_token:
         raise ValueError("Access Token do Mercado Pago não encontrado.")
     if backend == POSTGRES_BACKEND:
-        database = shared_postgres_database(database_url(secrets))
+        database = shared_postgres_database(secrets)
         database.ensure_schema()
         payments = PostgresPaymentRepository(database)
         credits = PostgresStoryCreditRepository(database)
