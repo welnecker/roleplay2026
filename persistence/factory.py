@@ -4,7 +4,7 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import Any
 
-from persistence.backend_config import POSTGRES_BACKEND, database_url, operational_backend
+from persistence.backend_config import POSTGRES_BACKEND, operational_backend
 from persistence.editorial_runtime_v2 import EditorialGoogleSheetsV2RuntimeRepository
 from persistence.postgres_database import shared_postgres_database
 from persistence.postgres_runtime import PostgresV2RuntimeRepository
@@ -29,7 +29,7 @@ def build_google_sheets_repository(secrets: Any) -> Any | None:
     """Seleciona o runtime operacional, preservando Sheets como rollback seguro."""
 
     if operational_backend(secrets) == POSTGRES_BACKEND:
-        database = shared_postgres_database(database_url(secrets))
+        database = shared_postgres_database(secrets)
         database.ensure_schema()
         return PostgresV2RuntimeRepository(database)
 
