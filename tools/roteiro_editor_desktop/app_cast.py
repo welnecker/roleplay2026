@@ -81,7 +81,9 @@ class ScriptEditor(GalleryScriptEditor):
             ttk.Button(
                 validate_button.master,
                 text="+ SMACK!",
-                command=lambda: self.insert_tag("[ONOMATOPEIA smack x=69 y=48 delay=350]"),
+                command=lambda: self.insert_tag(
+                    "[ONOMATOPEIA smack x=69 y=48 delay=350 duracao=3000]"
+                ),
             ).pack(side="right", padx=4, before=validate_button)
             ttk.Button(
                 validate_button.master,

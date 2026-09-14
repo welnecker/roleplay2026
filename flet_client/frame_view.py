@@ -670,13 +670,17 @@ class NovelFrameView:
                 return
             control.scale = ft.Scale(scale=1.0)
             self.page.update()
-            remaining = max(300, effect.duration - 180)
-            await asyncio.sleep(0.12)
+            # A duração representa todo o tempo visível. Após a entrada curta,
+            # mantém a palavra legível e usa a metade final para dissipá-la.
+            entry_ms = 300
+            fade_ms = max(600, int(effect.duration * 0.5))
+            hold_ms = max(0, effect.duration - entry_ms - fade_ms)
+            await asyncio.sleep((120 + hold_ms) / 1000.0)
             if generation != self._animation_generation:
                 return
-            control.animate_opacity = remaining
-            control.animate_scale = remaining
-            control.animate_offset = remaining
+            control.animate_opacity = fade_ms
+            control.animate_scale = fade_ms
+            control.animate_offset = fade_ms
             control.opacity = 0
             control.scale = ft.Scale(scale=0.65)
             # Offset do Flet é proporcional ao tamanho do próprio controle.

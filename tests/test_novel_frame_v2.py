@@ -183,7 +183,7 @@ def test_compilador_anexa_smack_a_proxima_fala_sem_criar_entry() -> None:
             "x": 69.0,
             "y": 48.0,
             "delay": 350,
-            "duration": 1200,
+            "duration": 3000,
             "dx": 32,
             "dy": -10,
         }

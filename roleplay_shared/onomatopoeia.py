@@ -21,7 +21,7 @@ class OnomatopoeiaEffect:
     x: float = 69.0
     y: float = 48.0
     delay: int = 350
-    duration: int = 1200
+    duration: int = 3000
     dx: int = 32
     dy: int = -10
 
@@ -71,7 +71,7 @@ def parse_onomatopoeia_header(header: str) -> OnomatopoeiaEffect:
             x=float(values.get("x", 69)),
             y=float(values.get("y", 48)),
             delay=int(values.get("delay", 350)),
-            duration=int(values.get("duracao", 1200)),
+            duration=int(values.get("duracao", 3000)),
             dx=int(values.get("dx", 32)),
             dy=int(values.get("dy", -10)),
         )
@@ -96,7 +96,7 @@ def effect_from_mapping(value: Mapping[str, object]) -> OnomatopoeiaEffect:
         x=float(value.get("x", 69) or 69),
         y=float(value.get("y", 48) or 48),
         delay=int(value.get("delay", 350) or 0),
-        duration=int(value.get("duration", 1200) or 1200),
+        duration=int(value.get("duration", 3000) or 3000),
         dx=int(value.get("dx", 32) or 0),
         dy=int(value.get("dy", -10) or 0),
     )

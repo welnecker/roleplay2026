@@ -33,9 +33,10 @@ FLUXO: ELENCO + IMAGEM PRIMEIRO
    as modalidades exata e interpretada também podem ser combinadas com BALÃO.
 15. Use + SMACK! para inserir a onomatopeia do beijo. Ela deve ficar
     imediatamente antes da FALA ou PENSAMENTO que aparece sobre a imagem-alvo:
-    [ONOMATOPEIA smack x=69 y=48 delay=350]
+    [ONOMATOPEIA smack x=69 y=48 delay=350 duracao=3000]
     x e y definem a posicao percentual dentro da imagem; delay define quantos
-    milissegundos ela espera para aparecer. A onomatopeia nao cria balao,
+    milissegundos ela espera para aparecer; duracao define por quanto tempo ela
+    permanece ate desaparecer por completo. A onomatopeia nao cria balao,
     imagem, clique ou etapa adicional na contagem do quadro.
 16. Use + FIM DA HISTORIA para inserir [FIM_HISTORIA] como a ultima linha.
     Sem texto, a tag encerra o ultimo quadro. Com texto, cria uma despedida final

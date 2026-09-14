@@ -100,7 +100,7 @@ def test_smack_e_exportado_antes_da_fala_sem_consumir_ator_ou_imagem() -> None:
 
     assert rows[2]["line_id"] == "mascara_001_onomatopeia_01"
     assert rows[2]["instruction"] == (
-        "[ONOMATOPEIA smack x=69 y=48 delay=350 duracao=1200 dx=32 dy=-10]"
+        "[ONOMATOPEIA smack x=69 y=48 delay=350 duracao=3000 dx=32 dy=-10]"
     )
     assert rows[2]["image_id"] == ""
     assert rows[3]["line_id"] == "mascara_001_mary_fala_01"
