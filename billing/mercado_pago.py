@@ -199,15 +199,26 @@ def validate_webhook_signature(
     received = parts.get("v1", "")
     if not timestamp or not received or not secret:
         return False
-    manifest_parts: list[str] = []
-    if data_id:
-        manifest_parts.append(f"id:{data_id};")
-    if x_request_id:
-        manifest_parts.append(f"request-id:{x_request_id};")
-    manifest_parts.append(f"ts:{timestamp};")
-    calculated = hmac.new(
-        secret.encode("utf-8"),
-        "".join(manifest_parts).encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
-    return hmac.compare_digest(calculated, received)
+    # O Mercado Pago normaliza identificadores alfanuméricos para minúsculas
+    # nas entregas reais. O simulador atualmente pode assinar o valor original.
+    # Aceitar ambos mantém compatibilidade sem enfraquecer a validação HMAC.
+    candidate_ids = [data_id]
+    normalized_data_id = data_id.lower()
+    if normalized_data_id != data_id:
+        candidate_ids.append(normalized_data_id)
+
+    for candidate_id in candidate_ids:
+        manifest_parts: list[str] = []
+        if candidate_id:
+            manifest_parts.append(f"id:{candidate_id};")
+        if x_request_id:
+            manifest_parts.append(f"request-id:{x_request_id};")
+        manifest_parts.append(f"ts:{timestamp};")
+        calculated = hmac.new(
+            secret.encode("utf-8"),
+            "".join(manifest_parts).encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        if hmac.compare_digest(calculated, received):
+            return True
+    return False
