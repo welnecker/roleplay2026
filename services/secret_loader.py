@@ -23,6 +23,8 @@ def load_application_secrets() -> dict[str, Any]:
 
     aliases = (
         "GOOGLE_SHEETS_SPREADSHEET_ID",
+        "PERSISTENCE_BACKEND",
+        "DATABASE_URL",
         "ROLEPLAY_ACCOUNTS_BILLING_SPREADSHEET_ID",
         "ROLEPLAY_RUNTIME_SPREADSHEET_ID",
         "ROLEPLAY_EDITORIAL_SPREADSHEET_ID",
