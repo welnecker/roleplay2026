@@ -116,3 +116,37 @@ def test_validate_webhook_signature() -> None:
         data_id=data_id,
         secret=secret,
     ) is False
+
+
+def test_validate_webhook_signature_normalizes_alphanumeric_order_id() -> None:
+    secret = "segredo"
+    data_id = "ORD01M2GJPXKD9A8FPXCAS1Y2WN47"
+    request_id = "request-real"
+    timestamp = "1704908010"
+    manifest = (
+        f"id:{data_id.lower()};request-id:{request_id};ts:{timestamp};"
+    )
+    digest = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+
+    assert validate_webhook_signature(
+        x_signature=f"ts={timestamp},v1={digest}",
+        x_request_id=request_id,
+        data_id=data_id,
+        secret=secret,
+    ) is True
+
+
+def test_validate_webhook_signature_keeps_simulator_compatibility() -> None:
+    secret = "segredo"
+    data_id = "ORD_SIMULATOR"
+    request_id = "request-simulator"
+    timestamp = "1704908010"
+    manifest = f"id:{data_id};request-id:{request_id};ts:{timestamp};"
+    digest = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+
+    assert validate_webhook_signature(
+        x_signature=f"ts={timestamp},v1={digest}",
+        x_request_id=request_id,
+        data_id=data_id,
+        secret=secret,
+    ) is True
