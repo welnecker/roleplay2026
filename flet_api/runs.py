@@ -25,7 +25,6 @@ from services.editorial_scene_images import (
     resolve_numbered_beat_image,
 )
 from services.immersive_onboarding import (
-    build_immersive_context,
     identity_is_complete,
     persistent_profile_payload,
     recover_persistent_profile,
@@ -33,13 +32,12 @@ from services.immersive_onboarding import (
 from services.novel_frame_output_contract import (
     FrameOutputContractError,
     authored_frame_content,
-    enforce_frame_output_contract,
-    frame_generation_instruction,
     frame_requires_generation,
+    interpreted_lines_prompt,
+    merge_interpreted_lines,
 )
 from services.novel_frame_reveal import frame_entry_count, frame_id
 from services.novel_frame_runtime_support import (
-    build_runtime_prompt,
     first_frame_movement,
     is_frame_script,
 )
@@ -356,35 +354,46 @@ class FletRunService:
         else:
             if not self.api_key:
                 raise RuntimeError("OpenRouter não está configurado no servidor.")
-            immersive_context = build_immersive_context(profile)
-            prompt = build_runtime_prompt(
+            recent_context = "\n\n".join(
+                str(item.get("content", ""))
+                for item in messages[-2:]
+                if str(item.get("role", "")) == "assistant"
+            )
+            prompt = interpreted_lines_prompt(
+                movement,
                 character_name=character_name,
                 user_name=user_name,
-                movement=movement,
                 actor_names=actor_names,
-            ) + immersive_context
-            history = [
-                {"role": "assistant", "content": str(item.get("content", ""))}
-                for item in messages[-8:]
-                if str(item.get("role", "")) == "assistant"
-            ]
+                recent_context=recent_context,
+            )
             last_contract_error: FrameOutputContractError | None = None
             for attempt in range(2):
+                retry_instruction = (
+                    "Gere as falas solicitadas no formato indicado."
+                    if attempt == 0
+                    else "Corrija o formato: devolva exatamente um bloco por line_id, na ordem pedida."
+                )
                 generated = generate_response(
                     api_key=self.api_key,
                     model=self.model,
                     system_prompt=prompt,
-                    history=history,
-                    user_text=frame_generation_instruction(attempt),
-                    debug_logging=not bool(immersive_context),
+                    history=[],
+                    user_text=retry_instruction,
+                    debug_logging=True,
                 ).strip()
                 try:
-                    content = enforce_frame_output_contract(movement, generated)
+                    content = merge_interpreted_lines(
+                        movement,
+                        generated,
+                        character_name=character_name,
+                        user_name=user_name,
+                        actor_names=actor_names,
+                    )
                     break
                 except FrameOutputContractError as exc:
                     last_contract_error = exc
                     log_editorial_exception(
-                        "flet_frame_contract",
+                        "flet_interpreted_line_contract",
                         exc,
                         user_id=user.user_id,
                         package_id=package.manifest.package_id,
