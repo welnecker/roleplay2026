@@ -52,6 +52,71 @@ def _restore_exact_speech(
     return restored
 
 
+
+def frame_requires_generation(movement: Any) -> bool:
+    """Retorna True somente quando o quadro contém fala interpretada."""
+
+    frame = novel_frame_patch._frame_from_movement(movement)
+    if not isinstance(frame, dict):
+        return True
+    return any(
+        _plain(entry.get("kind", "")) == "fala"
+        and _plain(entry.get("delivery", "")) == "interpretada"
+        for entry in frame.get("entries", []) or []
+        if isinstance(entry, dict)
+    )
+
+
+def authored_frame_content(
+    movement: Any,
+    *,
+    character_name: str,
+    user_name: str,
+    actor_names: dict[str, str] | None = None,
+) -> str:
+    """Serializa um quadro fechado sem chamar o modelo de linguagem."""
+
+    frame = novel_frame_patch._frame_from_movement(movement)
+    if not isinstance(frame, dict):
+        raise FrameOutputContractError("O movimento não contém um quadro V2 autoral.")
+    if frame_requires_generation(movement):
+        raise FrameOutputContractError("O quadro contém fala interpretada e exige geração.")
+
+    protagonist = str(user_name or "Você").strip() or "Você"
+
+    def personalized(value: object) -> str:
+        return str(value or "").replace("{{nome}}", protagonist).strip()
+
+    output = [f"[QUADRO {str(frame.get('frame_id', '') or '').strip()}]"]
+    description = personalized(frame.get("description", ""))
+    if description:
+        output.extend(("[DESCRIÇÃO]", description))
+
+    for entry in frame.get("entries", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        kind = _plain(entry.get("kind", ""))
+        if kind not in {"fala", "pensamento"}:
+            continue
+        actor = str(entry.get("actor", "") or "").strip()
+        visible_name = novel_frame_patch._actor_visible_name(
+            actor,
+            character_name=character_name,
+            user_name=protagonist,
+            actor_names=actor_names,
+        )
+        for raw_effect in entry.get("effects_before", []) or []:
+            if isinstance(raw_effect, dict):
+                effect = effect_from_mapping(raw_effect)
+                output.append(f"[{effect.canonical_header()}]")
+        label = "PENSAMENTO" if kind == "pensamento" else "FALA"
+        actor_spec = actor + (f"|{visible_name}" if visible_name else "")
+        output.extend((f"[{label} {actor_spec}]", personalized(entry.get("instruction", ""))))
+
+    output.append("[/QUADRO]")
+    return "\n".join(output)
+
+
 def enforce_frame_output_contract(movement: Any, content: str) -> str:
     """Garante correspondência 1:1 entre entries autorais e resposta persistida."""
 
@@ -127,6 +192,8 @@ def enforce_frame_output_contract(movement: Any, content: str) -> str:
 
 __all__ = [
     "FrameOutputContractError",
+    "authored_frame_content",
     "enforce_frame_output_contract",
     "frame_generation_instruction",
+    "frame_requires_generation",
 ]
