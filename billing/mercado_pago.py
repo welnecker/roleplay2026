@@ -13,7 +13,16 @@ API_BASE_URL = "https://api.mercadopago.com"
 
 
 class MercadoPagoError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        response_data: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.response_data = response_data or {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +134,11 @@ class MercadoPagoClient:
             data = {"message": response.text}
         if response.status_code >= 400:
             message = data.get("message") or data.get("error") or response.text
-            raise MercadoPagoError(f"Mercado Pago retornou HTTP {response.status_code}: {message}")
+            raise MercadoPagoError(
+                f"Mercado Pago retornou HTTP {response.status_code}: {message}",
+                status_code=response.status_code,
+                response_data=data,
+            )
         if not isinstance(data, dict):
             raise MercadoPagoError("Resposta inválida do Mercado Pago.")
         return data
