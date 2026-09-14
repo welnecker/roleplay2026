@@ -7,7 +7,9 @@ import pytest
 
 from services.novel_frame_output_contract import (
     FrameOutputContractError,
+    authored_frame_content,
     enforce_frame_output_contract,
+    frame_requires_generation,
 )
 
 
@@ -179,3 +181,65 @@ Ai!!! Que susto, prof... rsrs
 
     assert "[ONOMATOPEIA smack x=69 y=48 delay=350 duracao=1200 dx=32 dy=-10]" in result
     assert result.index("[ONOMATOPEIA") < result.index("[FALA mary|Mary]")
+
+
+
+def test_authored_frame_does_not_require_generation_and_preserves_text() -> None:
+    frame = {
+        "frame_id": "degustacao_001",
+        "description": "Camilly encontra {{nome}} e sorri com malícia.",
+        "entries": [
+            {
+                "kind": "fala",
+                "actor": "camilly",
+                "instruction": "Oi, {{nome}}... finalmente você chegou.",
+                "delivery": "adaptavel",
+            },
+            {
+                "kind": "pensamento",
+                "actor": "camilly",
+                "instruction": "Quero descobrir até onde ele pretende ir...",
+            },
+        ],
+    }
+    movement = SimpleNamespace(
+        instruction="NOVEL_FRAME_V2\n" + json.dumps(frame, ensure_ascii=False)
+    )
+
+    assert frame_requires_generation(movement) is False
+    result = authored_frame_content(
+        movement,
+        character_name="Camilly",
+        user_name="Janio",
+    )
+
+    assert "[QUADRO degustacao_001]" in result
+    assert "Camilly encontra Janio e sorri com malícia." in result
+    assert "Oi, Janio... finalmente você chegou." in result
+    assert "[PENSAMENTO camilly|Camilly]" in result
+
+
+def test_only_interpreted_speech_requires_generation() -> None:
+    frame = {
+        "frame_id": "degustacao_002",
+        "description": "Camilly sustenta o olhar.",
+        "entries": [
+            {
+                "kind": "fala",
+                "actor": "camilly",
+                "instruction": "Provoque {{nome}} com malícia.",
+                "delivery": "interpretada",
+            }
+        ],
+    }
+    movement = SimpleNamespace(
+        instruction="NOVEL_FRAME_V2\n" + json.dumps(frame, ensure_ascii=False)
+    )
+
+    assert frame_requires_generation(movement) is True
+    with pytest.raises(FrameOutputContractError, match="exige geração"):
+        authored_frame_content(
+            movement,
+            character_name="Camilly",
+            user_name="Janio",
+        )
