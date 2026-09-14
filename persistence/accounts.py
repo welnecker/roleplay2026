@@ -19,6 +19,7 @@ from persistence.google_sheets_retry import (
     with_transient_retry,
 )
 from persistence.models import new_id, utc_now_iso
+from persistence.backend_config import POSTGRES_BACKEND, operational_backend
 
 USERS_SHEET = "USERS"
 CREDENTIALS_SHEET = "USER_CREDENTIALS"
@@ -65,8 +66,16 @@ class AccountUser:
     status: str
 
 
-def build_account_repository(secrets: Any) -> "GoogleSheetsAccountRepository":
-    """Abre autenticação diretamente na base autoritativa de contas e cobrança."""
+def build_account_repository(secrets: Any) -> Any:
+    """Seleciona contas PostgreSQL ou Sheets sem alterar o contrato da API."""
+
+    if operational_backend(secrets) == POSTGRES_BACKEND:
+        from persistence.postgres_accounts import PostgresAccountRepository
+        from persistence.postgres_database import shared_postgres_database
+
+        repository = PostgresAccountRepository(shared_postgres_database(secrets))
+        repository.ensure_schema()
+        return repository
 
     credentials = secrets.get("gcp_service_account")
     if not credentials:
