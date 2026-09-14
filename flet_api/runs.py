@@ -32,8 +32,10 @@ from services.immersive_onboarding import (
 )
 from services.novel_frame_output_contract import (
     FrameOutputContractError,
+    authored_frame_content,
     enforce_frame_output_contract,
     frame_generation_instruction,
+    frame_requires_generation,
 )
 from services.novel_frame_reveal import frame_entry_count, frame_id
 from services.novel_frame_runtime_support import (
@@ -330,8 +332,6 @@ class FletRunService:
         return package, script, user, context, state, messages, profile
 
     def _generate(self, *, package, script, user, context, state, messages, profile, target_id):
-        if not self.api_key:
-            raise RuntimeError("OpenRouter não está configurado no servidor.")
         movement = (
             first_frame_movement(script)[1]
             if not target_id
@@ -342,46 +342,60 @@ class FletRunService:
         character_name, character_id = self._character(package, profile)
         user_name = str(profile.get("preferred_name") or user.display_name or "").strip()
         cast_names = profile.get("cast_names")
-        prompt = build_runtime_prompt(
-            character_name=character_name,
-            user_name=user_name,
-            movement=movement,
-            actor_names=(dict(cast_names) if isinstance(cast_names, dict) else None),
-        ) + build_immersive_context(profile)
-        history = [
-            {"role": "assistant", "content": str(item.get("content", ""))}
-            for item in messages[-8:]
-            if str(item.get("role", "")) == "assistant"
-        ]
-        last_contract_error: FrameOutputContractError | None = None
+        actor_names = dict(cast_names) if isinstance(cast_names, dict) else None
+        uses_model = frame_requires_generation(movement)
         content = ""
-        for attempt in range(2):
-            generated = generate_response(
-                api_key=self.api_key,
-                model=self.model,
-                system_prompt=prompt,
-                history=history,
-                user_text=frame_generation_instruction(attempt),
-                debug_logging=not bool(build_immersive_context(profile)),
-            ).strip()
-            try:
-                content = enforce_frame_output_contract(movement, generated)
-                break
-            except FrameOutputContractError as exc:
-                last_contract_error = exc
-                log_editorial_exception(
-                    "flet_frame_contract",
-                    exc,
-                    user_id=user.user_id,
-                    package_id=package.manifest.package_id,
-                    frame_id=target_id,
-                    attempt=attempt + 1,
-                )
-        if not content:
-            raise RuntimeError(
-                "O modelo não respeitou a estrutura obrigatória do quadro: "
-                f"{last_contract_error}"
+
+        if not uses_model:
+            content = authored_frame_content(
+                movement,
+                character_name=character_name,
+                user_name=user_name,
+                actor_names=actor_names,
             )
+        else:
+            if not self.api_key:
+                raise RuntimeError("OpenRouter não está configurado no servidor.")
+            immersive_context = build_immersive_context(profile)
+            prompt = build_runtime_prompt(
+                character_name=character_name,
+                user_name=user_name,
+                movement=movement,
+                actor_names=actor_names,
+            ) + immersive_context
+            history = [
+                {"role": "assistant", "content": str(item.get("content", ""))}
+                for item in messages[-8:]
+                if str(item.get("role", "")) == "assistant"
+            ]
+            last_contract_error: FrameOutputContractError | None = None
+            for attempt in range(2):
+                generated = generate_response(
+                    api_key=self.api_key,
+                    model=self.model,
+                    system_prompt=prompt,
+                    history=history,
+                    user_text=frame_generation_instruction(attempt),
+                    debug_logging=not bool(immersive_context),
+                ).strip()
+                try:
+                    content = enforce_frame_output_contract(movement, generated)
+                    break
+                except FrameOutputContractError as exc:
+                    last_contract_error = exc
+                    log_editorial_exception(
+                        "flet_frame_contract",
+                        exc,
+                        user_id=user.user_id,
+                        package_id=package.manifest.package_id,
+                        frame_id=target_id,
+                        attempt=attempt + 1,
+                    )
+            if not content:
+                raise RuntimeError(
+                    "O modelo não respeitou a estrutura obrigatória do quadro: "
+                    f"{last_contract_error}"
+                )
         updated_state = state.copy()
         updated_state.step_index += 1
         updated_state.consumed_orders.append(updated_state.step_index)
@@ -396,6 +410,7 @@ class FletRunService:
             "novel_movement": True,
             "novel_frame": True,
             "novel_terminal_frame": bool(movement.is_ending),
+            "generation_mode": "model" if uses_model else "authored",
             "input_source": "flet_api",
         }
         memory = persistent_profile_payload(profile)
