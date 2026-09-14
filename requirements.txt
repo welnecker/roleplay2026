@@ -12,3 +12,4 @@ flet==0.86.5
 flet-web==0.86.5
 flet-secure-storage==0.86.5
 psycopg[binary,pool]>=3.2,<4
+openpyxl>=3.1,<4
