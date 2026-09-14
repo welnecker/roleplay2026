@@ -10,7 +10,11 @@ from billing.master_test import MasterTestPaymentService
 from billing.mercado_pago import MercadoPagoClient
 from billing.service import PixCheckoutService, read_secret
 from packages.loader import discover_packages
-from persistence.accounts import AccountUser\nfrom persistence.backend_config import POSTGRES_BACKEND, operational_backend\nfrom persistence.postgres_database import shared_postgres_database\nfrom persistence.postgres_narrative import PostgresStoryCreditRepository\nfrom persistence.postgres_payments import PostgresPaymentRepository
+from persistence.accounts import AccountUser
+from persistence.backend_config import POSTGRES_BACKEND, operational_backend
+from persistence.postgres_database import shared_postgres_database
+from persistence.postgres_narrative import PostgresStoryCreditRepository
+from persistence.postgres_payments import PostgresPaymentRepository
 from persistence.payments import GoogleSheetsPaymentRepository
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from persistence.v2_google_sheets import GoogleSheetsStoryCreditRepository
