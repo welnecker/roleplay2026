@@ -8,6 +8,7 @@ on:
       - agent/narrative-engine-v2
       - agent/synced-image-carousel
       - agent/flet-visual-client
+      - agent/postgres-operational-runtime
   pull_request:
     branches:
       - main

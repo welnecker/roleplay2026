@@ -4,12 +4,13 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import Any
 
+from persistence.backend_config import POSTGRES_BACKEND, operational_backend
 from persistence.editorial_runtime_v2 import EditorialGoogleSheetsV2RuntimeRepository
+from persistence.postgres_database import shared_postgres_database
+from persistence.postgres_runtime import PostgresV2RuntimeRepository
 from persistence.spreadsheet_config import read_spreadsheet_ids
 
 
-# A autenticação do Google pode ultrapassar oito segundos durante o cold start
-# do Streamlit Cloud. O limite continua finito para não travar a interface.
 GOOGLE_SHEETS_CONNECT_TIMEOUT_SECONDS = 20.0
 
 
@@ -24,15 +25,13 @@ def _connect_runtime_repository(
     )
 
 
-def build_google_sheets_repository(
-    secrets: Any,
-) -> EditorialGoogleSheetsV2RuntimeRepository | None:
-    """Cria a conexão exclusiva com ROLEPLAY_RUNTIME sem bloquear a interface.
+def build_google_sheets_repository(secrets: Any) -> Any | None:
+    """Seleciona o runtime operacional, preservando Sheets como rollback seguro."""
 
-    As abas são preparadas pelo processo explícito de instalação/migração. O
-    caminho normal do usuário não valida schemas nem consulta a planilha antiga.
-    Uma indisponibilidade do Google não pode impedir o Streamlit de renderizar.
-    """
+    if operational_backend(secrets) == POSTGRES_BACKEND:
+        database = shared_postgres_database(secrets)
+        database.ensure_schema()
+        return PostgresV2RuntimeRepository(database)
 
     credentials = secrets.get("gcp_service_account")
     if not credentials:

@@ -13,7 +13,16 @@ API_BASE_URL = "https://api.mercadopago.com"
 
 
 class MercadoPagoError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        response_data: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.response_data = response_data or {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +134,11 @@ class MercadoPagoClient:
             data = {"message": response.text}
         if response.status_code >= 400:
             message = data.get("message") or data.get("error") or response.text
-            raise MercadoPagoError(f"Mercado Pago retornou HTTP {response.status_code}: {message}")
+            raise MercadoPagoError(
+                f"Mercado Pago retornou HTTP {response.status_code}: {message}",
+                status_code=response.status_code,
+                response_data=data,
+            )
         if not isinstance(data, dict):
             raise MercadoPagoError("Resposta inválida do Mercado Pago.")
         return data
@@ -186,15 +199,26 @@ def validate_webhook_signature(
     received = parts.get("v1", "")
     if not timestamp or not received or not secret:
         return False
-    manifest_parts: list[str] = []
-    if data_id:
-        manifest_parts.append(f"id:{data_id};")
-    if x_request_id:
-        manifest_parts.append(f"request-id:{x_request_id};")
-    manifest_parts.append(f"ts:{timestamp};")
-    calculated = hmac.new(
-        secret.encode("utf-8"),
-        "".join(manifest_parts).encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
-    return hmac.compare_digest(calculated, received)
+    # O Mercado Pago normaliza identificadores alfanuméricos para minúsculas
+    # nas entregas reais. O simulador atualmente pode assinar o valor original.
+    # Aceitar ambos mantém compatibilidade sem enfraquecer a validação HMAC.
+    candidate_ids = [data_id]
+    normalized_data_id = data_id.lower()
+    if normalized_data_id != data_id:
+        candidate_ids.append(normalized_data_id)
+
+    for candidate_id in candidate_ids:
+        manifest_parts: list[str] = []
+        if candidate_id:
+            manifest_parts.append(f"id:{candidate_id};")
+        if x_request_id:
+            manifest_parts.append(f"request-id:{x_request_id};")
+        manifest_parts.append(f"ts:{timestamp};")
+        calculated = hmac.new(
+            secret.encode("utf-8"),
+            "".join(manifest_parts).encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        if hmac.compare_digest(calculated, received):
+            return True
+    return False

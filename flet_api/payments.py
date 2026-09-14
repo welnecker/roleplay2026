@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import gspread
 
@@ -10,7 +10,11 @@ from billing.master_test import MasterTestPaymentService
 from billing.mercado_pago import MercadoPagoClient
 from billing.service import PixCheckoutService, read_secret
 from packages.loader import discover_packages
-from persistence.accounts import AccountUser, GoogleSheetsAccountRepository
+from persistence.accounts import AccountUser
+from persistence.backend_config import POSTGRES_BACKEND, operational_backend
+from persistence.postgres_database import shared_postgres_database
+from persistence.postgres_narrative import PostgresStoryCreditRepository
+from persistence.postgres_payments import PostgresPaymentRepository
 from persistence.payments import GoogleSheetsPaymentRepository
 from persistence.spreadsheet_config import read_spreadsheet_ids
 from persistence.v2_google_sheets import GoogleSheetsStoryCreditRepository
@@ -41,9 +45,9 @@ class ServerPaymentGateway:
     def __init__(
         self,
         *,
-        accounts: GoogleSheetsAccountRepository,
-        payments: GoogleSheetsPaymentRepository,
-        credits: GoogleSheetsStoryCreditRepository,
+        accounts: Any,
+        payments: Any,
+        credits: Any,
         checkout: PixCheckoutService,
         master_test: MasterTestPaymentService,
         stories_root: Path,
@@ -127,12 +131,10 @@ class ServerPaymentGateway:
 def build_payment_gateway(
     secrets: dict[str, object],
     *,
-    accounts: GoogleSheetsAccountRepository,
+    accounts: Any,
     stories_root: Path,
 ) -> ServerPaymentGateway:
-    credentials = secrets.get("gcp_service_account")
-    if not credentials:
-        raise ValueError("Google Sheets não está configurado para pagamentos.")
+    backend = operational_backend(secrets)
     access_token = read_secret(
         secrets,
         "MERCADO_PAGO_ACCESS_TOKEN",
@@ -141,13 +143,22 @@ def build_payment_gateway(
     )
     if not access_token:
         raise ValueError("Access Token do Mercado Pago não encontrado.")
-    spreadsheet_id = read_spreadsheet_ids(secrets).accounts_billing
-    spreadsheet = gspread.service_account_from_dict(dict(credentials)).open_by_key(
-        spreadsheet_id
-    )
-    payments = GoogleSheetsPaymentRepository(spreadsheet)
-    payments.ensure_schema()
-    credits = GoogleSheetsStoryCreditRepository(spreadsheet)
+    if backend == POSTGRES_BACKEND:
+        database = shared_postgres_database(secrets)
+        database.ensure_schema()
+        payments = PostgresPaymentRepository(database)
+        credits = PostgresStoryCreditRepository(database)
+    else:
+        credentials = secrets.get("gcp_service_account")
+        if not credentials:
+            raise ValueError("Google Sheets não está configurado para pagamentos.")
+        spreadsheet_id = read_spreadsheet_ids(secrets).accounts_billing
+        spreadsheet = gspread.service_account_from_dict(dict(credentials)).open_by_key(
+            spreadsheet_id
+        )
+        payments = GoogleSheetsPaymentRepository(spreadsheet)
+        payments.ensure_schema()
+        credits = GoogleSheetsStoryCreditRepository(spreadsheet)
     checkout = PixCheckoutService(
         client=MercadoPagoClient(access_token),
         payments=payments,
