@@ -456,6 +456,36 @@ class FletRunService:
             query += "&v=" + quote(version)
         return "/api/v1/runs/image?" + query
 
+    @classmethod
+    def _narrative_image_url(
+        cls,
+        package_id: str,
+        package_root: Path,
+        image_id: str,
+    ) -> str:
+        """Resolve mídia autoral localmente ou diretamente no R2.
+
+        O R2 é a fonte normal de produção. A existência de uma cópia no pacote
+        não pode ser pré-condição para publicar o image_id vindo de ROTEIROS.
+        """
+
+        clean_image_id = str(image_id or "").strip()
+        if not clean_image_id:
+            return ""
+        resolved = resolve_narrative_image_id(package_root, clean_image_id)
+        if resolved is not None:
+            return cls._image_url(
+                package_id,
+                image_id=clean_image_id,
+                version=_image_content_version(resolved),
+                filename=resolved,
+            )
+        return public_story_media_url(
+            package_id,
+            "scenes",
+            clean_image_id,
+        )
+
     @staticmethod
     def _intro_motion_url(package_id: str, *, node_id: str, first_node_id: str) -> str:
         if node_id != first_node_id:
@@ -495,33 +525,21 @@ class FletRunService:
                 frame,
                 inherited_image_id=inherited,
             )
-            base_image = (
-                resolve_narrative_image_id(package.root, base_image_id)
-                if base_image_id
-                else None
+            base_image_url = self._narrative_image_url(
+                package.manifest.package_id,
+                package.root,
+                base_image_id,
             )
-            if base_image is not None:
-                image_url = self._image_url(
-                    package.manifest.package_id,
-                    image_id=base_image_id,
-                    version=_image_content_version(base_image),
-                    filename=base_image,
-                )
+            if base_image_url:
+                image_url = base_image_url
 
             def entry_image_url(image_id: str) -> str:
-                resolved = (
-                    resolve_narrative_image_id(package.root, image_id)
-                    if image_id
-                    else None
-                )
-                if resolved is None:
-                    return image_url
-                return self._image_url(
+                resolved_url = self._narrative_image_url(
                     package.manifest.package_id,
-                    image_id=image_id,
-                    version=_image_content_version(resolved),
-                    filename=resolved,
+                    package.root,
+                    image_id,
                 )
+                return resolved_url or image_url
 
             entry_image_urls = tuple(entry_image_url(image_id) for image_id in image_ids)
         motion_url = self._intro_motion_url(
