@@ -1,10 +1,14 @@
-format_version: 1
+format_version: 2
 package_id: roleplay2026.degustacao
 version: 1.0.0
 author:
   id: roleplay2026
   name: Roleplay 2026
 entrypoint: story.yaml
+runtime:
+  kind: editorial
+  editorial:
+    source: content/editorial.yaml
 card:
   title: Primeiro Encontro
   subtitle: Uma história curta para conhecer a plataforma.
@@ -14,7 +18,13 @@ card:
     - Romance
   chapter_label: 1 capítulo
   cover: ""
+  character_profile:
+    name: Camilly
+    identity: Uma mulher adulta, confiante e curiosa para conhecer o protagonista.
+    personality: Espontânea, direta e provocante, sem decidir pelo usuário.
+    intention: Apresentar a experiência do EntreCenas em uma história curta.
 commerce:
   access: free
   price_cents: 0
   currency: BRL
+  replay_policy: reuse_access
