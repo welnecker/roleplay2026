@@ -226,3 +226,57 @@ def test_sem_credito_ainda_consulta_run_ativa_para_retomada(monkeypatch, tmp_pat
     assert run is active
     assert repositories.runs.active_lookups == 1
     assert repositories.runs.create_calls == 0
+
+
+def test_free_package_starts_without_credit_or_consumption(monkeypatch, tmp_path: Path) -> None:
+    story_root = _story_root(tmp_path)
+    manifest_path = story_root / "story" / "manifest.yaml"
+    manifest_path.write_text(
+        manifest_path.read_text(encoding="utf-8").replace(
+            "access: paid",
+            "access: free",
+        ),
+        encoding="utf-8",
+    )
+    repositories = FakeRepositories(FakeCredits(None), FakeRuns())
+    monkeypatch.setattr(
+        v2_run_starter,
+        "build_v2_narrative_repositories",
+        lambda secrets: repositories,
+    )
+    _mock_editorial_start(monkeypatch)
+
+    run = v2_run_starter.start_v2_run_on_first_message(
+        secrets={},
+        user_id="user_1",
+        package_id="roleplay2026.test",
+        installed_stories_root=story_root,
+    )
+
+    assert run is not None
+    assert run.credit_id == "free:roleplay2026.test:user_1"
+    assert repositories.credits.consumed is None
+    assert repositories.runs.create_calls == 1
+    assert repositories.runs.active_lookups == 0
+
+
+def test_paid_package_without_credit_remains_blocked(monkeypatch, tmp_path: Path) -> None:
+    repositories = FakeRepositories(FakeCredits(None), FakeRuns())
+    monkeypatch.setattr(
+        v2_run_starter,
+        "build_v2_narrative_repositories",
+        lambda secrets: repositories,
+    )
+    _mock_editorial_start(monkeypatch)
+
+    run = v2_run_starter.start_v2_run_on_first_message(
+        secrets={},
+        user_id="user_1",
+        package_id="roleplay2026.test",
+        installed_stories_root=_story_root(tmp_path),
+    )
+
+    assert run is None
+    assert repositories.credits.consumed is None
+    assert repositories.runs.create_calls == 0
+    assert repositories.runs.active_lookups == 1
