@@ -85,6 +85,16 @@ def start_v2_run_on_first_message(
             first_beat_id=start.first_beat_id,
         )
 
+    start_paid_run = getattr(repositories, "start_paid_run", None)
+    if callable(start_paid_run):
+        return start_paid_run(
+            user_id=user_id,
+            package_id=package_id,
+            script_version=start.script_version,
+            first_block_id=start.first_block_id,
+            first_beat_id=start.first_beat_id,
+        )
+
     credit = repositories.credits.get_available_credit(
         user_id=user_id,
         package_id=package_id,
