@@ -8,7 +8,11 @@ from typing import Any
 import gspread
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 
-from billing.mercado_pago import MercadoPagoClient, validate_webhook_signature
+from billing.mercado_pago import (
+    MercadoPagoClient,
+    MercadoPagoError,
+    validate_webhook_signature,
+)
 from billing.service import PaymentValidationError, PixCheckoutService, read_secret
 from persistence.accounts import GoogleSheetsAccountRepository
 from persistence.backend_config import POSTGRES_BACKEND, operational_backend
@@ -235,6 +239,18 @@ async def mercado_pago_webhook(
         result = service.process_provider_order(data_id)
     except PaymentValidationError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except MercadoPagoError as exc:
+        if exc.status_code == 404:
+            return {
+                "received": True,
+                "processed": False,
+                "ignored": True,
+                "reason": "provider_order_not_found",
+            }
+        raise HTTPException(
+            status_code=502,
+            detail="Falha temporária ao consultar a ordem no Mercado Pago.",
+        ) from exc
     return {
         "received": True,
         "processed": result is not None,
