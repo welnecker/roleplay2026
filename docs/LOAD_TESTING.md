@@ -29,3 +29,6 @@ avança os quadros e consulta o catálogo. Não cria cobranças Pix.
 As chamadas carregam `X-Load-Test-ID` e `X-Virtual-User-ID`. Esses identificadores
 aparecem no painel e em linhas `[TRAFFIC_AUDIT]` dos logs do Render, permitindo cruzar
 uma falha do Locust com o processamento interno do backend.
+
+Sondagens técnicas (`/api/v1/health`), o próprio painel e pedidos automáticos de
+`/favicon.ico` não entram nas estatísticas da carga.

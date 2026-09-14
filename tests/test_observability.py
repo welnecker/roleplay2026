@@ -63,3 +63,25 @@ def test_errors_are_signalled_without_response_body(monkeypatch) -> None:
     assert failure["status"] == 409
     assert failure["test_id"] == "unsafe_id__"
     assert "conteúdo privado" not in str(payload)
+
+
+def test_technical_probes_do_not_pollute_load_metrics(monkeypatch) -> None:
+    monkeypatch.setenv("OBSERVABILITY_ENABLED", "true")
+    monkeypatch.setenv("OBSERVABILITY_ADMIN_TOKEN", "token")
+    app = FastAPI()
+
+    @app.get("/api/v1/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    client = TestClient(install(app))
+    assert client.get("/api/v1/health").status_code == 200
+    assert client.get("/favicon.ico").status_code == 404
+    payload = client.get(
+        "/api/v1/admin/observability/metrics",
+        headers={"X-Observability-Token": "token"},
+    ).json()
+
+    assert payload["requests"] == 0
+    assert payload["errors"] == 0
+    assert payload["routes"] == []

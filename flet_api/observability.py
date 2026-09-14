@@ -21,6 +21,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 _LOGGER = logging.getLogger("roleplay2026.observability")
 _SAFE_ID = re.compile(r"[^a-zA-Z0-9._:-]")
+_IGNORED_PATHS = {
+    "/admin/observabilidade",
+    "/api/v1/admin/observability/metrics",
+    "/api/v1/health",
+    "/favicon.ico",
+}
 
 
 def _enabled() -> bool:
@@ -161,10 +167,7 @@ def install(app: Any) -> Any:
 
     @app.middleware("http")
     async def observability_middleware(request: Request, call_next: Any) -> Any:
-        if request.url.path in {
-            "/admin/observabilidade",
-            "/api/v1/admin/observability/metrics",
-        }:
+        if request.url.path in _IGNORED_PATHS:
             return await call_next(request)
         started = monotonic()
         test_id = _clean_header(request.headers.get("X-Load-Test-ID"), "ordinary")
