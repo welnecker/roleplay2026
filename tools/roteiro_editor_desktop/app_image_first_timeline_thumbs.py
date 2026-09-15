@@ -59,7 +59,8 @@ class ScriptEditor(TimelineScriptEditor):
             instruction = str(row.get("instruction", ""))
             image_id = str(row.get("image_id", "") or "")
             motion_id = str(row.get("motion_id", "") or "")
-            values = (row["order"], line_id, instruction, image_id, motion_id)
+            audio_id = str(row.get("audio_id", "") or "")
+            values = (row["order"], line_id, instruction, image_id, motion_id, audio_id)
             thumb = self._thumbnail_for(image_id)
 
             if line_id.endswith("_descricao"):
@@ -70,6 +71,8 @@ class ScriptEditor(TimelineScriptEditor):
                     label += f"  •  {image_id}"
                 if motion_id:
                     label += f"  🎬 {motion_id}"
+                if audio_id:
+                    label += f"  🔊 {audio_id}"
                 kwargs = {
                     "iid": line_id,
                     "text": label,
@@ -98,6 +101,8 @@ class ScriptEditor(TimelineScriptEditor):
                 label += f"  •  {image_id}"
             if motion_id:
                 label += f"  🎬 {motion_id}"
+            if audio_id:
+                label += f"  🔊 {audio_id}"
 
             kwargs = {
                 "iid": line_id,

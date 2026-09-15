@@ -75,7 +75,7 @@ def test_tsv_header_matches_google_sheet_contract() -> None:
     assert tsv.splitlines()[0] == "\t".join(OFFICIAL_COLUMNS)
 
 
-def test_xlsx_contains_roteiros_sheet_and_eight_columns() -> None:
+def test_xlsx_contains_roteiros_sheet_and_nine_columns() -> None:
     workbook = rows_to_xlsx_bytes(build_export_rows(_rows()))
     assert workbook.startswith(b"PK")
 
@@ -84,6 +84,6 @@ def test_xlsx_contains_roteiros_sheet_and_eight_columns() -> None:
         sheet_xml = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
 
     assert 'name="ROTEIROS"' in workbook_xml
-    assert 'dimension ref="A1:H4"' in sheet_xml
+    assert 'dimension ref="A1:I4"' in sheet_xml
     for header in OFFICIAL_COLUMNS:
         assert f">{header}<" in sheet_xml

@@ -310,7 +310,7 @@ else:
     st.info("Nenhuma imagem atribuída ainda. O roteiro pode ser exportado mesmo assim.")
 
 st.subheader("5. Exportar")
-st.caption("O cabeçalho exportado é exatamente: package_id, script_version, line_id, order, instruction, status, image_id, motion_id.")
+st.caption("O cabeçalho exportado é exatamente: package_id, script_version, line_id, order, instruction, status, image_id, motion_id, audio_id.")
 
 xlsx_bytes = rows_to_xlsx_bytes(export_rows)
 csv_text = rows_to_csv_text(export_rows)

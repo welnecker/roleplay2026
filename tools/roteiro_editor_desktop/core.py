@@ -22,6 +22,7 @@ COLUMNS = (
     "status",
     "image_id",
     "motion_id",
+    "audio_id",
 )
 
 _TAG_RE = re.compile(r"(?ms)^[ \t]*\[([^\]\n]+)\][ \t]*(.*?)(?=^[ \t]*\[[^\]\n]+\]|\Z)")
@@ -291,6 +292,7 @@ def compile_rows(
     start_frame_number: int = 1,
     image_map: dict[str, str] | None = None,
     motion_map: dict[str, str] | None = None,
+    audio_map: dict[str, str] | None = None,
 ) -> list[dict[str, object]]:
     clean_package = str(package_id or "").strip()
     if not clean_package.startswith("roleplay2026.") or clean_package.endswith("."):
@@ -311,6 +313,7 @@ def compile_rows(
     rows: list[dict[str, object]] = []
     assigned = image_map or {}
     assigned_motions = motion_map or {}
+    assigned_audio = audio_map or {}
 
     for index, item in enumerate(items):
         if item.kind == "DESCRICAO":
@@ -340,6 +343,7 @@ def compile_rows(
                 "status": "active",
                 "image_id": str(assigned.get(line_id, "") or ""),
                 "motion_id": str(assigned_motions.get(line_id, "") or ""),
+                "audio_id": str(assigned_audio.get(line_id, "") or ""),
             }
         )
     return rows
@@ -389,6 +393,13 @@ def normalize_image_name(prefix: str, number: int) -> str:
 
 def normalize_motion_name(prefix: str, number: int) -> str:
     return f"{slugify(prefix, fallback='motion')}{int(number)}_motion.webp"
+
+
+def normalize_audio_name(prefix: str, number: int, source: Path | None = None) -> str:
+    suffix = source.suffix.lower() if source is not None else ".mp3"
+    if suffix not in {".mp3", ".wav", ".ogg", ".m4a"}:
+        suffix = ".mp3"
+    return f"{slugify(prefix, fallback='audio')}{int(number)}_audio{suffix}"
 
 
 def convert_video_to_animated_webp(
@@ -459,6 +470,7 @@ def export_package(
     rows: list[dict[str, object]],
     image_sources: dict[str, str],
     motion_sources: dict[str, str] | None = None,
+    audio_sources: dict[str, str] | None = None,
     quality: int = 88,
     max_side: int = 1800,
     project_payload: dict[str, object] | None = None,
@@ -474,6 +486,9 @@ def export_package(
     videos_dir = destination / "videos"
     if motion_sources:
         videos_dir.mkdir(exist_ok=True)
+    audios_dir = destination / "audios"
+    if audio_sources:
+        audios_dir.mkdir(exist_ok=True)
 
     (destination / "roteiro.csv").write_text(rows_to_csv(rows), encoding="utf-8-sig")
     (destination / "roteiro.tsv").write_text(rows_to_tsv(rows), encoding="utf-8-sig")
@@ -496,6 +511,13 @@ def export_package(
             quality=min(int(quality), 85),
             max_side=min(int(max_side), 1280),
         )
+
+    for audio_id, source in (audio_sources or {}).items():
+        source_path = Path(source)
+        if not source_path.exists():
+            raise EditorError(f"Áudio não encontrado: {source_path}")
+        target = audios_dir / Path(audio_id).name
+        target.write_bytes(source_path.read_bytes())
 
     if project_payload is not None:
         save_project(destination / "projeto_roteiro.json", project_payload)

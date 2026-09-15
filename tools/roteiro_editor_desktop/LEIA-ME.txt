@@ -58,7 +58,10 @@ FLUXO: ELENCO + IMAGEM PRIMEIRO
     convertido automaticamente para WebP animado. No app ele entra depois da
     imagem de seguranca, toca uma vez, para no ultimo quadro e reinicia quando o
     usuario volta a cena.
-29. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
+29. Para adicionar som, selecione uma linha e use ATRIBUIR ÁUDIO À LINHA.
+    Sons podem ser ligados a uma ONOMATOPEIA, fala, pensamento ou movimento.
+    O arquivo original é copiado para audios/ e o audio_id é gravado na planilha.
+30. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
 
 SAIDA
 A pasta exportada contem:
@@ -70,13 +73,14 @@ A pasta exportada contem:
 - ELENCO-E-TAGS.txt
 - imagens/*.webp
 - videos/*_motion.webp
+- audios/*
 
 O arquivo elenco_manifest.yaml contem o bloco cast_customization pronto para ser
 copiado ao manifest.yaml do card. O arquivo ELENCO-E-TAGS.txt resume os marcadores
 de nome, fala e pensamento de todos os personagens cadastrados.
 
 CABECALHO OFICIAL
-package_id | script_version | line_id | order | instruction | status | image_id | motion_id
+package_id | script_version | line_id | order | instruction | status | image_id | motion_id | audio_id
 
 As imagens sao convertidas para WebP e recebem numeracao automatica, por exemplo:
 camilly1.webp

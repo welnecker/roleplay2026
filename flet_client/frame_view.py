@@ -282,8 +282,11 @@ class NovelFrameView:
         *,
         image: bytes | str | None = None,
         motion: str | None = None,
+        audio: str | None = None,
         entry_images: tuple[str, ...] = (),
         entry_motions: tuple[str, ...] = (),
+        entry_audios: tuple[str, ...] = (),
+        entry_effect_audios: tuple[tuple[str, ...], ...] = (),
         history: tuple[FrameVisualRow, ...] = (),
         revealed_entries: int = 0,
         on_frame_complete: Callable[[], bool] | None = None,
@@ -295,8 +298,11 @@ class NovelFrameView:
         self.on_reveal = on_reveal
         self.base_image = image
         self.base_motion = str(motion or "").strip() or None
+        self.base_audio = str(audio or "").strip() or None
         self.entry_images = tuple(entry_images)
         self.entry_motions = tuple(entry_motions)
+        self.entry_audios = tuple(entry_audios)
+        self.entry_effect_audios = tuple(tuple(item) for item in entry_effect_audios)
         self.history = tuple(history[-(INTERACTION_LIMIT - 1) :])
         self._busy = False
         self._image_dialog: ft.AlertDialog | None = None
@@ -414,6 +420,11 @@ class NovelFrameView:
             return self.entry_motions[index]
         return self.base_motion if index == 0 else None
 
+    def _entry_audio(self, index: int) -> str | None:
+        if index < len(self.entry_audios) and self.entry_audios[index]:
+            return self.entry_audios[index]
+        return None
+
     def _current_row(self) -> FrameVisualRow:
         items = [
             FrameVisualItem(
@@ -463,6 +474,8 @@ class NovelFrameView:
         self._balloon_control = None
         self._balloon_text_control = None
         self._effect_controls = []
+        self._audio_controls: list[tuple[object, str]] = []
+        self._active_audio: object | None = None
         if item is None:
             return ft.Container(
                 width=self.stage_width,
@@ -557,6 +570,13 @@ class NovelFrameView:
                     )
                     visual_stack.append(effect_control)
                     self._effect_controls.append((effect_control, effect))
+                    effect_index = len(self._effect_controls) - 1
+                    effect_audio = ""
+                    if item.entry_index < len(self.entry_effect_audios):
+                        effect_audios = self.entry_effect_audios[item.entry_index]
+                        if effect_index < len(effect_audios):
+                            effect_audio = effect_audios[effect_index]
+                    self._audio_controls.append((effect_control, effect_audio))
             media_stack = ft.Stack(
                 width=visual_width,
                 height=image_height,
@@ -642,6 +662,13 @@ class NovelFrameView:
                 self._motion_image_control(self._pending_motion_url)
             )
             self._pending_motion_url = None
+        selected = self._selected_item()
+        if selected is not None and selected.entry_index >= 0:
+            entry_audio = self._entry_audio(selected.entry_index)
+            if entry_audio:
+                self._play_audio_url(entry_audio)
+        elif self.base_audio:
+            self._play_audio_url(self.base_audio)
         if self._media_control is not None:
             self._media_control.opacity = 1
             self.page.update()
@@ -672,6 +699,7 @@ class NovelFrameView:
             control.scale = ft.Scale(scale=1.15)
             control.rotate = ft.Rotate(angle=0.035)
             self.page.update()
+            self._play_audio_for_effect(effect, generation)
             await asyncio.sleep(0.18)
             if generation != self._animation_generation:
                 return
@@ -693,6 +721,55 @@ class NovelFrameView:
             # Offset do Flet é proporcional ao tamanho do próprio controle.
             control.offset = ft.Offset(effect.dx / 120.0, effect.dy / 58.0)
             self.page.update()
+
+    def _play_audio_for_effect(self, effect: OnomatopoeiaEffect, generation: int) -> None:
+        """Toca o áudio associado; plataformas sem o controle Audio seguem visuais."""
+        audio_url = ""
+        try:
+            effect_index = next(index for index, (_control, item) in enumerate(self._effect_controls) if item == effect)
+            if effect_index < len(self._audio_controls):
+                audio_url = self._audio_controls[effect_index][1]
+        except StopIteration:
+            pass
+        self._play_audio_url(audio_url)
+
+    def _play_audio_url(self, audio_url: str) -> None:
+        """Insere um player temporário; o áudio termina sem ocupar o layout."""
+        audio_type = getattr(ft, "Audio", None)
+        if not audio_url or audio_type is None:
+            return
+        self._stop_active_audio()
+        audio = audio_type(src=audio_url, autoplay=True, volume=1.0)
+        overlay = getattr(self.page, "overlay", None)
+        if overlay is None:
+            return
+        overlay.append(audio)
+        self._active_audio = audio
+        self.page.update()
+
+    def _stop_active_audio(self) -> None:
+        audio = self._active_audio
+        if audio is None:
+            return
+        pause = getattr(audio, "pause", None)
+        if callable(pause):
+            try:
+                pause()
+            except Exception:
+                pass
+        release = getattr(audio, "release", None)
+        if callable(release):
+            try:
+                release()
+            except Exception:
+                pass
+        overlay = getattr(self.page, "overlay", None)
+        if overlay is not None:
+            try:
+                overlay.remove(audio)
+            except ValueError:
+                pass
+        self._active_audio = None
 
     def _open_image_viewer(self, image: bytes | str) -> None:
         self._image_dialog = _image_viewer_dialog(
@@ -740,6 +817,7 @@ class NovelFrameView:
         self.layout.scroll = ft.ScrollMode.AUTO if is_compact_desktop else None
 
     def _review_previous(self, _event: object = None) -> None:
+        self._stop_active_audio()
         items = self._current_row().items
         self.stage_cursor.previous(len(items))
         selected = self._selected_item()
@@ -754,6 +832,7 @@ class NovelFrameView:
             self._start_stage_animation(include_scene=False)
 
     def _review_next(self, _event: object = None) -> None:
+        self._stop_active_audio()
         items = self._current_row().items
         self.stage_cursor.next(len(items))
         selected = self._selected_item()

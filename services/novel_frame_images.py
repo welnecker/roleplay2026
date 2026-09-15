@@ -65,6 +65,26 @@ def _row_motion_maps(
     return line_motions, frame_motions
 
 
+def _row_audio_maps(rows: Iterable[dict[str, Any]]) -> tuple[dict[str, str], dict[str, str]]:
+    result: dict[str, str] = {}
+    frames: dict[str, str] = {}
+    description_index = 0
+    for raw in rows:
+        row = dict(raw)
+        if str(row.get("status", "active") or "active").strip().casefold() != "active":
+            continue
+        line_id = str(row.get("line_id", "") or "").strip()
+        kind, _actor, _body = novel_frame_patch._tag(row.get("instruction"))
+        if kind == "descricao":
+            description_index += 1
+        audio_id = clean_image_id(row.get("audio_id"))
+        if line_id and audio_id:
+            result[line_id] = audio_id
+            if kind == "descricao":
+                frames[novel_frame_patch._frame_id_from_description(line_id, description_index)] = audio_id
+    return result, frames
+
+
 def enrich_compiled_document_with_image_ids(
     document: dict[str, Any],
     rows: Iterable[dict[str, Any]],
@@ -74,7 +94,8 @@ def enrich_compiled_document_with_image_ids(
     materialized = [dict(row) for row in rows]
     line_images, frame_images = _row_image_maps(materialized)
     line_motions, frame_motions = _row_motion_maps(materialized)
-    if not line_images and not frame_images and not line_motions and not frame_motions:
+    line_audio, frame_audio = _row_audio_maps(materialized)
+    if not line_images and not frame_images and not line_motions and not frame_motions and not line_audio:
         return document
 
     enriched = deepcopy(document)
@@ -101,6 +122,9 @@ def enrich_compiled_document_with_image_ids(
             frame_motion = frame_motions.get(current_frame_id, "")
             if frame_motion:
                 frame["motion_id"] = frame_motion
+            frame_audio_id = frame_audio.get(current_frame_id, "")
+            if frame_audio_id:
+                frame["audio_id"] = frame_audio_id
             for entry in frame.get("entries", []) or []:
                 if not isinstance(entry, dict):
                     continue
@@ -116,6 +140,15 @@ def enrich_compiled_document_with_image_ids(
                 )
                 if entry_motion:
                     entry["motion_id"] = entry_motion
+                entry_audio = line_audio.get(str(entry.get("line_id", "") or "").strip(), "")
+                if entry_audio:
+                    entry["audio_id"] = entry_audio
+                for effect in entry.get("effects_before", []) or []:
+                    if isinstance(effect, dict):
+                        effect_line_id = str(effect.get("line_id", "") or "").strip()
+                        effect_audio = line_audio.get(effect_line_id, "")
+                        if effect_audio:
+                            effect["audio_id"] = effect_audio
             beat["required_movement"] = prefix + json.dumps(
                 frame,
                 ensure_ascii=False,
@@ -156,9 +189,31 @@ def motion_sequence_for_frame(
     return base, tuple(result)
 
 
+def audio_sequence_for_frame(
+    frame: Mapping[str, object],
+) -> tuple[str, tuple[str, ...], tuple[tuple[str, ...], ...]]:
+    """Retorna áudio do quadro, das entries e das onomatopeias por entry."""
+
+    base = clean_image_id(frame.get("audio_id"))
+    entries: list[str] = []
+    effects: list[tuple[str, ...]] = []
+    for raw in frame.get("entries", []) or []:
+        entry = raw if isinstance(raw, Mapping) else {}
+        entries.append(clean_image_id(entry.get("audio_id")))
+        effects.append(
+            tuple(
+                clean_image_id(effect.get("audio_id"))
+                for effect in entry.get("effects_before", []) or []
+                if isinstance(effect, Mapping) and clean_image_id(effect.get("audio_id"))
+            )
+        )
+    return base, tuple(entries), tuple(effects)
+
+
 __all__ = [
     "clean_image_id",
     "enrich_compiled_document_with_image_ids",
     "image_sequence_for_frame",
     "motion_sequence_for_frame",
+    "audio_sequence_for_frame",
 ]

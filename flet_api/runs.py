@@ -41,7 +41,7 @@ from services.novel_frame_runtime_support import (
     first_frame_movement,
     is_frame_script,
 )
-from services.novel_frame_images import image_sequence_for_frame, motion_sequence_for_frame
+from services.novel_frame_images import audio_sequence_for_frame, image_sequence_for_frame, motion_sequence_for_frame
 from services.novel_v2_adapter import movement_from_script, next_movement_id
 from services.runtime_persistence import (
     RuntimePersistenceContext,
@@ -77,8 +77,11 @@ class RunFrame:
     entry_count: int
     entry_image_urls: tuple[str, ...] = ()
     motion_url: str = ""
+    audio_url: str = ""
     finished: bool = False
     entry_motion_urls: tuple[str, ...] = ()
+    entry_audio_urls: tuple[str, ...] = ()
+    entry_effect_audio_urls: tuple[tuple[str, ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -545,7 +548,10 @@ class FletRunService:
             )
         entry_image_urls: tuple[str, ...] = ()
         entry_motion_urls: tuple[str, ...] = ()
+        entry_audio_urls: tuple[str, ...] = ()
+        entry_effect_audio_urls: tuple[tuple[str, ...], ...] = ()
         frame_motion_url = ""
+        frame_audio_url = ""
         if isinstance(frame, dict):
             inherited = self._previous_image_id(script, node_id)
             base_image_id, image_ids = image_sequence_for_frame(
@@ -570,6 +576,11 @@ class FletRunService:
 
             entry_image_urls = tuple(entry_image_url(image_id) for image_id in image_ids)
             base_motion_id, entry_motion_ids = motion_sequence_for_frame(frame)
+            base_audio_id, entry_audio_ids, entry_effect_audio_ids = audio_sequence_for_frame(frame)
+            frame_audio_url = (
+                public_story_media_url(package.manifest.package_id, "audios", base_audio_id)
+                if base_audio_id else ""
+            )
 
             def motion_id_url(motion_id: str) -> str:
                 return (
@@ -585,6 +596,19 @@ class FletRunService:
             frame_motion_url = motion_id_url(base_motion_id)
             entry_motion_urls = tuple(
                 motion_id_url(motion_id) for motion_id in entry_motion_ids
+            )
+            entry_audio_urls = tuple(
+                public_story_media_url(package.manifest.package_id, "audios", audio_id)
+                if audio_id else ""
+                for audio_id in entry_audio_ids
+            )
+            entry_effect_audio_urls = tuple(
+                tuple(
+                    public_story_media_url(package.manifest.package_id, "audios", audio_id)
+                    if audio_id else ""
+                    for audio_id in effect_ids
+                )
+                for effect_ids in entry_effect_audio_ids
             )
         motion_url = frame_motion_url or self._intro_motion_url(
             package.manifest.package_id,
@@ -607,7 +631,10 @@ class FletRunService:
             entry_count=entry_count,
             entry_image_urls=entry_image_urls,
             motion_url=motion_url,
+            audio_url=frame_audio_url,
             entry_motion_urls=entry_motion_urls,
+            entry_audio_urls=entry_audio_urls,
+            entry_effect_audio_urls=entry_effect_audio_urls,
             finished=bool(state.finished),
         )
 

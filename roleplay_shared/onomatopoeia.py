@@ -25,9 +25,13 @@ class OnomatopoeiaEffect:
     duration: int = 3000
     dx: int = 32
     dy: int = -10
+    audio_id: str = ""
 
     def to_dict(self) -> dict[str, object]:
-        return asdict(self)
+        result = asdict(self)
+        if not self.audio_id:
+            result.pop("audio_id", None)
+        return result
 
     def canonical_header(self) -> str:
         x = f"{self.x:g}"
@@ -36,9 +40,10 @@ class OnomatopoeiaEffect:
         text_parameter = (
             f" texto={shlex.quote(self.text)}" if self.text != default_text else ""
         )
+        audio_parameter = f" audio={shlex.quote(self.audio_id)}" if self.audio_id else ""
         return (
             f"ONOMATOPEIA {self.kind}{text_parameter} x={x} y={y} delay={self.delay} "
-            f"duracao={self.duration} dx={self.dx} dy={self.dy}"
+            f"duracao={self.duration} dx={self.dx} dy={self.dy}{audio_parameter}"
         )
 
 
@@ -64,7 +69,7 @@ def parse_onomatopoeia_header(header: str) -> OnomatopoeiaEffect:
         if key in values:
             raise ValueError(f"Parâmetro repetido em [ONOMATOPEIA]: {key}.")
         values[key] = value
-    allowed = {"texto", "text", "x", "y", "delay", "duracao", "dx", "dy"}
+    allowed = {"texto", "text", "x", "y", "delay", "duracao", "dx", "dy", "audio"}
     unknown = sorted(set(values) - allowed)
     if unknown:
         raise ValueError("Parâmetro desconhecido em [ONOMATOPEIA]: " + ", ".join(unknown))
@@ -79,6 +84,7 @@ def parse_onomatopoeia_header(header: str) -> OnomatopoeiaEffect:
             duration=int(values.get("duracao", 3000)),
             dx=int(values.get("dx", 32)),
             dy=int(values.get("dy", -10)),
+            audio_id=str(values.get("audio", "") or ""),
         )
     except ValueError as exc:
         raise ValueError("Os parâmetros da [ONOMATOPEIA] precisam ser numéricos.") from exc
@@ -104,6 +110,7 @@ def effect_from_mapping(value: Mapping[str, object]) -> OnomatopoeiaEffect:
         duration=int(value.get("duration", 3000) or 3000),
         dx=int(value.get("dx", 32) or 0),
         dy=int(value.get("dy", -10) or 0),
+        audio_id=str(value.get("audio_id", "") or ""),
     )
 
 

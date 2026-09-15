@@ -142,7 +142,11 @@ def compile_novel_frame_story(
                 effect = parse_onomatopoeia_header(header_match.group(1))
             except ValueError as exc:
                 raise ValueError(f"{line_id}: {exc}") from exc
-            pending_effects.append(effect.to_dict())
+            effect_data = effect.to_dict()
+            audio_id = str(row.get("audio_id", "") or "").strip()
+            if audio_id:
+                effect_data["audio_id"] = audio_id
+            pending_effects.append(effect_data)
             continue
 
         if pending_effects and kind not in {"fala", "pensamento"}:

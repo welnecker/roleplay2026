@@ -37,6 +37,7 @@ def test_columns_match_current_sheet_contract() -> None:
         "status",
         "image_id",
         "motion_id",
+        "audio_id",
     )
 
 
@@ -479,5 +480,5 @@ def test_csv_header_has_no_updated_at() -> None:
         frame_prefix="cena",
     )
     header = core.rows_to_csv(rows).splitlines()[0]
-    assert header == "package_id,script_version,line_id,order,instruction,status,image_id,motion_id"
+    assert header == "package_id,script_version,line_id,order,instruction,status,image_id,motion_id,audio_id"
     assert "updated_at" not in header

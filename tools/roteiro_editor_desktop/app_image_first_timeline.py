@@ -143,6 +143,8 @@ class ScriptEditor(BalloonScriptEditor):
         old_source = str(self.image_sources.get(old_image_id, "") or "") if old_image_id else ""
         old_motion_id = str(self.motion_map.get(line_id, "") or self.rows[index].get("motion_id", "") or "")
         old_motion_source = str(self.motion_sources.get(old_motion_id, "") or "") if old_motion_id else ""
+        old_audio_id = str(self.audio_map.get(line_id, "") or self.rows[index].get("audio_id", "") or "")
+        old_audio_source = str(self.audio_sources.get(old_audio_id, "") or "") if old_audio_id else ""
         instructions = [str(row.get("instruction", "")).strip() for row in self.rows]
         instructions[index] = new_instruction
         self.draft.delete("1.0", "end")
@@ -155,6 +157,9 @@ class ScriptEditor(BalloonScriptEditor):
         old_motion_map = dict(self.motion_map)
         old_motion_map.pop(line_id, None)
         self.motion_map = old_motion_map
+        old_audio_map = dict(self.audio_map)
+        old_audio_map.pop(line_id, None)
+        self.audio_map = old_audio_map
         if not self.compile_current():
             raise ValueError("A alteração tornou o roteiro inválido.")
         if index >= len(self.rows):
@@ -170,6 +175,10 @@ class ScriptEditor(BalloonScriptEditor):
             self.motion_map[new_line_id] = old_motion_id
             if old_motion_source:
                 self.motion_sources[old_motion_id] = old_motion_source
+        if old_audio_id:
+            self.audio_map[new_line_id] = old_audio_id
+            if old_audio_source:
+                self.audio_sources[old_audio_id] = old_audio_source
 
         # Se era/continua sendo descrição, sincroniza o binding ordinal da imagem-primeiro.
         descriptions = [
@@ -369,7 +378,8 @@ class ScriptEditor(BalloonScriptEditor):
             instruction = str(row.get("instruction", ""))
             image_id = str(row.get("image_id", "") or "")
             motion_id = str(row.get("motion_id", "") or "")
-            values = (row["order"], line_id, instruction, image_id, motion_id)
+            audio_id = str(row.get("audio_id", "") or "")
+            values = (row["order"], line_id, instruction, image_id, motion_id, audio_id)
 
             if line_id.endswith("_descricao"):
                 frame_number += 1
@@ -379,6 +389,8 @@ class ScriptEditor(BalloonScriptEditor):
                     label += f"  •  {image_id}"
                 if motion_id:
                     label += f"  🎬 {motion_id}"
+                if audio_id:
+                    label += f"  🔊 {audio_id}"
                 self.tree.insert(
                     "",
                     "end",
@@ -408,6 +420,8 @@ class ScriptEditor(BalloonScriptEditor):
                 label += f"  •  {image_id}"
             if motion_id:
                 label += f"  🎬 {motion_id}"
+            if audio_id:
+                label += f"  🔊 {audio_id}"
 
             parent = "" if upper.startswith("[FIM_HISTORIA]") else current_parent
             self.tree.insert(
