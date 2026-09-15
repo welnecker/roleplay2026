@@ -229,14 +229,14 @@ def test_primeiro_acesso_exige_e_persiste_os_dois_aceites() -> None:
     incomplete = test_client.post(
         "/api/v1/auth/legal-acceptance",
         headers=headers,
-        json={"accepted_terms": True, "accepted_privacy": False},
+        params={"accepted_terms": "true", "accepted_privacy": "false"},
     )
     assert incomplete.status_code == 400
 
     accepted = test_client.post(
         "/api/v1/auth/legal-acceptance",
         headers=headers,
-        json={"accepted_terms": True, "accepted_privacy": True},
+        params={"accepted_terms": "true", "accepted_privacy": "true"},
     )
     assert accepted.status_code == 200
     assert accepted.json()["legal_acceptance_required"] is False
@@ -468,3 +468,4 @@ def test_run_exige_nome_e_genero_antes_de_chamar_runtime() -> None:
 
     assert invalid_gender.status_code == 422
     assert blank_name.status_code == 422
+

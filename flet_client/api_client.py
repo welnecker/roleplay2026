@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 from typing import Any
 
 import requests
@@ -187,15 +186,10 @@ class FletApiClient:
             self._request(
                 "POST",
                 "/api/v1/auth/legal-acceptance",
-                # Serialize explicitly: the web deployment was receiving a
-                # 50-byte body that FastAPI could not parse.  Sending the
-                # bytes and content type explicitly avoids any adapter/proxy
-                # ambiguity around requests' ``json=`` convenience argument.
-                data=json.dumps(
-                    {"accepted_terms": True, "accepted_privacy": True},
-                    separators=(",", ":"),
-                ).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
+                # Keep this request bodyless.  The Flet web session makes an
+                # internal HTTPS call to the same service and its request
+                # body can be consumed by the proxy before FastAPI parses it.
+                params={"accepted_terms": "true", "accepted_privacy": "true"},
             )
         )
 

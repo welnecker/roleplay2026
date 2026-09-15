@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Literal, Protocol
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from gspread.exceptions import APIError
@@ -419,17 +419,18 @@ def create_api_app(services: ApiServices) -> FastAPI:
 
     @app.post("/api/v1/auth/legal-acceptance", response_model=UserResponse)
     def accept_legal_documents(
-        payload: LegalAcceptanceRequest,
+        accepted_terms: bool = Query(...),
+        accepted_privacy: bool = Query(...),
         identity: tuple[AccountUser, str] = Depends(authenticated),
     ) -> UserResponse:
         # Log only the parsed booleans so a production 400 can be diagnosed
         # without recording document contents or authentication data.
         _LOGGER.warning(
             "[LEGAL_ACCEPTANCE] terms=%s privacy=%s",
-            payload.accepted_terms,
-            payload.accepted_privacy,
+            accepted_terms,
+            accepted_privacy,
         )
-        if not payload.accepted_terms or not payload.accepted_privacy:
+        if not accepted_terms or not accepted_privacy:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="É necessário aceitar os dois documentos para continuar.",

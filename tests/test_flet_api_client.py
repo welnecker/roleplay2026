@@ -182,8 +182,10 @@ def test_cliente_registra_aceite_dos_dois_documentos() -> None:
 
     assert user.legal_acceptance_required is False
     assert session.calls[0][1].endswith("/api/v1/auth/legal-acceptance")
-    assert session.calls[0][2]["headers"]["Content-Type"] == "application/json"
-    assert session.calls[0][2]["data"] == b'{"accepted_terms":true,"accepted_privacy":true}'
+    assert session.calls[0][2]["params"] == {
+        "accepted_terms": "true",
+        "accepted_privacy": "true",
+    }
 
 
 def test_cliente_flet_trata_indisponibilidade_da_api() -> None:
