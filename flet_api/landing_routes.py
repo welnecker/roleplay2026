@@ -547,7 +547,7 @@ LEGAL_PAGE_TEMPLATE = """<!doctype html>
 </head>
 <body>
   <header><div class="shell nav"><a class="brand" href="/"><img src="__MEDIA_BASE_URL__/brand/entrecenas-icone.svg" alt=""><span>EntreCenas</span></a><a class="back" href="/">Voltar ao início</a></div></header>
-  <main><div class="shell"><p class="eyebrow">Transparência e segurança</p><h1>__LEGAL_TITLE__</h1><p class="updated">Última atualização: 14 de setembro de 2026</p><article>__LEGAL_BODY__</article></div></main>
+  <main><div class="shell"><p class="eyebrow">Transparência e segurança</p><h1>__LEGAL_TITLE__</h1><p class="updated">Última atualização: 15 de setembro de 2026</p><article>__LEGAL_BODY__</article></div></main>
   <footer><div class="shell footer-row"><span>© 2026 EntreCenas</span><a href="/termos-de-uso/">Termos de Uso</a><a href="/politica-de-privacidade/">Política de Privacidade</a><span>Exclusivo para maiores de 18 anos.</span></div></footer>
 </body>
 </html>"""
@@ -562,6 +562,7 @@ PRIVACY_POLICY_BODY = """
   <li><strong>Cadastro:</strong> nome de exibição, endereço de e-mail e senha armazenada de forma protegida por hash.</li>
   <li><strong>Perfil da história:</strong> nomes escolhidos para os personagens e preferências necessárias à personalização do roteiro.</li>
   <li><strong>Uso e progresso:</strong> cards acessados, execuções, posição no roteiro, interações técnicas e estado necessário para retomar a história.</li>
+  <li><strong>Aceites:</strong> versões dos Termos de Uso e da Política de Privacidade aceitas e data e hora do registro.</li>
   <li><strong>Compra:</strong> e-mail do pagador, card adquirido, valor, situação, identificadores da ordem e eventos de confirmação. Dados bancários e credenciais de pagamento são tratados pelo Mercado Pago.</li>
   <li><strong>Segurança e funcionamento:</strong> endereço IP, navegador, dispositivo, horários, rotas acessadas, métricas de desempenho e registros de erro, conforme disponibilizados pela infraestrutura.</li>
 </ul>

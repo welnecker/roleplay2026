@@ -7,6 +7,7 @@ import flet as ft
 from flet_client.screens import (
     flet_image_source,
     library_screen,
+    legal_acceptance_screen,
     login_screen,
     story_cast_screen,
     story_identity_screen,
@@ -112,6 +113,33 @@ def test_login_oferece_aba_de_cadastro_e_envia_os_campos() -> None:
     assert submitted == [
         ("Pessoa Nova", "nova@example.com", "senha-segura", "senha-segura")
     ]
+
+
+def test_aceite_legal_exige_duas_caixas_e_as_desabilita_apos_registro() -> None:
+    accepted: list[bool] = []
+    screen = legal_acceptance_screen(
+        on_accept=lambda: accepted.append(True) or None,
+        on_continue=lambda: None,
+        on_open_terms=lambda: None,
+        on_open_privacy=lambda: None,
+    )
+    boxes = [item for item in _walk(screen) if isinstance(item, ft.Checkbox)]
+    button = next(item for item in _walk(screen) if isinstance(item, ft.FilledButton))
+
+    assert len(boxes) == 2
+    assert button.disabled is True
+    boxes[0].value = True
+    boxes[0].on_change(None)
+    assert button.disabled is True
+    boxes[1].value = True
+    boxes[1].on_change(None)
+    assert button.disabled is False
+
+    button.on_click(None)
+
+    assert accepted == [True]
+    assert all(box.value and box.disabled for box in boxes)
+    assert button.content == "Continuar"
 
 
 def test_capa_data_url_e_convertida_em_base64_puro_para_flet_desktop() -> None:

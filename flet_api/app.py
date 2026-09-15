@@ -13,6 +13,7 @@ from gspread.exceptions import APIError
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from flet_api.sessions import SessionStore
+from legal_acceptance import PRIVACY_VERSION, TERMS_VERSION, LegalAcceptance
 from flet_api.payments import PaymentGateway, PaymentState, build_payment_gateway
 from flet_api.public_media import public_story_media_url
 from flet_api.runs import FletRunService, RunFrame
@@ -36,6 +37,12 @@ class AccountRepository(Protocol):
 
     def has_entitlement(self, *, user_id: str, package_id: str, access: str) -> bool: ...
 
+    def get_legal_acceptance(self, *, user_id: str) -> LegalAcceptance | None: ...
+
+    def accept_legal_documents(
+        self, *, user_id: str, terms_version: str, privacy_version: str
+    ) -> LegalAcceptance: ...
+
 
 class LoginRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -52,6 +59,16 @@ class UserResponse(BaseModel):
     user_id: str
     email: str
     display_name: str
+    terms_accepted: bool = False
+    privacy_accepted: bool = False
+    legal_acceptance_required: bool = True
+    terms_version: str = TERMS_VERSION
+    privacy_version: str = PRIVACY_VERSION
+
+
+class LegalAcceptanceRequest(BaseModel):
+    accepted_terms: bool
+    accepted_privacy: bool
 
 
 class LoginResponse(BaseModel):
@@ -189,11 +206,24 @@ class ApiServices:
     run_service: FletRunService | None = None
 
 
-def _user_response(user: AccountUser) -> UserResponse:
+def _current_legal_acceptance(accounts: AccountRepository, user_id: str) -> bool:
+    resolver = getattr(accounts, "get_legal_acceptance", None)
+    if resolver is None:
+        # Compatibilidade somente para repositórios de teste/legados.
+        return True
+    acceptance = resolver(user_id=user_id)
+    return acceptance is not None and acceptance.is_current
+
+
+def _user_response(user: AccountUser, accounts: AccountRepository) -> UserResponse:
+    accepted = _current_legal_acceptance(accounts, user.user_id)
     return UserResponse(
         user_id=user.user_id,
         email=user.email,
         display_name=user.display_name,
+        terms_accepted=accepted,
+        privacy_accepted=accepted,
+        legal_acceptance_required=not accepted,
     )
 
 
@@ -317,6 +347,17 @@ def create_api_app(services: ApiServices) -> FastAPI:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário inativo ou inexistente.")
         return user, token
 
+    def legal_accepted(
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> tuple[AccountUser, str]:
+        user, _token = identity
+        if not _current_legal_acceptance(services.accounts, user.user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Aceite os Termos de Uso e a Política de Privacidade para continuar.",
+            )
+        return identity
+
     @app.get("/api/v1/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
@@ -330,7 +371,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
         return LoginResponse(
             access_token=token,
             expires_at=session.expires_at.isoformat(),
-            user=_user_response(user),
+            user=_user_response(user, services.accounts),
         )
 
     @app.post(
@@ -354,13 +395,37 @@ def create_api_app(services: ApiServices) -> FastAPI:
         return LoginResponse(
             access_token=token,
             expires_at=session.expires_at.isoformat(),
-            user=_user_response(user),
+            user=_user_response(user, services.accounts),
         )
 
     @app.get("/api/v1/auth/me", response_model=UserResponse)
     def me(identity: tuple[AccountUser, str] = Depends(authenticated)) -> UserResponse:
         user, _token = identity
-        return _user_response(user)
+        return _user_response(user, services.accounts)
+
+    @app.post("/api/v1/auth/legal-acceptance", response_model=UserResponse)
+    def accept_legal_documents(
+        payload: LegalAcceptanceRequest,
+        identity: tuple[AccountUser, str] = Depends(authenticated),
+    ) -> UserResponse:
+        if not payload.accepted_terms or not payload.accepted_privacy:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="É necessário aceitar os dois documentos para continuar.",
+            )
+        user, _token = identity
+        recorder = getattr(services.accounts, "accept_legal_documents", None)
+        if recorder is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="O registro de aceite não está disponível.",
+            )
+        recorder(
+            user_id=user.user_id,
+            terms_version=TERMS_VERSION,
+            privacy_version=PRIVACY_VERSION,
+        )
+        return _user_response(user, services.accounts)
 
     @app.post("/api/v1/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
     def logout(identity: tuple[AccountUser, str] = Depends(authenticated)) -> None:
@@ -370,7 +435,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     @app.get("/api/v1/catalog", response_model=CatalogResponse)
     def catalog(
         request: Request,
-        identity: tuple[AccountUser, str] = Depends(authenticated),
+        identity: tuple[AccountUser, str] = Depends(legal_accepted),
     ) -> CatalogResponse:
         user, _token = identity
         items: list[StoryCardResponse] = []
@@ -435,7 +500,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     @app.get("/api/v1/payments/{package_id}/options", response_model=PaymentResponse)
     def payment_options(
         package_id: str,
-        identity: tuple[AccountUser, str] = Depends(authenticated),
+        identity: tuple[AccountUser, str] = Depends(legal_accepted),
     ) -> PaymentResponse:
         user, _token = identity
         gateway = payment_gateway()
@@ -450,7 +515,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     @app.post("/api/v1/payments/master-test", response_model=PaymentResponse)
     def approve_master_test(
         payload: PaymentRequest,
-        identity: tuple[AccountUser, str] = Depends(authenticated),
+        identity: tuple[AccountUser, str] = Depends(legal_accepted),
     ) -> PaymentResponse:
         user, _token = identity
         gateway = payment_gateway()
@@ -467,7 +532,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     @app.post("/api/v1/payments/pix", response_model=PaymentResponse)
     def create_pix(
         payload: PaymentRequest,
-        identity: tuple[AccountUser, str] = Depends(authenticated),
+        identity: tuple[AccountUser, str] = Depends(legal_accepted),
     ) -> PaymentResponse:
         user, _token = identity
         gateway = payment_gateway()
@@ -485,7 +550,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     @app.post("/api/v1/payments/refresh", response_model=PaymentResponse)
     def refresh_payment(
         payload: PaymentRefreshRequest,
-        identity: tuple[AccountUser, str] = Depends(authenticated),
+        identity: tuple[AccountUser, str] = Depends(legal_accepted),
     ) -> PaymentResponse:
         user, _token = identity
         gateway = payment_gateway()
@@ -516,7 +581,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     )
     def run_profile(
         package_id: str,
-        identity: tuple[AccountUser, str] = Depends(authenticated),
+        identity: tuple[AccountUser, str] = Depends(legal_accepted),
     ) -> RunProfileResponse:
         user, _token = identity
         if not any(card.package_id == package_id for card in services.catalog_loader()):
@@ -543,7 +608,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     def open_run(
         payload: RunOpenRequest,
         request: Request,
-        identity: tuple[AccountUser, str] = Depends(authenticated),
+        identity: tuple[AccountUser, str] = Depends(legal_accepted),
     ) -> RunFrameResponse:
         user, _token = identity
         selected_card = next(
@@ -573,7 +638,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     def advance_run(
         payload: RunAdvanceRequest,
         request: Request,
-        identity: tuple[AccountUser, str] = Depends(authenticated),
+        identity: tuple[AccountUser, str] = Depends(legal_accepted),
     ) -> RunFrameResponse:
         user, _token = identity
         try:
@@ -594,7 +659,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     def reveal_run_entry(
         payload: RunRevealRequest,
         request: Request,
-        identity: tuple[AccountUser, str] = Depends(authenticated),
+        identity: tuple[AccountUser, str] = Depends(legal_accepted),
     ) -> RunFrameResponse:
         user, _token = identity
         try:

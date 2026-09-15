@@ -19,11 +19,13 @@ from persistence.google_sheets_retry import (
     with_transient_retry,
 )
 from persistence.models import new_id, utc_now_iso
+from legal_acceptance import LegalAcceptance
 from persistence.backend_config import POSTGRES_BACKEND, operational_backend
 
 USERS_SHEET = "USERS"
 CREDENTIALS_SHEET = "USER_CREDENTIALS"
 ENTITLEMENTS_SHEET = "USER_ENTITLEMENTS"
+LEGAL_ACCEPTANCES_SHEET = "LEGAL_ACCEPTANCES"
 RECORDS_CACHE_TTL_SECONDS = 30.0
 QUOTA_RETRY_ATTEMPTS = 3
 
@@ -52,6 +54,13 @@ ENTITLEMENTS_HEADERS = (
     "source",
     "payment_id",
     "created_at",
+    "updated_at",
+)
+LEGAL_ACCEPTANCES_HEADERS = (
+    "user_id",
+    "terms_version",
+    "privacy_version",
+    "accepted_at",
     "updated_at",
 )
 
@@ -131,6 +140,7 @@ class GoogleSheetsAccountRepository:
 
         self._ensure_sheet(USERS_SHEET, USERS_HEADERS)
         self._ensure_sheet(CREDENTIALS_SHEET, CREDENTIALS_HEADERS)
+        self._ensure_sheet(LEGAL_ACCEPTANCES_SHEET, LEGAL_ACCEPTANCES_HEADERS)
 
     def register(self, *, email: str, password: str, display_name: str) -> AccountUser:
         clean_email = email.strip().lower()
@@ -212,6 +222,40 @@ class GoogleSheetsAccountRepository:
                 status=str(row.get("status", "")),
             )
         return None
+
+    def get_legal_acceptance(self, *, user_id: str) -> LegalAcceptance | None:
+        for row in reversed(self._records(LEGAL_ACCEPTANCES_SHEET)):
+            if str(row.get("user_id", "")).strip() != user_id.strip():
+                continue
+            return LegalAcceptance(
+                terms_version=str(row.get("terms_version", "")),
+                privacy_version=str(row.get("privacy_version", "")),
+                accepted_at=str(row.get("accepted_at", "")),
+            )
+        return None
+
+    def accept_legal_documents(
+        self,
+        *,
+        user_id: str,
+        terms_version: str,
+        privacy_version: str,
+    ) -> LegalAcceptance:
+        existing = self.get_legal_acceptance(user_id=user_id)
+        if existing is not None and existing.is_current:
+            return existing
+        now = utc_now_iso()
+        self._append(
+            LEGAL_ACCEPTANCES_SHEET,
+            {
+                "user_id": user_id,
+                "terms_version": terms_version,
+                "privacy_version": privacy_version,
+                "accepted_at": now,
+                "updated_at": now,
+            },
+        )
+        return LegalAcceptance(terms_version, privacy_version, now)
 
     def has_entitlement(self, *, user_id: str, package_id: str, access: str) -> bool:
         if access == "free":

@@ -23,6 +23,11 @@ class ApiUser:
     user_id: str
     email: str
     display_name: str
+    terms_accepted: bool = False
+    privacy_accepted: bool = False
+    legal_acceptance_required: bool = True
+    terms_version: str = ""
+    privacy_version: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,15 +119,28 @@ class FletApiClient:
         return response
 
     @staticmethod
-    def _user(response: requests.Response) -> ApiUser:
-        payload = response.json()
+    def _api_user(payload: dict[str, Any]) -> ApiUser:
         if not isinstance(payload, dict) or not payload.get("user_id"):
             raise FletApiError("Resposta de usuário inválida.")
         return ApiUser(
             user_id=str(payload.get("user_id", "") or ""),
             email=str(payload.get("email", "") or ""),
             display_name=str(payload.get("display_name", "") or ""),
+            terms_accepted=bool(payload.get("terms_accepted", False)),
+            privacy_accepted=bool(payload.get("privacy_accepted", False)),
+            legal_acceptance_required=bool(
+                payload.get("legal_acceptance_required", True)
+            ),
+            terms_version=str(payload.get("terms_version", "") or ""),
+            privacy_version=str(payload.get("privacy_version", "") or ""),
         )
+
+    @classmethod
+    def _user(cls, response: requests.Response) -> ApiUser:
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise FletApiError("Resposta de usuário inválida.")
+        return cls._api_user(payload)
 
     def login(self, *, email: str, password: str) -> ApiUser:
         response = self._request(
@@ -136,11 +154,7 @@ class FletApiClient:
         if not token or not isinstance(user, dict):
             raise FletApiError("Resposta de autenticação inválida.")
         self.access_token = token
-        return ApiUser(
-            user_id=str(user.get("user_id", "") or ""),
-            email=str(user.get("email", "") or ""),
-            display_name=str(user.get("display_name", "") or ""),
-        )
+        return self._api_user(user)
 
     def register(self, *, display_name: str, email: str, password: str) -> ApiUser:
         response = self._request(
@@ -158,14 +172,19 @@ class FletApiClient:
         if not token or not isinstance(user, dict):
             raise FletApiError("Resposta de cadastro inválida.")
         self.access_token = token
-        return ApiUser(
-            user_id=str(user.get("user_id", "") or ""),
-            email=str(user.get("email", "") or ""),
-            display_name=str(user.get("display_name", "") or ""),
-        )
+        return self._api_user(user)
 
     def me(self) -> ApiUser:
         return self._user(self._request("GET", "/api/v1/auth/me"))
+
+    def accept_legal_documents(self) -> ApiUser:
+        return self._user(
+            self._request(
+                "POST",
+                "/api/v1/auth/legal-acceptance",
+                json={"accepted_terms": True, "accepted_privacy": True},
+            )
+        )
 
     def catalog(self) -> list[StoryCard]:
         response = self._request("GET", "/api/v1/catalog")

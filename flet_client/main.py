@@ -7,13 +7,14 @@ from typing import Any
 
 import flet as ft
 
-from flet_client.api_client import ApiPayment, ApiRunFrame, FletApiClient, FletApiError
+from flet_client.api_client import ApiPayment, ApiRunFrame, ApiUser, FletApiClient, FletApiError
 from flet_client.auth_storage import AuthTokenStorage
 from flet_client.frame_state import parse_visual_frame
 from flet_client.frame_view import FrameVisualRow, NovelFrameView
 from flet_client.models import AccessStatus, StoryCard
 from flet_client.screens import (
     BACKGROUND,
+    legal_acceptance_screen,
     library_screen,
     login_screen,
     payment_screen,
@@ -337,6 +338,49 @@ async def main(
             )
         )
 
+    def finish_authenticated(user: ApiUser) -> None:
+        if api_client is None:
+            return
+        try:
+            cards = api_client.catalog()
+        except FletApiError as exc:
+            handle_api_error(exc)
+            return
+        show_library(cards, user.display_name or user.email)
+
+    def show_legal_gate(user: ApiUser) -> None:
+        if api_client is None:
+            return
+
+        def accept() -> str | None:
+            try:
+                accepted_user = api_client.accept_legal_documents()
+            except FletApiError as exc:
+                return str(exc)
+            if accepted_user.legal_acceptance_required:
+                return "Não foi possível confirmar o aceite. Tente novamente."
+            return None
+
+        show(
+            legal_acceptance_screen(
+                on_accept=accept,
+                on_continue=lambda: run_blocking(finish_authenticated, user),
+                on_open_terms=lambda: page.launch_url(
+                    f"{displayed_api_url}/termos-de-uso/"
+                ),
+                on_open_privacy=lambda: page.launch_url(
+                    f"{displayed_api_url}/politica-de-privacidade/"
+                ),
+            )
+        )
+
+    def route_authenticated(user: ApiUser) -> None:
+        page.run_task(persist_current_token)
+        if user.legal_acceptance_required:
+            show_legal_gate(user)
+            return
+        finish_authenticated(user)
+
     def show_login() -> None:
         def authenticate_request(email: str, password: str) -> None:
             if api_client is None:
@@ -344,12 +388,10 @@ async def main(
                 return
             try:
                 user = api_client.login(email=email, password=password)
-                cards = api_client.catalog()
             except FletApiError as exc:
                 handle_api_error(exc)
                 return
-            page.run_task(persist_current_token)
-            show_library(cards, user.display_name or user.email)
+            route_authenticated(user)
 
         def authenticate(email: str, password: str) -> str | None:
             run_blocking(authenticate_request, email, password)
@@ -373,12 +415,10 @@ async def main(
                     email=email,
                     password=password,
                 )
-                cards = api_client.catalog()
             except FletApiError as exc:
                 handle_api_error(exc)
                 return
-            page.run_task(persist_current_token)
-            show_library(cards, user.display_name or user.email)
+            route_authenticated(user)
 
         def register(
             display_name: str,
@@ -418,6 +458,9 @@ async def main(
         api_client.access_token = token
         try:
             user = await asyncio.to_thread(api_client.me)
+            if user.legal_acceptance_required:
+                show_legal_gate(user)
+                return
             cards = await asyncio.to_thread(api_client.catalog)
         except FletApiError as exc:
             if exc.is_authentication_error:

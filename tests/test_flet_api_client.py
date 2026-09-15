@@ -159,6 +159,35 @@ def test_cliente_flet_exibe_detalhe_de_erro_da_api() -> None:
         raise AssertionError("Era esperado FletApiError")
 
 
+def test_cliente_registra_aceite_dos_dois_documentos() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(
+                200,
+                {
+                    "user_id": "user-1",
+                    "email": "pessoa@example.com",
+                    "display_name": "Pessoa",
+                    "terms_accepted": True,
+                    "privacy_accepted": True,
+                    "legal_acceptance_required": False,
+                },
+            )
+        ]
+    )
+    client = FletApiClient("https://api.example.com", session=session)  # type: ignore[arg-type]
+    client.access_token = "token-opaco"
+
+    user = client.accept_legal_documents()
+
+    assert user.legal_acceptance_required is False
+    assert session.calls[0][1].endswith("/api/v1/auth/legal-acceptance")
+    assert session.calls[0][2]["json"] == {
+        "accepted_terms": True,
+        "accepted_privacy": True,
+    }
+
+
 def test_cliente_flet_trata_indisponibilidade_da_api() -> None:
     class OfflineSession:
         def request(self, *_args: Any, **_kwargs: Any) -> FakeResponse:

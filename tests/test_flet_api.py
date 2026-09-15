@@ -9,6 +9,7 @@ from flet_api.app import ApiServices, create_api_app
 from flet_api.payments import PaymentState
 from flet_api.runs import RunFrame, RunProfile
 from flet_api.sessions import SessionStore
+from legal_acceptance import LegalAcceptance
 from persistence.accounts import AccountUser
 from persistence.google_sheets_retry import GoogleSheetsTemporarilyUnavailable
 from platform_core.models import AccessStatus, ProgressStatus, StoryCard
@@ -194,7 +195,52 @@ def test_login_returns_opaque_bearer_and_current_user() -> None:
         "user_id": "user-1",
         "email": "pessoa@example.com",
         "display_name": "Pessoa",
+        "terms_accepted": True,
+        "privacy_accepted": True,
+        "legal_acceptance_required": False,
+        "terms_version": "2026-09-15",
+        "privacy_version": "2026-09-15",
     }
+
+
+def test_primeiro_acesso_exige_e_persiste_os_dois_aceites() -> None:
+    test_client, accounts = client()
+    state: dict[str, LegalAcceptance | None] = {"acceptance": None}
+
+    def get_acceptance(*, user_id: str) -> LegalAcceptance | None:
+        assert user_id == accounts.user.user_id
+        return state["acceptance"]
+
+    def accept_documents(
+        *, user_id: str, terms_version: str, privacy_version: str
+    ) -> LegalAcceptance:
+        assert user_id == accounts.user.user_id
+        state["acceptance"] = LegalAcceptance(
+            terms_version, privacy_version, "2026-09-15T00:00:00+00:00"
+        )
+        return state["acceptance"]
+
+    accounts.get_legal_acceptance = get_acceptance  # type: ignore[attr-defined]
+    accounts.accept_legal_documents = accept_documents  # type: ignore[attr-defined]
+    token = login(test_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert test_client.get("/api/v1/catalog", headers=headers).status_code == 403
+    incomplete = test_client.post(
+        "/api/v1/auth/legal-acceptance",
+        headers=headers,
+        json={"accepted_terms": True, "accepted_privacy": False},
+    )
+    assert incomplete.status_code == 400
+
+    accepted = test_client.post(
+        "/api/v1/auth/legal-acceptance",
+        headers=headers,
+        json={"accepted_terms": True, "accepted_privacy": True},
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["legal_acceptance_required"] is False
+    assert test_client.get("/api/v1/catalog", headers=headers).status_code == 200
 
 
 def test_cadastro_cria_sessao_e_rejeita_email_duplicado() -> None:
@@ -223,6 +269,11 @@ def test_cadastro_cria_sessao_e_rejeita_email_duplicado() -> None:
         "user_id": "user-new",
         "email": "nova@example.com",
         "display_name": "Pessoa Nova",
+        "terms_accepted": True,
+        "privacy_accepted": True,
+        "legal_acceptance_required": False,
+        "terms_version": "2026-09-15",
+        "privacy_version": "2026-09-15",
     }
     assert duplicated.status_code == 400
     assert duplicated.json()["detail"] == "Já existe uma conta com este e-mail."

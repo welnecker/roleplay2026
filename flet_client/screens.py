@@ -239,6 +239,101 @@ def login_screen(
     )
 
 
+def legal_acceptance_screen(
+    *,
+    on_accept: Callable[[], str | None],
+    on_continue: Callable[[], None],
+    on_open_terms: Callable[[], None],
+    on_open_privacy: Callable[[], None],
+    already_accepted: bool = False,
+) -> ft.Control:
+    terms = ft.Checkbox(
+        label="Li e aceito os Termos de Uso",
+        value=already_accepted,
+        disabled=already_accepted,
+    )
+    privacy = ft.Checkbox(
+        label="Li e aceito a Política de Privacidade",
+        value=already_accepted,
+        disabled=already_accepted,
+    )
+    error = ft.Text(size=12, color="#B42318", visible=False)
+    action = ft.FilledButton(
+        "Continuar" if already_accepted else "Registrar aceite",
+        height=52,
+        bgcolor=ACCENT,
+        color="#FFFFFF",
+        disabled=not already_accepted,
+    )
+
+    def update_action(_event: object = None) -> None:
+        action.disabled = not bool(terms.value and privacy.value)
+        _update_attached(action)
+
+    def submit(_event: object = None) -> None:
+        if terms.disabled and privacy.disabled:
+            on_continue()
+            return
+        message = on_accept()
+        if message:
+            error.value = message
+            error.visible = True
+            _update_attached(error)
+            return
+        terms.value = privacy.value = True
+        terms.disabled = privacy.disabled = True
+        action.content = "Continuar"
+        error.visible = False
+        _update_attached(action)
+
+    terms.on_change = update_action
+    privacy.on_change = update_action
+    action.on_click = submit
+
+    return ft.Container(
+        expand=True,
+        bgcolor=BACKGROUND,
+        alignment=ft.Alignment.CENTER,
+        padding=ft.Padding.symmetric(horizontal=22, vertical=30),
+        content=ft.Column(
+            width=520,
+            scroll=ft.ScrollMode.AUTO,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=22,
+            controls=[
+                _logo(),
+                ft.Container(
+                    bgcolor=SURFACE,
+                    border_radius=26,
+                    padding=ft.Padding.symmetric(horizontal=28, vertical=26),
+                    content=ft.Column(
+                        spacing=16,
+                        controls=[
+                            ft.Text("Documentos obrigatórios", size=25, weight=ft.FontWeight.BOLD, color=INK),
+                            ft.Text(
+                                "Antes do primeiro acesso, confirme separadamente os dois documentos. O aceite ficará registrado na sua conta.",
+                                size=14,
+                                color=MUTED,
+                            ),
+                            terms,
+                            ft.TextButton("Abrir Termos de Uso", on_click=lambda _e: on_open_terms()),
+                            privacy,
+                            ft.TextButton("Abrir Política de Privacidade", on_click=lambda _e: on_open_privacy()),
+                            ft.Text(
+                                "Cada pagamento libera uma execução do card/roteiro escolhido. Não há mensalidade nem assinatura. A desistência após a liberação e o início da experiência não gera reembolso por si só.",
+                                size=12,
+                                color=MUTED,
+                            ),
+                            error,
+                            action,
+                        ],
+                    ),
+                ),
+            ],
+        ),
+    )
+
+
 def _status(card: StoryCard) -> tuple[str, str]:
     if card.access_status == AccessStatus.FREE:
         return "DEGUSTAÇÃO", "#3D8068"

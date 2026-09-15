@@ -7,6 +7,7 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from psycopg.errors import UniqueViolation
 
 from persistence.accounts import AccountUser
+from legal_acceptance import LegalAcceptance
 from persistence.models import new_id
 from persistence.postgres_database import PostgresDatabase
 
@@ -110,6 +111,55 @@ class PostgresAccountRepository:
             email=str(row[1]),
             display_name=str(row[2]),
             status=str(row[3]),
+        )
+
+    def get_legal_acceptance(self, *, user_id: str) -> LegalAcceptance | None:
+        with self.database.pool.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT terms_version, privacy_version, accepted_at
+                FROM legal_acceptances
+                WHERE user_id = %s
+                LIMIT 1
+                """,
+                (user_id.strip(),),
+            ).fetchone()
+        if row is None:
+            return None
+        return LegalAcceptance(
+            terms_version=str(row[0]),
+            privacy_version=str(row[1]),
+            accepted_at=row[2].isoformat(),
+        )
+
+    def accept_legal_documents(
+        self,
+        *,
+        user_id: str,
+        terms_version: str,
+        privacy_version: str,
+    ) -> LegalAcceptance:
+        with self.database.pool.connection() as connection:
+            row = connection.execute(
+                """
+                INSERT INTO legal_acceptances(
+                    user_id, terms_version, privacy_version
+                ) VALUES (%s, %s, %s)
+                ON CONFLICT (user_id) DO UPDATE SET
+                    terms_version = EXCLUDED.terms_version,
+                    privacy_version = EXCLUDED.privacy_version,
+                    accepted_at = now(),
+                    updated_at = now()
+                RETURNING terms_version, privacy_version, accepted_at
+                """,
+                (user_id, terms_version, privacy_version),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Não foi possível registrar o aceite dos documentos.")
+        return LegalAcceptance(
+            terms_version=str(row[0]),
+            privacy_version=str(row[1]),
+            accepted_at=row[2].isoformat(),
         )
 
     def has_entitlement(self, *, user_id: str, package_id: str, access: str) -> bool:
