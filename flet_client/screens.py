@@ -265,17 +265,26 @@ def legal_acceptance_screen(
         color="#FFFFFF",
         disabled=not already_accepted,
     )
+    submitting = False
 
     def update_action(_event: object = None) -> None:
         action.disabled = not bool(terms.value and privacy.value)
         _update_attached(action)
 
     def submit(_event: object = None) -> None:
+        nonlocal submitting
+        if submitting:
+            return
         if terms.disabled and privacy.disabled:
             on_continue()
             return
+        submitting = True
+        action.disabled = True
+        _update_attached(action)
         message = on_accept()
         if message:
+            submitting = False
+            action.disabled = not bool(terms.value and privacy.value)
             error.value = message
             error.visible = True
             _update_attached(error)
@@ -286,7 +295,6 @@ def legal_acceptance_screen(
         # O aceite já foi persistido no backend; conclua o gate nesta mesma
         # ação.  Antes, a tela permanecia montada com o erro antigo visível.
         on_continue()
-        _update_attached(action)
 
     terms.on_change = update_action
     privacy.on_change = update_action
@@ -889,4 +897,3 @@ __all__ = [
     "story_cast_screen",
     "story_identity_screen",
 ]
-
