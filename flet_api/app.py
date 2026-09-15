@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,9 @@ from persistence.google_sheets_retry import (
 from platform_core.catalog import INSTALLED_STORIES_ROOT, cover_file_for_package, load_demo_catalog
 from platform_core.models import AccessStatus, StoryCard
 from services.secret_loader import load_application_secrets
+
+
+_LOGGER = logging.getLogger("roleplay2026.legal")
 
 
 class AccountRepository(Protocol):
@@ -418,6 +422,13 @@ def create_api_app(services: ApiServices) -> FastAPI:
         payload: LegalAcceptanceRequest,
         identity: tuple[AccountUser, str] = Depends(authenticated),
     ) -> UserResponse:
+        # Log only the parsed booleans so a production 400 can be diagnosed
+        # without recording document contents or authentication data.
+        _LOGGER.info(
+            "[LEGAL_ACCEPTANCE] terms=%s privacy=%s",
+            payload.accepted_terms,
+            payload.accepted_privacy,
+        )
         if not payload.accepted_terms or not payload.accepted_privacy:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -761,3 +772,4 @@ def production_app() -> FastAPI:
                     )
                 )
     return _production_app
+
