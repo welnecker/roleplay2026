@@ -13,6 +13,7 @@ BRAND_ICON_PATH = Path(__file__).resolve().parent.parent / "static" / "entrecena
 DEFAULT_APP_URL = "/app/"
 DEFAULT_MEDIA_BASE_URL = "/midia"
 DEFAULT_SITE_URL = "https://entrecenas-roleplay.com.br"
+DEFAULT_CONTACT_EMAIL = "contato@entrecenas-roleplay.com.br"
 
 
 def landing_page_html(
@@ -312,6 +313,9 @@ def landing_page_html(
 
     footer { padding: 34px 0 48px; color: #89a3a0; font-size: .88rem; }
     .footer-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 28px; }
+    .footer-links { display: flex; flex-wrap: wrap; gap: 10px 20px; }
+    .footer-links a { color: var(--muted); text-decoration: none; }
+    .footer-links a:hover, .footer-links a:focus-visible { color: var(--cream); text-decoration: underline; }
 
     @media (max-width: 820px) {
       nav > a:not(.button) { display: none; }
@@ -373,6 +377,7 @@ def landing_page_html(
         <div class="facts" aria-label="Informações principais">
           <span>Use online pelo celular ou computador</span>
           <span>Experiência para maiores de 18 anos</span>
+          <span>Pagamento único por execução, sem assinatura</span>
         </div>
       </div>
 
@@ -463,6 +468,10 @@ def landing_page_html(
             <summary>Onde o EntreCenas funciona?</summary>
             <p>Você pode usar o EntreCenas diretamente pelo navegador, tanto no celular quanto no computador, sem instalar nada.</p>
           </details>
+          <details>
+            <summary>Existe mensalidade ou assinatura?</summary>
+            <p>Não. Cada pagamento é unitário e libera uma execução do card e do roteiro escolhidos. Você pode retomar essa mesma execução; uma nova execução pode exigir novo pagamento. Não existe mensalidade, assinatura, renovação automática ou cobrança recorrente.</p>
+          </details>
         </div>
       </div>
     </section>
@@ -482,6 +491,10 @@ def landing_page_html(
   <footer>
     <div class="shell footer-row">
       <span>© 2026 EntreCenas</span>
+      <div class="footer-links">
+        <a href="/termos-de-uso/">Termos de Uso</a>
+        <a href="/politica-de-privacidade/">Política de Privacidade</a>
+      </div>
       <span>Conteúdo destinado exclusivamente a maiores de 18 anos.</span>
     </div>
   </footer>
@@ -492,6 +505,195 @@ def landing_page_html(
         html.replace("__APP_URL__", app_url.rstrip("/") + "/")
         .replace("__MEDIA_BASE_URL__", media_base_url.rstrip("/"))
         .replace("__SITE_URL__", site_url.rstrip("/"))
+    )
+
+
+LEGAL_PAGE_TEMPLATE = """<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c2e2d">
+  <meta name="description" content="__LEGAL_DESCRIPTION__">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="__SITE_URL____LEGAL_PATH__">
+  <link rel="icon" href="__MEDIA_BASE_URL__/brand/entrecenas-icone.svg" type="image/svg+xml">
+  <title>__LEGAL_TITLE__ — EntreCenas</title>
+  <style>
+    :root { color-scheme: dark; --ink:#071918; --green:#0c2e2d; --line:#285654; --rose:#f05b91; --cream:#fff8fb; --muted:#c7d7d5; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-width:320px; background:radial-gradient(circle at 85% 4%,rgba(210,67,105,.16),transparent 28rem),var(--ink); color:var(--cream); font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; line-height:1.7; }
+    a { color:#ffabc5; }
+    .shell { width:min(860px,calc(100% - 36px)); margin-inline:auto; }
+    header { border-bottom:1px solid rgba(255,255,255,.08); background:rgba(7,25,24,.82); }
+    .nav { min-height:72px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+    .brand { display:inline-flex; align-items:center; gap:11px; color:var(--cream); text-decoration:none; font-weight:850; }
+    .brand img { width:40px; height:40px; border-radius:10px; }
+    .back { color:var(--muted); text-decoration:none; font-weight:700; }
+    main { padding:clamp(48px,8vw,84px) 0 80px; }
+    .eyebrow { color:#ffabc5; font-size:.8rem; font-weight:850; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { margin:10px 0 16px; font-size:clamp(2.5rem,7vw,4.5rem); line-height:1; letter-spacing:-.05em; }
+    .updated { margin:0 0 38px; color:#91aaa7; }
+    article { padding:clamp(24px,5vw,48px); border:1px solid var(--line); border-radius:26px; background:rgba(255,255,255,.035); }
+    h2 { margin:36px 0 8px; font-size:1.35rem; line-height:1.25; }
+    h2:first-child { margin-top:0; }
+    p, li { color:var(--muted); }
+    strong { color:var(--cream); }
+    .notice { margin:24px 0; padding:18px 20px; border-left:4px solid var(--rose); border-radius:8px; background:rgba(240,91,145,.09); }
+    footer { padding:28px 0 44px; color:#89a3a0; font-size:.88rem; }
+    .footer-row { display:flex; flex-wrap:wrap; justify-content:space-between; gap:14px 24px; border-top:1px solid rgba(255,255,255,.08); padding-top:24px; }
+    .footer-row a { color:var(--muted); }
+  </style>
+</head>
+<body>
+  <header><div class="shell nav"><a class="brand" href="/"><img src="__MEDIA_BASE_URL__/brand/entrecenas-icone.svg" alt=""><span>EntreCenas</span></a><a class="back" href="/">Voltar ao início</a></div></header>
+  <main><div class="shell"><p class="eyebrow">Transparência e segurança</p><h1>__LEGAL_TITLE__</h1><p class="updated">Última atualização: 14 de setembro de 2026</p><article>__LEGAL_BODY__</article></div></main>
+  <footer><div class="shell footer-row"><span>© 2026 EntreCenas</span><a href="/termos-de-uso/">Termos de Uso</a><a href="/politica-de-privacidade/">Política de Privacidade</a><span>Exclusivo para maiores de 18 anos.</span></div></footer>
+</body>
+</html>"""
+
+
+PRIVACY_POLICY_BODY = """
+<h2>1. Sobre esta política</h2>
+<p>Esta Política explica como o EntreCenas trata dados pessoais ao oferecer histórias interativas para adultos. O tratamento observa a Lei Geral de Proteção de Dados Pessoais — LGPD (Lei nº 13.709/2018).</p>
+
+<h2>2. Dados que podemos tratar</h2>
+<ul>
+  <li><strong>Cadastro:</strong> nome de exibição, endereço de e-mail e senha armazenada de forma protegida por hash.</li>
+  <li><strong>Perfil da história:</strong> nomes escolhidos para os personagens e preferências necessárias à personalização do roteiro.</li>
+  <li><strong>Uso e progresso:</strong> cards acessados, execuções, posição no roteiro, interações técnicas e estado necessário para retomar a história.</li>
+  <li><strong>Compra:</strong> e-mail do pagador, card adquirido, valor, situação, identificadores da ordem e eventos de confirmação. Dados bancários e credenciais de pagamento são tratados pelo Mercado Pago.</li>
+  <li><strong>Segurança e funcionamento:</strong> endereço IP, navegador, dispositivo, horários, rotas acessadas, métricas de desempenho e registros de erro, conforme disponibilizados pela infraestrutura.</li>
+</ul>
+
+<h2>3. Para que usamos os dados</h2>
+<p>Usamos os dados para criar e autenticar a conta, personalizar e retomar histórias, processar pagamentos unitários, liberar o card comprado, prevenir fraude e abuso, prestar suporte, manter a segurança, cumprir obrigações legais e melhorar estabilidade e desempenho.</p>
+
+<h2>4. Pagamento unitário</h2>
+<div class="notice"><strong>O EntreCenas não oferece mensalidade ou assinatura.</strong> Cada pagamento é avulso e corresponde a uma execução do card e do roteiro escolhidos. A mesma execução pode ser retomada; uma nova execução pode exigir novo pagamento. Não há renovação automática nem cobrança recorrente.</div>
+
+<h2>5. Compartilhamento e operadores</h2>
+<p>Não vendemos dados pessoais. Podemos compartilhá-los, no limite necessário, com o <strong>Mercado Pago</strong> para processar e confirmar compras; <strong>Render</strong> para executar a aplicação e o banco operacional; <strong>Cloudflare/R2</strong> para entrega da landing page, segurança e mídia; <strong>Google Sheets</strong> como fonte editorial dos roteiros; e <strong>OpenRouter e seu provedor de modelo</strong> apenas quando algum recurso interpretativo estiver ativado. Também poderemos compartilhar dados para cumprir obrigação legal ou ordem de autoridade competente.</p>
+
+<h2>6. Cookies e armazenamento local</h2>
+<p>Utilizamos somente recursos técnicos necessários à autenticação, segurança, continuidade da sessão e funcionamento do aplicativo. Bloqueá-los no navegador pode impedir o login ou a retomada da experiência.</p>
+
+<h2>7. Conservação</h2>
+<p>Os dados são mantidos pelo período necessário às finalidades informadas, à execução do serviço, à prevenção de fraude e ao cumprimento de obrigações legais, regulatórias, fiscais ou judiciais. Quando cabível, serão eliminados ou anonimizados após o encerramento da finalidade.</p>
+
+<h2>8. Direitos do titular</h2>
+<p>Nos termos da LGPD, você pode solicitar confirmação e acesso, correção, informação sobre compartilhamentos, anonimização, bloqueio ou eliminação de dados desnecessários ou tratados em desconformidade, além dos demais direitos aplicáveis. A exclusão pode não alcançar registros que precisem ser conservados por obrigação legal ou para exercício regular de direitos.</p>
+
+<h2>9. Segurança</h2>
+<p>Adotamos conexão HTTPS, controle de acesso, senhas protegidas por hash, segregação de segredos e registros técnicos de segurança. Nenhum sistema é absolutamente imune a incidentes, mas aplicamos medidas proporcionais aos riscos e restringimos o acesso operacional.</p>
+
+<h2>10. Conteúdo adulto e menores</h2>
+<p>O EntreCenas é destinado exclusivamente a pessoas com 18 anos ou mais. Não buscamos conscientemente coletar dados de crianças ou adolescentes. Caso identifiquemos cadastro incompatível com essa regra, poderemos suspender a conta e adotar as medidas cabíveis.</p>
+
+<h2>11. Contato</h2>
+<p>Para dúvidas ou exercício de direitos relativos a dados pessoais, contate o responsável pela plataforma pelo e-mail <a href="mailto:__CONTACT_EMAIL__">__CONTACT_EMAIL__</a>.</p>
+"""
+
+
+TERMS_OF_USE_BODY = """
+<h2>1. Aceitação e maioridade</h2>
+<p>Estes Termos regem o acesso ao EntreCenas. Ao criar uma conta ou utilizar a plataforma, você declara que leu e concorda com estas condições e que possui <strong>18 anos ou mais</strong>.</p>
+
+<h2>2. Descrição do serviço</h2>
+<p>O EntreCenas oferece histórias interativas digitais em cards. Cada card apresenta um roteiro, personagens e um papel para o usuário acompanhar pelo navegador. Uma experiência de degustação pode ser disponibilizada gratuitamente e ter seu conteúdo ou disponibilidade alterados.</p>
+
+<h2>3. Compra avulsa por card</h2>
+<div class="notice"><strong>Não existe mensalidade, assinatura ou renovação automática.</strong> Cada pagamento é unitário e libera uma execução do card e do roteiro expressamente escolhidos no momento da compra. Outros cards ou novas execuções exigem pagamentos separados.</div>
+<p>O preço e o conteúdo abrangido são apresentados antes da geração do Pix. O pagamento é processado pelo Mercado Pago e a execução é liberada após a confirmação. A execução já iniciada pode ser retomada pela mesma conta sem novo pagamento. A simples criação ou expiração de uma cobrança Pix não gera débito recorrente.</p>
+
+<h2>4. Cadastro e segurança da conta</h2>
+<p>Você deve informar dados válidos e manter sua senha confidencial. A conta é pessoal e não deve ser cedida ou compartilhada. Comunique imediatamente qualquer uso não autorizado pelo canal de contato informado nestes Termos.</p>
+
+<h2>5. Acesso ao conteúdo adquirido</h2>
+<p>A compra concede licença pessoal, limitada, não exclusiva e intransferível para realizar e retomar a execução adquirida do card escolhido. Após a conclusão ou consumo dessa execução, uma nova experiência do mesmo roteiro pode exigir outro pagamento unitário. A compra não transfere propriedade sobre textos, imagens, vídeos, personagens, marcas ou software. O acesso depende de conta ativa, navegador compatível e conexão à internet.</p>
+
+<h2>6. Arrependimento, problemas e reembolso</h2>
+<div class="notice"><strong>A desistência de continuar as interações não gera devolução.</strong> Depois que a execução paga do card/roteiro for liberada e iniciada, a decisão do usuário de interromper, abandonar ou não concluir a experiência não dá direito, por si só, a reembolso, total ou parcial.</div>
+<p>Essa regra não elimina direitos que não possam ser afastados por contrato. Solicitações relacionadas ao direito de arrependimento quando legalmente aplicável, cobrança indevida, duplicidade, indisponibilidade ou defeito serão analisadas conforme o Código de Defesa do Consumidor e a legislação aplicável. Entre em contato pelo e-mail indicado ao final, informando o e-mail da conta e o card adquirido. Não envie senha, token ou dados bancários completos.</p>
+
+<h2>7. Condutas proibidas</h2>
+<p>É proibido tentar acessar contas ou áreas não autorizadas; fraudar pagamentos; explorar vulnerabilidades; sobrecarregar deliberadamente o serviço; automatizar acessos abusivos; copiar, redistribuir ou comercializar o conteúdo; remover avisos de autoria; ou realizar engenharia reversa em desacordo com a lei.</p>
+
+<h2>8. Propriedade intelectual</h2>
+<p>Textos, imagens, vídeos, personagens, identidade visual, marcas e código são protegidos pela legislação aplicável. O uso permitido limita-se à experiência pessoal oferecida pela plataforma.</p>
+
+<h2>9. Suspensão</h2>
+<p>Podemos restringir ou suspender contas em caso de fraude, violação destes Termos, risco à segurança, determinação legal ou uso que prejudique a plataforma ou terceiros. Sempre que possível e juridicamente adequado, serão considerados a gravidade da conduta e o direito de esclarecimento.</p>
+
+<h2>10. Disponibilidade e responsabilidade</h2>
+<p>Buscamos manter o serviço disponível e preservar compras e progresso, mas manutenções, falhas de internet, fornecedores externos ou eventos fora do controle razoável podem causar interrupções. Nada nestes Termos exclui direitos ou responsabilidades que não possam ser afastados pela legislação brasileira.</p>
+
+<h2>11. Privacidade</h2>
+<p>O tratamento de dados pessoais está descrito na <a href="/politica-de-privacidade/">Política de Privacidade</a>, que integra estes Termos.</p>
+
+<h2>12. Alterações</h2>
+<p>Estes Termos podem ser atualizados para refletir mudanças legais, operacionais ou no serviço. A versão vigente e sua data permanecerão disponíveis nesta página. Mudanças materiais serão comunicadas por meio adequado quando necessário.</p>
+
+<h2>13. Legislação e solução de conflitos</h2>
+<p>Aplicam-se as leis da República Federativa do Brasil. Fica preservado o foro legalmente competente, inclusive o foro do domicílio do consumidor quando aplicável.</p>
+
+<h2>14. Contato</h2>
+<p>Para suporte, dúvidas sobre compras ou exercício de direitos, escreva para <a href="mailto:__CONTACT_EMAIL__">__CONTACT_EMAIL__</a>.</p>
+"""
+
+
+def _legal_page_html(
+    *,
+    title: str,
+    description: str,
+    path: str,
+    body: str,
+    media_base_url: str,
+    site_url: str,
+    contact_email: str,
+) -> str:
+    return (
+        LEGAL_PAGE_TEMPLATE.replace("__LEGAL_TITLE__", title)
+        .replace("__LEGAL_DESCRIPTION__", description)
+        .replace("__LEGAL_PATH__", path)
+        .replace("__LEGAL_BODY__", body)
+        .replace("__MEDIA_BASE_URL__", media_base_url.rstrip("/"))
+        .replace("__SITE_URL__", site_url.rstrip("/"))
+        .replace("__CONTACT_EMAIL__", contact_email.strip())
+    )
+
+
+def privacy_policy_html(
+    *,
+    media_base_url: str = DEFAULT_MEDIA_BASE_URL,
+    site_url: str = DEFAULT_SITE_URL,
+    contact_email: str = DEFAULT_CONTACT_EMAIL,
+) -> str:
+    return _legal_page_html(
+        title="Política de Privacidade",
+        description="Política de Privacidade do EntreCenas e informações sobre o tratamento de dados pessoais.",
+        path="/politica-de-privacidade/",
+        body=PRIVACY_POLICY_BODY,
+        media_base_url=media_base_url,
+        site_url=site_url,
+        contact_email=contact_email,
+    )
+
+
+def terms_of_use_html(
+    *,
+    media_base_url: str = DEFAULT_MEDIA_BASE_URL,
+    site_url: str = DEFAULT_SITE_URL,
+    contact_email: str = DEFAULT_CONTACT_EMAIL,
+) -> str:
+    return _legal_page_html(
+        title="Termos de Uso",
+        description="Termos de Uso do EntreCenas, incluindo compra unitária por card e regras da plataforma.",
+        path="/termos-de-uso/",
+        body=TERMS_OF_USE_BODY,
+        media_base_url=media_base_url,
+        site_url=site_url,
+        contact_email=contact_email,
     )
 
 
@@ -526,6 +728,32 @@ def install(app: Any) -> Any:
     @app.get("/conhecer", response_class=HTMLResponse, include_in_schema=False)
     def landing_page() -> HTMLResponse:
         return HTMLResponse(landing_page_html(), headers=_page_headers())
+
+    @app.get(
+        "/politica-de-privacidade",
+        response_class=HTMLResponse,
+        include_in_schema=False,
+    )
+    @app.get(
+        "/politica-de-privacidade/",
+        response_class=HTMLResponse,
+        include_in_schema=False,
+    )
+    def privacy_policy_page() -> HTMLResponse:
+        return HTMLResponse(privacy_policy_html(), headers=_page_headers())
+
+    @app.get(
+        "/termos-de-uso",
+        response_class=HTMLResponse,
+        include_in_schema=False,
+    )
+    @app.get(
+        "/termos-de-uso/",
+        response_class=HTMLResponse,
+        include_in_schema=False,
+    )
+    def terms_of_use_page() -> HTMLResponse:
+        return HTMLResponse(terms_of_use_html(), headers=_page_headers())
 
     @app.get("/midia/entrecenas-reel.mp4", include_in_schema=False)
     @app.get("/midia/landing/entrecenas-reel.mp4", include_in_schema=False)
