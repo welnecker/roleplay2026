@@ -368,7 +368,10 @@ async def main(
         show(
             legal_acceptance_screen(
                 on_accept=accept,
-                on_continue=lambda: run_blocking(finish_authenticated, user),
+                # The acceptance callback already runs in the Flet event
+                # flow.  Scheduling another page thread here can silently
+                # drop the transition after a successful 200 response.
+                on_continue=lambda: finish_authenticated(user),
                 on_open_terms=lambda: page.launch_url(
                     f"{displayed_api_url}/termos-de-uso/"
                 ),
@@ -517,3 +520,4 @@ async def main(
 
 if __name__ == "__main__":
     ft.run(main)
+
