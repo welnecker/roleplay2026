@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shlex
 import unicodedata
 from dataclasses import asdict, dataclass
@@ -31,8 +32,12 @@ class OnomatopoeiaEffect:
     def canonical_header(self) -> str:
         x = f"{self.x:g}"
         y = f"{self.y:g}"
+        default_text = self.kind.upper() + "!"
+        text_parameter = (
+            f" texto={shlex.quote(self.text)}" if self.text != default_text else ""
+        )
         return (
-            f"ONOMATOPEIA {self.kind} x={x} y={y} delay={self.delay} "
+            f"ONOMATOPEIA {self.kind}{text_parameter} x={x} y={y} delay={self.delay} "
             f"duracao={self.duration} dx={self.dx} dy={self.dy}"
         )
 
@@ -47,8 +52,8 @@ def parse_onomatopoeia_header(header: str) -> OnomatopoeiaEffect:
     if len(parts) < 2:
         raise ValueError("[ONOMATOPEIA] exige o tipo do efeito, por exemplo: smack.")
     kind = _plain(parts[1])
-    if kind != "smack":
-        raise ValueError("Neste primeiro exemplo, a única onomatopeia disponível é smack.")
+    if not re.fullmatch(r"[a-z0-9_-]+", kind):
+        raise ValueError("O tipo da [ONOMATOPEIA] contém caracteres inválidos.")
 
     values: dict[str, str] = {}
     for token in parts[2:]:
@@ -59,7 +64,7 @@ def parse_onomatopoeia_header(header: str) -> OnomatopoeiaEffect:
         if key in values:
             raise ValueError(f"Parâmetro repetido em [ONOMATOPEIA]: {key}.")
         values[key] = value
-    allowed = {"x", "y", "delay", "duracao", "dx", "dy"}
+    allowed = {"texto", "text", "x", "y", "delay", "duracao", "dx", "dy"}
     unknown = sorted(set(values) - allowed)
     if unknown:
         raise ValueError("Parâmetro desconhecido em [ONOMATOPEIA]: " + ", ".join(unknown))
@@ -67,7 +72,7 @@ def parse_onomatopoeia_header(header: str) -> OnomatopoeiaEffect:
     try:
         effect = OnomatopoeiaEffect(
             kind=kind,
-            text="SMACK!",
+            text=str(values.get("texto", values.get("text", kind.upper() + "!"))),
             x=float(values.get("x", 69)),
             y=float(values.get("y", 48)),
             delay=int(values.get("delay", 350)),

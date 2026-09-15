@@ -283,6 +283,7 @@ class NovelFrameView:
         image: bytes | str | None = None,
         motion: str | None = None,
         entry_images: tuple[str, ...] = (),
+        entry_motions: tuple[str, ...] = (),
         history: tuple[FrameVisualRow, ...] = (),
         revealed_entries: int = 0,
         on_frame_complete: Callable[[], bool] | None = None,
@@ -295,6 +296,7 @@ class NovelFrameView:
         self.base_image = image
         self.base_motion = str(motion or "").strip() or None
         self.entry_images = tuple(entry_images)
+        self.entry_motions = tuple(entry_motions)
         self.history = tuple(history[-(INTERACTION_LIMIT - 1) :])
         self._busy = False
         self._image_dialog: ft.AlertDialog | None = None
@@ -407,6 +409,11 @@ class NovelFrameView:
                 active = self.entry_images[position]
         return active
 
+    def _entry_motion(self, index: int) -> str | None:
+        if index < len(self.entry_motions) and self.entry_motions[index]:
+            return self.entry_motions[index]
+        return self.base_motion if index == 0 else None
+
     def _current_row(self) -> FrameVisualRow:
         items = [
             FrameVisualItem(
@@ -414,7 +421,7 @@ class NovelFrameView:
                 entry_index=index,
                 entry=entry,
                 image=self._entry_image(index),
-                motion=self.base_motion if index == 0 else None,
+                motion=self._entry_motion(index),
             )
             for index, entry in enumerate(self.controller.visible_entries)
         ]

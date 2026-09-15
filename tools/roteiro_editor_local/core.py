@@ -17,6 +17,7 @@ OFFICIAL_COLUMNS = (
     "instruction",
     "status",
     "image_id",
+    "motion_id",
 )
 
 
@@ -68,6 +69,7 @@ def build_export_rows(
             "instruction": str(source.get("instruction", "") or "").strip(),
             "status": str(source.get("status", "active") or "active").strip() or "active",
             "image_id": str(images.get(line_id, source.get("image_id", "")) or "").strip(),
+            "motion_id": str(source.get("motion_id", "") or "").strip(),
         }
         result.append(row)
     return result
@@ -131,7 +133,7 @@ def rows_to_xlsx_bytes(rows: Iterable[Mapping[str, object]]) -> bytes:
     last_row = max(1, len(matrix))
     sheet_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <dimension ref="A1:G{last_row}"/>
+  <dimension ref="A1:H{last_row}"/>
   <sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
   <cols>
     <col min="1" max="1" width="24" customWidth="1"/>
@@ -141,6 +143,7 @@ def rows_to_xlsx_bytes(rows: Iterable[Mapping[str, object]]) -> bytes:
     <col min="5" max="5" width="95" customWidth="1"/>
     <col min="6" max="6" width="14" customWidth="1"/>
     <col min="7" max="7" width="30" customWidth="1"/>
+    <col min="8" max="8" width="30" customWidth="1"/>
   </cols>
   <sheetData>{''.join(xml_rows)}</sheetData>
   <autoFilter ref="A1:G{last_row}"/>

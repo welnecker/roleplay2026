@@ -186,6 +186,7 @@ async def main(
             image=run_frame.image_url or None,
             motion=run_frame.motion_url or None,
             entry_images=run_frame.entry_image_urls,
+            entry_motions=run_frame.entry_motion_urls,
             history=history,
             revealed_entries=run_frame.revealed_entries,
             on_frame_complete=completed,

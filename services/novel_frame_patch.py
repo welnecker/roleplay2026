@@ -136,8 +136,6 @@ def compile_novel_frame_story(
         if kind == "onomatopeia":
             if current is None:
                 raise ValueError(f"{line_id}: ONOMATOPEIA apareceu antes da primeira [DESCRIÇÃO].")
-            if pending_effects:
-                raise ValueError("ONOMATOPEIA precisa ficar imediatamente antes de uma FALA ou PENSAMENTO.")
             header_match = _MARKER.match(str(row.get("instruction", "") or "").strip())
             assert header_match is not None
             try:

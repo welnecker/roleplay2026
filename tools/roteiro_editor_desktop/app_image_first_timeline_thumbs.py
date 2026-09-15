@@ -58,7 +58,8 @@ class ScriptEditor(TimelineScriptEditor):
             line_id = str(row["line_id"])
             instruction = str(row.get("instruction", ""))
             image_id = str(row.get("image_id", "") or "")
-            values = (row["order"], line_id, instruction, image_id)
+            motion_id = str(row.get("motion_id", "") or "")
+            values = (row["order"], line_id, instruction, image_id, motion_id)
             thumb = self._thumbnail_for(image_id)
 
             if line_id.endswith("_descricao"):
@@ -67,6 +68,8 @@ class ScriptEditor(TimelineScriptEditor):
                 label = f"QUADRO {frame_number:02d}"
                 if image_id:
                     label += f"  •  {image_id}"
+                if motion_id:
+                    label += f"  🎬 {motion_id}"
                 kwargs = {
                     "iid": line_id,
                     "text": label,
@@ -93,6 +96,8 @@ class ScriptEditor(TimelineScriptEditor):
                 label += " BALÃO"
             if image_id:
                 label += f"  •  {image_id}"
+            if motion_id:
+                label += f"  🎬 {motion_id}"
 
             kwargs = {
                 "iid": line_id,

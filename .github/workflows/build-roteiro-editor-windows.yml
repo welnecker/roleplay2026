@@ -69,6 +69,7 @@ jobs:
             --hidden-import PIL.Image `
             --hidden-import PIL.ImageTk `
             --collect-all openpyxl `
+            --collect-all imageio_ffmpeg `
             tools/roteiro_editor_desktop/app_cast.py
 
       - name: Create distribution ZIP

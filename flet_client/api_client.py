@@ -51,6 +51,7 @@ class ApiRunFrame:
     image_url: str
     motion_url: str
     entry_image_urls: tuple[str, ...]
+    entry_motion_urls: tuple[str, ...]
     revealed_entries: int
     entry_count: int
     finished: bool
@@ -284,6 +285,10 @@ class FletApiClient:
             entry_image_urls=tuple(
                 self._public_media_url(item)
                 for item in payload.get("entry_image_urls", []) or []
+            ),
+            entry_motion_urls=tuple(
+                self._public_media_url(item)
+                for item in payload.get("entry_motion_urls", []) or []
             ),
             revealed_entries=int(payload.get("revealed_entries", 0) or 0),
             entry_count=int(payload.get("entry_count", 0) or 0),

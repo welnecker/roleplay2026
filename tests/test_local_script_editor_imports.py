@@ -12,4 +12,5 @@ def test_local_editor_exposes_current_sheet_contract() -> None:
         "instruction",
         "status",
         "image_id",
+        "motion_id",
     )

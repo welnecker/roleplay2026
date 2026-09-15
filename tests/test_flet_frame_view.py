@@ -421,6 +421,33 @@ def test_movimento_opcional_fica_sobre_a_imagem_de_seguranca() -> None:
     assert motion.src.endswith("/1_motion_v1.webp")
 
 
+def test_movimento_pode_ser_atribuido_a_uma_fala_especifica() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (
+                VisualEntry("pensamento", "mary", "Mary", "Cheguei."),
+                VisualEntry("fala", "mary", "Mary", "Olhe para mim."),
+            ),
+        ),
+        image="https://img/mary1.webp",
+        entry_images=("https://img/mary1.webp", "https://img/mary2.webp"),
+        entry_motions=("", "https://midia.example/videos/mary2_motion.webp"),
+        revealed_entries=2,
+    )
+    view.stage_cursor.position = 1
+    view._animate_next_render = False
+    view._refresh(update_page=False)
+
+    media = _image_container(view)
+    assert isinstance(media.content, ft.Stack)
+    motion = media.content.controls[1]
+    assert isinstance(motion, ft.Image)
+    assert motion.src.endswith("/mary2_motion.webp")
+
+
 def test_voltar_para_movimento_reinicia_webp_com_url_logica_nova() -> None:
     view = NovelFrameView(  # type: ignore[arg-type]
         _Page(),

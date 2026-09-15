@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tkinter as tk
 from pathlib import Path
@@ -11,7 +12,7 @@ HERE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from core import compile_rows, export_package, load_project, normalize_image_name, save_project, slugify  # noqa: E402
+from core import compile_rows, export_package, load_project, normalize_image_name, normalize_motion_name, save_project, slugify  # noqa: E402
 from image_sequence import next_image_number as calculate_next_image_number  # noqa: E402
 
 try:
@@ -22,6 +23,7 @@ except Exception:
 
 APP_TITLE = "Editor de Roteiros ROLEPLAY2026 — Imagem primeiro"
 IMAGE_TYPES = [("Imagens", "*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff"), ("Todos os arquivos", "*.*")]
+VIDEO_TYPES = [("Vídeos", "*.mp4 *.mov *.mkv *.avi *.webm *.m4v"), ("Todos os arquivos", "*.*")]
 
 
 class ScriptEditor(tk.Tk):
@@ -34,6 +36,8 @@ class ScriptEditor(tk.Tk):
         self.rows: list[dict[str, object]] = []
         self.image_map: dict[str, str] = {}
         self.image_sources: dict[str, str] = {}
+        self.motion_map: dict[str, str] = {}
+        self.motion_sources: dict[str, str] = {}
         self.description_bindings: dict[int, dict[str, str]] = {}
         self.reference_files: list[str] = []
         self.reference_index = -1
@@ -130,20 +134,23 @@ class ScriptEditor(tk.Tk):
         table_toolbar = ttk.Frame(left)
         table_toolbar.grid(row=3, column=0, sticky="ew", pady=(8, 5))
         ttk.Label(table_toolbar, text="Linhas geradas", style="Header.TLabel").pack(side="left")
+        ttk.Button(table_toolbar, text="REMOVER VÍDEO", command=self.remove_video_from_selected_line).pack(side="right", padx=(8, 0))
+        ttk.Button(table_toolbar, text="ATRIBUIR VÍDEO À LINHA", command=self.bind_video_to_selected_line).pack(side="right", padx=(8, 0))
         ttk.Button(table_toolbar, text="Usar imagem atual na DESCRIÇÃO selecionada", command=self.bind_reference_to_selected_description).pack(side="right")
 
         table_frame = ttk.Frame(left)
         table_frame.grid(row=5, column=0, sticky="nsew")
         table_frame.columnconfigure(0, weight=1)
         table_frame.rowconfigure(0, weight=1)
-        columns = ("order", "line_id", "instruction", "image_id")
+        columns = ("order", "line_id", "instruction", "image_id", "motion_id")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse")
-        for col, text in [("order", "order"), ("line_id", "line_id"), ("instruction", "instruction"), ("image_id", "image_id")]:
+        for col, text in [("order", "order"), ("line_id", "line_id"), ("instruction", "instruction"), ("image_id", "image_id"), ("motion_id", "motion_id")]:
             self.tree.heading(col, text=text)
         self.tree.column("order", width=65, anchor="center", stretch=False)
         self.tree.column("line_id", width=280, stretch=False)
         self.tree.column("instruction", width=620)
         self.tree.column("image_id", width=160, stretch=False)
+        self.tree.column("motion_id", width=180, stretch=False)
         self.tree.grid(row=0, column=0, sticky="nsew")
         sy = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         sy.grid(row=0, column=1, sticky="ns")
@@ -292,9 +299,9 @@ class ScriptEditor(tk.Tk):
 
     def compile_current(self) -> bool:
         try:
-            base=compile_rows(self.draft.get("1.0", "end-1c"), package_id=self.package_var.get(), script_version=self.version_var.get(), frame_prefix=self.frame_prefix_var.get(), start_order=self.start_order_var.get(), order_step=self.order_step_var.get(), start_frame_number=self.start_frame_var.get(), image_map={})
+            base=compile_rows(self.draft.get("1.0", "end-1c"), package_id=self.package_var.get(), script_version=self.version_var.get(), frame_prefix=self.frame_prefix_var.get(), start_order=self.start_order_var.get(), order_step=self.order_step_var.get(), start_frame_number=self.start_frame_var.get(), image_map={}, motion_map={})
             self.image_map=self.build_image_map(base)
-            self.rows=compile_rows(self.draft.get("1.0", "end-1c"), package_id=self.package_var.get(), script_version=self.version_var.get(), frame_prefix=self.frame_prefix_var.get(), start_order=self.start_order_var.get(), order_step=self.order_step_var.get(), start_frame_number=self.start_frame_var.get(), image_map=self.image_map)
+            self.rows=compile_rows(self.draft.get("1.0", "end-1c"), package_id=self.package_var.get(), script_version=self.version_var.get(), frame_prefix=self.frame_prefix_var.get(), start_order=self.start_order_var.get(), order_step=self.order_step_var.get(), start_frame_number=self.start_frame_var.get(), image_map=self.image_map, motion_map=self.motion_map)
         except Exception as exc:
             messagebox.showerror("Roteiro inválido", str(exc)); self.status_var.set("Há erros no roteiro."); return False
         self.refresh_tree(); self.status_var.set(f"Roteiro válido: {len(self.rows)} linhas."); return True
@@ -302,7 +309,44 @@ class ScriptEditor(tk.Tk):
     def refresh_tree(self):
         self.tree.delete(*self.tree.get_children())
         for r in self.rows:
-            lid=str(r["line_id"]); self.tree.insert("", "end", iid=lid, values=(r["order"], lid, r["instruction"], r.get("image_id", "")))
+            lid=str(r["line_id"]); self.tree.insert("", "end", iid=lid, values=(r["order"], lid, r["instruction"], r.get("image_id", ""), r.get("motion_id", "")))
+
+    def next_motion_number(self) -> int:
+        pattern = re.compile(r"(\d+)_motion\.webp$", re.IGNORECASE)
+        numbers = [int(match.group(1)) for value in self.motion_sources for match in [pattern.search(value)] if match]
+        return max(numbers, default=int(self.image_start_var.get()) - 1) + 1
+
+    def bind_video_to_selected_line(self):
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showinfo("Vídeo", "Selecione a linha que receberá o vídeo.")
+            return
+        source = filedialog.askopenfilename(title="Escolher vídeo", filetypes=VIDEO_TYPES)
+        if not source:
+            return
+        line_id = str(selection[0])
+        previous = self.motion_map.get(line_id, "")
+        if previous:
+            self.motion_sources.pop(previous, None)
+        motion_id = normalize_motion_name(self.image_prefix_var.get(), self.next_motion_number())
+        self.motion_map[line_id] = motion_id
+        self.motion_sources[motion_id] = source
+        self.compile_current()
+        self.tree.selection_set(line_id)
+        self.status_var.set(f"{line_id} → {motion_id}. O vídeo será convertido para WebP animado na exportação.")
+
+    def remove_video_from_selected_line(self):
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showinfo("Vídeo", "Selecione a linha que deixará de usar vídeo.")
+            return
+        line_id = str(selection[0])
+        motion_id = self.motion_map.pop(line_id, "")
+        if motion_id:
+            self.motion_sources.pop(motion_id, None)
+        self.compile_current()
+        self.tree.selection_set(line_id)
+        self.status_var.set(f"Vídeo removido de {line_id}.")
 
     def bind_reference_to_selected_description(self):
         source=self.current_reference(); sel=self.tree.selection()
@@ -315,7 +359,7 @@ class ScriptEditor(tk.Tk):
         ordinal=ids.index(lid)+1; self.allocate_binding(ordinal, source); self.compile_current(); self.tree.selection_set(lid)
 
     def project_payload(self):
-        return {"format":"roleplay2026-editor-desktop-image-first-v2","package_id":self.package_var.get(),"script_version":self.version_var.get(),"frame_prefix":self.frame_prefix_var.get(),"start_order":self.start_order_var.get(),"order_step":self.order_step_var.get(),"start_frame_number":self.start_frame_var.get(),"actors":self.actors_var.get(),"image_prefix":self.image_prefix_var.get(),"image_start":self.image_start_var.get(),"quality":self.quality_var.get(),"max_side":self.max_side_var.get(),"draft":self.draft.get("1.0","end-1c"),"image_map":self.image_map,"image_sources":self.image_sources,"description_bindings":self.description_bindings,"reference_files":self.reference_files,"reference_index":self.reference_index}
+        return {"format":"roleplay2026-editor-desktop-image-first-v3","package_id":self.package_var.get(),"script_version":self.version_var.get(),"frame_prefix":self.frame_prefix_var.get(),"start_order":self.start_order_var.get(),"order_step":self.order_step_var.get(),"start_frame_number":self.start_frame_var.get(),"actors":self.actors_var.get(),"image_prefix":self.image_prefix_var.get(),"image_start":self.image_start_var.get(),"quality":self.quality_var.get(),"max_side":self.max_side_var.get(),"draft":self.draft.get("1.0","end-1c"),"image_map":self.image_map,"image_sources":self.image_sources,"motion_map":self.motion_map,"motion_sources":self.motion_sources,"description_bindings":self.description_bindings,"reference_files":self.reference_files,"reference_index":self.reference_index}
 
     def save_project_dialog(self):
         if self.draft.get("1.0","end-1c").strip() and not self.compile_current(): return
@@ -337,6 +381,7 @@ class ScriptEditor(tk.Tk):
         self.actors_var.set(str(d.get("actors","usuario"))); self.image_prefix_var.set(str(d.get("image_prefix","imagem"))); self.image_start_var.set(int(d.get("image_start",1))); self.quality_var.set(int(d.get("quality",88))); self.max_side_var.set(int(d.get("max_side",1800)))
         self.draft.delete("1.0","end"); self.draft.insert("1.0",str(d.get("draft","")))
         self.image_map={str(k):str(v) for k,v in dict(d.get("image_map",{})).items()}; self.image_sources={str(k):str(v) for k,v in dict(d.get("image_sources",{})).items()}
+        self.motion_map={str(k):str(v) for k,v in dict(d.get("motion_map",{})).items()}; self.motion_sources={str(k):str(v) for k,v in dict(d.get("motion_sources",{})).items()}
         raw=dict(d.get("description_bindings",{})); self.description_bindings={int(k):{str(a):str(b) for a,b in dict(v).items()} for k,v in raw.items()}
         self.reference_files=[str(x) for x in d.get("reference_files",[])]; self.reference_index=int(d.get("reference_index",-1)); self._refresh_actor_values()
         if self.reference_files: self.reference_index=max(0,min(len(self.reference_files)-1,self.reference_index)); self.show_reference()
@@ -345,12 +390,13 @@ class ScriptEditor(tk.Tk):
     def export_dialog(self):
         if not self.compile_current(): return
         missing=[iid for iid,src in self.image_sources.items() if not Path(src).exists()]
+        missing += [iid for iid,src in self.motion_sources.items() if not Path(src).exists()]
         if missing: messagebox.showerror("Exportação","Imagens originais não encontradas:\n"+"\n".join(missing[:8])); return
         destination=filedialog.askdirectory(title="Escolha a pasta da exportação")
         if not destination: return
         target=Path(destination)/f"{slugify(self.package_var.get().split('.')[-1], 'roteiro')}_pronto"
         if target.exists() and any(target.iterdir()) and not messagebox.askyesno("Pasta existente",f"{target} já existe. Atualizar?"): return
-        try: export_package(target, rows=self.rows, image_sources=self.image_sources, quality=self.quality_var.get(), max_side=self.max_side_var.get(), project_payload=self.project_payload())
+        try: export_package(target, rows=self.rows, image_sources=self.image_sources, motion_sources=self.motion_sources, quality=self.quality_var.get(), max_side=self.max_side_var.get(), project_payload=self.project_payload())
         except Exception as exc: messagebox.showerror("Exportação",str(exc)); return
         messagebox.showinfo("Concluído",f"Roteiro e imagens preparados em:\n\n{target}")
         try: os.startfile(target)  # type: ignore[attr-defined]
@@ -358,7 +404,7 @@ class ScriptEditor(tk.Tk):
 
     def new_project(self):
         if self.draft.get("1.0","end-1c").strip() and not messagebox.askyesno("Novo projeto","Limpar o projeto atual?"): return
-        self.rows=[]; self.image_map={}; self.image_sources={}; self.description_bindings={}; self.reference_files=[]; self.reference_index=-1; self.project_path=None
+        self.rows=[]; self.image_map={}; self.image_sources={}; self.motion_map={}; self.motion_sources={}; self.description_bindings={}; self.reference_files=[]; self.reference_index=-1; self.project_path=None
         self.draft.delete("1.0","end"); self.tree.delete(*self.tree.get_children()); self.preview_image=None; self.preview_label.configure(image="",text="ABRA UMA IMAGEM PRIMEIRO\n\nEla ficará aqui enquanto você escreve o roteiro.")
         self.reference_name_var.set("Nenhuma imagem aberta"); self.reference_count_var.set("Abra uma imagem para começar a escrever."); self.status_var.set("Novo projeto iniciado.")
 

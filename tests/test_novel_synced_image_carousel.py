@@ -105,6 +105,30 @@ def test_optional_image_id_is_attached_to_exact_authorial_line() -> None:
     assert "image_id" not in frame["entries"][2]
 
 
+def test_optional_motion_id_is_attached_to_frame_and_exact_line() -> None:
+    document = _base_document()
+    rows = [
+        {
+            "line_id": "encontro_004_descricao",
+            "instruction": "[DESCRIÇÃO] Camilly entra no carro.",
+            "status": "active",
+            "motion_id": "camilly04_motion.webp",
+        },
+        {
+            "line_id": "encontro_004_camilly_pensamento_01",
+            "instruction": "[PENSAMENTO camilly] Eu observo a reação dele.",
+            "status": "active",
+            "motion_id": "camilly05_motion.webp",
+        },
+    ]
+
+    frame = _frame_from(synced.enrich_compiled_document_with_image_ids(document, rows))
+
+    assert frame["motion_id"] == "camilly04_motion.webp"
+    assert "motion_id" not in frame["entries"][0]
+    assert frame["entries"][1]["motion_id"] == "camilly05_motion.webp"
+
+
 def test_balloon_without_image_reuses_last_valid_image() -> None:
     frame = {
         "image_id": "camilly04.webp",

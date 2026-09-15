@@ -31,13 +31,13 @@ FLUXO: ELENCO + IMAGEM PRIMEIRO
    + FALA INTERPRETADA para permitir que o modelo desenvolva o núcleo autoral.
 14. Use + FALA BALAO para gerar [FALA ator_balao]. Na edição de uma linha,
    as modalidades exata e interpretada também podem ser combinadas com BALÃO.
-15. Use + SMACK! para inserir a onomatopeia do beijo. Ela deve ficar
-    imediatamente antes da FALA ou PENSAMENTO que aparece sobre a imagem-alvo:
-    [ONOMATOPEIA smack x=69 y=48 delay=350 duracao=3000]
-    x e y definem a posicao percentual dentro da imagem; delay define quantos
-    milissegundos ela espera para aparecer; duracao define por quanto tempo ela
-    permanece ate desaparecer por completo. A onomatopeia nao cria balao,
-    imagem, clique ou etapa adicional na contagem do quadro.
+15. Use + ONOMATOPEIA para definir o tipo, o texto, a posicao, o atraso, a
+    duracao e o deslocamento visual do efeito. Ela deve ficar imediatamente
+    antes da FALA ou PENSAMENTO que aparece sobre a imagem-alvo, por exemplo:
+    [ONOMATOPEIA smack texto='SMACK!' x=69 y=48 delay=350 duracao=3000 dx=32 dy=-10]
+    Podem existir duas ou mais ONOMATOPEIAS seguidas antes da mesma fala ou
+    pensamento. Cada uma e exibida com seus proprios parametros. Elas nao criam
+    balao, clique ou etapa adicional na contagem do quadro.
 16. Use + FIM DA HISTORIA para inserir [FIM_HISTORIA] como a ultima linha.
     Sem texto, a tag encerra o ultimo quadro. Com texto, cria uma despedida final
     deterministica, que tambem pode receber uma imagem propria na timeline.
@@ -51,7 +51,14 @@ FLUXO: ELENCO + IMAGEM PRIMEIRO
 24. Ao salvar a alteracao, line_id e order sao recompilados automaticamente e a imagem ja atribuida aquela linha e preservada.
 25. Anterior / Proxima continuam disponiveis como navegacao auxiliar, mas nao sao necessarios para trabalhar com lotes grandes.
 26. Salve o projeto JSON para continuar outro dia.
-27. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
+27. Para adicionar movimento, selecione qualquer linha da timeline e clique em
+    ATRIBUIR VIDEO A LINHA. O video escolhido fica ligado ao motion_id daquela
+    linha. Use REMOVER VIDEO para desfazer a atribuicao.
+28. Na exportacao, cada video e limitado a 15 segundos, fica sem audio, e
+    convertido automaticamente para WebP animado. No app ele entra depois da
+    imagem de seguranca, toca uma vez, para no ultimo quadro e reinicia quando o
+    usuario volta a cena.
+29. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
 
 SAIDA
 A pasta exportada contem:
@@ -62,18 +69,23 @@ A pasta exportada contem:
 - elenco_manifest.yaml
 - ELENCO-E-TAGS.txt
 - imagens/*.webp
+- videos/*_motion.webp
 
 O arquivo elenco_manifest.yaml contem o bloco cast_customization pronto para ser
 copiado ao manifest.yaml do card. O arquivo ELENCO-E-TAGS.txt resume os marcadores
 de nome, fala e pensamento de todos os personagens cadastrados.
 
 CABECALHO OFICIAL
-package_id | script_version | line_id | order | instruction | status | image_id
+package_id | script_version | line_id | order | instruction | status | image_id | motion_id
 
 As imagens sao convertidas para WebP e recebem numeracao automatica, por exemplo:
 camilly1.webp
 camilly2.webp
 camilly3.webp
+
+Os movimentos recebem numeracao automatica e o sufixo _motion.webp, por exemplo:
+camilly4_motion.webp
+camilly5_motion.webp
 
 O arquivo projeto_roteiro.json permite continuar a edicao posteriormente enquanto as imagens originais permanecerem acessiveis no PC.
 

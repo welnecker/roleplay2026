@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import subprocess
 import unicodedata
 from dataclasses import dataclass
 from io import BytesIO, StringIO
@@ -20,6 +21,7 @@ COLUMNS = (
     "instruction",
     "status",
     "image_id",
+    "motion_id",
 )
 
 _TAG_RE = re.compile(r"(?ms)^[ \t]*\[([^\]\n]+)\][ \t]*(.*?)(?=^[ \t]*\[[^\]\n]+\]|\Z)")
@@ -268,9 +270,12 @@ def parse_draft(draft: str) -> list[Item]:
     for index, item in enumerate(items):
         if item.kind != "ONOMATOPEIA":
             continue
-        if index + 1 >= len(items) or items[index + 1].kind not in {"FALA", "PENSAMENTO"}:
+        target = index + 1
+        while target < len(items) and items[target].kind == "ONOMATOPEIA":
+            target += 1
+        if target >= len(items) or items[target].kind not in {"FALA", "PENSAMENTO"}:
             raise EditorError(
-                "[ONOMATOPEIA] precisa ficar imediatamente antes da FALA ou PENSAMENTO correspondente."
+                "Uma sequência de [ONOMATOPEIA] precisa ficar antes da FALA ou PENSAMENTO correspondente."
             )
     return items
 
@@ -285,6 +290,7 @@ def compile_rows(
     order_step: int = 10,
     start_frame_number: int = 1,
     image_map: dict[str, str] | None = None,
+    motion_map: dict[str, str] | None = None,
 ) -> list[dict[str, object]]:
     clean_package = str(package_id or "").strip()
     if not clean_package.startswith("roleplay2026.") or clean_package.endswith("."):
@@ -304,6 +310,7 @@ def compile_rows(
     occurrences: dict[tuple[str, str], int] = {}
     rows: list[dict[str, object]] = []
     assigned = image_map or {}
+    assigned_motions = motion_map or {}
 
     for index, item in enumerate(items):
         if item.kind == "DESCRICAO":
@@ -332,6 +339,7 @@ def compile_rows(
                 "instruction": item.instruction,
                 "status": "active",
                 "image_id": str(assigned.get(line_id, "") or ""),
+                "motion_id": str(assigned_motions.get(line_id, "") or ""),
             }
         )
     return rows
@@ -367,7 +375,7 @@ def rows_to_xlsx_bytes(rows: list[dict[str, object]]) -> bytes:
     for row in rows:
         ws.append([row.get(column, "") for column in COLUMNS])
     ws.freeze_panes = "A2"
-    widths = {"A": 28, "B": 16, "C": 42, "D": 10, "E": 90, "F": 12, "G": 24}
+    widths = {"A": 28, "B": 16, "C": 42, "D": 10, "E": 90, "F": 12, "G": 24, "H": 26}
     for column, width in widths.items():
         ws.column_dimensions[column].width = width
     out = BytesIO()
@@ -377,6 +385,61 @@ def rows_to_xlsx_bytes(rows: list[dict[str, object]]) -> bytes:
 
 def normalize_image_name(prefix: str, number: int) -> str:
     return f"{slugify(prefix, fallback='imagem')}{int(number)}.webp"
+
+
+def normalize_motion_name(prefix: str, number: int) -> str:
+    return f"{slugify(prefix, fallback='motion')}{int(number)}_motion.webp"
+
+
+def convert_video_to_animated_webp(
+    source: Path,
+    destination: Path,
+    *,
+    quality: int = 80,
+    max_side: int = 1280,
+    fps: int = 12,
+    max_duration: int = 15,
+) -> None:
+    """Converte vídeo em WebP animado, uma reprodução e último frame retido."""
+
+    try:
+        import imageio_ffmpeg
+    except Exception as exc:
+        raise EditorError("O conversor de vídeos interno não está disponível.") from exc
+    if not source.exists():
+        raise EditorError(f"Vídeo não encontrado: {source}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    scale = (
+        f"scale='if(gt(iw,ih),min({int(max_side)},iw),-2)':"
+        f"'if(gt(iw,ih),-2,min({int(max_side)},ih))'"
+    )
+    command = [
+        imageio_ffmpeg.get_ffmpeg_exe(),
+        "-y",
+        "-i",
+        str(source),
+        "-t",
+        str(max(1, int(max_duration))),
+        "-an",
+        "-vf",
+        f"fps={max(1, int(fps))},{scale}",
+        "-c:v",
+        "libwebp_anim",
+        "-loop",
+        "1",
+        "-quality",
+        str(max(1, min(100, int(quality)))),
+        "-compression_level",
+        "6",
+        str(destination),
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    if completed.returncode != 0 or not destination.exists():
+        detail = completed.stderr.strip().splitlines()
+        raise EditorError(
+            "Falha ao converter o vídeo para WebP animado."
+            + (f" Detalhe: {detail[-1]}" if detail else "")
+        )
 
 
 def save_project(path: Path, payload: dict[str, object]) -> None:
@@ -395,6 +458,7 @@ def export_package(
     *,
     rows: list[dict[str, object]],
     image_sources: dict[str, str],
+    motion_sources: dict[str, str] | None = None,
     quality: int = 88,
     max_side: int = 1800,
     project_payload: dict[str, object] | None = None,
@@ -407,6 +471,9 @@ def export_package(
     destination.mkdir(parents=True, exist_ok=True)
     images_dir = destination / "imagens"
     images_dir.mkdir(exist_ok=True)
+    videos_dir = destination / "videos"
+    if motion_sources:
+        videos_dir.mkdir(exist_ok=True)
 
     (destination / "roteiro.csv").write_text(rows_to_csv(rows), encoding="utf-8-sig")
     (destination / "roteiro.tsv").write_text(rows_to_tsv(rows), encoding="utf-8-sig")
@@ -421,6 +488,14 @@ def export_package(
             if max(image.size) > int(max_side):
                 image.thumbnail((int(max_side), int(max_side)), Image.Resampling.LANCZOS)
             image.save(images_dir / image_id, "WEBP", quality=int(quality), method=6)
+
+    for motion_id, source in (motion_sources or {}).items():
+        convert_video_to_animated_webp(
+            Path(source),
+            videos_dir / motion_id,
+            quality=min(int(quality), 85),
+            max_side=min(int(max_side), 1280),
+        )
 
     if project_payload is not None:
         save_project(destination / "projeto_roteiro.json", project_payload)

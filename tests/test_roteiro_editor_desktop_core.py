@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -35,6 +36,7 @@ def test_columns_match_current_sheet_contract() -> None:
         "instruction",
         "status",
         "image_id",
+        "motion_id",
     )
 
 
@@ -106,8 +108,8 @@ def test_smack_e_exportado_antes_da_fala_sem_consumir_ator_ou_imagem() -> None:
     assert rows[3]["line_id"] == "mascara_001_mary_fala_01"
 
 
-def test_smack_precisa_ficar_imediatamente_antes_da_fala_alvo() -> None:
-    with pytest.raises(core.EditorError, match="imediatamente antes"):
+def test_smack_precisa_ficar_antes_da_fala_alvo() -> None:
+    with pytest.raises(core.EditorError, match="antes da FALA"):
         core.compile_rows(
             """[DESCRIÇÃO] Cena.
 [ONOMATOPEIA smack x=69 y=48]
@@ -391,9 +393,82 @@ def test_image_map_is_applied_only_to_exact_line() -> None:
     assert rows[2]["image_id"] == "camilly2.webp"
 
 
+def test_motion_map_is_exported_only_on_assigned_line() -> None:
+    rows = core.compile_rows(
+        _draft(),
+        package_id="roleplay2026.camilly",
+        script_version="200",
+        frame_prefix="encontro",
+        motion_map={
+            "encontro_001_descricao": "camilly1_motion.webp",
+            "encontro_001_camilly_pensamento_01": "camilly2_motion.webp",
+        },
+    )
+    assert rows[0]["motion_id"] == "camilly1_motion.webp"
+    assert rows[1]["motion_id"] == ""
+    assert rows[2]["motion_id"] == "camilly2_motion.webp"
+
+
+def test_multiple_onomatopoeias_can_target_the_same_speech() -> None:
+    rows = core.compile_rows(
+        """[DESCRIÇÃO] Mary beija o professor.
+[ONOMATOPEIA smack texto='SMACK!' x=40 y=45 delay=300]
+[ONOMATOPEIA suspiro texto='AH...' x=70 y=35 delay=1800]
+[FALA mary] Você me surpreendeu.
+""",
+        package_id="roleplay2026.casada_frustrada",
+        script_version="205",
+        frame_prefix="encontro",
+    )
+    assert [row["line_id"] for row in rows[1:3]] == [
+        "encontro_001_onomatopeia_01",
+        "encontro_001_onomatopeia_02",
+    ]
+    assert "texto=AH..." in rows[2]["instruction"]
+
+
 def test_image_name_is_webp_and_sequential() -> None:
     assert core.normalize_image_name("Camilly", 1) == "camilly1.webp"
     assert core.normalize_image_name("Casada frustrada", 12) == "casada_frustrada12.webp"
+
+
+def test_video_is_converted_to_single_play_animated_webp(tmp_path: Path) -> None:
+    imageio_ffmpeg = pytest.importorskip("imageio_ffmpeg")
+    source = tmp_path / "movimento.mp4"
+    destination = tmp_path / "camilly1_motion.webp"
+    generated = subprocess.run(
+        [
+            imageio_ffmpeg.get_ffmpeg_exe(),
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=96x64:rate=8:duration=1",
+            "-pix_fmt",
+            "yuv420p",
+            str(source),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert generated.returncode == 0
+
+    core.convert_video_to_animated_webp(
+        source,
+        destination,
+        max_side=64,
+        fps=6,
+        max_duration=2,
+    )
+
+    from PIL import Image
+
+    with Image.open(destination) as image:
+        assert image.format == "WEBP"
+        assert image.n_frames > 1
+        assert max(image.size) <= 64
+        assert image.info["loop"] == 1
 
 
 def test_csv_header_has_no_updated_at() -> None:
@@ -404,5 +479,5 @@ def test_csv_header_has_no_updated_at() -> None:
         frame_prefix="cena",
     )
     header = core.rows_to_csv(rows).splitlines()[0]
-    assert header == "package_id,script_version,line_id,order,instruction,status,image_id"
+    assert header == "package_id,script_version,line_id,order,instruction,status,image_id,motion_id"
     assert "updated_at" not in header

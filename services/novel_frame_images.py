@@ -40,6 +40,31 @@ def _row_image_maps(
     return line_images, frame_images
 
 
+def _row_motion_maps(
+    rows: Iterable[dict[str, Any]],
+) -> tuple[dict[str, str], dict[str, str]]:
+    line_motions: dict[str, str] = {}
+    frame_motions: dict[str, str] = {}
+    description_index = 0
+    for raw in rows:
+        row = dict(raw)
+        if str(row.get("status", "active") or "active").strip().casefold() != "active":
+            continue
+        line_id = str(row.get("line_id", "") or "").strip()
+        kind, _actor, _body = novel_frame_patch._tag(row.get("instruction"))
+        if kind == "descricao":
+            description_index += 1
+        motion_id = clean_image_id(row.get("motion_id"))
+        if not line_id or not motion_id:
+            continue
+        line_motions[line_id] = motion_id
+        if kind == "descricao":
+            frame_motions[
+                novel_frame_patch._frame_id_from_description(line_id, description_index)
+            ] = motion_id
+    return line_motions, frame_motions
+
+
 def enrich_compiled_document_with_image_ids(
     document: dict[str, Any],
     rows: Iterable[dict[str, Any]],
@@ -48,7 +73,8 @@ def enrich_compiled_document_with_image_ids(
 
     materialized = [dict(row) for row in rows]
     line_images, frame_images = _row_image_maps(materialized)
-    if not line_images and not frame_images:
+    line_motions, frame_motions = _row_motion_maps(materialized)
+    if not line_images and not frame_images and not line_motions and not frame_motions:
         return document
 
     enriched = deepcopy(document)
@@ -72,6 +98,9 @@ def enrich_compiled_document_with_image_ids(
             frame_image = frame_images.get(current_frame_id, "")
             if frame_image:
                 frame["image_id"] = frame_image
+            frame_motion = frame_motions.get(current_frame_id, "")
+            if frame_motion:
+                frame["motion_id"] = frame_motion
             for entry in frame.get("entries", []) or []:
                 if not isinstance(entry, dict):
                     continue
@@ -81,6 +110,12 @@ def enrich_compiled_document_with_image_ids(
                 )
                 if entry_image:
                     entry["image_id"] = entry_image
+                entry_motion = line_motions.get(
+                    str(entry.get("line_id", "") or "").strip(),
+                    "",
+                )
+                if entry_motion:
+                    entry["motion_id"] = entry_motion
             beat["required_movement"] = prefix + json.dumps(
                 frame,
                 ensure_ascii=False,
@@ -108,8 +143,22 @@ def image_sequence_for_frame(
     return base, tuple(result)
 
 
+def motion_sequence_for_frame(
+    frame: Mapping[str, object],
+) -> tuple[str, tuple[str, ...]]:
+    """Retorna motion do quadro e motions explícitos de cada fala/pensamento."""
+
+    base = clean_image_id(frame.get("motion_id"))
+    result: list[str] = []
+    for raw in frame.get("entries", []) or []:
+        entry = raw if isinstance(raw, Mapping) else {}
+        result.append(clean_image_id(entry.get("motion_id")))
+    return base, tuple(result)
+
+
 __all__ = [
     "clean_image_id",
     "enrich_compiled_document_with_image_ids",
     "image_sequence_for_frame",
+    "motion_sequence_for_frame",
 ]

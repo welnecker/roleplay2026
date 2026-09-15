@@ -11,6 +11,7 @@ from core import (
     slugify,
     validate_draft_cast,
 )
+from roleplay_shared.onomatopoeia import parse_onomatopoeia_header
 
 
 _GENDER_LABELS = {
@@ -80,16 +81,71 @@ class ScriptEditor(GalleryScriptEditor):
         if validate_button is not None:
             ttk.Button(
                 validate_button.master,
-                text="+ SMACK!",
-                command=lambda: self.insert_tag(
-                    "[ONOMATOPEIA smack x=69 y=48 delay=350 duracao=3000]"
-                ),
+                text="+ ONOMATOPEIA",
+                command=self.open_onomatopoeia_editor,
             ).pack(side="right", padx=4, before=validate_button)
             ttk.Button(
                 validate_button.master,
                 text="+ FIM DA HISTÓRIA",
                 command=lambda: self.insert_tag("[FIM_HISTORIA]"),
             ).pack(side="right", padx=4, before=validate_button)
+
+    def open_onomatopoeia_editor(self) -> None:
+        dialog = tk.Toplevel(self)
+        dialog.title("Inserir onomatopeia")
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+
+        values = {
+            "tipo": tk.StringVar(value="smack"),
+            "texto": tk.StringVar(value="SMACK!"),
+            "x": tk.StringVar(value="69"),
+            "y": tk.StringVar(value="48"),
+            "delay": tk.StringVar(value="350"),
+            "duracao": tk.StringVar(value="3000"),
+            "dx": tk.StringVar(value="32"),
+            "dy": tk.StringVar(value="-10"),
+        }
+        form = ttk.Frame(dialog, padding=14)
+        form.grid(sticky="nsew")
+        labels = (
+            ("Tipo", "tipo"), ("Texto exibido", "texto"),
+            ("Posição X (0–100)", "x"), ("Posição Y (0–100)", "y"),
+            ("Atraso (ms)", "delay"), ("Duração (ms)", "duracao"),
+            ("Movimento X (px)", "dx"), ("Movimento Y (px)", "dy"),
+        )
+        for index, (label, key) in enumerate(labels):
+            row, column = divmod(index, 2)
+            box = ttk.Frame(form)
+            box.grid(row=row, column=column, sticky="ew", padx=5, pady=4)
+            ttk.Label(box, text=label).pack(anchor="w")
+            ttk.Entry(box, textvariable=values[key], width=28).pack(fill="x")
+
+        ttk.Label(
+            form,
+            text="Você pode inserir várias onomatopeias seguidas antes da mesma fala ou pensamento.",
+        ).grid(row=4, column=0, columnspan=2, sticky="w", padx=5, pady=(8, 4))
+
+        def insert() -> None:
+            try:
+                raw = (
+                    f"ONOMATOPEIA {values['tipo'].get()} "
+                    f"texto={values['texto'].get()!r} x={values['x'].get()} y={values['y'].get()} "
+                    f"delay={values['delay'].get()} duracao={values['duracao'].get()} "
+                    f"dx={values['dx'].get()} dy={values['dy'].get()}"
+                )
+                effect = parse_onomatopoeia_header(raw)
+            except ValueError as exc:
+                messagebox.showerror("Onomatopeia inválida", str(exc), parent=dialog)
+                return
+            self.insert_tag(f"[{effect.canonical_header()}]")
+            dialog.destroy()
+
+        actions = ttk.Frame(form)
+        actions.grid(row=5, column=0, columnspan=2, sticky="e", padx=5, pady=(10, 0))
+        ttk.Button(actions, text="Cancelar", command=dialog.destroy).pack(side="left", padx=4)
+        ttk.Button(actions, text="Inserir", command=insert, style="Big.TButton").pack(side="left", padx=4)
 
     def _refresh_actor_values(self) -> None:
         try:

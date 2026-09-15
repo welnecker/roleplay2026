@@ -141,6 +141,8 @@ class ScriptEditor(BalloonScriptEditor):
 
         old_image_id = str(self.image_map.get(line_id, "") or self.rows[index].get("image_id", "") or "")
         old_source = str(self.image_sources.get(old_image_id, "") or "") if old_image_id else ""
+        old_motion_id = str(self.motion_map.get(line_id, "") or self.rows[index].get("motion_id", "") or "")
+        old_motion_source = str(self.motion_sources.get(old_motion_id, "") or "") if old_motion_id else ""
         instructions = [str(row.get("instruction", "")).strip() for row in self.rows]
         instructions[index] = new_instruction
         self.draft.delete("1.0", "end")
@@ -150,6 +152,9 @@ class ScriptEditor(BalloonScriptEditor):
         old_map = dict(self.image_map)
         old_map.pop(line_id, None)
         self.image_map = old_map
+        old_motion_map = dict(self.motion_map)
+        old_motion_map.pop(line_id, None)
+        self.motion_map = old_motion_map
         if not self.compile_current():
             raise ValueError("A alteração tornou o roteiro inválido.")
         if index >= len(self.rows):
@@ -161,6 +166,10 @@ class ScriptEditor(BalloonScriptEditor):
             self.image_map[new_line_id] = old_image_id
             if old_source:
                 self.image_sources[old_image_id] = old_source
+        if old_motion_id:
+            self.motion_map[new_line_id] = old_motion_id
+            if old_motion_source:
+                self.motion_sources[old_motion_id] = old_motion_source
 
         # Se era/continua sendo descrição, sincroniza o binding ordinal da imagem-primeiro.
         descriptions = [
@@ -359,7 +368,8 @@ class ScriptEditor(BalloonScriptEditor):
             line_id = str(row["line_id"])
             instruction = str(row.get("instruction", ""))
             image_id = str(row.get("image_id", "") or "")
-            values = (row["order"], line_id, instruction, image_id)
+            motion_id = str(row.get("motion_id", "") or "")
+            values = (row["order"], line_id, instruction, image_id, motion_id)
 
             if line_id.endswith("_descricao"):
                 frame_number += 1
@@ -367,6 +377,8 @@ class ScriptEditor(BalloonScriptEditor):
                 label = f"QUADRO {frame_number:02d}"
                 if image_id:
                     label += f"  •  {image_id}"
+                if motion_id:
+                    label += f"  🎬 {motion_id}"
                 self.tree.insert(
                     "",
                     "end",
@@ -394,6 +406,8 @@ class ScriptEditor(BalloonScriptEditor):
                 label += " BALÃO"
             if image_id:
                 label += f"  •  {image_id}"
+            if motion_id:
+                label += f"  🎬 {motion_id}"
 
             parent = "" if upper.startswith("[FIM_HISTORIA]") else current_parent
             self.tree.insert(
