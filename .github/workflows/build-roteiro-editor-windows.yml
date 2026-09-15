@@ -7,6 +7,7 @@ on:
       - agent/synced-image-carousel
       - agent/customizable-story-cast
       - agent/cloudflare-media-migration
+      - agent/legal-pages
     paths:
       - "tools/roteiro_editor_desktop/**"
       - ".github/workflows/build-roteiro-editor-windows.yml"
