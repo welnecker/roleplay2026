@@ -282,8 +282,10 @@ def legal_acceptance_screen(
             return
         terms.value = privacy.value = True
         terms.disabled = privacy.disabled = True
-        action.content = "Continuar"
         error.visible = False
+        # O aceite já foi persistido no backend; conclua o gate nesta mesma
+        # ação.  Antes, a tela permanecia montada com o erro antigo visível.
+        on_continue()
         _update_attached(action)
 
     terms.on_change = update_action
@@ -887,3 +889,4 @@ __all__ = [
     "story_cast_screen",
     "story_identity_screen",
 ]
+

@@ -117,9 +117,10 @@ def test_login_oferece_aba_de_cadastro_e_envia_os_campos() -> None:
 
 def test_aceite_legal_exige_duas_caixas_e_as_desabilita_apos_registro() -> None:
     accepted: list[bool] = []
+    continued: list[bool] = []
     screen = legal_acceptance_screen(
         on_accept=lambda: accepted.append(True) or None,
-        on_continue=lambda: None,
+        on_continue=lambda: continued.append(True),
         on_open_terms=lambda: None,
         on_open_privacy=lambda: None,
     )
@@ -138,8 +139,8 @@ def test_aceite_legal_exige_duas_caixas_e_as_desabilita_apos_registro() -> None:
     button.on_click(None)
 
     assert accepted == [True]
+    assert continued == [True]
     assert all(box.value and box.disabled for box in boxes)
-    assert button.content == "Continuar"
 
 
 def test_capa_data_url_e_convertida_em_base64_puro_para_flet_desktop() -> None:
@@ -295,3 +296,4 @@ def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
     assert "Quem é a personagem." in back_texts
     assert "COMO É" in back_texts
     assert "O QUE PRETENDE COM VOCÊ" in back_texts
+
