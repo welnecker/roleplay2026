@@ -17,6 +17,11 @@ class FakeResponse:
         return self._payload
 
 
+class BodyUnavailableResponse(FakeResponse):
+    def json(self) -> dict[str, Any]:
+        raise ValueError("response body unavailable")
+
+
 class FakeSession:
     def __init__(self, responses: list[FakeResponse]) -> None:
         self.responses = list(responses)
@@ -186,6 +191,16 @@ def test_cliente_registra_aceite_dos_dois_documentos() -> None:
         "accepted_terms": "true",
         "accepted_privacy": "true",
     }
+
+
+def test_cliente_considera_aceite_confirmado_se_resposta_200_nao_puder_ser_lida() -> None:
+    session = FakeSession([BodyUnavailableResponse(200, {})])
+    client = FletApiClient("https://api.example.com", session=session)  # type: ignore[arg-type]
+    client.access_token = "token-opaco"
+
+    user = client.accept_legal_documents()
+
+    assert user.legal_acceptance_required is False
 
 
 def test_cliente_flet_trata_indisponibilidade_da_api() -> None:
