@@ -189,22 +189,23 @@ class FletApiClient:
             # internal HTTPS call to the same service and its request
             # body can be consumed by the proxy before FastAPI parses it.
             params={"accepted_terms": "true", "accepted_privacy": "true"},
+            stream=True,
         )
-        try:
-            return self._user(response)
-        except (FletApiError, requests.RequestException, ValueError, TypeError):
-            # The acceptance is already committed when the API returns 200.
-            # Some same-service proxy paths close the response stream before
-            # the Flet worker can decode its JSON body; do not show a false
-            # connection error after a successful write.
-            return ApiUser(
-                user_id="legal-accepted",
-                email="",
-                display_name="",
-                terms_accepted=True,
-                privacy_accepted=True,
-                legal_acceptance_required=False,
-            )
+        # The API has already committed the acceptance when it returns 200.
+        # Do not read the response body: same-service proxy paths can close
+        # the stream after sending headers, which otherwise looks like a
+        # connection failure to the Flet worker.
+        closer = getattr(response, "close", None)
+        if callable(closer):
+            closer()
+        return ApiUser(
+            user_id="legal-accepted",
+            email="",
+            display_name="",
+            terms_accepted=True,
+            privacy_accepted=True,
+            legal_acceptance_required=False,
+        )
 
     def catalog(self) -> list[StoryCard]:
         response = self._request("GET", "/api/v1/catalog")

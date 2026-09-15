@@ -191,6 +191,7 @@ def test_cliente_registra_aceite_dos_dois_documentos() -> None:
         "accepted_terms": "true",
         "accepted_privacy": "true",
     }
+    assert session.calls[0][2]["stream"] is True
 
 
 def test_cliente_considera_aceite_confirmado_se_resposta_200_nao_puder_ser_lida() -> None:
