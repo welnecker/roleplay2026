@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Any
 
 import requests
@@ -186,7 +187,15 @@ class FletApiClient:
             self._request(
                 "POST",
                 "/api/v1/auth/legal-acceptance",
-                json={"accepted_terms": True, "accepted_privacy": True},
+                # Serialize explicitly: the web deployment was receiving a
+                # 50-byte body that FastAPI could not parse.  Sending the
+                # bytes and content type explicitly avoids any adapter/proxy
+                # ambiguity around requests' ``json=`` convenience argument.
+                data=json.dumps(
+                    {"accepted_terms": True, "accepted_privacy": True},
+                    separators=(",", ":"),
+                ).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
             )
         )
 
@@ -424,3 +433,4 @@ __all__ = [
     "FletApiClient",
     "FletApiError",
 ]
+

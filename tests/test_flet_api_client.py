@@ -182,10 +182,8 @@ def test_cliente_registra_aceite_dos_dois_documentos() -> None:
 
     assert user.legal_acceptance_required is False
     assert session.calls[0][1].endswith("/api/v1/auth/legal-acceptance")
-    assert session.calls[0][2]["json"] == {
-        "accepted_terms": True,
-        "accepted_privacy": True,
-    }
+    assert session.calls[0][2]["headers"]["Content-Type"] == "application/json"
+    assert session.calls[0][2]["data"] == b'{"accepted_terms":true,"accepted_privacy":true}'
 
 
 def test_cliente_flet_trata_indisponibilidade_da_api() -> None:
@@ -362,3 +360,4 @@ def test_cliente_web_publica_imagens_da_run_recebidas_pelo_loopback() -> None:
     assert opened.entry_image_urls[0].startswith(
         "https://entrecenas-roleplay.com.br/api/v1/runs/image"
     )
+
