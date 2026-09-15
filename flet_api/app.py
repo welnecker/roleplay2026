@@ -424,7 +424,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     ) -> UserResponse:
         # Log only the parsed booleans so a production 400 can be diagnosed
         # without recording document contents or authentication data.
-        _LOGGER.info(
+        _LOGGER.warning(
             "[LEGAL_ACCEPTANCE] terms=%s privacy=%s",
             payload.accepted_terms,
             payload.accepted_privacy,
