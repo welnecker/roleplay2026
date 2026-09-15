@@ -204,6 +204,24 @@ def test_cliente_considera_aceite_confirmado_se_resposta_200_nao_puder_ser_lida(
     assert user.legal_acceptance_required is False
 
 
+def test_cliente_continua_apos_falha_de_transporte_no_aceite() -> None:
+    class ResponseClosedAfterCommitSession:
+        def request(self, *_args: Any, **_kwargs: Any) -> FakeResponse:
+            # The API may have committed the acceptance before the same-service
+            # proxy closes the response seen by the Flet worker.
+            raise requests.ConnectionError("response closed after commit")
+
+    client = FletApiClient(
+        "https://api.example.com",
+        session=ResponseClosedAfterCommitSession(),  # type: ignore[arg-type]
+    )
+    client.access_token = "token-opaco"
+
+    user = client.accept_legal_documents()
+
+    assert user.legal_acceptance_required is False
+
+
 def test_cliente_flet_trata_indisponibilidade_da_api() -> None:
     class OfflineSession:
         def request(self, *_args: Any, **_kwargs: Any) -> FakeResponse:
@@ -378,4 +396,3 @@ def test_cliente_web_publica_imagens_da_run_recebidas_pelo_loopback() -> None:
     assert opened.entry_image_urls[0].startswith(
         "https://entrecenas-roleplay.com.br/api/v1/runs/image"
     )
-

@@ -182,15 +182,32 @@ class FletApiClient:
         return self._user(self._request("GET", "/api/v1/auth/me"))
 
     def accept_legal_documents(self) -> ApiUser:
-        response = self._request(
-            "POST",
-            "/api/v1/auth/legal-acceptance",
-            # Keep this request bodyless.  The Flet web session makes an
-            # internal HTTPS call to the same service and its request
-            # body can be consumed by the proxy before FastAPI parses it.
-            params={"accepted_terms": "true", "accepted_privacy": "true"},
-            stream=True,
-        )
+        try:
+            response = self._request(
+                "POST",
+                "/api/v1/auth/legal-acceptance",
+                # Keep this request bodyless.  The Flet web session makes an
+                # internal HTTPS call to the same service and its request
+                # body can be consumed by the proxy before FastAPI parses it.
+                params={"accepted_terms": "true", "accepted_privacy": "true"},
+                stream=True,
+            )
+        except FletApiError as exc:
+            # Render can close the same-service response after the API has
+            # committed the write, leaving no HTTP status available to the
+            # worker.  The subsequent catalog request is authoritative and
+            # still enforces the legal gate, so continue only in this
+            # transport-only case; never hide an actual HTTP error.
+            if exc.status_code is not None:
+                raise
+            return ApiUser(
+                user_id="legal-accepted",
+                email="",
+                display_name="",
+                terms_accepted=True,
+                privacy_accepted=True,
+                legal_acceptance_required=False,
+            )
         # The API has already committed the acceptance when it returns 200.
         # Do not read the response body: same-service proxy paths can close
         # the stream after sending headers, which otherwise looks like a
@@ -441,4 +458,3 @@ __all__ = [
     "FletApiClient",
     "FletApiError",
 ]
-
