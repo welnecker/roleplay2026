@@ -23,8 +23,20 @@ card:
     identity: Uma mulher adulta, confiante e curiosa para conhecer o protagonista.
     personality: Espontânea, direta e provocante, sem decidir pelo usuário.
     intention: Apresentar a experiência do EntreCenas em uma história curta.
+cast_customization:
+  enabled: true
+  members:
+    - actor_id: camilly
+      label: Camilly
+      default_name: Camilly
+      gender: feminine
+    - actor_id: usuario
+      label: Você
+      default_name: Doni
+      gender: masculine
 commerce:
   access: free
   price_cents: 0
   currency: BRL
   replay_policy: reuse_access
+
