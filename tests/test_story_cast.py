@@ -25,6 +25,26 @@ def test_elenco_usa_nomes_autorais_como_padrao() -> None:
     assert default_cast_names(_manifest()) == {"mary": "Mary", "usuario": "Doni"}
 
 
+@pytest.mark.parametrize(
+    ("package_id", "expected"),
+    [
+        ("roleplay2026.casada_frustrada", {"mary": "Mary", "usuario": "Doni"}),
+        ("roleplay2026.camilly", {"camilly": "Camilly", "usuario": "Doni"}),
+        ("roleplay2026.degustacao", {"camilly": "Camilly", "usuario": "Doni"}),
+    ],
+)
+def test_todos_os_cards_declarados_usam_elenco_personalizavel(
+    package_id: str, expected: dict[str, str]
+) -> None:
+    packages, errors = discover_packages(INSTALLED_STORIES)
+    assert errors == []
+    manifest = next(
+        package.manifest for package in packages
+        if package.manifest.package_id == package_id
+    )
+    assert default_cast_names(manifest) == expected
+
+
 def test_elenco_aceita_troca_parcial_e_completa_os_demais_papeis() -> None:
     assert normalize_cast_names(_manifest(), {"mary": "Sandra"}) == {
         "mary": "Sandra",
@@ -53,3 +73,4 @@ def test_perfil_de_elenco_preserva_compatibilidade_com_motor_atual() -> None:
 def test_elenco_recusa_nomes_ambiguos_ou_papeis_invalidos(names: dict[str, str]) -> None:
     with pytest.raises(ValueError):
         normalize_cast_names(_manifest(), names)
+
