@@ -242,7 +242,7 @@ def login_screen(
 def legal_acceptance_screen(
     *,
     on_accept: Callable[[], str | None],
-    on_continue: Callable[[], None],
+    on_continue: Callable[[], bool | None],
     on_open_terms: Callable[[], None],
     on_open_privacy: Callable[[], None],
     already_accepted: bool = False,
@@ -276,14 +276,27 @@ def legal_acceptance_screen(
         if submitting:
             return
         if terms.disabled and privacy.disabled:
-            on_continue()
+            submitting = True
+            action.content = "Aguarde..."
+            action.disabled = True
+            _update_attached(action)
+            completed = on_continue()
+            if completed is False:
+                submitting = False
+                action.content = "Tentar novamente"
+                action.disabled = False
+                error.value = "Não foi possível abrir os cards. Tente novamente."
+                error.visible = True
+                _update_attached(error)
             return
         submitting = True
+        action.content = "Aguarde..."
         action.disabled = True
         _update_attached(action)
         message = on_accept()
         if message:
             submitting = False
+            action.content = "Registrar aceite"
             action.disabled = not bool(terms.value and privacy.value)
             error.value = message
             error.visible = True

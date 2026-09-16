@@ -145,6 +145,8 @@ def test_aceite_legal_exige_duas_caixas_e_as_desabilita_apos_registro() -> None:
 
     button.on_click(None)
 
+    assert button.content == "Aguarde..."
+
     assert continued == [True]
 
 

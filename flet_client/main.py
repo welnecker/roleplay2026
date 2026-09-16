@@ -342,15 +342,16 @@ async def main(
             )
         )
 
-    def finish_authenticated(user: ApiUser) -> None:
+    def finish_authenticated(user: ApiUser) -> bool:
         if api_client is None:
-            return
+            return False
         try:
             cards = api_client.catalog()
         except FletApiError as exc:
             handle_api_error(exc)
-            return
+            return False
         show_library(cards, user.display_name or user.email)
+        return True
 
     def show_legal_gate(user: ApiUser) -> None:
         if api_client is None:
