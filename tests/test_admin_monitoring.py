@@ -34,3 +34,16 @@ def test_monitoring_dashboard_is_idempotent(monkeypatch) -> None:
     assert install(install(app)) is app
     assert app.state.admin_monitoring_installed is True
 
+
+def test_master_reset_requires_explicit_confirmation(monkeypatch) -> None:
+    monkeypatch.setenv("OBSERVABILITY_ADMIN_TOKEN", "monitoramento-seguro")
+    app = install(FastAPI())
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/admin/monitoring/reset-master",
+        headers={"X-Observability-Token": "monitoramento-seguro"},
+        json={"confirmation": "errado"},
+    )
+    assert response.status_code == 400
+
