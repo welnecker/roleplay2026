@@ -257,6 +257,13 @@ def legal_acceptance_screen(
         value=already_accepted,
         disabled=already_accepted,
     )
+    progress = ft.Text(
+        "",
+        size=12,
+        color=MUTED,
+        text_align=ft.TextAlign.CENTER,
+        visible=False,
+    )
     error = ft.Text(size=12, color="#B42318", visible=False)
     action = ft.FilledButton(
         "Continuar" if already_accepted else "Registrar aceite",
@@ -279,25 +286,33 @@ def legal_acceptance_screen(
             submitting = True
             action.content = "Aguarde..."
             action.disabled = True
-            _update_attached(action)
+            progress.value = "Aguarde... carregando seus cards."
+            progress.visible = True
+            _update_attached(progress)
             completed = on_continue()
             if completed is False:
                 submitting = False
                 action.content = "Tentar novamente"
                 action.disabled = False
+                progress.visible = False
                 error.value = "Não foi possível abrir os cards. Tente novamente."
                 error.visible = True
                 _update_attached(error)
             return
         submitting = True
+        terms.disabled = privacy.disabled = True
         action.content = "Aguarde..."
         action.disabled = True
-        _update_attached(action)
+        progress.value = "Aguarde... registrando seu aceite."
+        progress.visible = True
+        _update_attached(progress)
         message = on_accept()
         if message:
             submitting = False
+            terms.disabled = privacy.disabled = False
             action.content = "Registrar aceite"
             action.disabled = not bool(terms.value and privacy.value)
+            progress.visible = False
             error.value = message
             error.visible = True
             _update_attached(error)
@@ -305,6 +320,8 @@ def legal_acceptance_screen(
         terms.value = privacy.value = True
         terms.disabled = privacy.disabled = True
         error.visible = False
+        progress.value = "Aceite confirmado. Clique em Acessar cards."
+        progress.visible = True
         # O aceite já foi persistido no backend. Mantenha uma confirmação
         # explícita para que a entrada nos cards não dependa de uma atualização
         # automática da árvore de controles do Flet Web.
@@ -351,6 +368,7 @@ def legal_acceptance_screen(
                                 size=12,
                                 color=MUTED,
                             ),
+                            progress,
                             error,
                             action,
                         ],
