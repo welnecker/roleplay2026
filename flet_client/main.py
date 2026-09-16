@@ -366,13 +366,16 @@ async def main(
                 return "Não foi possível confirmar o aceite. Tente novamente."
             return None
 
+        def reload_after_acceptance() -> bool:
+            # Reexecute the same authenticated bootstrap used after a browser
+            # refresh: token -> /auth/me -> legal gate -> /catalog.
+            page.run_task(restore_session)
+            return True
+
         show(
             legal_acceptance_screen(
                 on_accept=accept,
-                # The acceptance callback already runs in the Flet event
-                # flow.  Scheduling another page thread here can silently
-                # drop the transition after a successful 200 response.
-                on_continue=lambda: finish_authenticated(user),
+                on_continue=reload_after_acceptance,
                 on_open_terms=lambda: page.launch_url(
                     f"{displayed_api_url}/termos-de-uso/"
                 ),
