@@ -197,6 +197,17 @@ def install(app: Any) -> Any:
         master_email = "welnecker@hotmail.com"
         with database.pool.connection() as connection:
             with connection.transaction():
+                masters = connection.execute(
+                    """SELECT user_id FROM users
+                       WHERE lower(trim(email)) = lower(%s)
+                       FOR UPDATE""",
+                    (master_email,),
+                ).fetchall()
+                if len(masters) != 1:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Limpeza abortada: o usuário master não foi identificado de forma única.",
+                    )
                 connection.execute(
                     """
                     CREATE TEMP TABLE admin_cleanup_users ON COMMIT DROP AS
