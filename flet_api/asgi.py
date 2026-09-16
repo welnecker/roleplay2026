@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from flet_api.admin_monitoring import install as install_admin_monitoring
 from flet_api.completed_run_restart_guard import install as install_completed_run_restart_guard
 from flet_api.download_routes import install as install_download_routes
 from flet_api.landing_routes import install as install_landing_routes
@@ -47,3 +48,5 @@ app = install_web_client_routes(
         )
     )
 )
+
+app = install_admin_monitoring(app)
