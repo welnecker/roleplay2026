@@ -25,7 +25,7 @@ def test_camilly_aparece_no_catalogo_com_runtime_editorial_pago() -> None:
 
     assert errors == []
     card = next(item for item in cards if item.package_id == "roleplay2026.camilly")
-    assert card.title == "Camilly"
+    assert card.title == "Uma carona bem-vinda"
     assert card.profile_name == "Camilly"
     assert card.price_label == "R$ 1,00"
     assert card.replay_requires_purchase is True
@@ -146,3 +146,4 @@ def test_nucleo_da_camilly_inclui_ficha_e_regras_autorais_completas() -> None:
     assert "REGRAS DO ROTEIRO" in context
     assert "O roteiro controla a ordem dos acontecimentos" in context
     assert "Mary" not in context
+
