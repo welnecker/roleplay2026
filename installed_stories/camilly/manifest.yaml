@@ -10,7 +10,7 @@ runtime:
   editorial:
     source: content/editorial.yaml
 card:
-  title: Camilly
+  title: Uma carona bem-vinda
   subtitle: Dê uma carona para Camilly.
   description: Aproveite a promoção de lançamento e se delicie com essa gata.
   genres:
