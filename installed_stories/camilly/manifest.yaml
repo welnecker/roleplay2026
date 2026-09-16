@@ -22,8 +22,20 @@ card:
     identity: Camilly é a gata dos seus sonhos. Você sempre teve uma atração incontrolável por ela, desde a faculdade.
     personality: Camilly é jovial e muito sexy. Ela não sabe do seu segredo, mas se ela descobrir...bem...
     intention: Venha se deliciar com essa história conduzida, onde você sempre será o protagonista.
+cast_customization:
+  enabled: true
+  members:
+    - actor_id: camilly
+      label: Camilly
+      default_name: Camilly
+      gender: feminine
+    - actor_id: usuario
+      label: Você
+      default_name: Doni
+      gender: masculine
 commerce:
   access: paid
   price_cents: 100
   currency: BRL
   replay_policy: new_purchase
+
