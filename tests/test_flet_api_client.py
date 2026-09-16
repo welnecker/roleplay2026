@@ -118,6 +118,30 @@ def test_cliente_web_publica_capa_recebida_pelo_loopback() -> None:
     )
 
 
+def test_cliente_repete_catalogo_se_a_conexao_for_encerrada_apos_o_200() -> None:
+    class RetryCatalogSession:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def request(self, *_args: Any, **_kwargs: Any) -> FakeResponse:
+            self.calls += 1
+            if self.calls == 1:
+                raise requests.ConnectionError("response closed after server 200")
+            return FakeResponse(200, catalog_payload())
+
+    session = RetryCatalogSession()
+    client = FletApiClient(
+        "https://api.example.com",
+        session=session,  # type: ignore[arg-type]
+    )
+    client.access_token = "token-opaco"
+
+    cards = client.catalog()
+
+    assert len(cards) == 1
+    assert session.calls == 2
+
+
 def test_cliente_flet_cadastra_e_guarda_o_token() -> None:
     session = FakeSession(
         [

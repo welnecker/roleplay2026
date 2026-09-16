@@ -225,8 +225,30 @@ class FletApiClient:
         )
 
     def catalog(self) -> list[StoryCard]:
-        response = self._request("GET", "/api/v1/catalog")
-        payload = response.json()
+        payload: Any = None
+        for attempt in range(2):
+            try:
+                response = self._request(
+                    "GET",
+                    "/api/v1/catalog",
+                    # Read the body explicitly so a transient same-service
+                    # proxy close can be retried without rebuilding the page.
+                    stream=True,
+                )
+                payload = response.json()
+                closer = getattr(response, "close", None)
+                if callable(closer):
+                    closer()
+                break
+            except FletApiError as exc:
+                # A real HTTP response must remain visible to the caller.
+                if exc.status_code is not None or attempt == 1:
+                    raise
+            except (ValueError, requests.RequestException) as exc:
+                if attempt == 1:
+                    raise FletApiError(
+                        "Não foi possível ler o catálogo da API do Entre Cenas."
+                    ) from exc
         rows = payload.get("items") if isinstance(payload, dict) else None
         if not isinstance(rows, list):
             raise FletApiError("Resposta de catálogo inválida.")
