@@ -28,14 +28,15 @@ small{color:#aeb4c2}.status{margin-left:8px}.ok{color:#62d394}.bad{color:#ff6b6b
 section{background:#171a22;border:1px solid #303543;border-radius:12px;padding:16px;margin-top:18px;overflow:auto}
 table{width:100%;border-collapse:collapse;min-width:900px}th,td{text-align:left;padding:8px;border-bottom:1px solid #303543;vertical-align:top}
 th{color:#aeb4c2;font-size:.85rem}.run{cursor:pointer}.run:hover{background:#232735}pre{white-space:pre-wrap;max-width:560px;margin:0;font:inherit}
-.danger{border-color:#8f3d4a;color:#ff9da8}.note{background:#211b20;border:1px solid #5d3942;border-radius:8px;padding:10px;margin-top:12px}
+.danger{border-color:#8f3d4a;color:#ff9da8}.master{border-color:#8a6d2e;color:#ffd166}.note{background:#211b20;border:1px solid #5d3942;border-radius:8px;padding:10px;margin-top:12px}
 </style></head>
 <body><main>
 <h1>Painel de monitoramento</h1>
 <div class="toolbar"><input id="token" type="password" placeholder="Token administrativo" size="28">
 <input id="filter" placeholder="E-mail, user_id, run_id ou package_id" size="36">
-<button onclick="loadAll()">Atualizar</button><button class="danger" onclick="cleanupTests()">Limpar dados de teste</button><span id="state"><small>aguardando autenticação</small></span></div>
+<button onclick="loadAll()">Atualizar</button><button class="danger" onclick="cleanupTests()">Limpar dados de teste</button><button class="master" onclick="resetMaster()">Resetar dados do master</button><span id="state"><small>aguardando autenticação</small></span></div>
 <div class="note"><strong>Limpeza:</strong> remove usuários, runs, sessões, interações, créditos e pagamentos de teste; preserva o usuário master <code>welnecker@hotmail.com</code> e o catálogo editorial. Exige confirmação explícita.</div>
+<div class="note"><strong>Reset do master:</strong> preserva login e aceite legal, mas remove o estado de execução, interações, memórias, créditos, pagamentos e liberações do master. Os cards voltarão a exigir a compra/teste.</div>
 <div class="grid" id="summary"></div>
 <section><h2>Cards editoriais</h2><small>O card aparece mesmo sem uma run iniciada.</small><table><thead><tr><th>Package</th><th>Título</th><th>Acesso</th><th>Runs</th><th>Interações</th><th>Última atividade</th></tr></thead><tbody id="cards"></tbody></table></section>
 <section><h2>Usuários</h2><table><thead><tr><th>ID</th><th>E-mail</th><th>Nome</th><th>Status</th><th>Cadastro</th><th>Runs</th><th>Interações</th></tr></thead><tbody id="users"></tbody></table></section>
@@ -55,6 +56,7 @@ users.innerHTML=u.items.map(x=>`<tr><td>${esc(x.user_id)}</td><td>${esc(x.email)
 runs.innerHTML=r.items.map(x=>`<tr class="run" onclick="loadInteractions('${encodeURIComponent(x.run_id)}')"><td>${esc(x.run_id)}</td><td>${esc(x.email)}</td><td>${esc(x.package_id)}</td><td>${esc(x.script_version)}</td><td>${esc(x.status)}</td><td>${esc(x.current_beat_id)}</td><td>${esc(x.interactions)}</td><td>${esc(x.updated_at)}</td></tr>`).join('');state.innerHTML='<span class="ok">conectado · backend '+esc(s.backend)+'</span>';
 }catch(e){state.innerHTML='<span class="bad">'+esc(e.message)+'</span>'}}
 async function cleanupTests(){if(!token()){state.innerHTML='<span class="bad">Informe o token administrativo.</span>';return}const answer=prompt('Digite APAGAR TESTES para confirmar. O master será preservado.');if(answer!=='APAGAR TESTES')return;try{state.textContent='limpando dados de teste…';const d=await mutate('/api/v1/admin/monitoring/cleanup-test-data',{confirmation:answer});state.innerHTML='<span class="ok">limpeza concluída: '+esc(d.users)+' usuários, '+esc(d.runs)+' runs, '+esc(d.interactions)+' interações removidos.</span>';await loadAll()}catch(e){state.innerHTML='<span class="bad">'+esc(e.message)+'</span>'}}
+async function resetMaster(){if(!token()){state.innerHTML='<span class="bad">Informe o token administrativo.</span>';return}const answer=prompt('Digite RESETAR MASTER para confirmar. O login e o aceite legal serão preservados.');if(answer!=='RESETAR MASTER')return;try{state.textContent='resetando dados do master…';const d=await mutate('/api/v1/admin/monitoring/reset-master',{confirmation:answer});state.innerHTML='<span class="ok">master resetado: '+esc(d.runs)+' runs, '+esc(d.interactions)+' interações e '+esc(d.payments)+' pagamentos removidos.</span>';await loadAll()}catch(e){state.innerHTML='<span class="bad">'+esc(e.message)+'</span>'}}
 async function loadInteractions(id){try{const run=decodeURIComponent(id);const d=await api('/api/v1/admin/monitoring/runs/'+encodeURIComponent(run)+'/interactions');selected.innerHTML='<small>run_id: '+esc(run)+'</small>';interactions.innerHTML=d.items.map(x=>`<tr><td>${esc(x.sequence)}</td><td>${esc(x.role)}</td><td>${esc(x.speaker_id)}</td><td>${esc(x.beat_id)}</td><td>${esc(x.model)}</td><td>${esc(x.latency_ms)} ms</td><td><pre>${esc(x.content)}</pre></td><td>${esc(x.created_at)}</td></tr>`).join('')}catch(e){selected.innerHTML='<span class="bad">'+esc(e.message)+'</span>'}}
 </script></body></html>"""
 
@@ -258,6 +260,66 @@ def install(app: Any) -> Any:
                 )
         return JSONResponse({"users": int(counts[0]), "runs": int(counts[1]),
                              "interactions": int(counts[2]), "master_preserved": True})
+
+    @app.post("/api/v1/admin/monitoring/reset-master", include_in_schema=False)
+    async def reset_master(request: Request) -> JSONResponse:
+        """Reinicia apenas o estado operacional do master, preservando sua conta."""
+        _authorize(request)
+        payload = await request.json()
+        if str(payload.get("confirmation", "")) != "RESETAR MASTER":
+            raise HTTPException(status_code=400, detail="Confirmação inválida.")
+        database = _database()
+        master_email = "welnecker@hotmail.com"
+        with database.pool.connection() as connection:
+            with connection.transaction():
+                masters = connection.execute(
+                    """SELECT user_id FROM users
+                       WHERE lower(trim(email)) = lower(%s)
+                       FOR UPDATE""",
+                    (master_email,),
+                ).fetchall()
+                if len(masters) != 1:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Reset abortado: o usuário master não foi identificado de forma única.",
+                    )
+                master_id = str(masters[0][0])
+                counts = connection.execute(
+                    """
+                    SELECT
+                      (SELECT count(*) FROM story_runs WHERE user_id = %s),
+                      (SELECT count(*) FROM interactions WHERE user_id = %s),
+                      (SELECT count(*) FROM payment_orders WHERE user_id = %s)
+                    """,
+                    (master_id, master_id, master_id),
+                ).fetchone()
+                connection.execute(
+                    "DELETE FROM interactions WHERE user_id = %s", (master_id,)
+                )
+                connection.execute(
+                    "DELETE FROM runtime_sessions WHERE user_id = %s", (master_id,)
+                )
+                connection.execute(
+                    """DELETE FROM run_memories
+                       WHERE run_id IN (SELECT run_id FROM story_runs
+                                        WHERE user_id = %s)""",
+                    (master_id,),
+                )
+                connection.execute(
+                    "DELETE FROM story_runs WHERE user_id = %s", (master_id,)
+                )
+                connection.execute(
+                    "DELETE FROM story_credits WHERE user_id = %s", (master_id,)
+                )
+                connection.execute(
+                    "DELETE FROM payment_orders WHERE user_id = %s", (master_id,)
+                )
+                connection.execute(
+                    "DELETE FROM user_entitlements WHERE user_id = %s", (master_id,)
+                )
+        return JSONResponse({"runs": int(counts[0]), "interactions": int(counts[1]),
+                             "payments": int(counts[2]), "login_preserved": True,
+                             "legal_acceptance_preserved": True})
 
     @app.get("/api/v1/admin/monitoring/runs", include_in_schema=False)
     async def runs(request: Request, q: str = "", limit: int = 100) -> JSONResponse:
