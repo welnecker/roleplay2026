@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from persistence.backend_config import POSTGRES_BACKEND, operational_backend
 from persistence.postgres_database import PostgresDatabase, shared_postgres_database
+from platform_core.catalog import load_demo_catalog
 from services.secret_loader import load_application_secrets
 
 
@@ -27,13 +28,16 @@ small{color:#aeb4c2}.status{margin-left:8px}.ok{color:#62d394}.bad{color:#ff6b6b
 section{background:#171a22;border:1px solid #303543;border-radius:12px;padding:16px;margin-top:18px;overflow:auto}
 table{width:100%;border-collapse:collapse;min-width:900px}th,td{text-align:left;padding:8px;border-bottom:1px solid #303543;vertical-align:top}
 th{color:#aeb4c2;font-size:.85rem}.run{cursor:pointer}.run:hover{background:#232735}pre{white-space:pre-wrap;max-width:560px;margin:0;font:inherit}
+.danger{border-color:#8f3d4a;color:#ff9da8}.note{background:#211b20;border:1px solid #5d3942;border-radius:8px;padding:10px;margin-top:12px}
 </style></head>
 <body><main>
 <h1>Painel de monitoramento</h1>
 <div class="toolbar"><input id="token" type="password" placeholder="Token administrativo" size="28">
 <input id="filter" placeholder="E-mail, user_id, run_id ou package_id" size="36">
-<button onclick="loadAll()">Atualizar</button><span id="state"><small>aguardando autenticação</small></span></div>
+<button onclick="loadAll()">Atualizar</button><button class="danger" onclick="cleanupTests()">Limpar dados de teste</button><span id="state"><small>aguardando autenticação</small></span></div>
+<div class="note"><strong>Limpeza:</strong> remove usuários, runs, sessões, interações, créditos e pagamentos de teste; preserva o usuário master <code>welnecker@hotmail.com</code> e o catálogo editorial. Exige confirmação explícita.</div>
 <div class="grid" id="summary"></div>
+<section><h2>Cards editoriais</h2><small>O card aparece mesmo sem uma run iniciada.</small><table><thead><tr><th>Package</th><th>Título</th><th>Acesso</th><th>Runs</th><th>Interações</th><th>Última atividade</th></tr></thead><tbody id="cards"></tbody></table></section>
 <section><h2>Usuários</h2><table><thead><tr><th>ID</th><th>E-mail</th><th>Nome</th><th>Status</th><th>Cadastro</th><th>Runs</th><th>Interações</th></tr></thead><tbody id="users"></tbody></table></section>
 <section><h2>Runs</h2><small>Clique em uma run para carregar as interações.</small><table><thead><tr><th>Run</th><th>Usuário</th><th>Card</th><th>Versão</th><th>Status</th><th>Quadro atual</th><th>Interações</th><th>Atualizada</th></tr></thead><tbody id="runs"></tbody></table></section>
 <section><h2>Interações da run selecionada</h2><div id="selected"><small>Nenhuma run selecionada.</small></div><table><thead><tr><th>Seq.</th><th>Role</th><th>Speaker</th><th>Beat</th><th>Modelo</th><th>Latência</th><th>Conteúdo</th><th>Criada</th></tr></thead><tbody id="interactions"></tbody></table></section>
@@ -42,12 +46,15 @@ th{color:#aeb4c2;font-size:.85rem}.run{cursor:pointer}.run:hover{background:#232
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const token=()=>document.querySelector('#token').value;
 async function api(path){const r=await fetch(path,{headers:{'X-Observability-Token':token()}});const d=await r.json().catch(()=>({detail:r.statusText}));if(!r.ok)throw Error(d.detail||r.status);return d}
+async function mutate(path,body){const r=await fetch(path,{method:'POST',headers:{'X-Observability-Token':token(),'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({detail:r.statusText}));if(!r.ok)throw Error(d.detail||r.status);return d}
 function query(){return encodeURIComponent(document.querySelector('#filter').value.trim())}
-async function loadAll(){try{state.textContent='carregando…';const [s,u,r]=await Promise.all([api('/api/v1/admin/monitoring/summary'),api('/api/v1/admin/monitoring/users?q='+query()),api('/api/v1/admin/monitoring/runs?q='+query())]);
+async function loadAll(){try{state.textContent='carregando…';const [s,c,u,r]=await Promise.all([api('/api/v1/admin/monitoring/summary'),api('/api/v1/admin/monitoring/cards?q='+query()),api('/api/v1/admin/monitoring/users?q='+query()),api('/api/v1/admin/monitoring/runs?q='+query())]);
 summary.innerHTML=Object.entries(s).filter(([k])=>k!=='backend').map(([k,v])=>`<div class="card"><small>${esc(k)}</small><div class="value">${esc(v)}</div></div>`).join('');
+cards.innerHTML=c.items.map(x=>`<tr><td>${esc(x.package_id)}</td><td>${esc(x.title)}</td><td>${esc(x.access)}</td><td>${esc(x.runs)}</td><td>${esc(x.interactions)}</td><td>${esc(x.last_activity)}</td></tr>`).join('');
 users.innerHTML=u.items.map(x=>`<tr><td>${esc(x.user_id)}</td><td>${esc(x.email)}</td><td>${esc(x.display_name)}</td><td>${esc(x.status)}</td><td>${esc(x.created_at)}</td><td>${esc(x.runs)}</td><td>${esc(x.interactions)}</td></tr>`).join('');
 runs.innerHTML=r.items.map(x=>`<tr class="run" onclick="loadInteractions('${encodeURIComponent(x.run_id)}')"><td>${esc(x.run_id)}</td><td>${esc(x.email)}</td><td>${esc(x.package_id)}</td><td>${esc(x.script_version)}</td><td>${esc(x.status)}</td><td>${esc(x.current_beat_id)}</td><td>${esc(x.interactions)}</td><td>${esc(x.updated_at)}</td></tr>`).join('');state.innerHTML='<span class="ok">conectado · backend '+esc(s.backend)+'</span>';
 }catch(e){state.innerHTML='<span class="bad">'+esc(e.message)+'</span>'}}
+async function cleanupTests(){if(!token()){state.innerHTML='<span class="bad">Informe o token administrativo.</span>';return}const answer=prompt('Digite APAGAR TESTES para confirmar. O master será preservado.');if(answer!=='APAGAR TESTES')return;try{state.textContent='limpando dados de teste…';const d=await mutate('/api/v1/admin/monitoring/cleanup-test-data',{confirmation:answer});state.innerHTML='<span class="ok">limpeza concluída: '+esc(d.users)+' usuários, '+esc(d.runs)+' runs, '+esc(d.interactions)+' interações removidos.</span>';await loadAll()}catch(e){state.innerHTML='<span class="bad">'+esc(e.message)+'</span>'}}
 async function loadInteractions(id){try{const run=decodeURIComponent(id);const d=await api('/api/v1/admin/monitoring/runs/'+encodeURIComponent(run)+'/interactions');selected.innerHTML='<small>run_id: '+esc(run)+'</small>';interactions.innerHTML=d.items.map(x=>`<tr><td>${esc(x.sequence)}</td><td>${esc(x.role)}</td><td>${esc(x.speaker_id)}</td><td>${esc(x.beat_id)}</td><td>${esc(x.model)}</td><td>${esc(x.latency_ms)} ms</td><td><pre>${esc(x.content)}</pre></td><td>${esc(x.created_at)}</td></tr>`).join('')}catch(e){selected.innerHTML='<span class="bad">'+esc(e.message)+'</span>'}}
 </script></body></html>"""
 
@@ -117,6 +124,42 @@ def install(app: Any) -> Any:
             "pagamentos aprovados": int(row[8]),
         })
 
+    @app.get("/api/v1/admin/monitoring/cards", include_in_schema=False)
+    async def cards(request: Request, q: str = "") -> JSONResponse:
+        """Lista o catálogo editorial, inclusive cards sem nenhuma run ainda."""
+        _authorize(request)
+        database = _database()
+        clean = str(q or "").strip().lower()
+        with database.pool.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT sr.package_id, count(DISTINCT sr.run_id),
+                       count(i.interaction_id), max(sr.updated_at)
+                FROM story_runs sr
+                LEFT JOIN interactions i ON i.run_id = sr.run_id
+                GROUP BY sr.package_id
+                """
+            ).fetchall()
+        activity = {
+            str(row[0]): {"runs": int(row[1]), "interactions": int(row[2]),
+                          "last_activity": _iso(row[3])}
+            for row in rows
+        }
+        items = []
+        for card in load_demo_catalog():
+            if clean and clean not in f"{card.package_id} {card.title}".lower():
+                continue
+            stats = activity.get(card.package_id, {})
+            items.append({
+                "package_id": card.package_id,
+                "title": card.title,
+                "access": str(card.access_status),
+                "runs": int(stats.get("runs", 0)),
+                "interactions": int(stats.get("interactions", 0)),
+                "last_activity": str(stats.get("last_activity", "")),
+            })
+        return JSONResponse({"items": items})
+
     @app.get("/api/v1/admin/monitoring/users", include_in_schema=False)
     async def users(request: Request, q: str = "", limit: int = 100) -> JSONResponse:
         _authorize(request)
@@ -142,6 +185,68 @@ def install(app: Any) -> Any:
              "status": str(r[3]), "created_at": _iso(r[4]), "runs": int(r[5]),
              "interactions": int(r[6])} for r in rows
         ]})
+
+    @app.post("/api/v1/admin/monitoring/cleanup-test-data", include_in_schema=False)
+    async def cleanup_test_data(request: Request) -> JSONResponse:
+        """Remove somente dados de usuários não-master, em uma transação única."""
+        _authorize(request)
+        payload = await request.json()
+        if str(payload.get("confirmation", "")) != "APAGAR TESTES":
+            raise HTTPException(status_code=400, detail="Confirmação inválida.")
+        database = _database()
+        master_email = "welnecker@hotmail.com"
+        with database.pool.connection() as connection:
+            with connection.transaction():
+                connection.execute(
+                    """
+                    CREATE TEMP TABLE admin_cleanup_users ON COMMIT DROP AS
+                    SELECT user_id FROM users
+                    WHERE lower(trim(email)) <> lower(%s)
+                    FOR UPDATE
+                    """,
+                    (master_email,),
+                )
+                counts = connection.execute(
+                    """
+                    SELECT
+                      (SELECT count(*) FROM admin_cleanup_users),
+                      (SELECT count(*) FROM story_runs r
+                         WHERE r.user_id IN (SELECT user_id FROM admin_cleanup_users)),
+                      (SELECT count(*) FROM interactions i
+                         WHERE i.user_id IN (SELECT user_id FROM admin_cleanup_users))
+                    """
+                ).fetchone()
+                connection.execute(
+                    """DELETE FROM interactions
+                       WHERE user_id IN (SELECT user_id FROM admin_cleanup_users)"""
+                )
+                connection.execute(
+                    """DELETE FROM runtime_sessions
+                       WHERE user_id IN (SELECT user_id FROM admin_cleanup_users)"""
+                )
+                connection.execute(
+                    """DELETE FROM run_memories
+                       WHERE run_id IN (SELECT run_id FROM story_runs
+                                        WHERE user_id IN (SELECT user_id FROM admin_cleanup_users))"""
+                )
+                connection.execute(
+                    """DELETE FROM story_runs
+                       WHERE user_id IN (SELECT user_id FROM admin_cleanup_users)"""
+                )
+                connection.execute(
+                    """DELETE FROM story_credits
+                       WHERE user_id IN (SELECT user_id FROM admin_cleanup_users)"""
+                )
+                connection.execute(
+                    """DELETE FROM payment_orders
+                       WHERE user_id IN (SELECT user_id FROM admin_cleanup_users)"""
+                )
+                connection.execute(
+                    """DELETE FROM users
+                       WHERE user_id IN (SELECT user_id FROM admin_cleanup_users)"""
+                )
+        return JSONResponse({"users": int(counts[0]), "runs": int(counts[1]),
+                             "interactions": int(counts[2]), "master_preserved": True})
 
     @app.get("/api/v1/admin/monitoring/runs", include_in_schema=False)
     async def runs(request: Request, q: str = "", limit: int = 100) -> JSONResponse:
