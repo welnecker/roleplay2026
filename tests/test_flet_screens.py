@@ -139,8 +139,13 @@ def test_aceite_legal_exige_duas_caixas_e_as_desabilita_apos_registro() -> None:
     button.on_click(None)
 
     assert accepted == [True]
-    assert continued == [True]
+    assert continued == []
     assert all(box.value and box.disabled for box in boxes)
+    assert button.content == "Acessar cards"
+
+    button.on_click(None)
+
+    assert continued == [True]
 
 
 def test_capa_data_url_e_convertida_em_base64_puro_para_flet_desktop() -> None:

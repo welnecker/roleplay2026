@@ -292,9 +292,13 @@ def legal_acceptance_screen(
         terms.value = privacy.value = True
         terms.disabled = privacy.disabled = True
         error.visible = False
-        # O aceite já foi persistido no backend; conclua o gate nesta mesma
-        # ação.  Antes, a tela permanecia montada com o erro antigo visível.
-        on_continue()
+        # O aceite já foi persistido no backend. Mantenha uma confirmação
+        # explícita para que a entrada nos cards não dependa de uma atualização
+        # automática da árvore de controles do Flet Web.
+        submitting = False
+        action.content = "Acessar cards"
+        action.disabled = False
+        _update_attached(action)
 
     terms.on_change = update_action
     privacy.on_change = update_action
