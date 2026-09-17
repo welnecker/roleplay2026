@@ -48,3 +48,14 @@ def test_public_story_media_supports_story_videos(monkeypatch) -> None:
         "https://midia.example/stories/roleplay2026.casada_frustrada/"
         "videos/1_v1.mp4"
     )
+
+
+def test_public_story_media_supports_story_audio(monkeypatch) -> None:
+    monkeypatch.setenv("ENTRECENAS_MEDIA_URL", "https://midia.example")
+
+    assert public_story_media_url(
+        "roleplay2026.camilly", "audio", "fala 01.mp3"
+    ) == (
+        "https://midia.example/stories/roleplay2026.camilly/"
+        "audio/fala%2001.mp3"
+    )

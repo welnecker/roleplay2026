@@ -87,6 +87,7 @@ def restore_project_image_state(
             continue
 
         candidates = (
+            project_dir / "scenes" / image_id,
             project_dir / "imagens" / image_id,
             project_dir / image_id,
             project_dir / f"{project_path.stem}_assets" / image_id,

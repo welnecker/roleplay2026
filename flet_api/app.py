@@ -151,7 +151,10 @@ class RunFrameResponse(BaseModel):
     content: str
     image_url: str
     motion_url: str = ""
+    audio_url: str = ""
     entry_image_urls: list[str]
+    entry_motion_urls: list[str] = Field(default_factory=list)
+    entry_audio_urls: list[str] = Field(default_factory=list)
     revealed_entries: int
     entry_count: int
     finished: bool
@@ -262,7 +265,10 @@ def _run_response(frame: RunFrame, request: Request) -> RunFrameResponse:
         content=frame.content,
         image_url=image_url,
         motion_url=absolute(frame.motion_url),
+        audio_url=absolute(frame.audio_url),
         entry_image_urls=[absolute(url) for url in frame.entry_image_urls],
+        entry_motion_urls=[absolute(url) for url in frame.entry_motion_urls],
+        entry_audio_urls=[absolute(url) for url in frame.entry_audio_urls],
         revealed_entries=frame.revealed_entries,
         entry_count=frame.entry_count,
         finished=frame.finished,

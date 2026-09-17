@@ -450,6 +450,33 @@ def test_voltar_para_movimento_reinicia_webp_com_url_logica_nova() -> None:
     assert motion.src.endswith("/1_motion_v1.webp?replay=1")
 
 
+def test_movimento_e_audio_da_planilha_ficam_na_linha_correspondente() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (
+                VisualEntry("pensamento", "mary", "Mary", "Cheguei."),
+                VisualEntry("fala", "mary", "Mary", "Olá."),
+            ),
+        ),
+        image="https://img/base.webp",
+        motion="https://midia.example/videos/base.webp",
+        audio="https://midia.example/audio/base.mp3",
+        entry_images=("https://img/base.webp", "https://img/fala.webp"),
+        entry_motions=("", "https://midia.example/videos/fala.webp"),
+        entry_audios=("", "https://midia.example/audio/fala.mp3"),
+        revealed_entries=2,
+    )
+
+    items = view._current_row().items
+    assert items[0].motion.endswith("/videos/base.webp")
+    assert items[0].audio.endswith("/audio/base.mp3")
+    assert items[1].motion.endswith("/videos/fala.webp")
+    assert items[1].audio.endswith("/audio/fala.mp3")
+
+
 def test_snapshot_preserva_cinco_quadros_sem_renderizar_historico_no_palco() -> None:
     page = _Page()
     history = ()

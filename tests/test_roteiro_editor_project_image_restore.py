@@ -66,6 +66,25 @@ def test_restore_recovers_exported_images_when_original_paths_are_stale(tmp_path
     assert restored["description_bindings"]["1"]["source"] == str(exported)
 
 
+def test_restore_recovers_new_r2_ready_scenes_folder(tmp_path: Path) -> None:
+    project_dir = tmp_path / "historia_pronto"
+    scenes_dir = project_dir / "scenes"
+    scenes_dir.mkdir(parents=True)
+    exported = scenes_dir / "mary1.webp"
+    exported.write_bytes(b"imagem")
+
+    restored = module.restore_project_image_state(
+        {
+            "image_map": {"encontro_001_descricao": "mary1.webp"},
+            "image_sources": {},
+            "reference_files": [],
+        },
+        project_path=project_dir / "projeto_roteiro.json",
+    )
+
+    assert restored["image_sources"]["mary1.webp"] == str(exported)
+
+
 def test_restore_recovers_assigned_source_from_selected_reference_directory(
     tmp_path: Path,
 ) -> None:

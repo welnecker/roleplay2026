@@ -35,6 +35,8 @@ def test_columns_match_current_sheet_contract() -> None:
         "instruction",
         "status",
         "image_id",
+        "motion_id",
+        "audio_id",
     )
 
 
@@ -57,6 +59,23 @@ def test_compile_rows_generates_v2_ids_and_orders() -> None:
     ]
     assert [row["order"] for row in rows] == [10, 20, 30, 40, 50]
     assert all(tuple(row.keys()) == core.COLUMNS for row in rows)
+
+
+def test_compile_rows_associa_imagem_movimento_e_audio_por_linha() -> None:
+    rows = core.compile_rows(
+        "[DESCRIÇÃO] Cena inicial.\n[FALA camilly] Oi.",
+        package_id="roleplay2026.camilly",
+        script_version="200",
+        frame_prefix="encontro",
+        image_map={"encontro_001_descricao": "camilly1.webp"},
+        motion_map={"encontro_001_descricao": "camilly1_motion.webp"},
+        audio_map={"encontro_001_camilly_fala_01": "camilly_oi.mp3"},
+    )
+
+    assert rows[0]["image_id"] == "camilly1.webp"
+    assert rows[0]["motion_id"] == "camilly1_motion.webp"
+    assert rows[0]["audio_id"] == ""
+    assert rows[1]["audio_id"] == "camilly_oi.mp3"
 
 
 def test_balloon_actor_suffix_is_preserved_in_export() -> None:
@@ -396,6 +415,41 @@ def test_image_name_is_webp_and_sequential() -> None:
     assert core.normalize_image_name("Casada frustrada", 12) == "casada_frustrada12.webp"
 
 
+def test_media_ids_preservam_nome_e_validam_formato() -> None:
+    assert core.normalize_media_id("C:/midia/cena_motion.webp", kind="motion") == (
+        "cena_motion.webp"
+    )
+    assert core.normalize_media_id("C:/midia/fala.mp3", kind="audio") == "fala.mp3"
+    with pytest.raises(core.EditorError, match="Formato de motion"):
+        core.normalize_media_id("C:/midia/video.mp4", kind="motion")
+
+
+def test_exportacao_separa_movimentos_e_audios(tmp_path) -> None:
+    motion = tmp_path / "cena.webp"
+    audio = tmp_path / "fala.mp3"
+    motion.write_bytes(b"webp-animado")
+    audio.write_bytes(b"audio")
+    destination = tmp_path / "saida"
+
+    core.export_package(
+        destination,
+        rows=core.compile_rows(
+            "[DESCRIÇÃO] Cena.",
+            package_id="roleplay2026.teste",
+            script_version="1",
+            frame_prefix="cena",
+            motion_map={"cena_001_descricao": motion.name},
+            audio_map={"cena_001_descricao": audio.name},
+        ),
+        image_sources={},
+        motion_sources={motion.name: str(motion)},
+        audio_sources={audio.name: str(audio)},
+    )
+
+    assert (destination / "videos" / motion.name).read_bytes() == b"webp-animado"
+    assert (destination / "audio" / audio.name).read_bytes() == b"audio"
+
+
 def test_csv_header_has_no_updated_at() -> None:
     rows = core.compile_rows(
         "[DESCRIÇÃO] Cena inicial.",
@@ -404,5 +458,8 @@ def test_csv_header_has_no_updated_at() -> None:
         frame_prefix="cena",
     )
     header = core.rows_to_csv(rows).splitlines()[0]
-    assert header == "package_id,script_version,line_id,order,instruction,status,image_id"
+    assert header == (
+        "package_id,script_version,line_id,order,instruction,status,"
+        "image_id,motion_id,audio_id"
+    )
     assert "updated_at" not in header

@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import shutil
 import unicodedata
 from dataclasses import dataclass
 from io import BytesIO, StringIO
@@ -20,6 +21,8 @@ COLUMNS = (
     "instruction",
     "status",
     "image_id",
+    "motion_id",
+    "audio_id",
 )
 
 _TAG_RE = re.compile(r"(?ms)^[ \t]*\[([^\]\n]+)\][ \t]*(.*?)(?=^[ \t]*\[[^\]\n]+\]|\Z)")
@@ -285,6 +288,8 @@ def compile_rows(
     order_step: int = 10,
     start_frame_number: int = 1,
     image_map: dict[str, str] | None = None,
+    motion_map: dict[str, str] | None = None,
+    audio_map: dict[str, str] | None = None,
 ) -> list[dict[str, object]]:
     clean_package = str(package_id or "").strip()
     if not clean_package.startswith("roleplay2026.") or clean_package.endswith("."):
@@ -304,6 +309,8 @@ def compile_rows(
     occurrences: dict[tuple[str, str], int] = {}
     rows: list[dict[str, object]] = []
     assigned = image_map or {}
+    assigned_motion = motion_map or {}
+    assigned_audio = audio_map or {}
 
     for index, item in enumerate(items):
         if item.kind == "DESCRICAO":
@@ -332,6 +339,8 @@ def compile_rows(
                 "instruction": item.instruction,
                 "status": "active",
                 "image_id": str(assigned.get(line_id, "") or ""),
+                "motion_id": str(assigned_motion.get(line_id, "") or ""),
+                "audio_id": str(assigned_audio.get(line_id, "") or ""),
             }
         )
     return rows
@@ -367,7 +376,10 @@ def rows_to_xlsx_bytes(rows: list[dict[str, object]]) -> bytes:
     for row in rows:
         ws.append([row.get(column, "") for column in COLUMNS])
     ws.freeze_panes = "A2"
-    widths = {"A": 28, "B": 16, "C": 42, "D": 10, "E": 90, "F": 12, "G": 24}
+    widths = {
+        "A": 28, "B": 16, "C": 42, "D": 10, "E": 90,
+        "F": 12, "G": 24, "H": 26, "I": 26,
+    }
     for column, width in widths.items():
         ws.column_dimensions[column].width = width
     out = BytesIO()
@@ -377,6 +389,19 @@ def rows_to_xlsx_bytes(rows: list[dict[str, object]]) -> bytes:
 
 def normalize_image_name(prefix: str, number: int) -> str:
     return f"{slugify(prefix, fallback='imagem')}{int(number)}.webp"
+
+
+def normalize_media_id(source: str | Path, *, kind: str) -> str:
+    path = Path(source)
+    name = path.name.strip()
+    if not name or name != Path(name).name:
+        raise EditorError("Nome de arquivo de mídia inválido.")
+    allowed = {"motion": {".webp"}, "audio": {".mp3", ".m4a", ".ogg", ".wav"}}
+    suffixes = allowed.get(kind)
+    if suffixes is None or path.suffix.casefold() not in suffixes:
+        expected = ", ".join(sorted(suffixes or ()))
+        raise EditorError(f"Formato de {kind} inválido. Use: {expected}.")
+    return name
 
 
 def save_project(path: Path, payload: dict[str, object]) -> None:
@@ -395,6 +420,8 @@ def export_package(
     *,
     rows: list[dict[str, object]],
     image_sources: dict[str, str],
+    motion_sources: dict[str, str] | None = None,
+    audio_sources: dict[str, str] | None = None,
     quality: int = 88,
     max_side: int = 1800,
     project_payload: dict[str, object] | None = None,
@@ -405,8 +432,10 @@ def export_package(
         raise EditorError("Não foi possível carregar o módulo interno de imagens.") from exc
 
     destination.mkdir(parents=True, exist_ok=True)
-    images_dir = destination / "imagens"
+    images_dir = destination / "scenes"
     images_dir.mkdir(exist_ok=True)
+    videos_dir = destination / "videos"
+    audio_dir = destination / "audio"
 
     (destination / "roteiro.csv").write_text(rows_to_csv(rows), encoding="utf-8-sig")
     (destination / "roteiro.tsv").write_text(rows_to_tsv(rows), encoding="utf-8-sig")
@@ -421,6 +450,30 @@ def export_package(
             if max(image.size) > int(max_side):
                 image.thumbnail((int(max_side), int(max_side)), Image.Resampling.LANCZOS)
             image.save(images_dir / image_id, "WEBP", quality=int(quality), method=6)
+
+    def copy_media(sources: dict[str, str], target: Path, kind: str) -> None:
+        if not sources:
+            return
+        target.mkdir(exist_ok=True)
+        for media_id, source in sources.items():
+            source_path = Path(source)
+            if not source_path.is_file():
+                raise EditorError(f"Arquivo de {kind} não encontrado: {source_path}")
+            clean_id = normalize_media_id(media_id, kind=kind)
+            shutil.copy2(source_path, target / clean_id)
+
+    project_motion = (
+        dict(project_payload.get("motion_sources", {}))
+        if project_payload and isinstance(project_payload.get("motion_sources"), Mapping)
+        else {}
+    )
+    project_audio = (
+        dict(project_payload.get("audio_sources", {}))
+        if project_payload and isinstance(project_payload.get("audio_sources"), Mapping)
+        else {}
+    )
+    copy_media(dict(motion_sources or project_motion), videos_dir, "motion")
+    copy_media(dict(audio_sources or project_audio), audio_dir, "audio")
 
     if project_payload is not None:
         save_project(destination / "projeto_roteiro.json", project_payload)

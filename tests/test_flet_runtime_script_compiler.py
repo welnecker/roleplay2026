@@ -13,6 +13,8 @@ class _ScriptRepository:
                 "instruction": "[DESCRIÇÃO] Mary entra na sala.",
                 "status": "active",
                 "image_id": "mary1.webp",
+                "motion_id": "mary1_motion.webp",
+                "audio_id": "ambiente.mp3",
             },
             {
                 "line_id": "encontro_001_fala",
@@ -20,6 +22,8 @@ class _ScriptRepository:
                 "instruction": "[FALA mary] Olá.",
                 "status": "active",
                 "image_id": "mary2.webp",
+                "motion_id": "mary2_motion.webp",
+                "audio_id": "mary_ola.mp3",
             },
         ]
 
@@ -55,4 +59,8 @@ def test_api_sem_patches_streamlit_compila_descricao_v2(monkeypatch) -> None:
     movement = document["blocks"][0]["beats"][0]["required_movement"]
     frame = json.loads(movement.removeprefix("NOVEL_FRAME_V2\n"))
     assert frame["image_id"] == "mary1.webp"
+    assert frame["motion_id"] == "mary1_motion.webp"
+    assert frame["audio_id"] == "ambiente.mp3"
     assert frame["entries"][0]["image_id"] == "mary2.webp"
+    assert frame["entries"][0]["motion_id"] == "mary2_motion.webp"
+    assert frame["entries"][0]["audio_id"] == "mary_ola.mp3"

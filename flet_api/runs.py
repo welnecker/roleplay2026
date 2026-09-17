@@ -41,7 +41,7 @@ from services.novel_frame_runtime_support import (
     first_frame_movement,
     is_frame_script,
 )
-from services.novel_frame_images import image_sequence_for_frame
+from services.novel_frame_images import explicit_media_for_frame, image_sequence_for_frame
 from services.novel_v2_adapter import movement_from_script, next_movement_id
 from services.runtime_persistence import (
     RuntimePersistenceContext,
@@ -77,6 +77,9 @@ class RunFrame:
     entry_count: int
     entry_image_urls: tuple[str, ...] = ()
     motion_url: str = ""
+    audio_url: str = ""
+    entry_motion_urls: tuple[str, ...] = ()
+    entry_audio_urls: tuple[str, ...] = ()
     finished: bool = False
 
 
@@ -465,6 +468,12 @@ class FletRunService:
             return ""
         return public_story_media_url(package_id, "videos", filename)
 
+    @staticmethod
+    def _external_media_url(package_id: str, category: str, media_id: str) -> str:
+        if not str(media_id or "").strip():
+            return ""
+        return public_story_media_url(package_id, category, media_id)
+
     def _view(self, package, script, context, state, messages) -> RunFrame:
         current = self._current(messages)
         if current is None:
@@ -489,6 +498,10 @@ class FletRunService:
                 filename=image,
             )
         entry_image_urls: tuple[str, ...] = ()
+        motion_url = ""
+        audio_url = ""
+        entry_motion_urls: tuple[str, ...] = ()
+        entry_audio_urls: tuple[str, ...] = ()
         if isinstance(frame, dict):
             inherited = self._previous_image_id(script, node_id)
             base_image_id, image_ids = image_sequence_for_frame(
@@ -500,12 +513,12 @@ class FletRunService:
                 if base_image_id
                 else None
             )
-            if base_image is not None:
+            if base_image_id:
                 image_url = self._image_url(
                     package.manifest.package_id,
                     image_id=base_image_id,
-                    version=_image_content_version(base_image),
-                    filename=base_image,
+                    version=_image_content_version(base_image) if base_image is not None else "",
+                    filename=base_image or base_image_id,
                 )
 
             def entry_image_url(image_id: str) -> str:
@@ -514,21 +527,38 @@ class FletRunService:
                     if image_id
                     else None
                 )
-                if resolved is None:
+                if not image_id:
                     return image_url
                 return self._image_url(
                     package.manifest.package_id,
                     image_id=image_id,
-                    version=_image_content_version(resolved),
-                    filename=resolved,
+                    version=_image_content_version(resolved) if resolved is not None else "",
+                    filename=resolved or image_id,
                 )
 
             entry_image_urls = tuple(entry_image_url(image_id) for image_id in image_ids)
-        motion_url = self._intro_motion_url(
-            package.manifest.package_id,
-            node_id=node_id,
-            first_node_id=str(script.first_beat_id),
-        )
+            base_motion_id, entry_motion_ids = explicit_media_for_frame(frame, "motion_id")
+            base_audio_id, entry_audio_ids = explicit_media_for_frame(frame, "audio_id")
+            motion_url = self._external_media_url(
+                package.manifest.package_id, "videos", base_motion_id
+            )
+            audio_url = self._external_media_url(
+                package.manifest.package_id, "audio", base_audio_id
+            )
+            entry_motion_urls = tuple(
+                self._external_media_url(package.manifest.package_id, "videos", media_id)
+                for media_id in entry_motion_ids
+            )
+            entry_audio_urls = tuple(
+                self._external_media_url(package.manifest.package_id, "audio", media_id)
+                for media_id in entry_audio_ids
+            )
+        if not motion_url and not any(entry_motion_urls):
+            motion_url = self._intro_motion_url(
+                package.manifest.package_id,
+                node_id=node_id,
+                first_node_id=str(script.first_beat_id),
+            )
         return RunFrame(
             run_id=context.run.run_id if context.run is not None else "",
             package_id=package.manifest.package_id,
@@ -545,6 +575,9 @@ class FletRunService:
             entry_count=entry_count,
             entry_image_urls=entry_image_urls,
             motion_url=motion_url,
+            audio_url=audio_url,
+            entry_motion_urls=entry_motion_urls,
+            entry_audio_urls=entry_audio_urls,
             finished=bool(state.finished),
         )
 

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import messagebox, ttk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 
 from app_image_first_timeline_gallery_restore import ScriptEditor as GalleryScriptEditor
 from core import (
     EditorError,
     cast_members_from_legacy_actors,
+    normalize_media_id,
     normalize_cast_members,
     slugify,
     validate_draft_cast,
@@ -43,10 +45,127 @@ class ScriptEditor(GalleryScriptEditor):
 
     def __init__(self) -> None:
         self.cast_members = default_cast_members()
+        self.motion_map: dict[str, str] = {}
+        self.audio_map: dict[str, str] = {}
+        self.motion_sources: dict[str, str] = {}
+        self.audio_sources: dict[str, str] = {}
         super().__init__()
         self.title("Editor de Roteiros ROLEPLAY2026 — Elenco personalizável")
         self._install_cast_controls()
+        self._install_media_controls()
         self._refresh_actor_values()
+
+    def _install_media_controls(self) -> None:
+        export_button = self._find_button("EXPORTAR ROTEIRO + IMAGENS")
+        if export_button is not None:
+            export_button.configure(text="EXPORTAR ROTEIRO + MÍDIAS")
+        for widget in self._walk_widgets(self):
+            if isinstance(widget, ttk.Label) and str(widget.cget("text")).startswith("Saída:"):
+                widget.configure(
+                    text=(
+                        "Saída: roteiro.xlsx/csv/tsv, projeto JSON e pastas "
+                        "scenes/, videos/ e audio/ prontas para o R2."
+                    )
+                )
+                break
+        image_button = self._find_button("USAR IMAGEM ATUAL NESTA LINHA")
+        if image_button is not None:
+            toolbar = image_button.master
+            ttk.Button(
+                toolbar,
+                text="MOVIMENTO NESTA LINHA",
+                command=lambda: self._assign_media("motion"),
+            ).pack(side="right", padx=4, before=image_button)
+            ttk.Button(
+                toolbar,
+                text="ÁUDIO NESTA LINHA",
+                command=lambda: self._assign_media("audio"),
+            ).pack(side="right", padx=4, before=image_button)
+            ttk.Button(
+                toolbar,
+                text="REMOVER MOV./ÁUDIO",
+                command=self._remove_selected_media,
+            ).pack(side="right", padx=4, before=image_button)
+
+        columns = ("order", "line_id", "instruction", "image_id", "motion_id", "audio_id")
+        self.tree.configure(columns=columns)
+        for column, title, width in (
+            ("motion_id", "motion_id", 180),
+            ("audio_id", "audio_id", 180),
+        ):
+            self.tree.heading(column, text=title)
+            self.tree.column(column, width=width, stretch=False)
+
+    def _selected_media_line(self) -> str:
+        if not self.rows and not self.compile_current():
+            return ""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showinfo("Mídia", "Selecione uma linha da timeline.")
+            return ""
+        line_id = str(selection[0])
+        if self._row_by_id(line_id) is None:
+            messagebox.showinfo("Mídia", "Selecione uma linha narrativa válida.")
+            return ""
+        return line_id
+
+    def _assign_media(self, kind: str) -> None:
+        line_id = self._selected_media_line()
+        if not line_id:
+            return
+        if kind == "motion":
+            title = "Selecionar WebP animado"
+            filetypes = [("WebP animado", "*.webp")]
+            target_map, sources = self.motion_map, self.motion_sources
+        else:
+            title = "Selecionar áudio"
+            filetypes = [("Áudio", "*.mp3 *.m4a *.ogg *.wav")]
+            target_map, sources = self.audio_map, self.audio_sources
+        source = filedialog.askopenfilename(title=title, filetypes=filetypes + [("Todos", "*.*")])
+        if not source:
+            return
+        try:
+            media_id = normalize_media_id(source, kind=kind)
+        except EditorError as exc:
+            messagebox.showerror("Mídia inválida", str(exc))
+            return
+        previous = target_map.get(line_id, "")
+        if previous and previous != media_id:
+            sources.pop(previous, None)
+        existing = sources.get(media_id)
+        if existing and Path(existing).resolve() != Path(source).resolve():
+            messagebox.showerror(
+                "Nome duplicado",
+                f"{media_id} já aponta para outro arquivo. Renomeie um deles.",
+            )
+            return
+        target_map[line_id] = media_id
+        sources[media_id] = source
+        self.compile_current()
+        if self.tree.exists(line_id):
+            self.tree.selection_set(line_id)
+            self.tree.see(line_id)
+        label = "Movimento" if kind == "motion" else "Áudio"
+        self.status_var.set(f"{label} atribuído: {line_id} → {media_id}")
+
+    def _remove_selected_media(self) -> None:
+        line_id = self._selected_media_line()
+        if not line_id:
+            return
+        removed: list[str] = []
+        for target_map, sources, label in (
+            (self.motion_map, self.motion_sources, "movimento"),
+            (self.audio_map, self.audio_sources, "áudio"),
+        ):
+            media_id = target_map.pop(line_id, "")
+            if media_id:
+                sources.pop(media_id, None)
+                removed.append(label)
+        self.compile_current()
+        self.status_var.set(
+            f"Removido de {line_id}: {', '.join(removed)}."
+            if removed else f"{line_id} não possui movimento ou áudio próprio."
+        )
 
     def _install_cast_controls(self) -> None:
         configure = self._find_button("Atualizar atores")
@@ -120,7 +239,41 @@ class ScriptEditor(GalleryScriptEditor):
             messagebox.showerror("Elenco inválido", str(exc))
             self.status_var.set("Há erros no elenco ou nas tags de personagens.")
             return False
-        return super().compile_current()
+        if not super().compile_current():
+            return False
+        for row in self.rows:
+            line_id = str(row.get("line_id", "") or "")
+            row["motion_id"] = str(self.motion_map.get(line_id, "") or "")
+            row["audio_id"] = str(self.audio_map.get(line_id, "") or "")
+        self.refresh_tree()
+        return True
+
+    def refresh_tree(self) -> None:
+        super().refresh_tree()
+        for row in self.rows:
+            line_id = str(row.get("line_id", "") or "")
+            if not self.tree.exists(line_id):
+                continue
+            values = list(self.tree.item(line_id, "values"))
+            values.extend([""] * (6 - len(values)))
+            values[4] = str(row.get("motion_id", "") or "")
+            values[5] = str(row.get("audio_id", "") or "")
+            self.tree.item(line_id, values=values[:6])
+
+    def _replace_row_instruction(self, line_id: str, new_instruction: str) -> str:
+        index = self._row_index(line_id)
+        motion_id = self.motion_map.get(line_id, "")
+        audio_id = self.audio_map.get(line_id, "")
+        new_line_id = super()._replace_row_instruction(line_id, new_instruction)
+        self.motion_map.pop(line_id, None)
+        self.audio_map.pop(line_id, None)
+        if motion_id:
+            self.motion_map[new_line_id] = motion_id
+        if audio_id:
+            self.audio_map[new_line_id] = audio_id
+        if index >= 0:
+            self.compile_current()
+        return new_line_id
 
     def project_payload(self):
         payload = super().project_payload()
@@ -129,10 +282,22 @@ class ScriptEditor(GalleryScriptEditor):
         payload["actors"] = ", ".join(
             member["actor_id"] for member in payload["cast_members"]
         )
+        payload["motion_map"] = dict(self.motion_map)
+        payload["audio_map"] = dict(self.audio_map)
+        payload["motion_sources"] = dict(self.motion_sources)
+        payload["audio_sources"] = dict(self.audio_sources)
         return payload
 
     def apply_project(self, data):
         data = dict(data)
+        self.motion_map = {str(k): str(v) for k, v in dict(data.get("motion_map", {})).items()}
+        self.audio_map = {str(k): str(v) for k, v in dict(data.get("audio_map", {})).items()}
+        self.motion_sources = {
+            str(k): str(v) for k, v in dict(data.get("motion_sources", {})).items()
+        }
+        self.audio_sources = {
+            str(k): str(v) for k, v in dict(data.get("audio_sources", {})).items()
+        }
         raw_cast = data.get("cast_members")
         self.cast_members = (
             normalize_cast_members(raw_cast)
@@ -144,6 +309,13 @@ class ScriptEditor(GalleryScriptEditor):
         )
         super().apply_project(data)
         self._refresh_actor_values()
+
+    def new_project(self):
+        super().new_project()
+        self.motion_map.clear()
+        self.audio_map.clear()
+        self.motion_sources.clear()
+        self.audio_sources.clear()
 
     def open_cast_editor(self) -> None:
         working = [dict(member) for member in normalize_cast_members(self.cast_members)]

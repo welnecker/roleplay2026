@@ -311,6 +311,10 @@ def test_cliente_web_publica_imagens_da_run_recebidas_pelo_loopback() -> None:
         "entry_image_urls": [
             "http://127.0.0.1:10000/api/v1/runs/image?image_id=mary1.webp"
         ],
+        "motion_url": "https://midia.example/videos/cena.webp",
+        "audio_url": "https://midia.example/audio/ambiente.mp3",
+        "entry_motion_urls": ["https://midia.example/videos/fala.webp"],
+        "entry_audio_urls": ["https://midia.example/audio/fala.mp3"],
         "revealed_entries": 0,
         "entry_count": 1,
         "finished": False,
@@ -333,3 +337,7 @@ def test_cliente_web_publica_imagens_da_run_recebidas_pelo_loopback() -> None:
     assert opened.entry_image_urls[0].startswith(
         "https://entrecenas-roleplay.com.br/api/v1/runs/image"
     )
+    assert opened.motion_url.endswith("/videos/cena.webp")
+    assert opened.audio_url.endswith("/audio/ambiente.mp3")
+    assert opened.entry_motion_urls[0].endswith("/videos/fala.webp")
+    assert opened.entry_audio_urls[0].endswith("/audio/fala.mp3")
