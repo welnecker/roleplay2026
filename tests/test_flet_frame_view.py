@@ -14,6 +14,8 @@ class _Page:
         self.height = height
         self.updates = 0
         self.dialogs: list[ft.AlertDialog] = []
+        self.services: list[object] = []
+        self.tasks: list[tuple[object, tuple[object, ...]]] = []
 
     def update(self) -> None:
         self.updates += 1
@@ -23,6 +25,9 @@ class _Page:
 
     def pop_dialog(self) -> None:
         self.dialogs.pop()
+
+    def run_task(self, handler, *args) -> None:
+        self.tasks.append((handler, args))
 
 
 def _stage_column(view: NovelFrameView) -> ft.Column:
@@ -446,6 +451,30 @@ def test_movimento_pode_ser_atribuido_a_uma_fala_especifica() -> None:
     motion = media.content.controls[1]
     assert isinstance(motion, ft.Image)
     assert motion.src.endswith("/mary2_motion.webp")
+
+
+def test_audio_da_linha_tem_repeticao_manual_e_servico_flet() -> None:
+    page = _Page()
+    view = NovelFrameView(  # type: ignore[arg-type]
+        page,
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (VisualEntry("fala", "mary", "Mary", "Olá."),),
+        ),
+        image="https://img/mary1.webp",
+        entry_images=("https://img/mary1.webp",),
+        entry_audios=("https://midia.example/audio/mary1.mp3",),
+    )
+
+    media = _image_container(view)
+    assert isinstance(media.content, ft.Stack)
+    speaker = next(
+        control for control in media.content.controls if isinstance(control, ft.IconButton)
+    )
+    speaker.on_click(None)
+
+    assert page.tasks[-1][1] == ("https://midia.example/audio/mary1.mp3",)
 
 
 def test_voltar_para_movimento_reinicia_webp_com_url_logica_nova() -> None:

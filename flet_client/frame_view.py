@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import flet as ft
+import flet_audio as fa
 
 from flet_client.frame_state import (
     FrameRevealController,
@@ -315,6 +316,8 @@ class NovelFrameView:
         self._balloon_control: ft.Control | None = None
         self._balloon_text_control: ft.Control | None = None
         self._effect_controls: list[tuple[ft.Container, OnomatopoeiaEffect]] = []
+        self._audio_controls: list[tuple[object, str]] = []
+        self._active_audio: fa.Audio | None = None
         self._viewport_width = float(getattr(page, "width", None) or 390)
         self._viewport_height = float(getattr(page, "height", None) or 800)
         self.stage_width = _stage_width(self._viewport_width)
@@ -425,6 +428,13 @@ class NovelFrameView:
             return self.entry_audios[index]
         return None
 
+    def _item_audio(self, item: FrameVisualItem | None) -> str | None:
+        if item is None:
+            return None
+        if item.entry_index >= 0:
+            return self._entry_audio(item.entry_index)
+        return self.base_audio
+
     def _current_row(self) -> FrameVisualRow:
         items = [
             FrameVisualItem(
@@ -475,7 +485,6 @@ class NovelFrameView:
         self._balloon_text_control = None
         self._effect_controls = []
         self._audio_controls: list[tuple[object, str]] = []
-        self._active_audio: object | None = None
         if item is None:
             return ft.Container(
                 width=self.stage_width,
@@ -524,6 +533,21 @@ class NovelFrameView:
                             color="#FFFFFF",
                             size=20,
                             semantics_label="Ampliar imagem",
+                        ),
+                    )
+                )
+            item_audio = self._item_audio(item)
+            if item_audio:
+                visual_stack.append(
+                    ft.IconButton(
+                        left=10,
+                        bottom=10,
+                        icon=ft.Icons.VOLUME_UP,
+                        icon_color="#FFFFFF",
+                        bgcolor="#99000000",
+                        tooltip="Reproduzir áudio novamente",
+                        on_click=lambda _event=None, url=item_audio: (
+                            self._play_audio_url(url)
                         ),
                     )
                 )
@@ -733,43 +757,50 @@ class NovelFrameView:
             pass
         self._play_audio_url(audio_url)
 
-    def _play_audio_url(self, audio_url: str) -> None:
-        """Insere um player temporário; o áudio termina sem ocupar o layout."""
-        audio_type = getattr(ft, "Audio", None)
-        if not audio_url or audio_type is None:
+    def _audio_service(self, audio_url: str) -> fa.Audio | None:
+        services = getattr(self.page, "services", None)
+        if services is None or not audio_url:
+            return None
+        audio = self._active_audio
+        if not isinstance(audio, fa.Audio):
+            audio = fa.Audio(src=audio_url, autoplay=False, volume=1.0)
+            services.append(audio)
+            self._active_audio = audio
+        elif audio.src != audio_url:
+            audio.src = audio_url
+        return audio
+
+    async def _play_audio(self, audio_url: str) -> None:
+        audio = self._audio_service(audio_url)
+        if audio is None:
             return
-        self._stop_active_audio()
-        audio = audio_type(src=audio_url, autoplay=True, volume=1.0)
-        overlay = getattr(self.page, "overlay", None)
-        if overlay is None:
-            return
-        overlay.append(audio)
-        self._active_audio = audio
         self.page.update()
+        try:
+            await audio.play(0)
+        except RuntimeError as exc:
+            # Chrome pode bloquear a primeira tentativa automática. O botão de
+            # volume continua disponível para uma reprodução iniciada pelo usuário.
+            print(f"[STORY_AUDIO] play_failed url={audio_url!r} error={exc!r}")
+
+    def _play_audio_url(self, audio_url: str) -> None:
+        runner = getattr(self.page, "run_task", None)
+        if audio_url and callable(runner):
+            runner(self._play_audio, audio_url)
 
     def _stop_active_audio(self) -> None:
         audio = self._active_audio
         if audio is None:
             return
-        pause = getattr(audio, "pause", None)
-        if callable(pause):
-            try:
-                pause()
-            except Exception:
-                pass
-        release = getattr(audio, "release", None)
-        if callable(release):
-            try:
-                release()
-            except Exception:
-                pass
-        overlay = getattr(self.page, "overlay", None)
-        if overlay is not None:
-            try:
-                overlay.remove(audio)
-            except ValueError:
-                pass
-        self._active_audio = None
+        runner = getattr(self.page, "run_task", None)
+        if callable(runner):
+            runner(self._pause_audio, audio)
+
+    @staticmethod
+    async def _pause_audio(audio: fa.Audio) -> None:
+        try:
+            await audio.pause()
+        except RuntimeError:
+            pass
 
     def _open_image_viewer(self, image: bytes | str) -> None:
         self._image_dialog = _image_viewer_dialog(
@@ -830,6 +861,10 @@ class NovelFrameView:
         self._refresh()
         if replay_effect:
             self._start_stage_animation(include_scene=False)
+        elif selected is not None:
+            audio_url = self._item_audio(selected)
+            if audio_url:
+                self._play_audio_url(audio_url)
 
     def _review_next(self, _event: object = None) -> None:
         self._stop_active_audio()
@@ -843,6 +878,10 @@ class NovelFrameView:
         self._refresh()
         if replay_effect:
             self._start_stage_animation(include_scene=False)
+        elif selected is not None:
+            audio_url = self._item_audio(selected)
+            if audio_url:
+                self._play_audio_url(audio_url)
 
     def _refresh(self, *, update_page: bool = True) -> None:
         items = self._current_row().items

@@ -60,7 +60,7 @@ FLUXO: ELENCO + IMAGEM PRIMEIRO
     usuario volta a cena.
 29. Para adicionar som, selecione uma linha e use ATRIBUIR ÁUDIO À LINHA.
     Sons podem ser ligados a uma ONOMATOPEIA, fala, pensamento ou movimento.
-    O arquivo original é copiado para audios/ e o audio_id é gravado na planilha.
+    O arquivo original é copiado para audio/ e o audio_id é gravado na planilha.
 30. Clique em EXPORTAR ROTEIRO + IMAGENS ao finalizar.
 
 SAIDA
@@ -71,9 +71,9 @@ A pasta exportada contem:
 - projeto_roteiro.json
 - elenco_manifest.yaml
 - ELENCO-E-TAGS.txt
-- imagens/*.webp
+- scenes/*.webp
 - videos/*_motion.webp
-- audios/*
+- audio/*
 
 O arquivo elenco_manifest.yaml contem o bloco cast_customization pronto para ser
 copiado ao manifest.yaml do card. O arquivo ELENCO-E-TAGS.txt resume os marcadores

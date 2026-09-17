@@ -42,7 +42,7 @@ def test_restore_keeps_existing_original_image_sources(tmp_path: Path) -> None:
 
 def test_restore_recovers_exported_images_when_original_paths_are_stale(tmp_path: Path) -> None:
     project_dir = tmp_path / "historia_pronto"
-    images_dir = project_dir / "imagens"
+    images_dir = project_dir / "scenes"
     images_dir.mkdir(parents=True)
     exported = images_dir / "mary1.webp"
     exported.write_bytes(b"imagem")

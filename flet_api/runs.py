@@ -569,7 +569,7 @@ class FletRunService:
             base_motion_id, entry_motion_ids = motion_sequence_for_frame(frame)
             base_audio_id, entry_audio_ids, entry_effect_audio_ids = audio_sequence_for_frame(frame)
             frame_audio_url = (
-                public_story_media_url(package.manifest.package_id, "audios", base_audio_id)
+                public_story_media_url(package.manifest.package_id, "audio", base_audio_id)
                 if base_audio_id else ""
             )
 
@@ -589,23 +589,25 @@ class FletRunService:
                 motion_id_url(motion_id) for motion_id in entry_motion_ids
             )
             entry_audio_urls = tuple(
-                public_story_media_url(package.manifest.package_id, "audios", audio_id)
+                public_story_media_url(package.manifest.package_id, "audio", audio_id)
                 if audio_id else ""
                 for audio_id in entry_audio_ids
             )
             entry_effect_audio_urls = tuple(
                 tuple(
-                    public_story_media_url(package.manifest.package_id, "audios", audio_id)
+                    public_story_media_url(package.manifest.package_id, "audio", audio_id)
                     if audio_id else ""
                     for audio_id in effect_ids
                 )
                 for effect_ids in entry_effect_audio_ids
             )
-        motion_url = frame_motion_url or self._intro_motion_url(
-            package.manifest.package_id,
-            node_id=node_id,
-            first_node_id=str(script.first_beat_id),
-        )
+        motion_url = frame_motion_url
+        if not motion_url and not any(entry_motion_urls):
+            motion_url = self._intro_motion_url(
+                package.manifest.package_id,
+                node_id=node_id,
+                first_node_id=str(script.first_beat_id),
+            )
         return RunFrame(
             run_id=context.run.run_id if context.run is not None else "",
             package_id=package.manifest.package_id,

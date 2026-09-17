@@ -481,12 +481,12 @@ def export_package(
         raise EditorError("Não foi possível carregar o módulo interno de imagens.") from exc
 
     destination.mkdir(parents=True, exist_ok=True)
-    images_dir = destination / "imagens"
+    images_dir = destination / "scenes"
     images_dir.mkdir(exist_ok=True)
     videos_dir = destination / "videos"
     if motion_sources:
         videos_dir.mkdir(exist_ok=True)
-    audios_dir = destination / "audios"
+    audios_dir = destination / "audio"
     if audio_sources:
         audios_dir.mkdir(exist_ok=True)
 

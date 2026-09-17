@@ -265,6 +265,28 @@ def test_exportacao_inclui_arquivos_de_elenco(tmp_path: Path) -> None:
     assert "{{nome:mary}}" in guide
 
 
+def test_exportacao_usa_as_pastas_publicas_do_r2(tmp_path: Path) -> None:
+    from PIL import Image
+
+    image = tmp_path / "entrada.png"
+    Image.new("RGB", (8, 8), "red").save(image)
+    audio = tmp_path / "entrada.mp3"
+    audio.write_bytes(b"audio")
+    destination = tmp_path / "exportado"
+
+    core.export_package(
+        destination,
+        rows=[],
+        image_sources={"camilly1.webp": str(image)},
+        audio_sources={"camilly1.mp3": str(audio)},
+    )
+
+    assert (destination / "scenes" / "camilly1.webp").is_file()
+    assert (destination / "audio" / "camilly1.mp3").is_file()
+    assert not (destination / "imagens").exists()
+    assert not (destination / "audios").exists()
+
+
 def test_fim_historia_sem_texto_encerra_o_ultimo_quadro() -> None:
     rows = core.compile_rows(
         "[DESCRIÇÃO] Último encontro.\n[FALA mary] Até logo.\n[FIM_HISTORIA]",
