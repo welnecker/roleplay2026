@@ -426,7 +426,7 @@ class NovelFrameView:
     def _entry_audio(self, index: int) -> str | None:
         if index < len(self.entry_audios) and self.entry_audios[index]:
             return self.entry_audios[index]
-        return None
+        return self.base_audio if index == 0 else None
 
     def _item_audio(self, item: FrameVisualItem | None) -> str | None:
         if item is None:

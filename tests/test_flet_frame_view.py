@@ -477,6 +477,22 @@ def test_audio_da_linha_tem_repeticao_manual_e_servico_flet() -> None:
     assert page.tasks[-1][1] == ("https://midia.example/audio/mary1.mp3",)
 
 
+def test_audio_da_descricao_acompanha_a_primeira_posicao_visual() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (VisualEntry("fala", "mary", "Mary", "Olá."),),
+        ),
+        image="https://img/mary1.webp",
+        audio="https://midia.example/audio/cena.mp3",
+        entry_images=("https://img/mary1.webp",),
+    )
+
+    assert view._entry_audio(0) == "https://midia.example/audio/cena.mp3"
+
+
 def test_voltar_para_movimento_reinicia_webp_com_url_logica_nova() -> None:
     view = NovelFrameView(  # type: ignore[arg-type]
         _Page(),
