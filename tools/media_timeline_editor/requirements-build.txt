@@ -1,0 +1,4 @@
+Pillow>=10.4,<13
+imageio-ffmpeg>=0.6,<1
+pyinstaller>=6.10,<7
+pytest>=8,<9

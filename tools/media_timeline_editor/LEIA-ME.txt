@@ -1,0 +1,18 @@
+EDITOR DE MÍDIA ENTRECENAS
+
+1. Abra um vídeo MP4.
+2. Escolha o início e o fim do trecho nos controles da timeline.
+3. Opcionalmente, carregue um MP3 separado. Sem MP3, o áudio do vídeo será usado.
+4. Ajuste o deslocamento do áudio: valor positivo atrasa o som; negativo adianta.
+5. Use PRÉVIA para conferir o trecho.
+6. Exporte. A ferramenta gera:
+
+   nome_motion.webp
+   nome_audio.mp3
+
+O WebP e o MP3 têm o mesmo ponto zero e a mesma duração. No editor de roteiros,
+associe os nomes às colunas motion_id e audio_id da mesma linha. Envie o WebP
+para videos/ e o MP3 para audio/ no bucket R2 da história.
+
+O WebP não contém áudio internamente. A sincronização ocorre porque o aplicativo
+inicia os dois arquivos juntos e ambos são exportados com a mesma duração.
