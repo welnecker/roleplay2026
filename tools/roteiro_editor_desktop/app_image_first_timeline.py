@@ -6,7 +6,7 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 
 from app_image_first_balao import ScriptEditor as BalloonScriptEditor
-from app_image_first import normalize_image_name, slugify
+from app_image_first import Image, ImageTk, normalize_image_name, slugify
 from roleplay_shared.onomatopoeia import parse_onomatopoeia_header
 
 _TAG = re.compile(r"^\s*\[([^\]]+)\]\s*(.*)$", re.DOTALL)
@@ -27,6 +27,7 @@ class ScriptEditor(BalloonScriptEditor):
         self.tree.configure(show="tree headings")
         self.tree.heading("#0", text="Quadro / linha")
         self.tree.column("#0", width=185, minwidth=150, stretch=False)
+        self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
         self.tree.bind("<Double-1>", self._on_tree_double_click)
 
     def _walk_widgets(self, widget):
@@ -197,6 +198,83 @@ class ScriptEditor(BalloonScriptEditor):
         if not self.compile_current():
             raise ValueError("Não foi possível recompilar a linha alterada.")
         return new_line_id
+
+    def _load_motion_first_frame(self, path: Path):
+        """Carrega o primeiro quadro de um vídeo original usando o ffmpeg disponível."""
+        try:
+            import imageio_ffmpeg
+
+            frames = imageio_ffmpeg.read_frames(str(path), pix_fmt="rgb24")
+            metadata = next(frames)
+            raw_frame = next(frames)
+            width, height = metadata["size"]
+            return Image.frombytes("RGB", (int(width), int(height)), raw_frame)
+        except Exception:
+            return None
+
+    def _show_selected_media(self, source: str, media_id: str, line_id: str, *, is_motion: bool = False) -> None:
+        if not source:
+            self.preview_image = None
+            self.preview_label.configure(image="", text=f"{line_id}\\n{media_id}\\nArquivo de origem não informado.")
+            return
+        path = Path(source)
+        if not path.exists():
+            self.preview_image = None
+            self.preview_label.configure(
+                image="",
+                text=f"{line_id}\\n{media_id}\\nArquivo original não encontrado:\\n{source}",
+            )
+            return
+        if Image is None or ImageTk is None:
+            self.preview_image = None
+            self.preview_label.configure(image="", text=f"{line_id}\\n{media_id}\\n{source}")
+            return
+
+        try:
+            image = None
+            if is_motion and path.suffix.lower() not in {".webp", ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}:
+                image = self._load_motion_first_frame(path)
+            if image is None:
+                with Image.open(path) as opened:
+                    opened.seek(0)
+                    image = opened.convert("RGB")
+            image.thumbnail((570, 590), Image.Resampling.LANCZOS)
+            preview = ImageTk.PhotoImage(image.copy())
+            self.preview_image = preview
+            self.preview_label.configure(image=preview, text=f"{line_id}\\n{media_id}", compound="top")
+            self.reference_name_var.set(f"{media_id} — linha selecionada")
+            self.reference_count_var.set("Prévia da mídia vinculada à linha")
+        except Exception as exc:
+            self.preview_image = None
+            self.preview_label.configure(
+                image="",
+                text=f"Não foi possível abrir a mídia da linha {line_id}:\\n{exc}",
+            )
+
+    def on_tree_select(self, _event=None) -> None:
+        selection = self.tree.selection()
+        if not selection:
+            return
+        line_id = str(selection[0])
+        row = self._row_by_id(line_id)
+        if row is None:
+            return
+
+        motion_id = str(row.get("motion_id", "") or self.motion_map.get(line_id, "") or "")
+        image_id = str(row.get("image_id", "") or self.image_map.get(line_id, "") or "")
+        if motion_id:
+            motion_source = str(self.motion_sources.get(motion_id, "") or "")
+            self._show_selected_media(motion_source, motion_id, line_id, is_motion=True)
+            return
+        if image_id:
+            image_source = str(self.image_sources.get(image_id, "") or "")
+            self._show_selected_media(image_source, image_id, line_id)
+            return
+
+        self.preview_image = None
+        self.preview_label.configure(image="", text=f"{line_id}\\nEsta linha não possui imagem ou vídeo próprio.")
+        self.reference_name_var.set("Nenhuma mídia própria na linha")
+        self.reference_count_var.set("A linha pode herdar a imagem do quadro anterior")
 
     def _on_tree_double_click(self, event) -> None:
         row_id = self.tree.identify_row(event.y)
@@ -436,6 +514,7 @@ class ScriptEditor(BalloonScriptEditor):
         if selected_id and self.tree.exists(selected_id):
             self.tree.selection_set(selected_id)
             self.tree.see(selected_id)
+            self.on_tree_select()
 
 
 if __name__ == "__main__":
