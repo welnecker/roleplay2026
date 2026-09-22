@@ -215,19 +215,19 @@ class ScriptEditor(BalloonScriptEditor):
     def _show_selected_media(self, source: str, media_id: str, line_id: str, *, is_motion: bool = False) -> None:
         if not source:
             self.preview_image = None
-            self.preview_label.configure(image="", text=f"{line_id}\\n{media_id}\\nArquivo de origem não informado.")
+            self.preview_label.configure(image="", text=f"{line_id}\n{media_id}\nArquivo de origem não informado.")
             return
         path = Path(source)
         if not path.exists():
             self.preview_image = None
             self.preview_label.configure(
                 image="",
-                text=f"{line_id}\\n{media_id}\\nArquivo original não encontrado:\\n{source}",
+                text=f"{line_id}\n{media_id}\nArquivo original não encontrado:\n{source}",
             )
             return
         if Image is None or ImageTk is None:
             self.preview_image = None
-            self.preview_label.configure(image="", text=f"{line_id}\\n{media_id}\\n{source}")
+            self.preview_label.configure(image="", text=f"{line_id}\n{media_id}\n{source}")
             return
 
         try:
@@ -241,14 +241,14 @@ class ScriptEditor(BalloonScriptEditor):
             image.thumbnail((570, 590), Image.Resampling.LANCZOS)
             preview = ImageTk.PhotoImage(image.copy())
             self.preview_image = preview
-            self.preview_label.configure(image=preview, text=f"{line_id}\\n{media_id}", compound="top")
+            self.preview_label.configure(image=preview, text=f"{line_id}\n{media_id}", compound="top")
             self.reference_name_var.set(f"{media_id} — linha selecionada")
             self.reference_count_var.set("Prévia da mídia vinculada à linha")
         except Exception as exc:
             self.preview_image = None
             self.preview_label.configure(
                 image="",
-                text=f"Não foi possível abrir a mídia da linha {line_id}:\\n{exc}",
+                text=f"Não foi possível abrir a mídia da linha {line_id}:\n{exc}",
             )
 
     def on_tree_select(self, _event=None) -> None:
@@ -272,7 +272,7 @@ class ScriptEditor(BalloonScriptEditor):
             return
 
         self.preview_image = None
-        self.preview_label.configure(image="", text=f"{line_id}\\nEsta linha não possui imagem ou vídeo próprio.")
+        self.preview_label.configure(image="", text=f"{line_id}\nEsta linha não possui imagem ou vídeo próprio.")
         self.reference_name_var.set("Nenhuma mídia própria na linha")
         self.reference_count_var.set("A linha pode herdar a imagem do quadro anterior")
 
