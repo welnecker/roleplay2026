@@ -30,7 +30,7 @@ class ScriptEditor(TimelineScriptEditor):
     def _thumbnail_for(self, image_id: str):
         if not image_id or Image is None or ImageTk is None:
             return None
-        source = str(self.image_sources.get(image_id, "") or "").strip()
+        source = self._media_source_for_id(image_id, self.image_sources)
         if not source:
             return None
         path = Path(source)
