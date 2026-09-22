@@ -91,7 +91,11 @@ class ScriptEditor(ThumbnailScriptEditor):
         for mapped in self.image_sources.values():
             if str(Path(str(mapped))) == normalized:
                 return True
-        return False
+        source_name = Path(source).name.casefold()
+        return any(
+            Path(image_id).name.casefold() == source_name
+            for image_id in self._referenced_image_ids()
+        )
 
     def _select_gallery_reference(self, index: int) -> None:
         if not (0 <= index < len(self.reference_files)):
