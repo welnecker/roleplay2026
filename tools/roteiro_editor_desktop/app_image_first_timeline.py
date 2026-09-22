@@ -199,6 +199,31 @@ class ScriptEditor(BalloonScriptEditor):
             raise ValueError("Não foi possível recompilar a linha alterada.")
         return new_line_id
 
+    def _media_source_for_id(self, media_id: str, source_map: dict[str, str]) -> str:
+        """Resolve o caminho físico pelo mapa salvo ou pelo nome na galeria."""
+        clean_id = str(media_id or "").strip()
+        if not clean_id:
+            return ""
+
+        direct = str(source_map.get(clean_id, "") or "").strip()
+        if direct and Path(direct).is_file():
+            return direct
+
+        wanted_name = Path(clean_id).name.casefold()
+        for candidate in self.reference_files:
+            candidate_path = Path(str(candidate))
+            if candidate_path.is_file() and candidate_path.name.casefold() == wanted_name:
+                return str(candidate_path)
+
+        directory_var = getattr(self, "reference_directory_var", None)
+        directory = str(directory_var.get() if directory_var is not None else "").strip()
+        if directory and Path(directory).is_dir():
+            candidate_path = Path(directory) / Path(clean_id).name
+            if candidate_path.is_file():
+                return str(candidate_path)
+
+        return direct
+
     def _load_motion_first_frame(self, path: Path):
         """Carrega o primeiro quadro de um vídeo original usando o ffmpeg disponível."""
         try:
@@ -263,12 +288,12 @@ class ScriptEditor(BalloonScriptEditor):
         motion_id = str(row.get("motion_id", "") or self.motion_map.get(line_id, "") or "")
         image_id = str(row.get("image_id", "") or self.image_map.get(line_id, "") or "")
         if motion_id:
-            motion_source = str(self.motion_sources.get(motion_id, "") or "")
+            motion_source = self._media_source_for_id(motion_id, self.motion_sources)
             if motion_source:
                 self._show_selected_media(motion_source, motion_id, line_id, is_motion=True)
                 return
         if image_id:
-            image_source = str(self.image_sources.get(image_id, "") or "")
+            image_source = self._media_source_for_id(image_id, self.image_sources)
             self._show_selected_media(image_source, image_id, line_id)
             return
         if motion_id:
