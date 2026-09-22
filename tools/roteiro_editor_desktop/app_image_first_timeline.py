@@ -264,11 +264,15 @@ class ScriptEditor(BalloonScriptEditor):
         image_id = str(row.get("image_id", "") or self.image_map.get(line_id, "") or "")
         if motion_id:
             motion_source = str(self.motion_sources.get(motion_id, "") or "")
-            self._show_selected_media(motion_source, motion_id, line_id, is_motion=True)
-            return
+            if motion_source:
+                self._show_selected_media(motion_source, motion_id, line_id, is_motion=True)
+                return
         if image_id:
             image_source = str(self.image_sources.get(image_id, "") or "")
             self._show_selected_media(image_source, image_id, line_id)
+            return
+        if motion_id:
+            self._show_selected_media("", motion_id, line_id, is_motion=True)
             return
 
         self.preview_image = None
