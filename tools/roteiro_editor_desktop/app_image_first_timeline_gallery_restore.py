@@ -142,15 +142,22 @@ class ScriptEditor(GalleryScriptEditor):
                 break
 
     def _available_reference_indexes(self) -> list[int]:
-        used = {
+        used_paths = {
             self._path_key(source)
             for source in self.image_sources.values()
             if str(source or "").strip()
         }
+        used_names = {
+            Path(image_id).name.casefold()
+            for image_id in self._referenced_image_ids()
+        }
         return [
             index
             for index, source in enumerate(self.reference_files)
-            if self._path_key(source) not in used
+            if (
+                self._path_key(source) not in used_paths
+                and Path(source).name.casefold() not in used_names
+            )
         ]
 
     def _select_first_available_reference(self) -> None:
