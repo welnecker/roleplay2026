@@ -199,6 +199,28 @@ class ScriptEditor(BalloonScriptEditor):
             raise ValueError("Não foi possível recompilar a linha alterada.")
         return new_line_id
 
+    def _referenced_image_ids(self) -> set[str]:
+        ids = {
+            str(image_id).strip()
+            for image_id in self.image_sources
+            if str(image_id).strip()
+        }
+        ids.update(
+            str(image_id).strip()
+            for image_id in self.image_map.values()
+            if str(image_id).strip()
+        )
+        ids.update(
+            str(row.get("image_id", "") or "").strip()
+            for row in self.rows
+            if str(row.get("image_id", "") or "").strip()
+        )
+        for binding in self.description_bindings.values():
+            image_id = str(binding.get("image_id", "") or "").strip()
+            if image_id:
+                ids.add(image_id)
+        return ids
+
     def _media_source_for_id(self, media_id: str, source_map: dict[str, str]) -> str:
         """Resolve o caminho físico pelo mapa salvo ou pelo nome na galeria."""
         clean_id = str(media_id or "").strip()
