@@ -83,3 +83,52 @@ def test_waveform_returns_requested_number_of_points(tmp_path: Path) -> None:
     peaks = core.waveform_peaks(source, start=0, duration=1, points=64)
     assert len(peaks) == 64
     assert max(peaks) > 0
+
+
+def test_frame_accurate_index_capture_and_dib(tmp_path: Path) -> None:
+    ffmpeg = core.ffmpeg_executable()
+    source = tmp_path / "frames.mp4"
+    generated = subprocess.run(
+        [
+            ffmpeg, "-y", "-f", "lavfi", "-i",
+            "testsrc=size=160x90:rate=12:duration=1", "-pix_fmt", "yuv420p",
+            str(source),
+        ],
+        capture_output=True,
+        check=False,
+    )
+    if generated.returncode != 0:
+        pytest.skip("O FFmpeg disponível não possui os codecs de teste.")
+
+    info = core.probe_media(source)
+    previews = core.extract_precision_frames(source, tmp_path / "precision", max_width=120)
+    capture = core.extract_frame_at_index(source, tmp_path / "capture.png", 5)
+
+    from PIL import Image
+
+    assert info.fps == pytest.approx(12, abs=0.1)
+    assert info.frame_count == 12
+    assert len(previews) == 12
+    assert core.frame_time(6, info.fps) == pytest.approx(0.5, abs=0.01)
+    with Image.open(capture) as image:
+        assert image.size == (160, 90)
+    dib = core.image_dib_bytes(capture)
+    assert len(dib) > 40
+    assert dib[:4] == (40).to_bytes(4, "little")
+
+
+def test_export_audio_track_as_wav(tmp_path: Path) -> None:
+    ffmpeg = core.ffmpeg_executable()
+    source = tmp_path / "tone.mp3"
+    generated = subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", "sine=frequency=330:duration=2", str(source)],
+        capture_output=True,
+        check=False,
+    )
+    if generated.returncode != 0:
+        pytest.skip("O FFmpeg disponível não possui encoder MP3.")
+    destination = tmp_path / "track.wav"
+    result = core.export_audio_clip(source, destination, start=0.25, end=1.25)
+    assert result == destination
+    assert destination.is_file()
+    assert core.probe_media(destination).duration == pytest.approx(1.0, abs=0.08)

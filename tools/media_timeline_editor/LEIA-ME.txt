@@ -1,18 +1,43 @@
-EDITOR DE MÍDIA ENTRECENAS
+EDITOR DE MÍDIA ENTRECENAS — TIMELINE PRECISA
 
-1. Abra um vídeo MP4.
-2. Escolha o início e o fim do trecho nos controles da timeline.
-3. Opcionalmente, carregue um MP3 separado. Sem MP3, o áudio do vídeo será usado.
-4. Ajuste o deslocamento do áudio: valor positivo atrasa o som; negativo adianta.
-5. Use PRÉVIA para conferir o trecho.
-6. Exporte. A ferramenta gera:
+FLUXO PRINCIPAL
 
-   nome_motion.webp
-   nome_audio.mp3
+1. Abra um vídeo MP4, MOV, MKV ou WebM.
+2. Aguarde a indexação: o editor decodifica todos os frames em prévias leves.
+3. Use ← e → para avançar um frame; Shift + seta avança dez frames.
+4. Também é possível arrastar o playhead, clicar na timeline ou digitar o frame.
+5. COPIAR FRAME extrai o quadro original e o envia à área de transferência.
+6. SALVAR FRAME exporta o quadro em PNG, JPG ou WebP.
+7. MARCAR INÍCIO e MARCAR FIM definem o trecho usando o frame atual.
+8. A pista inferior mostra a forma de onda do áudio na mesma escala temporal.
+9. Opcionalmente, carregue um áudio separado e ajuste offset, volume e fades.
+10. PRÉVIA SINCRONIZADA reproduz o WebP e o áudio juntos.
+11. EXPORTAR gera:
 
-O WebP e o MP3 têm o mesmo ponto zero e a mesma duração. No editor de roteiros,
-associe os nomes às colunas motion_id e audio_id da mesma linha. Envie o WebP
-para videos/ e o MP3 para audio/ no bucket R2 da história.
+    nome_motion.webp
+    nome_audio.mp3
 
-O WebP não contém áudio internamente. A sincronização ocorre porque o aplicativo
-inicia os dois arquivos juntos e ambos são exportados com a mesma duração.
+PERFIS DE WEBP
+
+Leve:            8 FPS, qualidade 58, máximo 854 px
+Equilibrado:    10 FPS, qualidade 65, máximo 960 px (padrão)
+Alta qualidade: 12 FPS, qualidade 75, máximo 1280 px
+Personalizado: valores definidos manualmente
+
+ÁUDIO
+
+O botão EXPORTAR MP3/WAV gera somente a pista de áudio do intervalo marcado.
+O WebP não contém áudio internamente. No EntreCenas, motion_id e audio_id são
+iniciados juntos e ambos são exportados com a mesma duração.
+
+R2
+
+Envie o WebP para a pasta videos/ e o MP3 para audio/ no bucket da história.
+Associe os nomes às colunas motion_id e audio_id da mesma linha em ROTEIROS.
+
+ÁREA DE TRANSFERÊNCIA
+
+COPIAR FRAME coloca uma imagem real na área de transferência do Windows. Depois
+da confirmação, use Ctrl+V no Paint, Photoshop, WhatsApp, Venice ou outro
+aplicativo compatível.
+

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import array
+import io
+import os
 import re
 import shutil
 import subprocess
@@ -20,6 +22,7 @@ class MediaInfo:
     height: int
     fps: float
     has_audio: bool
+    frame_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +35,8 @@ class ExportResult:
 
 
 _DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)")
-_VIDEO_RE = re.compile(r"Video:.*?(\d{2,5})x(\d{2,5}).*?(\d+(?:\.\d+)?)\s*fps")
+_VIDEO_SIZE_RE = re.compile(r"Video:.*?(\d{2,5})x(\d{2,5})")
+_VIDEO_RATE_RE = re.compile(r"Video:.*?(\d+(?:\.\d+)?)\s*(?:fps|tbr)")
 
 
 def ffmpeg_executable() -> str:
@@ -66,17 +70,118 @@ def probe_media(source: Path) -> MediaInfo:
         raise MediaEditorError("Não foi possível determinar a duração da mídia.")
     hours, minutes, seconds = duration_match.groups()
     duration = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
-    video_match = _VIDEO_RE.search(diagnostic)
-    width = int(video_match.group(1)) if video_match else 0
-    height = int(video_match.group(2)) if video_match else 0
-    fps = float(video_match.group(3)) if video_match else 0.0
+    size_match = _VIDEO_SIZE_RE.search(diagnostic)
+    rate_match = _VIDEO_RATE_RE.search(diagnostic)
+    width = int(size_match.group(1)) if size_match else 0
+    height = int(size_match.group(2)) if size_match else 0
+    fps = float(rate_match.group(1)) if rate_match else 0.0
     return MediaInfo(
         duration=duration,
         width=width,
         height=height,
         fps=fps,
         has_audio="Audio:" in diagnostic,
+        frame_count=max(1, round(duration * fps)) if fps else 1,
     )
+
+
+def frame_time(frame_index: int, fps: float) -> float:
+    if fps <= 0:
+        raise MediaEditorError("O vídeo não informou uma taxa de quadros válida.")
+    return max(0, int(frame_index)) / float(fps)
+
+
+def extract_precision_frames(
+    source: Path,
+    destination: Path,
+    *,
+    max_width: int = 960,
+) -> list[Path]:
+    """Decode every source frame into a lightweight, frame-accurate preview."""
+    destination.mkdir(parents=True, exist_ok=True)
+    for stale in destination.glob("precision_*.jpg"):
+        stale.unlink()
+    scale = f"scale='min({max(160, int(max_width))},iw)':-2:flags=lanczos"
+    command = [
+        ffmpeg_executable(), "-y", "-i", str(source), "-an", "-vsync", "0",
+        "-vf", scale, "-q:v", "4", str(destination / "precision_%08d.jpg"),
+    ]
+    completed = _run(command)
+    frames = sorted(destination.glob("precision_*.jpg"))
+    if completed.returncode != 0 or not frames:
+        detail = str(completed.stderr or "").strip().splitlines()
+        raise MediaEditorError(
+            "Falha ao indexar os quadros do vídeo."
+            + (f" Detalhe: {detail[-1]}" if detail else "")
+        )
+    return frames
+
+
+def extract_frame_at_index(
+    source: Path,
+    destination: Path,
+    frame_index: int,
+) -> Path:
+    """Extract one original-resolution source frame by its zero-based index."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    select = f"select=eq(n\\,{max(0, int(frame_index))})"
+    command = [
+        ffmpeg_executable(), "-y", "-i", str(source), "-an", "-vf", select,
+        "-vsync", "0", "-frames:v", "1", str(destination),
+    ]
+    completed = _run(command)
+    if completed.returncode != 0 or not destination.is_file():
+        detail = str(completed.stderr or "").strip().splitlines()
+        raise MediaEditorError(
+            "Falha ao extrair o frame selecionado."
+            + (f" Detalhe: {detail[-1]}" if detail else "")
+        )
+    return destination
+
+
+def image_dib_bytes(source: Path) -> bytes:
+    """Return Windows CF_DIB bytes (a BMP without its 14-byte file header)."""
+    from PIL import Image
+
+    with Image.open(source) as image:
+        converted = image.convert("RGB")
+        buffer = io.BytesIO()
+        converted.save(buffer, "BMP")
+    return buffer.getvalue()[14:]
+
+
+def copy_image_to_clipboard(source: Path) -> None:
+    if os.name != "nt":
+        raise MediaEditorError("A cópia de imagem está disponível no aplicativo Windows.")
+    import ctypes
+
+    data = image_dib_bytes(source)
+    kernel32 = ctypes.windll.kernel32
+    user32 = ctypes.windll.user32
+    kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+    kernel32.GlobalAlloc.restype = ctypes.c_void_p
+    kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+    user32.SetClipboardData.restype = ctypes.c_void_p
+    handle = kernel32.GlobalAlloc(0x0002, len(data))  # GMEM_MOVEABLE
+    if not handle:
+        raise MediaEditorError("O Windows não reservou memória para a imagem.")
+    pointer = kernel32.GlobalLock(handle)
+    ctypes.memmove(pointer, data, len(data))
+    kernel32.GlobalUnlock(handle)
+    if not user32.OpenClipboard(None):
+        kernel32.GlobalFree(handle)
+        raise MediaEditorError("A área de transferência está sendo usada por outro programa.")
+    try:
+        user32.EmptyClipboard()
+        if not user32.SetClipboardData(8, handle):  # CF_DIB
+            kernel32.GlobalFree(handle)
+            raise MediaEditorError("Não foi possível copiar o frame.")
+        handle = None  # ownership transferred to Windows
+    finally:
+        user32.CloseClipboard()
 
 
 def validate_interval(start: float, end: float, duration: float) -> tuple[float, float]:
@@ -237,10 +342,12 @@ def _export_audio(
         fade_start = max(0.0, duration - fade_out)
         filters.append(f"afade=t=out:st={fade_start:.6f}:d={min(fade_out, duration):.6f}")
     destination.parent.mkdir(parents=True, exist_ok=True)
+    codec = ["-c:a", "pcm_s16le"] if destination.suffix.lower() == ".wav" else [
+        "-c:a", "libmp3lame", "-b:a", "192k",
+    ]
     command = [
         ffmpeg_executable(), "-y", "-i", str(source),
-        "-vn", "-af", ",".join(filters),
-        "-c:a", "libmp3lame", "-b:a", "192k", str(destination),
+        "-vn", "-af", ",".join(filters), *codec, str(destination),
     ]
     completed = _run(command)
     if completed.returncode != 0 or not destination.is_file():
@@ -249,6 +356,34 @@ def _export_audio(
             "Falha ao exportar o áudio sincronizado."
             + (f" Detalhe: {detail[-1]}" if detail else "")
         )
+
+
+def export_audio_clip(
+    source: Path,
+    destination: Path,
+    *,
+    start: float,
+    end: float,
+    offset_ms: int = 0,
+    volume: float = 1.0,
+    fade_in_ms: int = 0,
+    fade_out_ms: int = 250,
+) -> Path:
+    info = probe_media(source)
+    start, end = validate_interval(start, end, info.duration)
+    if destination.suffix.lower() not in {".mp3", ".wav"}:
+        raise MediaEditorError("Escolha MP3 ou WAV para exportar o áudio.")
+    _export_audio(
+        source,
+        destination,
+        source_start=start,
+        duration=end - start,
+        offset_ms=offset_ms,
+        volume=volume,
+        fade_in_ms=fade_in_ms,
+        fade_out_ms=fade_out_ms,
+    )
+    return destination
 
 
 def export_synchronized_clip(
@@ -291,7 +426,9 @@ def export_synchronized_clip(
 
 
 __all__ = [
-    "ExportResult", "MediaEditorError", "MediaInfo", "export_synchronized_clip",
-    "extract_timeline_frames", "ffmpeg_executable", "probe_media",
-    "validate_interval", "waveform_peaks",
+    "ExportResult", "MediaEditorError", "MediaInfo", "copy_image_to_clipboard",
+    "export_audio_clip", "export_synchronized_clip", "extract_frame_at_index",
+    "extract_precision_frames", "extract_timeline_frames", "ffmpeg_executable",
+    "frame_time", "image_dib_bytes", "probe_media", "validate_interval",
+    "waveform_peaks",
 ]
