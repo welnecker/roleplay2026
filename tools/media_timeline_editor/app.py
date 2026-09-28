@@ -182,7 +182,7 @@ class MediaTimelineEditor(tk.Tk):
             ttk.Label(cell, text=label).pack(anchor="w")
             entry = ttk.Entry(cell, textvariable=variable, width=width)
             entry.pack(fill="x")
-            if variable in {self.fps_var, self.quality_var, self.size_var}:
+            if any(variable is item for item in (self.fps_var, self.quality_var, self.size_var)):
                 entry.bind("<KeyRelease>", lambda _event: self.profile_var.set("Personalizado"))
             if variable is self.offset_var:
                 entry.bind("<KeyRelease>", lambda _event: self._paint_wave(self.wave_peaks))
