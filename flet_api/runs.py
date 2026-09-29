@@ -5,7 +5,7 @@ from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import quote
 
 from flet_api.public_media import public_story_media_url
@@ -44,7 +44,7 @@ from services.novel_frame_runtime_support import (
     is_frame_script,
 )
 from services.novel_frame_images import audio_sequence_for_frame, image_sequence_for_frame, motion_sequence_for_frame
-from services.novel_v2_adapter import movement_from_script, next_movement_id
+from services.novel_v2_adapter import movement_from_script, next_movement_id, payment_gate_from_script
 from services.runtime_persistence import (
     RuntimePersistenceContext,
     open_persistent_runtime,
@@ -66,6 +66,14 @@ from services.story_cast import (
 INTRO_MOTION_BY_PACKAGE = {
     "roleplay2026.casada_frustrada": "1_motion_v1.webp",
 }
+
+
+class PaymentRequiredError(PermissionError):
+    """Interrompe o avanço exatamente no paywall definido pelo roteiro."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message or "Quer saber como termina essa aventura?")
+        self.message = message or "Quer saber como termina essa aventura?"
 
 
 @dataclass(frozen=True, slots=True)
@@ -738,6 +746,7 @@ class FletRunService:
         preferred_name: str = "",
         story_gender: str = "",
         cast_names: dict[str, str] | None = None,
+        paid_access_resolver: Callable[[str, str], bool] | None = None,
     ) -> RunFrame:
         selected_package = (
             require_editorial_package(package_id) if cast_names is not None else None
@@ -777,6 +786,16 @@ class FletRunService:
                 raise PermissionError("Revele todas as falas e pensamentos antes do próximo quadro.")
             movement_id = self._movement_id(current)
             target = next_movement_id(script, movement_id)
+            payment_message = payment_gate_from_script(script, movement_id)
+            if (
+                target
+                and payment_message
+                and (
+                    paid_access_resolver is None
+                    or not paid_access_resolver(account.user_id, package_id)
+                )
+            ):
+                raise PaymentRequiredError(payment_message)
             if not target:
                 movement = movement_from_script(script, movement_id)
                 state.finished = True
