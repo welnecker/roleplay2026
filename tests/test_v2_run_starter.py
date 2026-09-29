@@ -260,7 +260,7 @@ def test_free_package_starts_without_credit_or_consumption(monkeypatch, tmp_path
     assert repositories.runs.active_lookups == 0
 
 
-def test_paid_package_without_credit_remains_blocked(monkeypatch, tmp_path: Path) -> None:
+def test_paid_package_without_credit_starts_preview_run(monkeypatch, tmp_path: Path) -> None:
     repositories = FakeRepositories(FakeCredits(None), FakeRuns())
     monkeypatch.setattr(
         v2_run_starter,
@@ -276,7 +276,8 @@ def test_paid_package_without_credit_remains_blocked(monkeypatch, tmp_path: Path
         installed_stories_root=_story_root(tmp_path),
     )
 
-    assert run is None
+    assert run is not None
+    assert run.credit_id == "preview:roleplay2026.test:user_1"
     assert repositories.credits.consumed is None
-    assert repositories.runs.create_calls == 0
-    assert repositories.runs.active_lookups == 1
+    assert repositories.runs.create_calls == 1
+    assert repositories.runs.active_lookups == 0
