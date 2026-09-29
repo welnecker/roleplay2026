@@ -747,6 +747,7 @@ class FletRunService:
         story_gender: str = "",
         cast_names: dict[str, str] | None = None,
         paid_access_resolver: Callable[[str, str], bool] | None = None,
+        paid_access_consumer: Callable[[str, str, str], None] | None = None,
     ) -> RunFrame:
         selected_package = (
             require_editorial_package(package_id) if cast_names is not None else None
@@ -787,15 +788,23 @@ class FletRunService:
             movement_id = self._movement_id(current)
             target = next_movement_id(script, movement_id)
             payment_message = payment_gate_from_script(script, movement_id)
-            if (
-                target
-                and payment_message
-                and (
-                    paid_access_resolver is None
-                    or not paid_access_resolver(account.user_id, package_id)
+            if target and payment_message:
+                allowed = (
+                    paid_access_resolver is not None
+                    and paid_access_resolver(account.user_id, package_id)
                 )
-            ):
-                raise PaymentRequiredError(payment_message)
+                if not allowed:
+                    raise PaymentRequiredError(payment_message)
+                if paid_access_consumer is not None:
+                    if context.run is None:
+                        raise RuntimeError(
+                            "A run de prévia não está disponível para receber o pagamento."
+                        )
+                    paid_access_consumer(
+                        account.user_id,
+                        package_id,
+                        context.run.run_id,
+                    )
             if not target:
                 movement = movement_from_script(script, movement_id)
                 state.finished = True
