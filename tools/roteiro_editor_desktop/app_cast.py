@@ -12,6 +12,7 @@ from core import (
     validate_draft_cast,
 )
 from roleplay_shared.onomatopoeia import parse_onomatopoeia_header
+from media_bridge import install_media_bridge
 
 
 _GENDER_LABELS = {
@@ -47,6 +48,7 @@ class ScriptEditor(GalleryScriptEditor):
         super().__init__()
         self.title("Editor de Roteiros ROLEPLAY2026 — Elenco personalizável")
         self._install_cast_controls()
+        install_media_bridge(self)
         self._refresh_actor_values()
 
     def _install_cast_controls(self) -> None:
