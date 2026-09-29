@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import shutil
 import subprocess
 import tempfile
@@ -29,6 +30,7 @@ from core import (
     waveform_peaks,
 )
 from PIL import Image, ImageTk
+from bridge import install_bridge
 
 PROFILES = {
     "Leve": (8, 58, 854),
@@ -1421,4 +1423,11 @@ class MediaTimelineEditor(tk.Tk):
 
 
 if __name__ == "__main__":
-    MediaTimelineEditor().mainloop()
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--bridge", type=Path)
+    args, _unknown = parser.parse_known_args()
+
+    app = MediaTimelineEditor()
+    if args.bridge is not None:
+        install_bridge(app, args.bridge)
+    app.mainloop()
