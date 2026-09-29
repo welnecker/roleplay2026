@@ -28,6 +28,28 @@ def _frame_is_explicit_ending(instruction: str) -> bool:
     return bool(payload.get("is_ending", False)) if isinstance(payload, dict) else False
 
 
+def payment_gate_from_script(script: Any, current_id: str) -> str:
+    """Retorna a mensagem do paywall editorial associado ao quadro atual."""
+
+    current_id = str(current_id or "").strip()
+    if not current_id:
+        return ""
+    beat = dict(getattr(script, "beats", {}).get(current_id) or {})
+    objective = str(beat.get("objective", "") or "").strip()
+    if not objective.startswith(_FRAME_PREFIX):
+        return ""
+    try:
+        payload = json.loads(objective[len(_FRAME_PREFIX) :])
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    gate = payload.get("payment_gate")
+    if not isinstance(gate, dict):
+        return ""
+    return str(gate.get("message", "") or "").strip() or "Quer saber como termina essa aventura?"
+
+
 def next_movement_id(script: Any, current_id: str) -> str:
     """Resolve o avanço sem classificar ou depender de resposta do usuário."""
 
@@ -192,4 +214,5 @@ __all__ = [
     "build_novel_prompt",
     "movement_from_script",
     "next_movement_id",
+    "payment_gate_from_script",
 ]
