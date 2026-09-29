@@ -71,6 +71,7 @@ version = "0.1.6"
 source = { virtual = "." }
 dependencies = [
     { name = "flet" },
+    { name = "flet-audio" },
     { name = "flet-secure-storage" },
     { name = "requests" },
 ]
@@ -78,6 +79,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "flet", specifier = "==0.86.5" },
+    { name = "flet-audio", specifier = "==0.86.5" },
     { name = "flet-secure-storage", specifier = "==0.86.5" },
     { name = "requests", specifier = ">=2.32,<3" },
 ]
@@ -95,6 +97,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/97/91/173edaffb9135f4a0f2b92061b375f553327c38bbe4973a9b9f50b785f4a/flet-0.86.5.tar.gz", hash = "sha256:2ac87c7150686d64b61f0c014ec3415dc74ca3afe8f2fe1e6039c0a164738f90", size = 543099, upload-time = "2026-08-01T16:51:26.067Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/20/c4/ae44a4b7f70c5010fda86634f15d32e4a57ad19a5663aadd6cc89b419fcb/flet-0.86.5-py3-none-any.whl", hash = "sha256:b0accfe78243611ab71c3a6adb0045a80f81a284d0cf037e38c7825c2fd45282", size = 622504, upload-time = "2026-08-01T16:51:24.563Z" },
+]
+
+[[package]]
+name = "flet-audio"
+version = "0.86.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "flet" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c5/38/5dfcb8cfb7af6b4b74de4476e1db09e6cc962a65c1bbfd3ca16dc9741f72/flet_audio-0.86.5.tar.gz", hash = "sha256:ee936a803bfd218afa80fbbc13eb701d7a457e008b7ff97d4d61c148e92dcc0c", size = 11546, upload-time = "2026-08-01T16:51:46.64Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e5/f3/f22b9d4473fe7a8b42409fcd765c762e1e5ff1d9dab214ef2d6f78e5b4f6/flet_audio-0.86.5-py3-none-any.whl", hash = "sha256:577ce2c4a816e4105f0c06f1fcd3d1049af01ec143c0f141797677f03998fd4f", size = 13380, upload-time = "2026-08-01T16:51:45.572Z" },
 ]
 
 [[package]]

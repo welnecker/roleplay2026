@@ -1,8 +1,8 @@
-EDITOR DE MÍDIA ENTRECENAS — TIMELINE PRECISA
+EDITOR DE MÍDIA ENTRECENAS — TIMELINE VISUAL E DIÁLOGOS
 
 FLUXO PRINCIPAL
 
-1. Abra um vídeo MP4, MOV, MKV ou WebM.
+1. Abra um vídeo MP4, MOV, MKV ou WebM, ou abra uma imagem estática.
 2. Aguarde a indexação: o editor decodifica todos os frames em prévias leves.
 3. Use ← e → para avançar um frame; Shift + seta avança dez frames.
 4. Também é possível arrastar o playhead, clicar na timeline ou digitar o frame.
@@ -10,12 +10,45 @@ FLUXO PRINCIPAL
 6. SALVAR FRAME exporta o quadro em PNG, JPG ou WebP.
 7. MARCAR INÍCIO e MARCAR FIM definem o trecho usando o frame atual.
 8. A pista inferior mostra a forma de onda do áudio na mesma escala temporal.
-9. Opcionalmente, carregue um áudio separado e ajuste offset, volume e fades.
+9. Opcionalmente, carregue um áudio separado do ElevenLabs.
 10. PRÉVIA SINCRONIZADA reproduz o WebP e o áudio juntos.
 11. EXPORTAR gera:
 
     nome_motion.webp
     nome_audio.mp3
+
+EDIÇÃO DOS DIÁLOGOS DO ELEVENLABS
+
+1. Clique na forma de onda para posicionar o cursor amarelo.
+2. Selecione o bloco colorido que contém o diálogo.
+3. CORTAR NO CURSOR divide o bloco sem modificar o áudio original.
+4. INÍCIO = CURSOR e FIM = CURSOR retiram sobras do trecho selecionado.
+5. Arraste um bloco colorido para mudar sua posição na timeline.
+6. O campo POSIÇÃO BLOCO MS permite um ajuste numérico preciso.
+7. OUVIR TRECHO reproduz somente o bloco selecionado.
+8. EXCLUIR BLOCO remove o trecho da montagem; DESFAZER o recupera.
+9. EXPORTAR SELECIONADO salva apenas um diálogo.
+10. EXPORTAR TODOS cria um MP3 para cada bloco, já numerado em ordem.
+
+Exemplo de arquivos exportados:
+
+    camilly50_audio_01.mp3
+    camilly50_audio_02.mp3
+    camilly50_audio_03.mp3
+
+O corte é não destrutivo: o arquivo original do ElevenLabs nunca é alterado.
+
+IMAGEM ESTÁTICA
+
+Ao abrir uma imagem, a duração da timeline acompanha o áudio carregado. Use a
+imagem em image_id e os diálogos exportados em audio_id. Não é necessário criar
+um vídeo artificial quando a cena tiver somente imagem e som.
+
+VÍDEO + DIÁLOGO
+
+Com um vídeo aberto, selecione um bloco e use EXPORTAR ou PRÉVIA SINCRONIZADA.
+O editor usa a posição do bloco para recortar o intervalo correspondente do
+vídeo e gera o WebP e o MP3 com a mesma duração.
 
 PERFIS DE WEBP
 
@@ -40,4 +73,3 @@ Associe os nomes às colunas motion_id e audio_id da mesma linha em ROTEIROS.
 COPIAR FRAME coloca uma imagem real na área de transferência do Windows. Depois
 da confirmação, use Ctrl+V no Paint, Photoshop, WhatsApp, Venice ou outro
 aplicativo compatível.
-

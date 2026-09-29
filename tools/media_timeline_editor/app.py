@@ -8,21 +8,27 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from PIL import Image, ImageTk
-
 from core import (
+    AudioSegment,
     MediaEditorError,
     copy_image_to_clipboard,
+    create_audio_segment,
     export_audio_clip,
+    export_audio_segments,
     export_synchronized_clip,
+    export_synchronized_segment,
     extract_frame_at_index,
     extract_precision_frames,
     ffmpeg_executable,
     frame_time,
+    move_audio_segment,
     probe_media,
+    rename_audio_segments,
+    split_audio_segment,
+    trim_audio_segment,
     waveform_peaks,
 )
-
+from PIL import Image, ImageTk
 
 PROFILES = {
     "Leve": (8, 58, 854),
@@ -36,13 +42,16 @@ class MediaTimelineEditor(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Editor de Mídia EntreCenas — Timeline precisa")
-        self.geometry("1320x920")
-        self.minsize(1050, 760)
+        self.geometry("1380x1040")
+        self.minsize(1080, 820)
         self.configure(bg="#183D3A")
         self.video_path: Path | None = None
+        self.image_path: Path | None = None
         self.audio_path: Path | None = None
+        self.audio_info = None
         self.media_info = None
         self.media_duration = 1.0
+        self.visual_duration = 1.0
         self.precision_frames: list[Path] = []
         self.timeline_images: list[ImageTk.PhotoImage] = []
         self.current_photo: ImageTk.PhotoImage | None = None
@@ -53,6 +62,11 @@ class MediaTimelineEditor(tk.Tk):
         self.preview_index = 0
         self.audio_drag_x = 0
         self.audio_drag_offset = 0
+        self.audio_segments: list[AudioSegment] = []
+        self.segment_history: list[list[AudioSegment]] = []
+        self.selected_segment = -1
+        self.segment_drag_origin = 0.0
+        self.playhead_time = 0.0
         self.workspace = Path(tempfile.mkdtemp(prefix="entrecenas_timeline_"))
         self.protocol("WM_DELETE_WINDOW", self._close)
         self._build()
@@ -73,51 +87,109 @@ class MediaTimelineEditor(tk.Tk):
 
         top = ttk.Frame(self, padding=12)
         top.pack(fill="x")
-        ttk.Label(top, text="Editor de Mídia EntreCenas", style="Title.TLabel").pack(side="left")
-        ttk.Button(top, text="ABRIR VÍDEO", command=self.open_video).pack(side="left", padx=(20, 5))
-        ttk.Button(top, text="ABRIR ÁUDIO", command=self.open_audio).pack(side="left", padx=5)
-        ttk.Button(top, text="ÁUDIO DO VÍDEO", command=self.use_video_audio).pack(side="left", padx=5)
-        ttk.Button(top, text="EXPORTAR", style="Accent.TButton", command=self.export).pack(side="right", padx=5)
-        ttk.Button(top, text="PRÉVIA SINCRONIZADA", command=self.preview).pack(side="right", padx=5)
+        ttk.Label(top, text="Editor de Mídia EntreCenas", style="Title.TLabel").pack(
+            side="left"
+        )
+        ttk.Button(top, text="ABRIR VÍDEO", command=self.open_video).pack(
+            side="left", padx=(20, 5)
+        )
+        ttk.Button(top, text="ABRIR IMAGEM", command=self.open_image).pack(
+            side="left", padx=5
+        )
+        ttk.Button(top, text="ABRIR ÁUDIO", command=self.open_audio).pack(
+            side="left", padx=5
+        )
+        ttk.Button(top, text="ÁUDIO DO VÍDEO", command=self.use_video_audio).pack(
+            side="left", padx=5
+        )
+        ttk.Button(
+            top, text="EXPORTAR", style="Accent.TButton", command=self.export
+        ).pack(side="right", padx=5)
+        ttk.Button(top, text="PRÉVIA SINCRONIZADA", command=self.preview).pack(
+            side="right", padx=5
+        )
 
-        self.source_label = ttk.Label(self, text="Abra um vídeo MP4 para começar.", padding=(14, 0))
+        self.source_label = ttk.Label(
+            self, text="Abra um vídeo MP4 para começar.", padding=(14, 0)
+        )
         self.source_label.pack(fill="x")
 
         viewer = ttk.Frame(self, padding=(12, 8))
         viewer.pack(fill="both", expand=True)
         self.preview_label = tk.Label(
-            viewer, text="VISUALIZADOR DE FRAMES", bg="#102F2D", fg="#D6E5E3",
-            font=("Segoe UI", 14, "bold"), anchor="center",
+            viewer,
+            text="VISUALIZADOR DE FRAMES",
+            bg="#102F2D",
+            fg="#D6E5E3",
+            font=("Segoe UI", 14, "bold"),
+            anchor="center",
         )
         self.preview_label.pack(fill="both", expand=True)
 
         transport = ttk.Frame(self, padding=(12, 0, 12, 8))
         transport.pack(fill="x")
-        ttk.Button(transport, text="|◀", width=5, command=lambda: self.set_frame(0)).pack(side="left", padx=2)
-        ttk.Button(transport, text="◀ 10", width=6, command=lambda: self.step_frame(-10)).pack(side="left", padx=2)
-        ttk.Button(transport, text="◀ 1 FRAME", command=lambda: self.step_frame(-1)).pack(side="left", padx=2)
-        ttk.Button(transport, text="1 FRAME ▶", command=lambda: self.step_frame(1)).pack(side="left", padx=2)
-        ttk.Button(transport, text="10 ▶", width=6, command=lambda: self.step_frame(10)).pack(side="left", padx=2)
-        ttk.Button(transport, text="▶|", width=5, command=self.last_frame).pack(side="left", padx=2)
-        self.frame_label = ttk.Label(transport, text="Frame: —   Tempo: 00:00.000", font=("Segoe UI", 10, "bold"))
+        ttk.Button(
+            transport, text="|◀", width=5, command=lambda: self.set_frame(0)
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            transport, text="◀ 10", width=6, command=lambda: self.step_frame(-10)
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            transport, text="◀ 1 FRAME", command=lambda: self.step_frame(-1)
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            transport, text="1 FRAME ▶", command=lambda: self.step_frame(1)
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            transport, text="10 ▶", width=6, command=lambda: self.step_frame(10)
+        ).pack(side="left", padx=2)
+        ttk.Button(transport, text="▶|", width=5, command=self.last_frame).pack(
+            side="left", padx=2
+        )
+        self.frame_label = ttk.Label(
+            transport, text="Frame: —   Tempo: 00:00.000", font=("Segoe UI", 10, "bold")
+        )
         self.frame_label.pack(side="left", padx=14)
-        ttk.Button(transport, text="COPIAR FRAME", command=self.copy_frame).pack(side="right", padx=3)
-        ttk.Button(transport, text="SALVAR FRAME", command=self.save_frame).pack(side="right", padx=3)
+        ttk.Button(transport, text="COPIAR FRAME", command=self.copy_frame).pack(
+            side="right", padx=3
+        )
+        ttk.Button(transport, text="SALVAR FRAME", command=self.save_frame).pack(
+            side="right", padx=3
+        )
 
         frame_row = ttk.Frame(self, padding=(12, 0, 12, 8))
         frame_row.pack(fill="x")
         self.frame_var = tk.DoubleVar(value=0)
-        self.frame_scale = ttk.Scale(frame_row, variable=self.frame_var, from_=0, to=1, command=self._frame_slider_changed)
+        self.frame_scale = ttk.Scale(
+            frame_row,
+            variable=self.frame_var,
+            from_=0,
+            to=1,
+            command=self._frame_slider_changed,
+        )
         self.frame_scale.pack(side="left", fill="x", expand=True)
         ttk.Label(frame_row, text="Ir ao frame:").pack(side="left", padx=(10, 4))
         self.frame_entry_var = tk.StringVar(value="1")
-        self.frame_entry = ttk.Spinbox(frame_row, from_=1, to=1, width=9, textvariable=self.frame_entry_var, command=self.go_to_typed_frame)
+        self.frame_entry = ttk.Spinbox(
+            frame_row,
+            from_=1,
+            to=1,
+            width=9,
+            textvariable=self.frame_entry_var,
+            command=self.go_to_typed_frame,
+        )
         self.frame_entry.pack(side="left")
         self.frame_entry.bind("<Return>", lambda _event: self.go_to_typed_frame())
 
-        timeline_box = ttk.LabelFrame(self, text=" TIMELINE DE VÍDEO — clique para posicionar o playhead ", padding=7)
+        timeline_box = ttk.LabelFrame(
+            self,
+            text=" TIMELINE VISUAL — clique para posicionar o playhead ",
+            padding=7,
+        )
         timeline_box.pack(fill="x", padx=12, pady=(0, 6))
-        self.timeline_canvas = tk.Canvas(timeline_box, height=94, bg="#102F2D", highlightthickness=0, cursor="hand2")
+        self.timeline_canvas = tk.Canvas(
+            timeline_box, height=94, bg="#102F2D", highlightthickness=0, cursor="hand2"
+        )
         self.timeline_canvas.pack(fill="x")
         self.timeline_canvas.bind("<Button-1>", self._timeline_clicked)
 
@@ -125,31 +197,107 @@ class MediaTimelineEditor(tk.Tk):
         selectors.pack(fill="x", pady=(5, 0))
         self.start_var = tk.DoubleVar(value=0.0)
         self.end_var = tk.DoubleVar(value=1.0)
-        ttk.Button(selectors, text="MARCAR INÍCIO", command=self.mark_start).grid(row=0, column=0, rowspan=2, padx=(0, 6))
+        ttk.Button(selectors, text="MARCAR INÍCIO", command=self.mark_start).grid(
+            row=0, column=0, rowspan=2, padx=(0, 6)
+        )
         ttk.Label(selectors, text="Início").grid(row=0, column=1)
-        self.start_scale = ttk.Scale(selectors, variable=self.start_var, from_=0, to=1, command=self._selection_changed)
+        self.start_scale = ttk.Scale(
+            selectors,
+            variable=self.start_var,
+            from_=0,
+            to=1,
+            command=self._selection_changed,
+        )
         self.start_scale.grid(row=0, column=2, sticky="ew", padx=6)
         self.start_text = ttk.Label(selectors, text="00:00.000", width=12)
         self.start_text.grid(row=0, column=3)
         ttk.Label(selectors, text="Fim").grid(row=1, column=1)
-        self.end_scale = ttk.Scale(selectors, variable=self.end_var, from_=0, to=1, command=self._selection_changed)
+        self.end_scale = ttk.Scale(
+            selectors,
+            variable=self.end_var,
+            from_=0,
+            to=1,
+            command=self._selection_changed,
+        )
         self.end_scale.grid(row=1, column=2, sticky="ew", padx=6)
         self.end_text = ttk.Label(selectors, text="00:01.000", width=12)
         self.end_text.grid(row=1, column=3)
-        ttk.Button(selectors, text="MARCAR FIM", command=self.mark_end).grid(row=0, column=4, rowspan=2, padx=(6, 0))
+        ttk.Button(selectors, text="MARCAR FIM", command=self.mark_end).grid(
+            row=0, column=4, rowspan=2, padx=(6, 0)
+        )
         selectors.columnconfigure(2, weight=1)
 
-        audio_box = ttk.LabelFrame(self, text=" PISTA DE ÁUDIO SINCRONIZADA ", padding=7)
+        audio_box = ttk.LabelFrame(
+            self, text=" PISTA DE ÁUDIO SINCRONIZADA ", padding=7
+        )
         audio_box.pack(fill="x", padx=12, pady=(0, 7))
-        self.wave_canvas = tk.Canvas(audio_box, height=68, bg="#241A22", highlightthickness=0)
+        self.wave_canvas = tk.Canvas(
+            audio_box, height=68, bg="#241A22", highlightthickness=0
+        )
         self.wave_canvas.pack(fill="x")
-        self.wave_canvas.bind("<Button-1>", self._audio_drag_begin)
+        self.wave_canvas.bind("<Button-1>", self._audio_clicked)
         self.wave_canvas.bind("<B1-Motion>", self._audio_drag_move)
+        self.wave_canvas.bind("<ButtonRelease-1>", self._audio_drag_end)
         audio_controls = ttk.Frame(audio_box)
         audio_controls.pack(fill="x", pady=(4, 0))
-        self.audio_label = ttk.Label(audio_controls, text="Áudio: faixa original do vídeo, quando existir.")
+        self.audio_label = ttk.Label(
+            audio_controls, text="Áudio: faixa original do vídeo, quando existir."
+        )
         self.audio_label.pack(side="left")
-        ttk.Button(audio_controls, text="EXPORTAR MP3/WAV", command=self.export_audio_only).pack(side="right")
+        ttk.Button(
+            audio_controls,
+            text="EXPORTAR TODOS",
+            command=self.export_all_audio_segments,
+        ).pack(side="right", padx=2)
+        ttk.Button(
+            audio_controls,
+            text="EXPORTAR SELECIONADO",
+            command=self.export_selected_audio,
+        ).pack(side="right", padx=2)
+        ttk.Button(
+            audio_controls, text="OUVIR TRECHO", command=self.play_selected_audio
+        ).pack(side="right", padx=2)
+
+        segment_controls = ttk.Frame(audio_box)
+        segment_controls.pack(fill="x", pady=(5, 0))
+        ttk.Button(
+            segment_controls, text="CORTAR NO CURSOR", command=self.split_at_playhead
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            segment_controls,
+            text="INÍCIO = CURSOR",
+            command=self.trim_start_to_playhead,
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            segment_controls, text="FIM = CURSOR", command=self.trim_end_to_playhead
+        ).pack(side="left", padx=2)
+        ttk.Button(
+            segment_controls, text="EXCLUIR BLOCO", command=self.delete_selected_segment
+        ).pack(side="left", padx=2)
+        ttk.Button(segment_controls, text="DESFAZER", command=self.undo_segments).pack(
+            side="left", padx=2
+        )
+        ttk.Label(
+            segment_controls, text="Arraste o bloco colorido para sincronizar."
+        ).pack(side="right", padx=5)
+
+        self.segment_table = ttk.Treeview(
+            audio_box,
+            columns=("name", "source", "position", "duration"),
+            show="headings",
+            height=3,
+            selectmode="browse",
+        )
+        self.segment_table.heading("name", text="Nome do arquivo")
+        self.segment_table.heading("source", text="Trecho no áudio original")
+        self.segment_table.heading("position", text="Posição na timeline")
+        self.segment_table.heading("duration", text="Duração")
+        self.segment_table.column("name", width=260)
+        self.segment_table.column("source", width=250)
+        self.segment_table.column("position", width=150)
+        self.segment_table.column("duration", width=130)
+        self.segment_table.pack(fill="x", pady=(5, 0))
+        self.segment_table.bind("<<TreeviewSelect>>", self._segment_table_selected)
 
         options = ttk.Frame(self, padding=(12, 0, 12, 8))
         options.pack(fill="x")
@@ -166,15 +314,25 @@ class MediaTimelineEditor(tk.Tk):
         profile_cell = ttk.Frame(options)
         profile_cell.grid(row=0, column=0, padx=4, sticky="ew")
         ttk.Label(profile_cell, text="Perfil").pack(anchor="w")
-        profile = ttk.Combobox(profile_cell, state="readonly", textvariable=self.profile_var, values=list(PROFILES), width=15)
+        profile = ttk.Combobox(
+            profile_cell,
+            state="readonly",
+            textvariable=self.profile_var,
+            values=list(PROFILES),
+            width=15,
+        )
         profile.pack(fill="x")
         profile.bind("<<ComboboxSelected>>", self._profile_changed)
 
         fields = [
-            ("Nome", self.name_var, 15), ("FPS", self.fps_var, 6),
-            ("Qualidade", self.quality_var, 7), ("Máx. px", self.size_var, 8),
-            ("Áudio offset ms", self.offset_var, 10), ("Volume", self.volume_var, 7),
-            ("Fade-in ms", self.fade_in_var, 8), ("Fade-out ms", self.fade_out_var, 8),
+            ("Nome", self.name_var, 15),
+            ("FPS", self.fps_var, 6),
+            ("Qualidade", self.quality_var, 7),
+            ("Máx. px", self.size_var, 8),
+            ("Posição bloco ms", self.offset_var, 10),
+            ("Volume", self.volume_var, 7),
+            ("Fade-in ms", self.fade_in_var, 8),
+            ("Fade-out ms", self.fade_out_var, 8),
         ]
         for column, (label, variable, width) in enumerate(fields, start=1):
             cell = ttk.Frame(options)
@@ -182,14 +340,23 @@ class MediaTimelineEditor(tk.Tk):
             ttk.Label(cell, text=label).pack(anchor="w")
             entry = ttk.Entry(cell, textvariable=variable, width=width)
             entry.pack(fill="x")
-            if any(variable is item for item in (self.fps_var, self.quality_var, self.size_var)):
-                entry.bind("<KeyRelease>", lambda _event: self.profile_var.set("Personalizado"))
+            if any(
+                variable is item
+                for item in (self.fps_var, self.quality_var, self.size_var)
+            ):
+                entry.bind(
+                    "<KeyRelease>", lambda _event: self.profile_var.set("Personalizado")
+                )
             if variable is self.offset_var:
-                entry.bind("<KeyRelease>", lambda _event: self._paint_wave(self.wave_peaks))
+                entry.bind("<KeyRelease>", self._offset_entry_changed)
             options.columnconfigure(column, weight=1)
 
-        self.status_var = tk.StringVar(value="Pronto. Use ← e → para caminhar frame por frame.")
-        ttk.Label(self, textvariable=self.status_var, padding=(14, 0, 14, 9)).pack(fill="x")
+        self.status_var = tk.StringVar(
+            value="Pronto. Use ← e → para caminhar frame por frame."
+        )
+        ttk.Label(self, textvariable=self.status_var, padding=(14, 0, 14, 9)).pack(
+            fill="x"
+        )
 
     @staticmethod
     def _clock(value: float) -> str:
@@ -213,8 +380,11 @@ class MediaTimelineEditor(tk.Tk):
             return
         self.stop_preview()
         self.video_path = Path(selected)
+        self.image_path = None
         self.status_var.set("Analisando e indexando todos os frames...")
-        threading.Thread(target=self._load_video_worker, args=(self.video_path,), daemon=True).start()
+        threading.Thread(
+            target=self._load_video_worker, args=(self.video_path,), daemon=True
+        ).start()
 
     def _load_video_worker(self, source: Path) -> None:
         try:
@@ -222,26 +392,42 @@ class MediaTimelineEditor(tk.Tk):
             folder = self.workspace / "precision"
             frames = extract_precision_frames(source, folder, max_width=960)
         except Exception as exc:
-            self.after(0, lambda: self._error(exc))
+            self.after(0, lambda error=exc: self._error(error))
             return
         self.after(0, lambda: self._finish_video_load(info, frames))
 
     def _finish_video_load(self, info, frames: list[Path]) -> None:
         self.media_info = info
-        self.media_duration = info.duration
+        self.visual_duration = info.duration
+        self.media_duration = max(
+            info.duration,
+            self.audio_info.duration if self.audio_info is not None else 0.0,
+        )
         self.precision_frames = frames
         last = max(0, len(frames) - 1)
         self.frame_scale.configure(to=last)
         self.frame_entry.configure(to=max(1, len(frames)))
-        self.start_scale.configure(to=info.duration)
-        self.end_scale.configure(to=info.duration)
+        self.start_scale.configure(to=self.media_duration)
+        self.end_scale.configure(to=self.media_duration)
         self.start_var.set(0.0)
         self.end_var.set(info.duration)
         self.name_var.set(self.video_path.stem[:40] if self.video_path else "cena1")
         self.source_label.configure(
             text=f"Vídeo: {self.video_path}  •  {info.width}×{info.height}  •  "
-                 f"{info.duration:.3f}s  •  {info.fps:g} FPS  •  {len(frames)} frames"
+            f"{info.duration:.3f}s  •  {info.fps:g} FPS  •  {len(frames)} frames"
         )
+        if info.has_audio and self.audio_path is None and self.video_path is not None:
+            self.audio_info = info
+            self.audio_segments = [
+                create_audio_segment(
+                    info.duration,
+                    name=f"{self.name_var.get()}_audio_01",
+                )
+            ]
+            self.selected_segment = 0
+            self.segment_history = []
+            self.audio_label.configure(text="Áudio: faixa original do vídeo.")
+            self._refresh_segment_table()
         self._draw_timeline()
         self.set_frame(0)
         self._selection_changed()
@@ -250,14 +436,61 @@ class MediaTimelineEditor(tk.Tk):
             f"Indexação concluída: {len(frames)} frames. Setas ← → avançam um frame; Shift avança dez."
         )
 
+    def open_image(self) -> None:
+        selected = filedialog.askopenfilename(
+            title="Abrir imagem",
+            filetypes=[
+                ("Imagens", "*.png *.jpg *.jpeg *.webp *.bmp"),
+                ("Todos", "*.*"),
+            ],
+        )
+        if not selected:
+            return
+        self.stop_preview()
+        self.image_path = Path(selected)
+        self.video_path = None
+        self.media_info = None
+        self.visual_duration = 0.0
+        self.precision_frames = [self.image_path]
+        duration = self.audio_info.duration if self.audio_info is not None else 10.0
+        self.media_duration = max(0.2, duration)
+        self.frame_scale.configure(to=0)
+        self.frame_entry.configure(to=1)
+        self.start_scale.configure(to=self.media_duration)
+        self.end_scale.configure(to=self.media_duration)
+        self.start_var.set(0.0)
+        self.end_var.set(self.media_duration)
+        self.name_var.set(self.image_path.stem[:40])
+        with Image.open(self.image_path) as image:
+            width, height = image.size
+        self.source_label.configure(
+            text=f"Imagem: {self.image_path}  •  {width}×{height}  •  "
+            f"timeline {self.media_duration:.3f}s"
+        )
+        self._draw_timeline()
+        self.set_frame(0)
+        self._selection_changed()
+        self._draw_waveform()
+        self.status_var.set(
+            "Imagem carregada. Abra o áudio e clique na pista para posicionar o cursor."
+        )
+
     def set_frame(self, index: int) -> None:
         if not self.precision_frames:
             return
         index = max(0, min(int(index), len(self.precision_frames) - 1))
         self.frame_var.set(index)
         self.frame_entry_var.set(str(index + 1))
-        fps = self.media_info.fps if self.media_info and self.media_info.fps else len(self.precision_frames) / self.media_duration
-        timestamp = min(self.media_duration, frame_time(index, fps))
+        if self.image_path is not None:
+            timestamp = self.playhead_time
+        else:
+            fps = (
+                self.media_info.fps
+                if self.media_info and self.media_info.fps
+                else len(self.precision_frames) / self.media_duration
+            )
+            timestamp = min(self.media_duration, frame_time(index, fps))
+            self.playhead_time = timestamp
         self.frame_label.configure(
             text=f"Frame: {index + 1}/{len(self.precision_frames)}  •  índice {index}  •  Tempo: {self._clock(timestamp)}"
         )
@@ -284,16 +517,38 @@ class MediaTimelineEditor(tk.Tk):
             self._error(MediaEditorError("Informe um número de frame válido."))
 
     def _current_time(self) -> float:
+        if self.image_path is not None:
+            return max(0.0, min(self.media_duration, self.playhead_time))
         if not self.precision_frames:
-            return 0.0
-        fps = self.media_info.fps if self.media_info and self.media_info.fps else len(self.precision_frames) / self.media_duration
-        return min(self.media_duration, frame_time(round(float(self.frame_var.get())), fps))
+            return max(0.0, min(self.media_duration, self.playhead_time))
+        fps = (
+            self.media_info.fps
+            if self.media_info and self.media_info.fps
+            else len(self.precision_frames) / self.media_duration
+        )
+        return min(
+            self.media_duration, frame_time(round(float(self.frame_var.get())), fps)
+        )
 
     def _timeline_clicked(self, event) -> None:
         if not self.precision_frames:
             return
         ratio = max(0.0, min(1.0, event.x / max(1, self.timeline_canvas.winfo_width())))
-        self.set_frame(round(ratio * (len(self.precision_frames) - 1)))
+        if self.image_path is not None:
+            self._set_playhead_time(ratio * self.media_duration)
+        else:
+            self.set_frame(round(ratio * (len(self.precision_frames) - 1)))
+
+    def _set_playhead_time(self, value: float) -> None:
+        self.playhead_time = max(0.0, min(self.media_duration, float(value)))
+        if self.image_path is not None:
+            self.frame_label.configure(
+                text=f"Imagem estática  •  Tempo: {self._clock(self.playhead_time)}"
+            )
+        elif self.media_info is not None and self.media_info.fps > 0:
+            self.set_frame(round(self.playhead_time * self.media_info.fps))
+            return
+        self._draw_playhead()
 
     def _draw_timeline(self) -> None:
         canvas = self.timeline_canvas
@@ -301,16 +556,23 @@ class MediaTimelineEditor(tk.Tk):
         width = max(1, canvas.winfo_width() or 1200)
         height = 90
         count = max(1, min(len(self.precision_frames), 16))
-        indices = [round(i * (len(self.precision_frames) - 1) / max(1, count - 1)) for i in range(count)]
+        indices = [
+            round(i * (len(self.precision_frames) - 1) / max(1, count - 1))
+            for i in range(count)
+        ]
         cell_width = width / count
         self.timeline_images = []
         for position, index in enumerate(indices):
             with Image.open(self.precision_frames[index]) as source:
                 image = source.convert("RGB")
-                image.thumbnail((max(40, int(cell_width) - 3), height - 5), Image.Resampling.LANCZOS)
+                image.thumbnail(
+                    (max(40, int(cell_width) - 3), height - 5), Image.Resampling.LANCZOS
+                )
                 photo = ImageTk.PhotoImage(image)
             self.timeline_images.append(photo)
-            canvas.create_image(position * cell_width + cell_width / 2, height / 2, image=photo)
+            canvas.create_image(
+                position * cell_width + cell_width / 2, height / 2, image=photo
+            )
         self._draw_selection()
 
     def _selection_changed(self, _value=None) -> None:
@@ -339,9 +601,29 @@ class MediaTimelineEditor(tk.Tk):
         width = max(1, canvas.winfo_width())
         start_x = width * float(self.start_var.get()) / max(0.001, self.media_duration)
         end_x = width * float(self.end_var.get()) / max(0.001, self.media_duration)
-        canvas.create_rectangle(0, 0, start_x, 94, fill="#000000", outline="", stipple="gray50", tags="overlay")
-        canvas.create_rectangle(end_x, 0, width, 94, fill="#000000", outline="", stipple="gray50", tags="overlay")
-        canvas.create_line(start_x, 0, start_x, 94, fill="#4DE0C1", width=3, tags="overlay")
+        canvas.create_rectangle(
+            0,
+            0,
+            start_x,
+            94,
+            fill="#000000",
+            outline="",
+            stipple="gray50",
+            tags="overlay",
+        )
+        canvas.create_rectangle(
+            end_x,
+            0,
+            width,
+            94,
+            fill="#000000",
+            outline="",
+            stipple="gray50",
+            tags="overlay",
+        )
+        canvas.create_line(
+            start_x, 0, start_x, 94, fill="#4DE0C1", width=3, tags="overlay"
+        )
         canvas.create_line(end_x, 0, end_x, 94, fill="#D24369", width=3, tags="overlay")
         self._draw_playhead()
 
@@ -350,7 +632,9 @@ class MediaTimelineEditor(tk.Tk):
         for canvas, height in ((self.timeline_canvas, 94), (self.wave_canvas, 68)):
             canvas.delete("playhead")
             x = max(0, canvas.winfo_width()) * ratio
-            canvas.create_line(x, 0, x, height, fill="#FFD166", width=2, tags="playhead")
+            canvas.create_line(
+                x, 0, x, height, fill="#FFD166", width=2, tags="playhead"
+            )
 
     def open_audio(self) -> None:
         selected = filedialog.askopenfilename(
@@ -360,23 +644,70 @@ class MediaTimelineEditor(tk.Tk):
         if not selected:
             return
         self.audio_path = Path(selected)
-        self.audio_label.configure(text=f"Áudio separado: {self.audio_path}")
-        self._draw_waveform()
+        try:
+            self._configure_audio(self.audio_path)
+        except Exception as exc:
+            self._error(exc)
 
     def use_video_audio(self) -> None:
+        if self.video_path is None:
+            self._error(MediaEditorError("Abra um vídeo com áudio primeiro."))
+            return
         self.audio_path = None
-        self.audio_label.configure(text="Áudio: faixa original do vídeo.")
+        try:
+            self._configure_audio(self.video_path)
+        except Exception as exc:
+            self._error(exc)
+
+    def _configure_audio(self, source: Path) -> None:
+        info = probe_media(source)
+        if not info.has_audio:
+            raise MediaEditorError(
+                "O arquivo selecionado não contém uma faixa de áudio."
+            )
+        self.audio_info = info
+        self.media_duration = max(self.visual_duration, info.duration, 0.2)
+        self.start_scale.configure(to=self.media_duration)
+        self.end_scale.configure(to=self.media_duration)
+        self.end_var.set(
+            min(self.media_duration, max(0.2, self.visual_duration or info.duration))
+        )
+        initial_offset = max(0.0, self._audio_offset() / 1000.0)
+        initial = create_audio_segment(
+            info.duration,
+            name=f"{self.name_var.get()}_audio_01",
+            timeline_start=initial_offset,
+        )
+        self.audio_segments = [initial]
+        self.segment_history = []
+        self.selected_segment = 0
+        self.audio_label.configure(
+            text=f"Áudio: {source}  •  {info.duration:.3f}s  •  1 bloco"
+        )
+        if self.image_path is not None:
+            self.source_label.configure(
+                text=f"Imagem: {self.image_path}  •  timeline {self.media_duration:.3f}s"
+            )
+        if self.precision_frames:
+            self._draw_timeline()
+            self._selection_changed()
+        self._refresh_segment_table()
         self._draw_waveform()
 
     def _draw_waveform(self) -> None:
-        if self.video_path is None:
-            return
         source = self.audio_path or self.video_path
+        if source is None or self.audio_info is None:
+            return
         self.status_var.set("Lendo a forma de onda da pista de áudio...")
         threading.Thread(target=self._wave_worker, args=(source,), daemon=True).start()
 
     def _wave_worker(self, source: Path) -> None:
-        peaks = waveform_peaks(source, start=0, duration=self.media_duration, points=1000)
+        duration = (
+            self.audio_info.duration
+            if self.audio_info is not None
+            else self.media_duration
+        )
+        peaks = waveform_peaks(source, start=0, duration=duration, points=1000)
         self.after(0, lambda: self._paint_wave(peaks))
 
     def _paint_wave(self, peaks: list[float]) -> None:
@@ -386,17 +717,44 @@ class MediaTimelineEditor(tk.Tk):
         width = max(1, canvas.winfo_width() or 1200)
         height = 68
         middle = height / 2
-        step = width / max(1, len(peaks))
-        offset = self._audio_offset()
-        offset_x = width * offset / 1000.0 / max(0.001, self.media_duration)
-        for index, peak in enumerate(peaks):
-            x = index * step + offset_x
-            if 0 <= x <= width:
-                amplitude = peak * (height * 0.43)
-                canvas.create_line(x, middle - amplitude, x, middle + amplitude, fill="#ED8BAE")
+        audio_duration = (
+            self.audio_info.duration
+            if self.audio_info is not None
+            else self.media_duration
+        )
+        for segment_index, segment in enumerate(self.audio_segments):
+            start_x = width * segment.timeline_start / max(0.001, self.media_duration)
+            end_x = width * segment.timeline_end / max(0.001, self.media_duration)
+            selected = segment_index == self.selected_segment
+            canvas.create_rectangle(
+                start_x,
+                2,
+                end_x,
+                height - 2,
+                fill="#5D3045" if selected else "#38232E",
+                outline="#FFD166" if selected else "#8F6475",
+                width=2 if selected else 1,
+            )
+            for index, peak in enumerate(peaks):
+                source_time = index * audio_duration / max(1, len(peaks) - 1)
+                if not segment.source_start <= source_time <= segment.source_end:
+                    continue
+                timeline_time = (
+                    segment.timeline_start + source_time - segment.source_start
+                )
+                x = width * timeline_time / max(0.001, self.media_duration)
+                if 0 <= x <= width:
+                    amplitude = peak * (height * 0.40)
+                    canvas.create_line(
+                        x,
+                        middle - amplitude,
+                        x,
+                        middle + amplitude,
+                        fill="#FFD0DF" if selected else "#ED8BAE",
+                    )
         self._draw_playhead()
         self.status_var.set(
-            f"Pista de áudio alinhada. Offset: {offset} ms; arraste a forma de onda para sincronizar."
+            f"Áudio dividido em {len(self.audio_segments)} bloco(s). Clique para selecionar; arraste para sincronizar."
         )
 
     def _audio_offset(self) -> int:
@@ -405,15 +763,200 @@ class MediaTimelineEditor(tk.Tk):
         except (tk.TclError, ValueError):
             return 0
 
-    def _audio_drag_begin(self, event) -> None:
+    def _offset_entry_changed(self, _event=None) -> None:
+        if 0 <= self.selected_segment < len(self.audio_segments):
+            segment = self.audio_segments[self.selected_segment]
+            self.audio_segments[self.selected_segment] = move_audio_segment(
+                segment,
+                max(0.0, self._audio_offset() / 1000.0),
+            )
+            self._refresh_segment_table(keep_selection=True)
+        self._paint_wave(self.wave_peaks)
+
+    def _audio_clicked(self, event) -> None:
+        timeline_time = max(
+            0.0,
+            min(
+                self.media_duration,
+                event.x / max(1, self.wave_canvas.winfo_width()) * self.media_duration,
+            ),
+        )
+        self._set_playhead_time(timeline_time)
+        selected = next(
+            (
+                index
+                for index in range(len(self.audio_segments) - 1, -1, -1)
+                if self.audio_segments[index].timeline_start
+                <= timeline_time
+                <= self.audio_segments[index].timeline_end
+            ),
+            -1,
+        )
+        if selected >= 0:
+            self._remember_segments()
+            self.selected_segment = selected
+            self.segment_table.selection_set(str(selected))
+            self.segment_table.focus(str(selected))
+            self.offset_var.set(
+                round(self.audio_segments[selected].timeline_start * 1000)
+            )
         self.audio_drag_x = event.x
-        self.audio_drag_offset = self._audio_offset()
+        self.segment_drag_origin = (
+            self.audio_segments[selected].timeline_start if selected >= 0 else 0.0
+        )
+        self._paint_wave(self.wave_peaks)
 
     def _audio_drag_move(self, event) -> None:
+        if not 0 <= self.selected_segment < len(self.audio_segments):
+            return
         width = max(1, self.wave_canvas.winfo_width())
-        delta_ms = round((event.x - self.audio_drag_x) / width * self.media_duration * 1000)
-        self.offset_var.set(self.audio_drag_offset + delta_ms)
+        delta = (event.x - self.audio_drag_x) / width * self.media_duration
+        segment = self.audio_segments[self.selected_segment]
+        self.offset_var.set(round(segment.timeline_start * 1000))
+        self.audio_segments[self.selected_segment] = move_audio_segment(
+            segment,
+            self.segment_drag_origin + delta,
+        )
         self._paint_wave(self.wave_peaks)
+
+    def _audio_drag_end(self, _event=None) -> None:
+        if 0 <= self.selected_segment < len(self.audio_segments):
+            self.offset_var.set(
+                round(
+                    self.audio_segments[self.selected_segment].timeline_start * 1000
+                )
+            )
+            self._refresh_segment_table(keep_selection=True)
+
+    def _remember_segments(self) -> None:
+        snapshot = list(self.audio_segments)
+        if not self.segment_history or self.segment_history[-1] != snapshot:
+            self.segment_history.append(snapshot)
+            self.segment_history = self.segment_history[-30:]
+
+    def _renumber_segments(self) -> None:
+        self.audio_segments = rename_audio_segments(
+            self.audio_segments,
+            f"{self.name_var.get()}_audio",
+        )
+
+    def _refresh_segment_table(self, *, keep_selection: bool = False) -> None:
+        previous = self.selected_segment if keep_selection else -1
+        for item in self.segment_table.get_children():
+            self.segment_table.delete(item)
+        for index, segment in enumerate(self.audio_segments):
+            self.segment_table.insert(
+                "",
+                "end",
+                iid=str(index),
+                values=(
+                    segment.name,
+                    f"{self._clock(segment.source_start)} → {self._clock(segment.source_end)}",
+                    self._clock(segment.timeline_start),
+                    self._clock(segment.duration),
+                ),
+            )
+        if self.audio_segments:
+            self.selected_segment = min(
+                max(0, previous if previous >= 0 else self.selected_segment),
+                len(self.audio_segments) - 1,
+            )
+            self.segment_table.selection_set(str(self.selected_segment))
+            self.segment_table.focus(str(self.selected_segment))
+        else:
+            self.selected_segment = -1
+
+    def _segment_table_selected(self, _event=None) -> None:
+        selection = self.segment_table.selection()
+        if not selection:
+            return
+        self.selected_segment = int(selection[0])
+        segment = self.audio_segments[self.selected_segment]
+        self._set_playhead_time(segment.timeline_start)
+        self._paint_wave(self.wave_peaks)
+
+    def _selected_audio_segment(self) -> AudioSegment:
+        if not 0 <= self.selected_segment < len(self.audio_segments):
+            raise MediaEditorError("Selecione um bloco de áudio.")
+        return self.audio_segments[self.selected_segment]
+
+    def split_at_playhead(self) -> None:
+        try:
+            segment = self._selected_audio_segment()
+            left, right = split_audio_segment(segment, self._current_time())
+            self._remember_segments()
+            self.audio_segments[self.selected_segment : self.selected_segment + 1] = [
+                left,
+                right,
+            ]
+            self._renumber_segments()
+            self.selected_segment += 1
+            self._refresh_segment_table(keep_selection=True)
+            self._paint_wave(self.wave_peaks)
+            self.status_var.set("Corte criado. O arquivo original permaneceu intacto.")
+        except Exception as exc:
+            self._error(exc)
+
+    def trim_start_to_playhead(self) -> None:
+        try:
+            segment = self._selected_audio_segment()
+            local = self._current_time() - segment.timeline_start
+            self._remember_segments()
+            trimmed = trim_audio_segment(
+                segment,
+                source_start=segment.source_start + local,
+            )
+            self.audio_segments[self.selected_segment] = AudioSegment(
+                trimmed.name,
+                trimmed.source_start,
+                trimmed.source_end,
+                self._current_time(),
+            )
+            self._refresh_segment_table(keep_selection=True)
+            self._paint_wave(self.wave_peaks)
+        except Exception as exc:
+            self._error(exc)
+
+    def trim_end_to_playhead(self) -> None:
+        try:
+            segment = self._selected_audio_segment()
+            source_end = (
+                segment.source_start + self._current_time() - segment.timeline_start
+            )
+            self._remember_segments()
+            self.audio_segments[self.selected_segment] = trim_audio_segment(
+                segment,
+                source_end=source_end,
+            )
+            self._refresh_segment_table(keep_selection=True)
+            self._paint_wave(self.wave_peaks)
+        except Exception as exc:
+            self._error(exc)
+
+    def delete_selected_segment(self) -> None:
+        try:
+            self._selected_audio_segment()
+        except Exception as exc:
+            self._error(exc)
+            return
+        self._remember_segments()
+        del self.audio_segments[self.selected_segment]
+        self._renumber_segments()
+        self.selected_segment = min(self.selected_segment, len(self.audio_segments) - 1)
+        self._refresh_segment_table(keep_selection=True)
+        self._paint_wave(self.wave_peaks)
+
+    def undo_segments(self) -> None:
+        if not self.segment_history:
+            self.status_var.set("Não há edição de áudio para desfazer.")
+            return
+        self.audio_segments = self.segment_history.pop()
+        self.selected_segment = min(
+            max(0, self.selected_segment), len(self.audio_segments) - 1
+        )
+        self._refresh_segment_table(keep_selection=True)
+        self._paint_wave(self.wave_peaks)
+        self.status_var.set("Última edição de áudio desfeita.")
 
     def _full_frame_target(self) -> Path:
         index = round(float(self.frame_var.get()))
@@ -421,37 +964,68 @@ class MediaTimelineEditor(tk.Tk):
         return folder / f"frame_{index + 1:06d}.png"
 
     def copy_frame(self) -> None:
+        if self.image_path is not None:
+            try:
+                copy_image_to_clipboard(self.image_path)
+                self.status_var.set("Imagem copiada. Use Ctrl+V no programa desejado.")
+            except Exception as exc:
+                self._error(exc)
+            return
         if self.video_path is None:
-            self._error(MediaEditorError("Abra um vídeo primeiro."))
+            self._error(MediaEditorError("Abra uma imagem ou um vídeo primeiro."))
             return
         index = round(float(self.frame_var.get()))
         target = self._full_frame_target()
         self.status_var.set(f"Extraindo o frame {index + 1} na resolução original...")
-        threading.Thread(target=self._copy_frame_worker, args=(index, target), daemon=True).start()
+        threading.Thread(
+            target=self._copy_frame_worker, args=(index, target), daemon=True
+        ).start()
 
     def _copy_frame_worker(self, index: int, target: Path) -> None:
         try:
             extract_frame_at_index(self.video_path, target, index)  # type: ignore[arg-type]
             copy_image_to_clipboard(target)
-            self.after(0, lambda: self.status_var.set(f"Frame {index + 1} copiado. Use Ctrl+V no programa desejado."))
+            self.after(
+                0,
+                lambda: self.status_var.set(
+                    f"Frame {index + 1} copiado. Use Ctrl+V no programa desejado."
+                ),
+            )
         except Exception as exc:
-            self.after(0, lambda: self._error(exc))
+            self.after(0, lambda error=exc: self._error(error))
 
     def save_frame(self) -> None:
-        if self.video_path is None:
-            self._error(MediaEditorError("Abra um vídeo primeiro."))
+        if self.video_path is None and self.image_path is None:
+            self._error(MediaEditorError("Abra uma imagem ou um vídeo primeiro."))
             return
         index = round(float(self.frame_var.get()))
-        default = f"{self.video_path.stem}_frame_{index + 1:06d}.png"
+        source = self.video_path or self.image_path
+        default = f"{source.stem}_frame_{index + 1:06d}.png"  # type: ignore[union-attr]
         selected = filedialog.asksaveasfilename(
-            title="Salvar frame", defaultextension=".png", initialfile=default,
-            filetypes=[("PNG sem perdas", "*.png"), ("JPEG", "*.jpg"), ("WebP", "*.webp")],
+            title="Salvar frame",
+            defaultextension=".png",
+            initialfile=default,
+            filetypes=[
+                ("PNG sem perdas", "*.png"),
+                ("JPEG", "*.jpg"),
+                ("WebP", "*.webp"),
+            ],
         )
         if not selected:
             return
         target = Path(selected)
+        if self.image_path is not None:
+            try:
+                with Image.open(self.image_path) as image:
+                    image.save(target, quality=92)
+                self.status_var.set(f"Imagem salva: {target}")
+            except Exception as exc:
+                self._error(exc)
+            return
         self.status_var.set(f"Salvando frame {index + 1}...")
-        threading.Thread(target=self._save_frame_worker, args=(index, target), daemon=True).start()
+        threading.Thread(
+            target=self._save_frame_worker, args=(index, target), daemon=True
+        ).start()
 
     def _save_frame_worker(self, index: int, target: Path) -> None:
         try:
@@ -464,7 +1038,7 @@ class MediaTimelineEditor(tk.Tk):
                     image.save(target, quality=92)
             self.after(0, lambda: self.status_var.set(f"Frame salvo: {target}"))
         except Exception as exc:
-            self.after(0, lambda: self._error(exc))
+            self.after(0, lambda error=exc: self._error(error))
 
     def _settings(self) -> dict:
         if self.video_path is None:
@@ -474,18 +1048,31 @@ class MediaTimelineEditor(tk.Tk):
         if end - start < 0.2:
             raise MediaEditorError("Escolha um intervalo de pelo menos 0,2 segundo.")
         return {
-            "video_source": self.video_path, "basename": self.name_var.get(),
-            "start": start, "end": end, "fps": int(self.fps_var.get()),
-            "quality": int(self.quality_var.get()), "max_side": int(self.size_var.get()),
-            "audio_source": self.audio_path, "audio_offset_ms": int(self.offset_var.get()),
+            "video_source": self.video_path,
+            "basename": self.name_var.get(),
+            "start": start,
+            "end": end,
+            "fps": int(self.fps_var.get()),
+            "quality": int(self.quality_var.get()),
+            "max_side": int(self.size_var.get()),
+            "audio_source": self.audio_path,
+            "audio_offset_ms": int(self.offset_var.get()),
             "audio_volume": float(self.volume_var.get()),
             "audio_fade_in_ms": int(self.fade_in_var.get()),
             "audio_fade_out_ms": int(self.fade_out_var.get()),
         }
 
     def preview(self) -> None:
+        if self.image_path is not None:
+            self.play_selected_audio()
+            return
         try:
-            settings = self._settings()
+            if self.audio_segments:
+                settings = self._segment_settings()
+                segment_mode = True
+            else:
+                settings = self._settings()
+                segment_mode = False
         except Exception as exc:
             self._error(exc)
             return
@@ -496,14 +1083,40 @@ class MediaTimelineEditor(tk.Tk):
         target.mkdir()
         self.status_var.set("Gerando prévia sincronizada...")
         settings.update({"destination_dir": target, "max_side": 720, "quality": 60})
-        threading.Thread(target=self._preview_worker, args=(settings,), daemon=True).start()
+        worker = self._segment_preview_worker if segment_mode else self._preview_worker
+        threading.Thread(target=worker, args=(settings,), daemon=True).start()
+
+    def _segment_settings(self) -> dict:
+        if self.video_path is None:
+            raise MediaEditorError(
+                "Abra um vídeo para exportar movimento sincronizado."
+            )
+        return {
+            "video_source": self.video_path,
+            "audio_source": self._audio_source(),
+            "segment": self._selected_audio_segment(),
+            "basename": self._selected_audio_segment().name.replace("_audio_", "_"),
+            "fps": int(self.fps_var.get()),
+            "quality": int(self.quality_var.get()),
+            "max_side": int(self.size_var.get()),
+            "audio_volume": float(self.volume_var.get()),
+            "audio_fade_in_ms": int(self.fade_in_var.get()),
+            "audio_fade_out_ms": int(self.fade_out_var.get()),
+        }
+
+    def _segment_preview_worker(self, settings: dict) -> None:
+        try:
+            result = export_synchronized_segment(**settings)
+            self.after(0, lambda: self._start_preview(result))
+        except Exception as exc:
+            self.after(0, lambda error=exc: self._error(error))
 
     def _preview_worker(self, settings: dict) -> None:
         try:
             result = export_synchronized_clip(**settings)
             self.after(0, lambda: self._start_preview(result))
         except Exception as exc:
-            self.after(0, lambda: self._error(exc))
+            self.after(0, lambda error=exc: self._error(error))
 
     def _start_preview(self, result) -> None:
         image = Image.open(result.webp_path)
@@ -515,14 +1128,18 @@ class MediaTimelineEditor(tk.Tk):
                 frame = image.convert("RGB")
                 frame.thumbnail((1080, 455), Image.Resampling.LANCZOS)
                 self.preview_images.append(ImageTk.PhotoImage(frame))
-                self.preview_durations.append(int(image.info.get("duration", round(1000 / result.fps))))
+                self.preview_durations.append(
+                    int(image.info.get("duration", round(1000 / result.fps)))
+                )
         finally:
             image.close()
         self.preview_index = 0
         if result.audio_path is not None:
             self._play_preview_audio(result.audio_path)
         self._advance_preview()
-        self.status_var.set(f"Prévia: {result.frame_count} frames, {result.duration:.3f}s, {result.fps} FPS.")
+        self.status_var.set(
+            f"Prévia: {result.frame_count} frames, {result.duration:.3f}s, {result.fps} FPS."
+        )
 
     def _play_preview_audio(self, mp3: Path) -> None:
         try:
@@ -532,7 +1149,8 @@ class MediaTimelineEditor(tk.Tk):
         wav = self.workspace / "preview.wav"
         completed = subprocess.run(
             [ffmpeg_executable(), "-y", "-i", str(mp3), str(wav)],
-            capture_output=True, check=False,
+            capture_output=True,
+            check=False,
         )
         if completed.returncode == 0:
             winsound.PlaySound(str(wav), winsound.SND_FILENAME | winsound.SND_ASYNC)
@@ -544,7 +1162,9 @@ class MediaTimelineEditor(tk.Tk):
         self.preview_label.configure(image=self.preview_images[index], text="")
         self.preview_index += 1
         if self.preview_index < len(self.preview_images):
-            self.preview_job = self.after(self.preview_durations[index], self._advance_preview)
+            self.preview_job = self.after(
+                self.preview_durations[index], self._advance_preview
+            )
 
     def stop_preview(self) -> None:
         if self.preview_job:
@@ -552,9 +1172,151 @@ class MediaTimelineEditor(tk.Tk):
             self.preview_job = None
         try:
             import winsound
+
             winsound.PlaySound(None, winsound.SND_PURGE)
         except (ImportError, RuntimeError):
             pass
+
+    def _audio_source(self) -> Path:
+        source = self.audio_path or self.video_path
+        if source is None or self.audio_info is None:
+            raise MediaEditorError(
+                "Abra um áudio do ElevenLabs ou use o áudio do vídeo."
+            )
+        return source
+
+    def play_selected_audio(self) -> None:
+        try:
+            source = self._audio_source()
+            segment = self._selected_audio_segment()
+        except Exception as exc:
+            self._error(exc)
+            return
+        target = self.workspace / "selected_preview.wav"
+        self.status_var.set("Preparando o trecho selecionado...")
+        threading.Thread(
+            target=self._play_segment_worker,
+            args=(
+                source,
+                segment,
+                target,
+                float(self.volume_var.get()),
+                int(self.fade_in_var.get()),
+                int(self.fade_out_var.get()),
+            ),
+            daemon=True,
+        ).start()
+
+    def _play_segment_worker(
+        self,
+        source: Path,
+        segment: AudioSegment,
+        target: Path,
+        volume: float,
+        fade_in_ms: int,
+        fade_out_ms: int,
+    ) -> None:
+        try:
+            export_audio_clip(
+                source,
+                target,
+                start=segment.source_start,
+                end=segment.source_end,
+                volume=volume,
+                fade_in_ms=fade_in_ms,
+                fade_out_ms=fade_out_ms,
+            )
+            self.after(0, lambda: self._play_wav(target, segment))
+        except Exception as exc:
+            self.after(0, lambda error=exc: self._error(error))
+
+    def _play_wav(self, target: Path, segment: AudioSegment) -> None:
+        try:
+            import winsound
+
+            winsound.PlaySound(str(target), winsound.SND_FILENAME | winsound.SND_ASYNC)
+            self.status_var.set(
+                f"Reproduzindo {segment.name}: {segment.duration:.3f}s."
+            )
+        except (ImportError, RuntimeError) as exc:
+            self._error(
+                MediaEditorError(f"Não foi possível reproduzir o trecho: {exc}")
+            )
+
+    def export_selected_audio(self) -> None:
+        try:
+            source = self._audio_source()
+            segment = self._selected_audio_segment()
+        except Exception as exc:
+            self._error(exc)
+            return
+        selected = filedialog.asksaveasfilename(
+            title="Exportar bloco selecionado",
+            defaultextension=".mp3",
+            initialfile=f"{segment.name}.mp3",
+            filetypes=[("MP3", "*.mp3"), ("WAV", "*.wav")],
+        )
+        if not selected:
+            return
+        kwargs = {
+            "source": source,
+            "destination": Path(selected),
+            "start": segment.source_start,
+            "end": segment.source_end,
+            "volume": float(self.volume_var.get()),
+            "fade_in_ms": int(self.fade_in_var.get()),
+            "fade_out_ms": int(self.fade_out_var.get()),
+        }
+        self.status_var.set("Exportando o bloco selecionado...")
+        threading.Thread(
+            target=self._audio_export_worker, args=(kwargs,), daemon=True
+        ).start()
+
+    def export_all_audio_segments(self) -> None:
+        try:
+            source = self._audio_source()
+            if not self.audio_segments:
+                raise MediaEditorError("Não existem blocos de áudio para exportar.")
+        except Exception as exc:
+            self._error(exc)
+            return
+        destination = filedialog.askdirectory(
+            title="Escolha a pasta para os diálogos separados"
+        )
+        if not destination:
+            return
+        segments = rename_audio_segments(
+            self.audio_segments,
+            f"{self.name_var.get()}_audio",
+        )
+        self.audio_segments = segments
+        self._refresh_segment_table(keep_selection=True)
+        kwargs = {
+            "source": source,
+            "destination_dir": Path(destination),
+            "segments": segments,
+            "volume": float(self.volume_var.get()),
+            "fade_in_ms": int(self.fade_in_var.get()),
+            "fade_out_ms": int(self.fade_out_var.get()),
+        }
+        self.status_var.set(f"Exportando {len(segments)} blocos de áudio...")
+        threading.Thread(
+            target=self._audio_batch_worker, args=(kwargs,), daemon=True
+        ).start()
+
+    def _audio_batch_worker(self, kwargs: dict) -> None:
+        try:
+            results = export_audio_segments(**kwargs)
+            self.after(0, lambda: self._audio_batch_done(results))
+        except Exception as exc:
+            self.after(0, lambda error=exc: self._error(error))
+
+    def _audio_batch_done(self, results: list[Path]) -> None:
+        self.status_var.set(f"{len(results)} diálogos exportados.")
+        messagebox.showinfo(
+            "Áudios exportados",
+            f"{len(results)} arquivo(s) foram criados em:\n{results[0].parent}",
+        )
 
     def export_audio_only(self) -> None:
         if self.video_path is None:
@@ -562,31 +1324,46 @@ class MediaTimelineEditor(tk.Tk):
             return
         source = self.audio_path or self.video_path
         selected = filedialog.asksaveasfilename(
-            title="Exportar pista de áudio", defaultextension=".mp3",
+            title="Exportar pista de áudio",
+            defaultextension=".mp3",
             initialfile=f"{self.name_var.get()}_audio.mp3",
             filetypes=[("MP3", "*.mp3"), ("WAV", "*.wav")],
         )
         if not selected:
             return
         kwargs = {
-            "source": source, "destination": Path(selected),
-            "start": float(self.start_var.get()), "end": float(self.end_var.get()),
-            "offset_ms": int(self.offset_var.get()), "volume": float(self.volume_var.get()),
-            "fade_in_ms": int(self.fade_in_var.get()), "fade_out_ms": int(self.fade_out_var.get()),
+            "source": source,
+            "destination": Path(selected),
+            "start": float(self.start_var.get()),
+            "end": float(self.end_var.get()),
+            "offset_ms": int(self.offset_var.get()),
+            "volume": float(self.volume_var.get()),
+            "fade_in_ms": int(self.fade_in_var.get()),
+            "fade_out_ms": int(self.fade_out_var.get()),
         }
         self.status_var.set("Exportando a pista de áudio...")
-        threading.Thread(target=self._audio_export_worker, args=(kwargs,), daemon=True).start()
+        threading.Thread(
+            target=self._audio_export_worker, args=(kwargs,), daemon=True
+        ).start()
 
     def _audio_export_worker(self, kwargs: dict) -> None:
         try:
             result = export_audio_clip(**kwargs)
             self.after(0, lambda: self.status_var.set(f"Áudio exportado: {result}"))
         except Exception as exc:
-            self.after(0, lambda: self._error(exc))
+            self.after(0, lambda error=exc: self._error(error))
 
     def export(self) -> None:
+        if self.image_path is not None:
+            self.export_all_audio_segments()
+            return
         try:
-            settings = self._settings()
+            if self.audio_segments:
+                settings = self._segment_settings()
+                segment_mode = True
+            else:
+                settings = self._settings()
+                segment_mode = False
         except Exception as exc:
             self._error(exc)
             return
@@ -595,14 +1372,22 @@ class MediaTimelineEditor(tk.Tk):
             return
         settings["destination_dir"] = Path(destination)
         self.status_var.set("Exportando WebP e áudio sincronizado...")
-        threading.Thread(target=self._export_worker, args=(settings,), daemon=True).start()
+        worker = self._segment_export_worker if segment_mode else self._export_worker
+        threading.Thread(target=worker, args=(settings,), daemon=True).start()
+
+    def _segment_export_worker(self, settings: dict) -> None:
+        try:
+            result = export_synchronized_segment(**settings)
+            self.after(0, lambda: self._export_done(result))
+        except Exception as exc:
+            self.after(0, lambda error=exc: self._error(error))
 
     def _export_worker(self, settings: dict) -> None:
         try:
             result = export_synchronized_clip(**settings)
             self.after(0, lambda: self._export_done(result))
         except Exception as exc:
-            self.after(0, lambda: self._error(exc))
+            self.after(0, lambda error=exc: self._error(error))
 
     @staticmethod
     def _size(path: Path | None) -> str:
@@ -611,8 +1396,14 @@ class MediaTimelineEditor(tk.Tk):
         return f"{path.stat().st_size / (1024 * 1024):.2f} MB"
 
     def _export_done(self, result) -> None:
-        audio = f"\nMP3: {result.audio_path} ({self._size(result.audio_path)})" if result.audio_path else "\nSem faixa de áudio."
-        self.status_var.set(f"Exportação concluída: WebP {self._size(result.webp_path)}.")
+        audio = (
+            f"\nMP3: {result.audio_path} ({self._size(result.audio_path)})"
+            if result.audio_path
+            else "\nSem faixa de áudio."
+        )
+        self.status_var.set(
+            f"Exportação concluída: WebP {self._size(result.webp_path)}."
+        )
         messagebox.showinfo(
             "Concluído",
             f"WebP: {result.webp_path} ({self._size(result.webp_path)}){audio}\n"

@@ -34,6 +34,24 @@ class ExportResult:
     fps: int
 
 
+@dataclass(frozen=True, slots=True)
+class AudioSegment:
+    """Trecho não destrutivo de uma gravação colocado na timeline."""
+
+    name: str
+    source_start: float
+    source_end: float
+    timeline_start: float
+
+    @property
+    def duration(self) -> float:
+        return max(0.0, self.source_end - self.source_start)
+
+    @property
+    def timeline_end(self) -> float:
+        return self.timeline_start + self.duration
+
+
 _DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)")
 _VIDEO_SIZE_RE = re.compile(r"Video:.*?(\d{2,5})x(\d{2,5})")
 _VIDEO_RATE_RE = re.compile(r"Video:.*?(\d+(?:\.\d+)?)\s*(?:fps|tbr)")
@@ -103,8 +121,18 @@ def extract_precision_frames(
         stale.unlink()
     scale = f"scale='min({max(160, int(max_width))},iw)':-2:flags=lanczos"
     command = [
-        ffmpeg_executable(), "-y", "-i", str(source), "-an", "-vsync", "0",
-        "-vf", scale, "-q:v", "4", str(destination / "precision_%08d.jpg"),
+        ffmpeg_executable(),
+        "-y",
+        "-i",
+        str(source),
+        "-an",
+        "-vsync",
+        "0",
+        "-vf",
+        scale,
+        "-q:v",
+        "4",
+        str(destination / "precision_%08d.jpg"),
     ]
     completed = _run(command)
     frames = sorted(destination.glob("precision_*.jpg"))
@@ -126,8 +154,18 @@ def extract_frame_at_index(
     destination.parent.mkdir(parents=True, exist_ok=True)
     select = f"select=eq(n\\,{max(0, int(frame_index))})"
     command = [
-        ffmpeg_executable(), "-y", "-i", str(source), "-an", "-vf", select,
-        "-vsync", "0", "-frames:v", "1", str(destination),
+        ffmpeg_executable(),
+        "-y",
+        "-i",
+        str(source),
+        "-an",
+        "-vf",
+        select,
+        "-vsync",
+        "0",
+        "-frames:v",
+        "1",
+        str(destination),
     ]
     completed = _run(command)
     if completed.returncode != 0 or not destination.is_file():
@@ -152,7 +190,9 @@ def image_dib_bytes(source: Path) -> bytes:
 
 def copy_image_to_clipboard(source: Path) -> None:
     if os.name != "nt":
-        raise MediaEditorError("A cópia de imagem está disponível no aplicativo Windows.")
+        raise MediaEditorError(
+            "A cópia de imagem está disponível no aplicativo Windows."
+        )
     import ctypes
 
     data = image_dib_bytes(source)
@@ -173,7 +213,9 @@ def copy_image_to_clipboard(source: Path) -> None:
     kernel32.GlobalUnlock(handle)
     if not user32.OpenClipboard(None):
         kernel32.GlobalFree(handle)
-        raise MediaEditorError("A área de transferência está sendo usada por outro programa.")
+        raise MediaEditorError(
+            "A área de transferência está sendo usada por outro programa."
+        )
     try:
         user32.EmptyClipboard()
         if not user32.SetClipboardData(8, handle):  # CF_DIB
@@ -192,6 +234,97 @@ def validate_interval(start: float, end: float, duration: float) -> tuple[float,
     return clean_start, clean_end
 
 
+def create_audio_segment(
+    duration: float,
+    *,
+    name: str = "audio_01",
+    timeline_start: float = 0.0,
+) -> AudioSegment:
+    if float(duration) < 0.2:
+        raise MediaEditorError("O áudio precisa ter pelo menos 0,2 segundo.")
+    return AudioSegment(
+        name=str(name or "audio_01"),
+        source_start=0.0,
+        source_end=float(duration),
+        timeline_start=max(0.0, float(timeline_start)),
+    )
+
+
+def split_audio_segment(
+    segment: AudioSegment,
+    timeline_time: float,
+    *,
+    minimum_duration: float = 0.1,
+) -> tuple[AudioSegment, AudioSegment]:
+    local_time = float(timeline_time) - segment.timeline_start
+    source_cut = segment.source_start + local_time
+    minimum = max(0.05, float(minimum_duration))
+    if (
+        source_cut - segment.source_start < minimum
+        or segment.source_end - source_cut < minimum
+    ):
+        raise MediaEditorError(
+            "Posicione o cursor dentro do bloco, deixando espaço dos dois lados."
+        )
+    left = AudioSegment(
+        name=segment.name,
+        source_start=segment.source_start,
+        source_end=source_cut,
+        timeline_start=segment.timeline_start,
+    )
+    right = AudioSegment(
+        name=segment.name,
+        source_start=source_cut,
+        source_end=segment.source_end,
+        timeline_start=float(timeline_time),
+    )
+    return left, right
+
+
+def trim_audio_segment(
+    segment: AudioSegment,
+    *,
+    source_start: float | None = None,
+    source_end: float | None = None,
+    minimum_duration: float = 0.1,
+) -> AudioSegment:
+    clean_start = segment.source_start if source_start is None else float(source_start)
+    clean_end = segment.source_end if source_end is None else float(source_end)
+    if clean_start < 0 or clean_end - clean_start < max(0.05, minimum_duration):
+        raise MediaEditorError("O trecho de áudio ficou curto ou inválido.")
+    return AudioSegment(
+        name=segment.name,
+        source_start=clean_start,
+        source_end=clean_end,
+        timeline_start=segment.timeline_start,
+    )
+
+
+def move_audio_segment(segment: AudioSegment, timeline_start: float) -> AudioSegment:
+    return AudioSegment(
+        name=segment.name,
+        source_start=segment.source_start,
+        source_end=segment.source_end,
+        timeline_start=max(0.0, float(timeline_start)),
+    )
+
+
+def rename_audio_segments(
+    segments: list[AudioSegment],
+    basename: str,
+) -> list[AudioSegment]:
+    clean = re.sub(r"[^a-zA-Z0-9_-]+", "_", basename).strip("_") or "audio"
+    return [
+        AudioSegment(
+            name=f"{clean}_{index:02d}",
+            source_start=segment.source_start,
+            source_end=segment.source_end,
+            timeline_start=segment.timeline_start,
+        )
+        for index, segment in enumerate(segments, start=1)
+    ]
+
+
 def extract_timeline_frames(
     source: Path,
     destination: Path,
@@ -203,9 +336,16 @@ def extract_timeline_frames(
     for stale in destination.glob("timeline_*.jpg"):
         stale.unlink()
     command = [
-        ffmpeg_executable(), "-y", "-i", str(source), "-an",
-        "-vf", f"fps={max(0.2, float(sample_fps))},scale={int(width)}:-2:flags=lanczos",
-        "-q:v", "4", str(destination / "timeline_%06d.jpg"),
+        ffmpeg_executable(),
+        "-y",
+        "-i",
+        str(source),
+        "-an",
+        "-vf",
+        f"fps={max(0.2, float(sample_fps))},scale={int(width)}:-2:flags=lanczos",
+        "-q:v",
+        "4",
+        str(destination / "timeline_%06d.jpg"),
     ]
     completed = _run(command)
     frames = sorted(destination.glob("timeline_*.jpg"))
@@ -226,10 +366,24 @@ def waveform_peaks(
     points: int = 900,
 ) -> list[float]:
     command = [
-        ffmpeg_executable(), "-hide_banner", "-loglevel", "error",
-        "-ss", f"{max(0.0, start):.6f}", "-i", str(source),
-        "-t", f"{max(0.1, duration):.6f}", "-vn", "-ac", "1", "-ar", "8000",
-        "-f", "s16le", "pipe:1",
+        ffmpeg_executable(),
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        f"{max(0.0, start):.6f}",
+        "-i",
+        str(source),
+        "-t",
+        f"{max(0.1, duration):.6f}",
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "8000",
+        "-f",
+        "s16le",
+        "pipe:1",
     ]
     completed = _run(command, binary=True)
     if completed.returncode != 0 or not completed.stdout:
@@ -261,8 +415,17 @@ def _extract_frames(
         f"'if(gt(iw,ih),-2,min({int(max_side)},ih))':flags=lanczos"
     )
     command = [
-        ffmpeg_executable(), "-y", "-ss", f"{start:.6f}", "-i", str(source),
-        "-t", f"{duration:.6f}", "-an", "-vf", f"fps={int(fps)},{scale}",
+        ffmpeg_executable(),
+        "-y",
+        "-ss",
+        f"{start:.6f}",
+        "-i",
+        str(source),
+        "-t",
+        f"{duration:.6f}",
+        "-an",
+        "-vf",
+        f"fps={int(fps)},{scale}",
         str(destination / "frame_%06d.png"),
     ]
     completed = _run(command)
@@ -340,14 +503,30 @@ def _export_audio(
         filters.append(f"afade=t=in:st=0:d={min(fade_in, duration):.6f}")
     if fade_out:
         fade_start = max(0.0, duration - fade_out)
-        filters.append(f"afade=t=out:st={fade_start:.6f}:d={min(fade_out, duration):.6f}")
+        filters.append(
+            f"afade=t=out:st={fade_start:.6f}:d={min(fade_out, duration):.6f}"
+        )
     destination.parent.mkdir(parents=True, exist_ok=True)
-    codec = ["-c:a", "pcm_s16le"] if destination.suffix.lower() == ".wav" else [
-        "-c:a", "libmp3lame", "-b:a", "192k",
-    ]
+    codec = (
+        ["-c:a", "pcm_s16le"]
+        if destination.suffix.lower() == ".wav"
+        else [
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "192k",
+        ]
+    )
     command = [
-        ffmpeg_executable(), "-y", "-i", str(source),
-        "-vn", "-af", ",".join(filters), *codec, str(destination),
+        ffmpeg_executable(),
+        "-y",
+        "-i",
+        str(source),
+        "-vn",
+        "-af",
+        ",".join(filters),
+        *codec,
+        str(destination),
     ]
     completed = _run(command)
     if completed.returncode != 0 or not destination.is_file():
@@ -386,6 +565,39 @@ def export_audio_clip(
     return destination
 
 
+def export_audio_segments(
+    source: Path,
+    destination_dir: Path,
+    segments: list[AudioSegment],
+    *,
+    extension: str = ".mp3",
+    volume: float = 1.0,
+    fade_in_ms: int = 0,
+    fade_out_ms: int = 120,
+) -> list[Path]:
+    if not segments:
+        raise MediaEditorError("Não existem blocos de áudio para exportar.")
+    suffix = extension.lower()
+    if suffix not in {".mp3", ".wav"}:
+        raise MediaEditorError("Escolha MP3 ou WAV para exportar os blocos.")
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    results: list[Path] = []
+    for segment in segments:
+        clean_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", segment.name).strip("_")
+        destination = destination_dir / f"{clean_name or 'audio'}{suffix}"
+        export_audio_clip(
+            source,
+            destination,
+            start=segment.source_start,
+            end=segment.source_end,
+            volume=volume,
+            fade_in_ms=fade_in_ms,
+            fade_out_ms=min(fade_out_ms, round(segment.duration * 500)),
+        )
+        results.append(destination)
+    return results
+
+
 def export_synchronized_clip(
     video_source: Path,
     destination_dir: Path,
@@ -407,28 +619,120 @@ def export_synchronized_clip(
     duration = end - start
     clean_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", basename).strip("_") or "motion"
     webp_path = destination_dir / f"{clean_name}_motion.webp"
-    selected_audio = audio_source if audio_source is not None else (video_source if info.has_audio else None)
+    selected_audio = (
+        audio_source
+        if audio_source is not None
+        else (video_source if info.has_audio else None)
+    )
     audio_path = destination_dir / f"{clean_name}_audio.mp3" if selected_audio else None
     with tempfile.TemporaryDirectory(prefix="entrecenas_media_") as temp:
         frames = _extract_frames(
-            video_source, Path(temp), start=start, duration=duration,
-            fps=max(1, int(fps)), max_side=max(64, int(max_side)),
+            video_source,
+            Path(temp),
+            start=start,
+            duration=duration,
+            fps=max(1, int(fps)),
+            max_side=max(64, int(max_side)),
         )
         _save_animated_webp(frames, webp_path, fps=max(1, int(fps)), quality=quality)
         if selected_audio is not None and audio_path is not None:
             source_start = start if selected_audio == video_source else 0.0
             _export_audio(
-                selected_audio, audio_path, source_start=source_start,
-                duration=duration, offset_ms=audio_offset_ms, volume=audio_volume,
-                fade_in_ms=audio_fade_in_ms, fade_out_ms=audio_fade_out_ms,
+                selected_audio,
+                audio_path,
+                source_start=source_start,
+                duration=duration,
+                offset_ms=audio_offset_ms,
+                volume=audio_volume,
+                fade_in_ms=audio_fade_in_ms,
+                fade_out_ms=audio_fade_out_ms,
             )
     return ExportResult(webp_path, audio_path, duration, len(frames), max(1, int(fps)))
 
 
+def export_synchronized_segment(
+    video_source: Path,
+    audio_source: Path,
+    segment: AudioSegment,
+    destination_dir: Path,
+    basename: str,
+    *,
+    fps: int = 10,
+    quality: int = 65,
+    max_side: int = 960,
+    audio_volume: float = 1.0,
+    audio_fade_in_ms: int = 0,
+    audio_fade_out_ms: int = 120,
+) -> ExportResult:
+    video_info = probe_media(video_source)
+    start, end = validate_interval(
+        segment.timeline_start,
+        segment.timeline_end,
+        video_info.duration,
+    )
+    if abs((end - start) - segment.duration) > 0.05:
+        raise MediaEditorError(
+            "O bloco ultrapassa a duração do vídeo. Mova ou apare o áudio primeiro."
+        )
+    clean_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", basename).strip("_") or "motion"
+    webp_path = destination_dir / f"{clean_name}_motion.webp"
+    audio_path = destination_dir / f"{clean_name}_audio.mp3"
+    with tempfile.TemporaryDirectory(prefix="entrecenas_segment_") as temp:
+        frames = _extract_frames(
+            video_source,
+            Path(temp),
+            start=start,
+            duration=segment.duration,
+            fps=max(1, int(fps)),
+            max_side=max(64, int(max_side)),
+        )
+        _save_animated_webp(
+            frames,
+            webp_path,
+            fps=max(1, int(fps)),
+            quality=quality,
+        )
+        _export_audio(
+            audio_source,
+            audio_path,
+            source_start=segment.source_start,
+            duration=segment.duration,
+            offset_ms=0,
+            volume=audio_volume,
+            fade_in_ms=audio_fade_in_ms,
+            fade_out_ms=audio_fade_out_ms,
+        )
+    return ExportResult(
+        webp_path,
+        audio_path,
+        segment.duration,
+        len(frames),
+        max(1, int(fps)),
+    )
+
+
 __all__ = [
-    "ExportResult", "MediaEditorError", "MediaInfo", "copy_image_to_clipboard",
-    "export_audio_clip", "export_synchronized_clip", "extract_frame_at_index",
-    "extract_precision_frames", "extract_timeline_frames", "ffmpeg_executable",
-    "frame_time", "image_dib_bytes", "probe_media", "validate_interval",
+    "AudioSegment",
+    "ExportResult",
+    "MediaEditorError",
+    "MediaInfo",
+    "copy_image_to_clipboard",
+    "create_audio_segment",
+    "export_audio_clip",
+    "export_audio_segments",
+    "export_synchronized_clip",
+    "export_synchronized_segment",
+    "extract_frame_at_index",
+    "extract_precision_frames",
+    "extract_timeline_frames",
+    "ffmpeg_executable",
+    "frame_time",
+    "image_dib_bytes",
+    "move_audio_segment",
+    "probe_media",
+    "rename_audio_segments",
+    "split_audio_segment",
+    "trim_audio_segment",
+    "validate_interval",
     "waveform_peaks",
 ]
