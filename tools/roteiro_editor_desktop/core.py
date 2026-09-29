@@ -203,6 +203,13 @@ def parse_draft(draft: str) -> list[Item]:
             items.append(Item("FIM_HISTORIA", "", text, instruction, ""))
             continue
 
+        if kind_raw == "PAGAMENTO":
+            if actor:
+                raise EditorError("[PAGAMENTO] não recebe argumentos dentro da tag.")
+            instruction = "[PAGAMENTO]" + (f" {text}" if text else "")
+            items.append(Item("PAGAMENTO", "", text, instruction, ""))
+            continue
+
         if kind_raw == "ONOMATOPEIA":
             if text:
                 raise EditorError("[ONOMATOPEIA] não recebe texto fora da tag.")
@@ -259,6 +266,16 @@ def parse_draft(draft: str) -> list[Item]:
         raise EditorError("O roteiro deve possuir no máximo uma tag [FIM_HISTORIA].")
     if endings and endings[0] != len(items) - 1:
         raise EditorError("[FIM_HISTORIA] deve ser a última linha do roteiro.")
+
+    payment_indexes = [index for index, item in enumerate(items) if item.kind == "PAGAMENTO"]
+    for index in payment_indexes:
+        if index == 0 or index == len(items) - 1:
+            raise EditorError("[PAGAMENTO] deve ficar entre dois quadros da história.")
+        if items[index - 1].kind not in {"FALA", "PENSAMENTO"}:
+            raise EditorError("[PAGAMENTO] deve entrar depois da última FALA ou PENSAMENTO do quadro gratuito.")
+        if items[index + 1].kind != "DESCRICAO":
+            raise EditorError("[PAGAMENTO] deve ficar imediatamente antes da próxima [DESCRIÇÃO].")
+
     frame_open = False
     for index, item in enumerate(items, start=1):
         if item.kind == "DESCRICAO":
@@ -323,6 +340,10 @@ def compile_rows(
             line_id = f"{current_frame}_descricao"
         elif item.kind == "FIM_HISTORIA":
             line_id = f"{current_frame}_fim_historia"
+        elif item.kind == "PAGAMENTO":
+            key = ("", item.kind)
+            occurrences[key] = occurrences.get(key, 0) + 1
+            line_id = f"{current_frame}_pagamento_{occurrences[key]:02d}"
         elif item.kind == "ONOMATOPEIA":
             key = ("", item.kind)
             occurrences[key] = occurrences.get(key, 0) + 1
