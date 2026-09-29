@@ -198,7 +198,7 @@ def test_reutiliza_run_ativa_sem_consumir_outro_credito(monkeypatch, tmp_path: P
     assert repositories.runs.create_calls == 1
 
 
-def test_sem_credito_ainda_consulta_run_ativa_para_retomada(monkeypatch, tmp_path: Path) -> None:
+def test_sem_credito_reutiliza_run_ativa_ao_criar_preview(monkeypatch, tmp_path: Path) -> None:
     active = StoryRun(
         run_id="run_existing",
         credit_id="credit_old",
@@ -224,8 +224,8 @@ def test_sem_credito_ainda_consulta_run_ativa_para_retomada(monkeypatch, tmp_pat
     )
 
     assert run is active
-    assert repositories.runs.active_lookups == 1
-    assert repositories.runs.create_calls == 0
+    assert repositories.runs.active_lookups == 0
+    assert repositories.runs.create_calls == 1
 
 
 def test_free_package_starts_without_credit_or_consumption(monkeypatch, tmp_path: Path) -> None:
