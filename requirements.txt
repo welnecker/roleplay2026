@@ -14,3 +14,4 @@ flet-secure-storage==0.86.5
 flet-audio==0.86.5
 psycopg[binary,pool]>=3.2,<4
 openpyxl>=3.1,<4
+imageio-ffmpeg>=0.6,<1
