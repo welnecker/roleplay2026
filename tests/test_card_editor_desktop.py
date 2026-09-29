@@ -162,8 +162,9 @@ def test_import_cover_copies_file_inside_package(tmp_path: Path) -> None:
     assert (manifest_path.parent / relative).read_bytes() == b"RIFFfake-webp"
 
 
-def test_package_id_validation_rejects_spaces_and_uppercase() -> None:
+def test_package_id_validation_normalizes_case_and_rejects_spaces() -> None:
     assert module.validate_package_id("roleplay2026.primagotica") == "roleplay2026.primagotica"
+    assert module.validate_package_id("ROLEPLAY2026.PRIMAGOTICA") == "roleplay2026.primagotica"
     try:
         module.validate_package_id("Roleplay 2026.Prima")
     except module.CardEditorError:
