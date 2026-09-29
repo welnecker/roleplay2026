@@ -9,6 +9,7 @@ on:
       - agent/synced-image-carousel
       - agent/flet-visual-client
       - agent/postgres-operational-runtime
+      - agent/legal-pages
   pull_request:
     branches:
       - main
