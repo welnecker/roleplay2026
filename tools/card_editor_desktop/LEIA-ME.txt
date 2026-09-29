@@ -1,22 +1,52 @@
 CONFIGURADOR DE CARDS • ENTRECENAS
 
-Ferramenta Windows para editar a apresentação comercial de um card existente.
+Ferramenta Windows para CRIAR cards novos ou EDITAR cards existentes.
 
-O que edita:
-- título
-- subtítulo
-- descrição
-- gêneros
-- rótulo de capítulo
-- capa
-- nome e textos do verso/perfil
-- preço
-- política de replay
+MODO NOVO CARD
+1. Clique em NOVO CARD.
+2. Escolha a pasta onde a nova pasta do pacote será criada.
+3. Preencha:
+   - package_id, por exemplo roleplay2026.primagotica
+   - versão
+   - autor
+   - título, subtítulo, descrição e gêneros
+   - rótulo de capítulo
+   - capa
+   - textos do verso/perfil
+   - preço
+   - política de replay
+4. O manifest.yaml ainda NÃO existe durante o preenchimento.
+5. Clique em GERAR NOVO CARD.
+6. Só então o configurador cria a estrutura do pacote.
 
-O que NÃO altera:
+ESTRUTURA GERADA
+<nome_do_pacote>/
+- manifest.yaml
+- story.yaml
+- content/editorial.yaml
+- assets/capas/
+
+O story.yaml e o content/editorial.yaml são arquivos iniciais seguros para que
+a estrutura do pacote seja válida. O roteiro real deve substituir/publicar o
+conteúdo editorial antes de colocar o novo card em produção.
+
+CAPA
+Ao criar um card novo, a imagem escolhida é copiada automaticamente para:
+assets/capas/capa.<extensão>
+
+O manifest.yaml recebe apenas o caminho relativo, evitando dependência de
+Downloads, Desktop ou outra pasta externa do Windows.
+
+MODO EDITAR CARD EXISTENTE
+1. Clique em ABRIR MANIFEST.YAML.
+2. Selecione o manifest.yaml do pacote.
+3. Edite frente, verso, capa, preço e política de replay.
+4. Clique em SALVAR CARD.
+
+Ao editar um card existente, o configurador preserva:
 - package_id
 - versão
-- author
+- autor
 - entrypoint
 - runtime/editorial
 - elenco
@@ -24,24 +54,29 @@ O que NÃO altera:
 - roteiro
 
 NOVO FLUXO DE PAGAMENTO
-Um card comercial continua com commerce.access: paid.
-Isso NÃO significa que ele cobra na abertura.
+Um card comercial permanece com:
+commerce.access: paid
 
-O app agora permite abrir o card e avançar gratuitamente até a tag:
+Isso NÃO significa cobrança ao abrir o card.
+
+O usuário pode abrir e avançar gratuitamente até a linha editorial:
 [PAGAMENTO] Quer saber como termina essa aventura?
 
-Somente ali a tela Pix é acionada.
+Somente nesse ponto a tela Pix é acionada.
 
-USO
-1. Abra Configurador_Cards_EntreCenas.exe.
-2. Clique em ABRIR MANIFEST.YAML.
-3. Selecione o manifest.yaml do pacote.
-4. Edite frente e verso vendo a prévia.
-5. Ajuste o preço se necessário.
-6. Clique em SALVAR CARD.
+CAMPOS EDITÁVEIS DO CARD
+- título
+- subtítulo
+- descrição
+- gêneros
+- rótulo de capítulo
+- capa
+- nome do perfil
+- Quem é
+- Como é
+- O que pretende com você
+- preço
+- política de replay
 
-CAPA
-Se escolher uma capa dentro da pasta do pacote, o configurador salva o caminho
-relativo, por exemplo assets/capas/capa.webp.
-Se escolher fora do pacote, o caminho absoluto é mantido; para produção,
-recomenda-se mover/copiar a capa para a estrutura final do pacote/R2.
+O configurador não envia arquivos ao GitHub, Render, Cloudflare R2 ou Google
+Sheets. A publicação continua sendo uma etapa separada e controlada.
