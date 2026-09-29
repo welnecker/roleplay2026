@@ -58,6 +58,18 @@ def _stage_balloon(view: NovelFrameView) -> ft.Stack:
     return balloon
 
 
+def _balloon_media_buttons(view: NovelFrameView) -> list[ft.IconButton]:
+    card = _stage_balloon(view).controls[-1]
+    assert isinstance(card, ft.Container)
+    assert isinstance(card.content, ft.Column)
+    header = card.content.controls[0]
+    assert isinstance(header, ft.Row)
+    actions = header.controls[-1]
+    assert isinstance(actions, ft.Row)
+    assert all(isinstance(control, ft.IconButton) for control in actions.controls)
+    return list(actions.controls)  # type: ignore[return-value]
+
+
 def test_palco_mostra_um_conteudo_por_vez_e_revela_o_proximo() -> None:
     page = _Page()
     frame = VisualFrame(
@@ -467,14 +479,79 @@ def test_audio_da_linha_tem_repeticao_manual_e_servico_flet() -> None:
         entry_audios=("https://midia.example/audio/mary1.mp3",),
     )
 
-    media = _image_container(view)
-    assert isinstance(media.content, ft.Stack)
     speaker = next(
-        control for control in media.content.controls if isinstance(control, ft.IconButton)
+        button
+        for button in _balloon_media_buttons(view)
+        if button.tooltip == "Ouvir áudio"
     )
     speaker.on_click(None)
 
     assert page.tasks[-1][1] == ("https://midia.example/audio/mary1.mp3",)
+
+
+def test_balao_exibe_somente_os_icones_das_midias_disponiveis() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (VisualEntry("fala", "mary", "Mary", "Olá."),),
+        ),
+        entry_images=("https://img/mary.webp",),
+        entry_motions=("https://midia.example/videos/mary.webp",),
+        entry_audios=("https://midia.example/audio/mary.mp3",),
+    )
+
+    assert [button.tooltip for button in _balloon_media_buttons(view)] == [
+        "Ver imagem",
+        "Rever movimento",
+        "Ouvir áudio",
+    ]
+
+
+def test_balao_com_apenas_imagem_nao_exibe_controles_inexistentes() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (VisualEntry("pensamento", "mary", "Mary", "Cheguei."),),
+        ),
+        entry_images=("https://img/mary.webp",),
+    )
+
+    assert [button.tooltip for button in _balloon_media_buttons(view)] == [
+        "Ver imagem"
+    ]
+
+
+def test_clique_no_icone_de_movimento_gera_url_nova_para_replay() -> None:
+    view = NovelFrameView(  # type: ignore[arg-type]
+        _Page(),
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (VisualEntry("fala", "mary", "Mary", "Olá."),),
+        ),
+        entry_images=("https://img/mary.webp",),
+        entry_motions=("https://midia.example/videos/mary.webp",),
+    )
+    view._animate_next_render = False
+    view._refresh(update_page=False)
+    motion_button = next(
+        button
+        for button in _balloon_media_buttons(view)
+        if button.tooltip == "Rever movimento"
+    )
+
+    assert motion_button.on_click is not None
+    motion_button.on_click()  # type: ignore[misc]
+
+    media = _image_container(view)
+    assert isinstance(media.content, ft.Stack)
+    motion = media.content.controls[1]
+    assert isinstance(motion, ft.Image)
+    assert motion.src.endswith("/mary.webp?replay=1")
 
 
 def test_audio_da_descricao_acompanha_a_primeira_posicao_visual() -> None:

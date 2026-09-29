@@ -76,12 +76,83 @@ def _entry_card(
     *,
     width: float,
     initially_hidden: bool = False,
+    has_image: bool = False,
+    has_motion: bool = False,
+    has_audio: bool = False,
+    audio_playing: bool = False,
+    on_image: Callable[[object], None] | None = None,
+    on_motion: Callable[[object], None] | None = None,
+    on_audio: Callable[[object], None] | None = None,
 ) -> ft.Control:
     is_thought = entry.kind == "pensamento"
     is_impact_balloon = not is_thought and entry.impact_balloon
     label = entry.visible_name or entry.actor or "Personagem"
     card_color = "#F7DFEA" if is_thought else SPEECH_COLORS[index % len(SPEECH_COLORS)]
     border = ft.Border.all(2, "#8F6475") if is_thought else None
+    icon_color = "#755363" if is_thought else TEXT_COLOR
+    media_buttons: list[ft.Control] = []
+    if has_image:
+        media_buttons.append(
+            ft.IconButton(
+                icon=ft.Icons.IMAGE_OUTLINED,
+                icon_size=18,
+                width=40,
+                height=40,
+                icon_color=icon_color,
+                tooltip="Ver imagem",
+                on_click=on_image,
+            )
+        )
+    if has_motion:
+        media_buttons.append(
+            ft.IconButton(
+                icon=ft.Icons.PLAY_CIRCLE_OUTLINE,
+                icon_size=19,
+                width=40,
+                height=40,
+                icon_color=icon_color,
+                tooltip="Rever movimento",
+                on_click=on_motion,
+            )
+        )
+    if has_audio:
+        media_buttons.append(
+            ft.IconButton(
+                icon=(
+                    ft.Icons.PAUSE_CIRCLE_OUTLINE
+                    if audio_playing
+                    else ft.Icons.VOLUME_UP_OUTLINED
+                ),
+                icon_size=19,
+                width=40,
+                height=40,
+                icon_color=icon_color,
+                tooltip="Pausar áudio" if audio_playing else "Ouvir áudio",
+                on_click=on_audio,
+            )
+        )
+
+    label_control = ft.Text(
+        f"✦ pensamento · {label}" if is_thought else label.upper(),
+        size=12,
+        weight=ft.FontWeight.BOLD,
+        color=icon_color,
+        expand=True,
+    )
+    header: ft.Control
+    if media_buttons:
+        header = ft.Row(
+            controls=[
+                label_control,
+                ft.Row(controls=media_buttons, spacing=0),
+            ],
+            spacing=6,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+    else:
+        header = label_control
+
     card = ft.Container(
         width=width,
         margin=ft.Margin.only(left=11, right=11, top=18),
@@ -93,12 +164,7 @@ def _entry_card(
         content=ft.Column(
             spacing=6,
             controls=[
-                ft.Text(
-                    f"✦ pensamento · {label}" if is_thought else label.upper(),
-                    size=12,
-                    weight=ft.FontWeight.BOLD,
-                    color="#755363" if is_thought else TEXT_COLOR,
-                ),
+                header,
                 ft.Text(
                     entry.body,
                     size=23 if is_impact_balloon else 17,
@@ -318,6 +384,7 @@ class NovelFrameView:
         self._effect_controls: list[tuple[ft.Container, OnomatopoeiaEffect]] = []
         self._audio_controls: list[tuple[object, str]] = []
         self._active_audio: fa.Audio | None = None
+        self._audio_playing_url: str | None = None
         self._viewport_width = float(getattr(page, "width", None) or 390)
         self._viewport_height = float(getattr(page, "height", None) or 800)
         self.stage_width = _stage_width(self._viewport_width)
@@ -493,6 +560,7 @@ class NovelFrameView:
             )
 
         controls: list[ft.Control] = []
+        item_audio = self._item_audio(item)
         if item.image:
             image_height = _image_height(
                 self.stage_width,
@@ -533,21 +601,6 @@ class NovelFrameView:
                             color="#FFFFFF",
                             size=20,
                             semantics_label="Ampliar imagem",
-                        ),
-                    )
-                )
-            item_audio = self._item_audio(item)
-            if item_audio:
-                visual_stack.append(
-                    ft.IconButton(
-                        left=10,
-                        bottom=10,
-                        icon=ft.Icons.VOLUME_UP,
-                        icon_color="#FFFFFF",
-                        bgcolor="#99000000",
-                        tooltip="Reproduzir áudio novamente",
-                        on_click=lambda _event=None, url=item_audio: (
-                            self._play_audio_url(url)
                         ),
                     )
                 )
@@ -630,6 +683,25 @@ class NovelFrameView:
                     max(0, item.entry_index),
                     width=_balloon_width(self.stage_width, self._viewport_width),
                     initially_hidden=self._animate_next_render,
+                    has_image=bool(item.image),
+                    has_motion=bool(item.motion),
+                    has_audio=bool(item_audio),
+                    audio_playing=bool(
+                        item_audio and self._audio_playing_url == item_audio
+                    ),
+                    on_image=(
+                        lambda _event=None, image=item.image: (
+                            self._open_image_viewer(image)
+                            if image is not None
+                            else None
+                        )
+                    ),
+                    on_motion=lambda _event=None: self._replay_motion(),
+                    on_audio=(
+                        lambda _event=None, url=item_audio: (
+                            self._toggle_audio(url) if url is not None else None
+                        )
+                    ),
                 )
             self._balloon_control = balloon
             card = balloon.controls[-1]
@@ -686,13 +758,6 @@ class NovelFrameView:
                 self._motion_image_control(self._pending_motion_url)
             )
             self._pending_motion_url = None
-        selected = self._selected_item()
-        if selected is not None and selected.entry_index >= 0:
-            entry_audio = self._entry_audio(selected.entry_index)
-            if entry_audio:
-                self._play_audio_url(entry_audio)
-        elif self.base_audio:
-            self._play_audio_url(self.base_audio)
         if self._media_control is not None:
             self._media_control.opacity = 1
             self.page.update()
@@ -763,12 +828,32 @@ class NovelFrameView:
             return None
         audio = self._active_audio
         if not isinstance(audio, fa.Audio):
-            audio = fa.Audio(src=audio_url, autoplay=False, volume=1.0)
+            audio = fa.Audio(
+                src=audio_url,
+                autoplay=False,
+                volume=1.0,
+                on_state_change=self._audio_state_changed,
+            )
             services.append(audio)
             self._active_audio = audio
-        elif audio.src != audio_url:
-            audio.src = audio_url
+        else:
+            audio.on_state_change = self._audio_state_changed
+            if audio.src != audio_url:
+                audio.src = audio_url
         return audio
+
+    def _audio_state_changed(self, event: object) -> None:
+        state = getattr(event, "state", None)
+        if state not in {
+            fa.AudioState.COMPLETED,
+            fa.AudioState.STOPPED,
+            fa.AudioState.DISPOSED,
+        }:
+            return
+        if self._audio_playing_url is None:
+            return
+        self._audio_playing_url = None
+        self._refresh()
 
     async def _play_audio(self, audio_url: str) -> None:
         audio = self._audio_service(audio_url)
@@ -787,7 +872,37 @@ class NovelFrameView:
         if audio_url and callable(runner):
             runner(self._play_audio, audio_url)
 
+    def _toggle_audio(self, audio_url: str) -> None:
+        runner = getattr(self.page, "run_task", None)
+        if callable(runner):
+            runner(self._toggle_audio_async, audio_url)
+
+    async def _toggle_audio_async(self, audio_url: str) -> None:
+        audio = self._audio_service(audio_url)
+        if audio is None:
+            return
+        try:
+            if self._audio_playing_url == audio_url:
+                await audio.pause()
+                self._audio_playing_url = None
+            else:
+                await audio.play(0)
+                self._audio_playing_url = audio_url
+        except RuntimeError as exc:
+            self._audio_playing_url = None
+            print(f"[STORY_AUDIO] control_failed url={audio_url!r} error={exc!r}")
+        self._refresh()
+
+    def _replay_motion(self) -> None:
+        selected = self._selected_item()
+        if selected is None or not selected.motion:
+            return
+        self._motion_replay_nonce += 1
+        self._animate_next_render = False
+        self._refresh()
+
     def _stop_active_audio(self) -> None:
+        self._audio_playing_url = None
         audio = self._active_audio
         if audio is None:
             return
@@ -861,10 +976,6 @@ class NovelFrameView:
         self._refresh()
         if replay_effect:
             self._start_stage_animation(include_scene=False)
-        elif selected is not None:
-            audio_url = self._item_audio(selected)
-            if audio_url:
-                self._play_audio_url(audio_url)
 
     def _review_next(self, _event: object = None) -> None:
         self._stop_active_audio()
@@ -878,10 +989,6 @@ class NovelFrameView:
         self._refresh()
         if replay_effect:
             self._start_stage_animation(include_scene=False)
-        elif selected is not None:
-            audio_url = self._item_audio(selected)
-            if audio_url:
-                self._play_audio_url(audio_url)
 
     def _refresh(self, *, update_page: bool = True) -> None:
         items = self._current_row().items
@@ -914,6 +1021,7 @@ class NovelFrameView:
     def _advance(self, _event: object = None) -> None:
         if self._busy:
             return
+        self._stop_active_audio()
         if self.controller.advance():
             self._busy = True
             self._refresh()
