@@ -1,0 +1,47 @@
+CONFIGURADOR DE CARDS • ENTRECENAS
+
+Ferramenta Windows para editar a apresentação comercial de um card existente.
+
+O que edita:
+- título
+- subtítulo
+- descrição
+- gêneros
+- rótulo de capítulo
+- capa
+- nome e textos do verso/perfil
+- preço
+- política de replay
+
+O que NÃO altera:
+- package_id
+- versão
+- author
+- entrypoint
+- runtime/editorial
+- elenco
+- extensões
+- roteiro
+
+NOVO FLUXO DE PAGAMENTO
+Um card comercial continua com commerce.access: paid.
+Isso NÃO significa que ele cobra na abertura.
+
+O app agora permite abrir o card e avançar gratuitamente até a tag:
+[PAGAMENTO] Quer saber como termina essa aventura?
+
+Somente ali a tela Pix é acionada.
+
+USO
+1. Abra Configurador_Cards_EntreCenas.exe.
+2. Clique em ABRIR MANIFEST.YAML.
+3. Selecione o manifest.yaml do pacote.
+4. Edite frente e verso vendo a prévia.
+5. Ajuste o preço se necessário.
+6. Clique em SALVAR CARD.
+
+CAPA
+Se escolher uma capa dentro da pasta do pacote, o configurador salva o caminho
+relativo, por exemplo assets/capas/capa.webp.
+Se escolher fora do pacote, o caminho absoluto é mantido; para produção,
+recomenda-se mover/copiar a capa para a estrutura final do pacote/R2.
