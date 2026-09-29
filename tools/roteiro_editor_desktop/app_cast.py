@@ -88,6 +88,13 @@ class ScriptEditor(GalleryScriptEditor):
             ).pack(side="right", padx=4, before=validate_button)
             ttk.Button(
                 validate_button.master,
+                text="+ PAGAMENTO",
+                command=lambda: self.insert_tag(
+                    "[PAGAMENTO] Quer saber como termina essa aventura?"
+                ),
+            ).pack(side="right", padx=4, before=validate_button)
+            ttk.Button(
+                validate_button.master,
                 text="+ FIM DA HISTÓRIA",
                 command=lambda: self.insert_tag("[FIM_HISTORIA]"),
             ).pack(side="right", padx=4, before=validate_button)
