@@ -10,8 +10,22 @@ from services import paid_run_access
 @dataclass
 class FakeCredits:
     credit: RunCredit | None = None
+    consumed: tuple[str, str] | None = None
 
     def get_available_credit(self, *, user_id: str, package_id: str) -> RunCredit | None:
+        return self.credit
+
+    def consume_credit(self, *, credit_id: str, run_id: str) -> RunCredit:
+        assert self.credit is not None
+        self.consumed = (credit_id, run_id)
+        self.credit = RunCredit(
+            credit_id=self.credit.credit_id,
+            user_id=self.credit.user_id,
+            package_id=self.credit.package_id,
+            payment_id=self.credit.payment_id,
+            status="consumed",
+            run_id=run_id,
+        )
         return self.credit
 
 
@@ -237,4 +251,86 @@ def test_fim_persistido_reconcilia_run_antiga_e_bloqueia_apenas_seu_card(monkeyp
     assert access.state == "locked"
     assert run.status == "completed"
     assert run.ending_code == "story_complete"
+    _clear_caches()
+
+
+def test_preview_run_fica_bloqueada_sem_credito(monkeypatch) -> None:
+    _clear_caches()
+    preview = StoryRun(
+        run_id="run_preview",
+        credit_id="preview:story_1:user_1",
+        user_id="user_1",
+        package_id="story_1",
+        script_version="1.0.0",
+        current_block_id="block_1",
+        current_beat_id="beat_1",
+    )
+    repositories = FakeRepositories(
+        credits=FakeCredits(None),
+        runs=FakeRuns(preview),
+    )
+    monkeypatch.setattr(
+        paid_run_access,
+        "build_v2_narrative_repositories",
+        lambda secrets: repositories,
+    )
+
+    access = paid_run_access.get_paid_run_access(
+        secrets={},
+        user_id="user_1",
+        package_id="story_1",
+    )
+
+    assert access.state == "locked"
+    assert access.allowed is False
+    assert access.run is preview
+    _clear_caches()
+
+
+def test_pagamento_e_acoplado_a_mesma_preview_run(monkeypatch) -> None:
+    _clear_caches()
+    preview = StoryRun(
+        run_id="run_preview",
+        credit_id="preview:story_1:user_1",
+        user_id="user_1",
+        package_id="story_1",
+        script_version="1.0.0",
+        current_block_id="block_1",
+        current_beat_id="beat_1",
+        state_version=1,
+    )
+    credit = RunCredit(
+        credit_id="credit_paid",
+        user_id="user_1",
+        package_id="story_1",
+        payment_id="pix_123",
+        status="available",
+    )
+    credits = FakeCredits(credit)
+    runs = FakeRuns(preview)
+    repositories = FakeRepositories(credits=credits, runs=runs)
+    monkeypatch.setattr(
+        paid_run_access,
+        "build_v2_narrative_repositories",
+        lambda secrets: repositories,
+    )
+
+    claimed = paid_run_access.claim_paid_access_for_preview_run(
+        secrets={},
+        user_id="user_1",
+        package_id="story_1",
+        run_id="run_preview",
+    )
+    access = paid_run_access.get_paid_run_access(
+        secrets={},
+        user_id="user_1",
+        package_id="story_1",
+    )
+
+    assert claimed.run_id == "run_preview"
+    assert claimed.credit_id == "credit_paid"
+    assert credits.consumed == ("credit_paid", "run_preview")
+    assert runs.updated is claimed
+    assert access.state == "active"
+    assert access.allowed is True
     _clear_caches()
