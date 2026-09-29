@@ -150,6 +150,45 @@ async def main(
                     cast_names=cast_names,
                 )
             except FletApiError as exc:
+                if exc.status_code == 402:
+                    snapshot = view.history_snapshot()
+
+                    def resume_after_payment() -> None:
+                        try:
+                            following = api_client.advance_run(
+                                package_id=card.package_id,
+                                frame_id=run_frame.frame_id,
+                                revealed_entries=len(frame.entries),
+                                preferred_name=preferred_name,
+                                story_gender=story_gender,
+                                cast_names=cast_names,
+                            )
+                        except FletApiError as retry_exc:
+                            handle_api_error(retry_exc)
+                            return
+                        show_player(
+                            card,
+                            preferred_name,
+                            story_gender,
+                            cast_names,
+                            following,
+                            history=snapshot,
+                        )
+
+                    _show_payment(
+                        card,
+                        gate_message=str(exc),
+                        on_approved=resume_after_payment,
+                        on_back=lambda: show_player(
+                            card,
+                            preferred_name,
+                            story_gender,
+                            cast_names,
+                            run_frame,
+                            history=snapshot,
+                        ),
+                    )
+                    return False
                 handle_api_error(exc)
                 return False
             show_player(
@@ -224,7 +263,14 @@ async def main(
     def reload_library() -> None:
         run_blocking(_reload_library)
 
-    def _show_payment(card: StoryCard, state: ApiPayment | None = None) -> None:
+    def _show_payment(
+        card: StoryCard,
+        state: ApiPayment | None = None,
+        *,
+        gate_message: str = "",
+        on_approved: Callable[[], None] | None = None,
+        on_back: Callable[[], None] | None = None,
+    ) -> None:
         if api_client is None:
             show_api_error("API não configurada.")
             return
@@ -241,9 +287,18 @@ async def main(
                 handle_api_error(exc)
                 return
             if updated.approved:
-                reload_library()
+                if on_approved is not None:
+                    on_approved()
+                else:
+                    reload_library()
                 return
-            _show_payment(card, updated)
+            _show_payment(
+                card,
+                updated,
+                gate_message=gate_message,
+                on_approved=on_approved,
+                on_back=on_back,
+            )
 
         show(
             payment_screen(
@@ -253,7 +308,8 @@ async def main(
                 qr_code=current.qr_code,
                 qr_code_base64=current.qr_code_base64,
                 payment_status=current.status,
-                on_back=lambda: show_library(active_cards, active_display_name),
+                gate_message=gate_message,
+                on_back=on_back or (lambda: show_library(active_cards, active_display_name)),
                 on_create_pix=lambda: run_blocking(
                     run, lambda: api_client.create_pix(card.package_id)
                 ),
@@ -270,9 +326,6 @@ async def main(
         run_blocking(_show_payment, card)
 
     def _select_card(card: StoryCard) -> None:
-        if card.access_status == AccessStatus.LOCKED:
-            show_payment(card)
-            return
         if api_client is None:
             show_api_error("API não configurada.")
             return
