@@ -273,7 +273,7 @@ def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
     texts = _texts(screen)
     assert "Aprecie sem moderação" in texts
     assert "História exemplo" in texts
-    assert "R$ 9,90" in texts
+    assert "COMECE GRÁTIS" in texts
     assert story.access_status == AccessStatus.LOCKED
     image = next(item for item in _walk(screen) if isinstance(item, ft.Image))
     assert image.src == story.cover_url
@@ -284,7 +284,7 @@ def test_biblioteca_renderiza_cards_reais_sem_alterar_acesso() -> None:
     assert stack.fit == ft.StackFit.EXPAND
     button = next(item for item in _walk(screen) if isinstance(item, ft.FilledButton))
     assert button.disabled is False
-    assert button.content == "Comprar com Pix"
+    assert button.content == "Abrir história"
 
     switcher = next(item for item in _walk(screen) if isinstance(item, ft.AnimatedSwitcher))
     assert switcher.transition == ft.AnimatedSwitcherTransition.ROTATION
