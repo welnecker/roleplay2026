@@ -90,3 +90,83 @@ def test_save_and_reload_manifest(tmp_path: Path) -> None:
     loaded = module.load_manifest(path)
     assert loaded["package_id"] == "roleplay2026.exemplo"
     assert yaml.safe_load(path.read_text(encoding="utf-8"))["commerce"]["price_cents"] == 990
+
+
+
+def test_new_manifest_uses_paid_access_with_scripted_preview_model() -> None:
+    payload = module.new_manifest(
+        module.NewCardSpec(
+            package_id="roleplay2026.primagotica",
+            version="1.0.0",
+            author_id="welnecker",
+            author_name="Welnecker",
+        )
+    )
+
+    assert payload["package_id"] == "roleplay2026.primagotica"
+    assert payload["runtime"]["kind"] == "editorial"
+    assert payload["commerce"]["access"] == "paid"
+    assert payload["commerce"]["price_cents"] == 990
+    assert payload["cast_customization"] == {"enabled": False, "members": []}
+
+
+def test_create_card_package_generates_minimum_structure(tmp_path: Path) -> None:
+    manifest_path, payload = module.create_card_package(
+        tmp_path,
+        module.NewCardSpec(
+            package_id="roleplay2026.primagotica",
+            version="1.0.0",
+            author_id="welnecker",
+            author_name="Welnecker",
+        ),
+    )
+
+    root = tmp_path / "primagotica"
+    assert manifest_path == root / "manifest.yaml"
+    assert manifest_path.is_file()
+    assert (root / "story.yaml").is_file()
+    assert (root / "content" / "editorial.yaml").is_file()
+    assert (root / "assets" / "capas").is_dir()
+    loaded = module.load_manifest(manifest_path)
+    assert loaded["package_id"] == "roleplay2026.primagotica"
+    assert payload["entrypoint"] == "story.yaml"
+
+
+def test_create_card_package_refuses_nonempty_existing_folder(tmp_path: Path) -> None:
+    root = tmp_path / "primagotica"
+    root.mkdir()
+    (root / "arquivo.txt").write_text("não sobrescrever", encoding="utf-8")
+
+    try:
+        module.create_card_package(
+            tmp_path,
+            module.NewCardSpec(package_id="roleplay2026.primagotica"),
+        )
+    except module.CardEditorError as exc:
+        assert "já existe" in str(exc)
+    else:
+        raise AssertionError("A criação deveria recusar pasta existente não vazia.")
+
+
+def test_import_cover_copies_file_inside_package(tmp_path: Path) -> None:
+    manifest_path, _payload = module.create_card_package(
+        tmp_path,
+        module.NewCardSpec(package_id="roleplay2026.primagotica"),
+    )
+    source = tmp_path / "minha_capa.webp"
+    source.write_bytes(b"RIFFfake-webp")
+
+    relative = module.import_cover_into_package(manifest_path, source)
+
+    assert relative == "assets/capas/capa.webp"
+    assert (manifest_path.parent / relative).read_bytes() == b"RIFFfake-webp"
+
+
+def test_package_id_validation_rejects_spaces_and_uppercase() -> None:
+    assert module.validate_package_id("roleplay2026.primagotica") == "roleplay2026.primagotica"
+    try:
+        module.validate_package_id("Roleplay 2026.Prima")
+    except module.CardEditorError:
+        pass
+    else:
+        raise AssertionError("package_id inválido deveria ser rejeitado.")
