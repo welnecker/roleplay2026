@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from flet_api.app import ApiServices, create_api_app
 from flet_api.payments import PaymentState
-from flet_api.runs import RunFrame, RunProfile
+from flet_api.runs import PaymentRequiredError, RunFrame, RunProfile
 from flet_api.sessions import SessionStore
 from legal_acceptance import LegalAcceptance
 from persistence.accounts import AccountUser
@@ -98,6 +98,8 @@ class FakeRuns:
     def advance(self, **kwargs) -> RunFrame:
         if kwargs["revealed_entries"] < 1:
             raise PermissionError("Revele todas as falas.")
+        if kwargs["package_id"] == "story.locked":
+            raise PaymentRequiredError("Quer saber como termina essa aventura?")
         return RunFrame("run-1", kwargs["package_id"], "quadro-2", "[QUADRO quadro-2]\n[DESCRIÇÃO]\nContinuação.\n[/QUADRO]", "", 0, 0)
 
     def image(self, *, package_id: str, node_id: str = "", image_id: str = ""):
@@ -414,6 +416,38 @@ def test_run_abre_quadro_persistido_e_bloqueia_avanco_antecipado() -> None:
     )
     assert blocked.status_code == 403
     assert advanced.json()["frame_id"] == "quadro-2"
+
+
+def test_card_pago_abre_preview_e_paywall_do_roteiro_retorna_402() -> None:
+    test_client, _accounts = client()
+    token = login(test_client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    opened = test_client.post(
+        "/api/v1/runs/open",
+        headers=headers,
+        json={
+            "package_id": "story.locked",
+            "preferred_name": "Pessoa",
+            "story_gender": "Como homem",
+        },
+    )
+    gated = test_client.post(
+        "/api/v1/runs/advance",
+        headers=headers,
+        json={
+            "package_id": "story.locked",
+            "frame_id": "quadro-1",
+            "revealed_entries": 1,
+            "preferred_name": "Pessoa",
+            "story_gender": "Como homem",
+        },
+    )
+
+    assert opened.status_code == 200
+    assert opened.json()["frame_id"] == "quadro-1"
+    assert gated.status_code == 402
+    assert gated.json()["detail"] == "Quer saber como termina essa aventura?"
 
 
 def test_perfil_da_run_e_recuperado_antes_da_abertura() -> None:
