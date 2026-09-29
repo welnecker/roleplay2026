@@ -114,6 +114,7 @@ def compile_novel_frame_story(
     current: dict[str, Any] | None = None
     pending_effects: list[dict[str, object]] = []
     seen_line_ids: set[str] = set()
+    payment_waiting_for_next_frame = False
 
     for row in source_rows:
         line_id = str(row.get("line_id", "") or "").strip()
@@ -122,7 +123,13 @@ def compile_novel_frame_story(
         seen_line_ids.add(line_id)
         kind, actor, text = _tag(row.get("instruction"))
 
+        if payment_waiting_for_next_frame and kind != "descricao":
+            raise ValueError(
+                "[PAGAMENTO] deve ficar imediatamente antes da próxima [DESCRIÇÃO]."
+            )
+
         if kind == "descricao":
+            payment_waiting_for_next_frame = False
             if pending_effects:
                 raise ValueError("ONOMATOPEIA precisa ficar imediatamente antes de uma FALA ou PENSAMENTO.")
             current = {
@@ -131,6 +138,25 @@ def compile_novel_frame_story(
                 "entries": [],
             }
             frames.append(current)
+            continue
+
+        if kind == "pagamento":
+            if pending_effects:
+                raise ValueError(
+                    "ONOMATOPEIA precisa ficar imediatamente antes de uma FALA ou PENSAMENTO."
+                )
+            if current is None or not current.get("entries"):
+                raise ValueError(
+                    f"{line_id}: [PAGAMENTO] precisa vir depois de um quadro com falas ou pensamentos."
+                )
+            if current.get("payment_gate"):
+                raise ValueError(
+                    f"{line_id}: o quadro já possui uma tag [PAGAMENTO]."
+                )
+            current["payment_gate"] = {
+                "message": text or "Quer saber como termina essa aventura?"
+            }
+            payment_waiting_for_next_frame = True
             continue
 
         if kind == "onomatopeia":
@@ -175,6 +201,8 @@ def compile_novel_frame_story(
 
     if pending_effects:
         raise ValueError("A última ONOMATOPEIA do roteiro não possui FALA/PENSAMENTO posterior.")
+    if payment_waiting_for_next_frame:
+        raise ValueError("[PAGAMENTO] não pode ser a última linha ativa do roteiro.")
 
     if not frames:
         raise ValueError("Roteiro V2 não contém quadros com [DESCRIÇÃO].")
