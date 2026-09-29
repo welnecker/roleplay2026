@@ -380,11 +380,11 @@ def legal_acceptance_screen(
 
 
 def _status(card: StoryCard) -> tuple[str, str]:
-    if card.access_status == AccessStatus.FREE:
-        return "DEGUSTAÇÃO", "#3D8068"
     if card.access_status == AccessStatus.OWNED:
         return "LIBERADO", "#3D8068"
-    return card.price_label or "BLOQUEADO", ACCENT_DARK
+    if card.access_status == AccessStatus.FREE:
+        return "ABERTO", "#3D8068"
+    return "COMECE GRÁTIS", ACCENT_DARK
 
 
 def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]) -> ft.Control:
@@ -533,9 +533,7 @@ def _story_card(card: StoryCard, *, on_open_preview: Callable[[StoryCard], None]
                 ft.Container(
                     padding=ft.Padding.only(left=20, right=20, bottom=20),
                     content=ft.FilledButton(
-                        "Abrir história"
-                        if card.access_status != AccessStatus.LOCKED
-                        else "Comprar com Pix",
+                        "Abrir história",
                         bgcolor=ACCENT,
                         color="#FFFFFF",
                         height=45,
@@ -769,6 +767,7 @@ def payment_screen(
     qr_code: str = "",
     qr_code_base64: str = "",
     payment_status: str = "not_started",
+    gate_message: str = "",
     on_back: Callable[[], None],
     on_create_pix: Callable[[], None],
     on_master_test: Callable[[], None],
@@ -839,6 +838,18 @@ def payment_screen(
                             ft.TextButton("← Voltar aos cards", on_click=lambda _event: on_back()),
                             ft.Text("Pagamento por Pix", size=28, weight=ft.FontWeight.BOLD, color=INK),
                             ft.Text(card.title, size=21, weight=ft.FontWeight.BOLD, color=INK),
+                            *(
+                                [
+                                    ft.Text(
+                                        gate_message,
+                                        size=20,
+                                        weight=ft.FontWeight.BOLD,
+                                        color=ACCENT_DARK,
+                                    )
+                                ]
+                                if str(gate_message or "").strip()
+                                else []
+                            ),
                             ft.Text(card.description or card.subtitle, color=MUTED),
                             ft.Text(card.price_label, size=24, weight=ft.FontWeight.BOLD, color=ACCENT_DARK),
                             ft.Text(f"Status: {payment_status}", size=12, color=MUTED),
