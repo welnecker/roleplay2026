@@ -87,33 +87,47 @@ def start_v2_run_on_first_message(
 
     start_paid_run = getattr(repositories, "start_paid_run", None)
     if callable(start_paid_run):
-        return start_paid_run(
+        paid_run = start_paid_run(
             user_id=user_id,
             package_id=package_id,
             script_version=start.script_version,
             first_block_id=start.first_block_id,
             first_beat_id=start.first_beat_id,
         )
+        if paid_run is not None:
+            return paid_run
 
     credit = repositories.credits.get_available_credit(
         user_id=user_id,
         package_id=package_id,
     )
-    if credit is None:
-        return repositories.runs.get_active_run(
-            user_id=user_id,
-            package_id=package_id,
+    if credit is not None:
+        run = repositories.runs.create_run(
+            credit=credit,
+            script_version=start.script_version,
+            first_block_id=start.first_block_id,
+            first_beat_id=start.first_beat_id,
         )
+        if run.credit_id == credit.credit_id:
+            repositories.credits.consume_credit(
+                credit_id=credit.credit_id,
+                run_id=run.run_id,
+            )
+        return run
 
-    run = repositories.runs.create_run(
-        credit=credit,
+    # Histórias comerciais agora começam em modo preview. A cobrança é
+    # disparada somente pela tag [PAGAMENTO] do roteiro; o crédito real será
+    # acoplado a esta mesma run quando o Pix for confirmado.
+    preview_access = RunCredit(
+        credit_id=f"preview:{package_id}:{user_id}",
+        user_id=user_id,
+        package_id=package_id,
+        payment_id="preview",
+        status="available",
+    )
+    return repositories.runs.create_run(
+        credit=preview_access,
         script_version=start.script_version,
         first_block_id=start.first_block_id,
         first_beat_id=start.first_beat_id,
     )
-    if run.credit_id == credit.credit_id:
-        repositories.credits.consume_credit(
-            credit_id=credit.credit_id,
-            run_id=run.run_id,
-        )
-    return run
