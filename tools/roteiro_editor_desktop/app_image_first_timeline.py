@@ -505,21 +505,21 @@ class ScriptEditor(BalloonScriptEditor):
         for row in self.rows:
             line_id = str(row["line_id"])
             instruction = str(row.get("instruction", ""))
-            image_id = str(row.get("image_id", "") or "")
-            motion_id = str(row.get("motion_id", "") or "")
-            audio_id = str(row.get("audio_id", "") or "")
+            image_id = str(row.get("image_id", "") or self.image_map.get(line_id, "") or "")
+            motion_id = str(row.get("motion_id", "") or self.motion_map.get(line_id, "") or "")
+            audio_id = str(row.get("audio_id", "") or self.audio_map.get(line_id, "") or "")
             values = (row["order"], line_id, instruction, image_id, motion_id, audio_id)
 
             if line_id.endswith("_descricao"):
                 frame_number += 1
                 current_parent = line_id
-                label = f"QUADRO {frame_number:02d}"
+                label = f"{'🔊 ' if audio_id else ''}QUADRO {frame_number:02d}"
                 if image_id:
                     label += f"  •  {image_id}"
                 if motion_id:
                     label += f"  🎬 {motion_id}"
                 if audio_id:
-                    label += f"  🔊 {audio_id}"
+                    label += f"  •  áudio: {audio_id}"
                 self.tree.insert(
                     "",
                     "end",
@@ -545,12 +545,14 @@ class ScriptEditor(BalloonScriptEditor):
                 label = "FALA BALÃO"
             if "_BALAO]" in upper and label != "FALA BALÃO":
                 label += " BALÃO"
+            if audio_id:
+                label = f"🔊 {label}"
             if image_id:
                 label += f"  •  {image_id}"
             if motion_id:
                 label += f"  🎬 {motion_id}"
             if audio_id:
-                label += f"  🔊 {audio_id}"
+                label += f"  •  áudio: {audio_id}"
 
             parent = "" if upper.startswith("[FIM_HISTORIA]") else current_parent
             self.tree.insert(
