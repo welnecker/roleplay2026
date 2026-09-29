@@ -91,6 +91,8 @@ class ScriptEditor(BalloonScriptEditor):
             return "DESCRIÇÃO", "", body
         if kind == "FIM_HISTORIA":
             return "FIM_HISTORIA", "", body
+        if kind == "PAGAMENTO":
+            return "PAGAMENTO", "", body
         if kind == "ONOMATOPEIA":
             return "ONOMATOPEIA", "", " ".join(arguments)
         delivery = ""
@@ -114,6 +116,8 @@ class ScriptEditor(BalloonScriptEditor):
         clean_body = str(body or "").strip()
         if kind == "FIM_HISTORIA":
             return "[FIM_HISTORIA]" + (f" {clean_body}" if clean_body else "")
+        if kind == "PAGAMENTO":
+            return "[PAGAMENTO]" + (f" {clean_body}" if clean_body else "")
         if kind == "ONOMATOPEIA":
             effect = parse_onomatopoeia_header(f"ONOMATOPEIA {clean_body}")
             return f"[{effect.canonical_header()}]"
@@ -349,6 +353,7 @@ class ScriptEditor(BalloonScriptEditor):
         kind, actor, body = self._parse_instruction(str(row.get("instruction", "")))
         is_description = kind == "DESCRIÇÃO"
         is_ending = kind == "FIM_HISTORIA"
+        is_payment = kind == "PAGAMENTO"
         is_effect = kind == "ONOMATOPEIA"
 
         dialog = tk.Toplevel(self)
@@ -371,6 +376,8 @@ class ScriptEditor(BalloonScriptEditor):
                 if is_description
                 else ("FIM_HISTORIA",)
                 if is_ending
+                else ("PAGAMENTO",)
+                if is_payment
                 else ("ONOMATOPEIA",)
                 if is_effect
                 else (
@@ -392,7 +399,7 @@ class ScriptEditor(BalloonScriptEditor):
         actor_var = tk.StringVar(value=actor or (actor_values[0] if actor_values else "usuario"))
         actor_combo = ttk.Combobox(dialog, textvariable=actor_var, state="readonly", values=actor_values)
         actor_combo.grid(row=3, column=0, sticky="ew", padx=14)
-        if is_description or is_ending or is_effect:
+        if is_description or is_ending or is_payment or is_effect:
             actor_combo.configure(state="disabled")
 
         text_frame = ttk.Frame(dialog)
@@ -404,6 +411,8 @@ class ScriptEditor(BalloonScriptEditor):
             text=(
                 "Texto (opcional)"
                 if is_ending
+                else "Mensagem de chamada (opcional)"
+                if is_payment
                 else "Configuração (tipo, posição e atraso)"
                 if is_effect
                 else "Texto"
@@ -535,6 +544,8 @@ class ScriptEditor(BalloonScriptEditor):
             upper = instruction.upper()
             if upper.startswith("[FIM_HISTORIA]"):
                 label = "FIM DA HISTÓRIA"
+            elif upper.startswith("[PAGAMENTO]"):
+                label = "💳 PAGAMENTO"
             elif upper.startswith("[PENSAMENTO"):
                 label = "PENSAMENTO"
             elif upper.startswith("[FALA EXATA"):
