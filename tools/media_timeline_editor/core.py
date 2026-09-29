@@ -517,6 +517,25 @@ def _export_audio(
             "192k",
         ]
     )
+
+    # O modo acoplado pode reabrir o áudio já pré-salvo de uma linha e
+    # exportar o novo corte para o mesmo audio_id. O FFmpeg não aceita
+    # entrada e saída no mesmo arquivo. Nessa situação, convertemos para
+    # um temporário irmão e só substituímos o original após sucesso.
+    try:
+        same_file = source.resolve() == destination.resolve()
+    except OSError:
+        same_file = False
+    output_path = (
+        destination.with_name(
+            f".{destination.stem}.entrecenas_tmp{destination.suffix}"
+        )
+        if same_file
+        else destination
+    )
+    if output_path != destination and output_path.exists():
+        output_path.unlink()
+
     command = [
         ffmpeg_executable(),
         "-y",
@@ -526,15 +545,21 @@ def _export_audio(
         "-af",
         ",".join(filters),
         *codec,
-        str(destination),
+        str(output_path),
     ]
     completed = _run(command)
-    if completed.returncode != 0 or not destination.is_file():
+    if completed.returncode != 0 or not output_path.is_file():
+        if output_path != destination:
+            output_path.unlink(missing_ok=True)
         detail = str(completed.stderr or "").strip().splitlines()
+        diagnostic = " | ".join(detail[-4:]) if detail else ""
         raise MediaEditorError(
             "Falha ao exportar o áudio sincronizado."
-            + (f" Detalhe: {detail[-1]}" if detail else "")
+            + (f" Detalhe: {diagnostic}" if diagnostic else "")
         )
+
+    if output_path != destination:
+        output_path.replace(destination)
 
 
 def export_audio_clip(
