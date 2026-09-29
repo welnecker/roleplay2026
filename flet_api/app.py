@@ -17,7 +17,7 @@ from flet_api.sessions import SessionStore
 from legal_acceptance import PRIVACY_VERSION, TERMS_VERSION, LegalAcceptance
 from flet_api.payments import PaymentGateway, PaymentState, build_payment_gateway
 from flet_api.public_media import public_story_media_url
-from flet_api.runs import FletRunService, RunFrame
+from flet_api.runs import FletRunService, PaymentRequiredError, RunFrame
 from persistence.accounts import AccountUser, build_account_repository
 from persistence.google_sheets_retry import (
     GoogleSheetsTemporarilyUnavailable,
@@ -639,13 +639,6 @@ def create_api_app(services: ApiServices) -> FastAPI:
         )
         if selected_card is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="História não encontrada.")
-        is_free = selected_card.access_status == AccessStatus.FREE
-        if (
-            not is_free
-            and services.paid_access_resolver is not None
-            and not services.paid_access_resolver(user.user_id, payload.package_id)
-        ):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="História sem acesso liberado.")
         try:
             frame = run_service().open(
                 account=user,
@@ -669,8 +662,14 @@ def create_api_app(services: ApiServices) -> FastAPI:
                 package_id=payload.package_id,
                 expected_frame_id=payload.frame_id,
                 revealed_entries=payload.revealed_entries,
+                paid_access_resolver=services.paid_access_resolver,
                 **_run_identity_kwargs(payload),
             )
+        except PaymentRequiredError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=exc.message,
+            ) from exc
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
         except (KeyError, ValueError, RuntimeError) as exc:
