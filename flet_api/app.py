@@ -211,6 +211,7 @@ class ApiServices:
     payment_gateway: PaymentGateway | None = None
     paid_access_resolver: Callable[[str, str], bool] | None = None
     paid_access_primer: Callable[[str, str], None] | None = None
+    paid_access_consumer: Callable[[str, str, str], None] | None = None
     run_service: FletRunService | None = None
 
 
@@ -663,6 +664,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
                 expected_frame_id=payload.frame_id,
                 revealed_entries=payload.revealed_entries,
                 paid_access_resolver=services.paid_access_resolver,
+                paid_access_consumer=services.paid_access_consumer,
                 **_run_identity_kwargs(payload),
             )
         except PaymentRequiredError as exc:
@@ -760,6 +762,20 @@ def production_app() -> FastAPI:
                         ttl_seconds=90.0,
                     )
 
+                def consume_paid_access(
+                    user_id: str,
+                    package_id: str,
+                    run_id: str,
+                ) -> None:
+                    from services.paid_run_access import claim_paid_access_for_preview_run
+
+                    claim_paid_access_for_preview_run(
+                        secrets=secrets,
+                        user_id=user_id,
+                        package_id=package_id,
+                        run_id=run_id,
+                    )
+
                 _production_app = create_api_app(
                     ApiServices(
                         accounts=accounts,
@@ -768,6 +784,7 @@ def production_app() -> FastAPI:
                         payment_gateway=payment_gateway,
                         paid_access_resolver=has_paid_access,
                         paid_access_primer=prime_paid_access,
+                        paid_access_consumer=consume_paid_access,
                         run_service=run_gateway,
                     )
                 )
