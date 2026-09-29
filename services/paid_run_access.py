@@ -173,7 +173,17 @@ def get_paid_run_access(*, secrets: Any, user_id: str, package_id: str) -> PaidR
                 ending_code=persisted_end[1],
             )
             active = None
-    if active is not None:
+    if active is not None and str(active.credit_id or "").startswith("preview:"):
+        credit = repositories.credits.get_available_credit(
+            user_id=user_id,
+            package_id=package_id,
+        )
+        result = (
+            PaidRunAccess(state="available", run=active)
+            if credit is not None
+            else PaidRunAccess(state="locked", run=active)
+        )
+    elif active is not None:
         result = PaidRunAccess(state="active", run=active)
     else:
         credit = repositories.credits.get_available_credit(
@@ -184,6 +194,83 @@ def get_paid_run_access(*, secrets: Any, user_id: str, package_id: str) -> PaidR
 
     _access_cache[cache_key] = (now + ACCESS_CACHE_TTL_SECONDS, result)
     return result
+
+
+def claim_paid_access_for_preview_run(
+    *,
+    secrets: Any,
+    user_id: str,
+    package_id: str,
+    run_id: str,
+) -> StoryRun:
+    """Consome o crédito pago e o acopla à run preview já em andamento."""
+
+    repositories = _repositories(secrets)
+    active = repositories.runs.get_active_run(
+        user_id=user_id,
+        package_id=package_id,
+    )
+    if active is None or active.run_id != run_id:
+        raise RuntimeError("A run de prévia não está mais ativa.")
+    if not str(active.credit_id or "").startswith("preview:"):
+        _access_cache[
+            _access_cache_key(
+                secrets=secrets,
+                user_id=user_id,
+                package_id=package_id,
+            )
+        ] = (monotonic() + ACCESS_CACHE_TTL_SECONDS, PaidRunAccess("active", active))
+        return active
+
+    credit = repositories.credits.get_available_credit(
+        user_id=user_id,
+        package_id=package_id,
+    )
+    if credit is None:
+        raise RuntimeError("Pagamento ainda não liberou o crédito desta história.")
+
+    repositories.credits.consume_credit(
+        credit_id=credit.credit_id,
+        run_id=run_id,
+    )
+
+    for attempt in range(2):
+        current = (
+            active
+            if attempt == 0
+            else repositories.runs.get_active_run(
+                user_id=user_id,
+                package_id=package_id,
+            )
+        )
+        if current is None or current.run_id != run_id:
+            raise RuntimeError("A run mudou durante a liberação do pagamento.")
+        if current.credit_id == credit.credit_id:
+            active = current
+            break
+        expected_version = current.state_version
+        current.credit_id = credit.credit_id
+        current.updated_at = utc_now_iso()
+        try:
+            active = repositories.runs.update_run(
+                run=current,
+                expected_version=expected_version,
+            )
+            break
+        except Exception as exc:
+            if attempt == 0 and _is_concurrent_version_error(exc):
+                continue
+            raise
+
+    result = PaidRunAccess(state="active", run=active)
+    _access_cache[
+        _access_cache_key(
+            secrets=secrets,
+            user_id=user_id,
+            package_id=package_id,
+        )
+    ] = (monotonic() + ACCESS_CACHE_TTL_SECONDS, result)
+    return active
 
 
 def revoke_available_credits(*, secrets: Any, user_id: str, package_id: str) -> int:
