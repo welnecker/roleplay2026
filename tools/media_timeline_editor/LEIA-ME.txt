@@ -73,3 +73,17 @@ Associe os nomes às colunas motion_id e audio_id da mesma linha em ROTEIROS.
 COPIAR FRAME coloca uma imagem real na área de transferência do Windows. Depois
 da confirmação, use Ctrl+V no Paint, Photoshop, WhatsApp, Venice ou outro
 aplicativo compatível.
+
+
+PRIVACIDADE DE TELA
+- A imagem ou o vídeo carregado ficam ocultos por padrão.
+- A timeline visual também fica mascarada.
+- Clique em MOSTRAR MÍDIA apenas quando precisar conferir a imagem.
+- Clique em OCULTAR MÍDIA para voltar imediatamente à proteção visual.
+- A ocultação não altera a mídia, o áudio, a timeline nem a exportação.
+
+MEMÓRIA DE PASTAS
+- O editor memoriza a última pasta usada para abrir áudio, vídeo ou imagem.
+- Também memoriza a última pasta usada para exportar blocos, faixas, frames e mídia sincronizada.
+- Essas preferências permanecem após fechar e abrir novamente o programa.
+- A configuração é local e não contém conteúdo de mídia nem dados sensíveis.
