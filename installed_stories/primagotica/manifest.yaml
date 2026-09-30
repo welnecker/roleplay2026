@@ -1,0 +1,44 @@
+format_version: 2
+package_id: roleplay2026.primagotica
+version: 1.0.0
+author:
+  id: welnecker
+  name: Welnecker
+entrypoint: story.yaml
+runtime:
+  kind: editorial
+  editorial:
+    source: content/editorial.yaml
+card:
+  title: Prima Gótica
+  subtitle: Convença sua prima.
+  description: Sua prima gótica quer passar uma tarde agradável com a amiga dela, mas você não parece que vai dar sossego papa as duas.
+  genres:
+    - 18+
+  chapter_label: História completa
+  cover: assets/capas/capa.png
+  character_profile:
+    name: Prima Gótica
+    identity: Sua prima tem tendência a namorar outras mulheres. ele é jovem e bonita. Você a conhece bem e respeita as escolhas dela.
+    personality: Sua prima gosta de privacidade, mas você é meio sem noção e vai irrita-la com certeza.
+    intention: A nova amiga da sua prima demonstrou um certo interesse em você. O que você pretende fazer sobre isso?
+cast_customization:
+  enabled: true
+  members:
+    - actor_id: usuario
+      label: O participante
+      default_name: Usuário
+      gender: neutral
+    - actor_id: prima
+      label: Prima
+      default_name: Gerusa
+      gender: feminine
+    - actor_id: namorada
+      label: Namorada
+      default_name: Natielle
+      gender: feminine
+commerce:
+  access: paid
+  price_cents: 499
+  currency: BRL
+  replay_policy: new_purchase

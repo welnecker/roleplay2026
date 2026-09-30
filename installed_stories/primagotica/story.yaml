@@ -1,0 +1,10 @@
+story_id: primagotica
+title: Prima Gótica
+entry_route: abertura
+routes:
+  - id: abertura
+    beats:
+      - id: abertura_001
+        movements:
+          - order: 1
+            content: A história será conduzida pelo roteiro editorial publicado para este card.
