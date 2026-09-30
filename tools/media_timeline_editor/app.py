@@ -22,9 +22,11 @@ from core import (
     extract_precision_frames,
     ffmpeg_executable,
     frame_time,
+    load_media_editor_settings,
     move_audio_segment,
     probe_media,
     rename_audio_segments,
+    save_media_editor_settings,
     split_audio_segment,
     trim_audio_segment,
     waveform_peaks,
@@ -62,6 +64,8 @@ class MediaTimelineEditor(tk.Tk):
         self.preview_durations: list[int] = []
         self.preview_job: str | None = None
         self.preview_index = 0
+        self.privacy_hidden = True
+        self.folder_settings = load_media_editor_settings()
         self.audio_drag_x = 0
         self.audio_drag_offset = 0
         self.audio_segments: list[AudioSegment] = []
@@ -104,6 +108,12 @@ class MediaTimelineEditor(tk.Tk):
         ttk.Button(top, text="ÁUDIO DO VÍDEO", command=self.use_video_audio).pack(
             side="left", padx=5
         )
+        self.privacy_button = ttk.Button(
+            top,
+            text="MOSTRAR MÍDIA",
+            command=self.toggle_privacy,
+        )
+        self.privacy_button.pack(side="left", padx=(14, 5))
         ttk.Button(
             top, text="EXPORTAR", style="Accent.TButton", command=self.export
         ).pack(side="right", padx=5)
@@ -127,6 +137,16 @@ class MediaTimelineEditor(tk.Tk):
             anchor="center",
         )
         self.preview_label.pack(fill="both", expand=True)
+        self.privacy_mask = tk.Label(
+            viewer,
+            text="MÍDIA OCULTA\n\nClique em MOSTRAR MÍDIA para visualizar",
+            bg="#0B1F1E",
+            fg="#FFFFFF",
+            font=("Segoe UI", 18, "bold"),
+            anchor="center",
+            justify="center",
+        )
+        self.privacy_mask.place(relx=0, rely=0, relwidth=1, relheight=1)
 
         transport = ttk.Frame(self, padding=(12, 0, 12, 8))
         transport.pack(fill="x")
@@ -360,6 +380,34 @@ class MediaTimelineEditor(tk.Tk):
             fill="x"
         )
 
+    def _dialog_dir(self, key: str) -> str:
+        value = str(self.folder_settings.get(key, "") or "").strip()
+        if value and Path(value).is_dir():
+            return value
+        return str(Path.home())
+
+    def _remember_dir(self, key: str, path: Path) -> None:
+        folder = path if path.is_dir() else path.parent
+        if folder.is_dir():
+            self.folder_settings[key] = str(folder)
+            save_media_editor_settings(self.folder_settings)
+
+    def toggle_privacy(self) -> None:
+        self.privacy_hidden = not self.privacy_hidden
+        if self.privacy_hidden:
+            self.privacy_mask.place(relx=0, rely=0, relwidth=1, relheight=1)
+            self.privacy_button.configure(text="MOSTRAR MÍDIA")
+        else:
+            self.privacy_mask.place_forget()
+            self.privacy_button.configure(text="OCULTAR MÍDIA")
+        if self.precision_frames:
+            self._draw_timeline()
+        self.status_var.set(
+            "Privacidade ativada: mídia oculta."
+            if self.privacy_hidden
+            else "Mídia visível temporariamente."
+        )
+
     @staticmethod
     def _clock(value: float) -> str:
         minutes, seconds = divmod(max(0.0, value), 60)
@@ -376,12 +424,14 @@ class MediaTimelineEditor(tk.Tk):
     def open_video(self) -> None:
         selected = filedialog.askopenfilename(
             title="Abrir vídeo",
+            initialdir=self._dialog_dir("last_open_dir"),
             filetypes=[("Vídeos", "*.mp4 *.mov *.mkv *.webm"), ("Todos", "*.*")],
         )
         if not selected:
             return
         self.stop_preview()
         self.video_path = Path(selected)
+        self._remember_dir("last_open_dir", self.video_path)
         self.image_path = None
         self.status_var.set("Analisando e indexando todos os frames...")
         threading.Thread(
@@ -441,6 +491,7 @@ class MediaTimelineEditor(tk.Tk):
     def open_image(self) -> None:
         selected = filedialog.askopenfilename(
             title="Abrir imagem",
+            initialdir=self._dialog_dir("last_open_dir"),
             filetypes=[
                 ("Imagens", "*.png *.jpg *.jpeg *.webp *.bmp"),
                 ("Todos", "*.*"),
@@ -450,6 +501,7 @@ class MediaTimelineEditor(tk.Tk):
             return
         self.stop_preview()
         self.image_path = Path(selected)
+        self._remember_dir("last_open_dir", self.image_path)
         self.video_path = None
         self.media_info = None
         self.visual_duration = 0.0
@@ -557,6 +609,18 @@ class MediaTimelineEditor(tk.Tk):
         canvas.delete("all")
         width = max(1, canvas.winfo_width() or 1200)
         height = 90
+        if self.privacy_hidden:
+            canvas.create_rectangle(0, 0, width, height, fill="#0B1F1E", outline="")
+            canvas.create_text(
+                width / 2,
+                height / 2,
+                text="MÍDIA OCULTA",
+                fill="#FFFFFF",
+                font=("Segoe UI", 12, "bold"),
+            )
+            self.timeline_images = []
+            self._draw_selection()
+            return
         count = max(1, min(len(self.precision_frames), 16))
         indices = [
             round(i * (len(self.precision_frames) - 1) / max(1, count - 1))
@@ -641,11 +705,13 @@ class MediaTimelineEditor(tk.Tk):
     def open_audio(self) -> None:
         selected = filedialog.askopenfilename(
             title="Abrir áudio",
+            initialdir=self._dialog_dir("last_open_dir"),
             filetypes=[("Áudio", "*.mp3 *.wav *.m4a *.ogg *.aac"), ("Todos", "*.*")],
         )
         if not selected:
             return
         self.audio_path = Path(selected)
+        self._remember_dir("last_open_dir", self.audio_path)
         try:
             self._configure_audio(self.audio_path)
         except Exception as exc:
@@ -1005,6 +1071,7 @@ class MediaTimelineEditor(tk.Tk):
         default = f"{source.stem}_frame_{index + 1:06d}.png"  # type: ignore[union-attr]
         selected = filedialog.asksaveasfilename(
             title="Salvar frame",
+            initialdir=self._dialog_dir("last_export_dir"),
             defaultextension=".png",
             initialfile=default,
             filetypes=[
@@ -1016,6 +1083,7 @@ class MediaTimelineEditor(tk.Tk):
         if not selected:
             return
         target = Path(selected)
+        self._remember_dir("last_export_dir", target)
         if self.image_path is not None:
             try:
                 with Image.open(self.image_path) as image:
@@ -1254,12 +1322,14 @@ class MediaTimelineEditor(tk.Tk):
             return
         selected = filedialog.asksaveasfilename(
             title="Exportar bloco selecionado",
+            initialdir=self._dialog_dir("last_export_dir"),
             defaultextension=".mp3",
             initialfile=f"{segment.name}.mp3",
             filetypes=[("MP3", "*.mp3"), ("WAV", "*.wav")],
         )
         if not selected:
             return
+        self._remember_dir("last_export_dir", Path(selected))
         kwargs = {
             "source": source,
             "destination": Path(selected),
@@ -1283,10 +1353,12 @@ class MediaTimelineEditor(tk.Tk):
             self._error(exc)
             return
         destination = filedialog.askdirectory(
-            title="Escolha a pasta para os diálogos separados"
+            title="Escolha a pasta para os diálogos separados",
+            initialdir=self._dialog_dir("last_export_dir"),
         )
         if not destination:
             return
+        self._remember_dir("last_export_dir", Path(destination))
         segments = rename_audio_segments(
             self.audio_segments,
             f"{self.name_var.get()}_audio",
@@ -1327,12 +1399,14 @@ class MediaTimelineEditor(tk.Tk):
         source = self.audio_path or self.video_path
         selected = filedialog.asksaveasfilename(
             title="Exportar pista de áudio",
+            initialdir=self._dialog_dir("last_export_dir"),
             defaultextension=".mp3",
             initialfile=f"{self.name_var.get()}_audio.mp3",
             filetypes=[("MP3", "*.mp3"), ("WAV", "*.wav")],
         )
         if not selected:
             return
+        self._remember_dir("last_export_dir", Path(selected))
         kwargs = {
             "source": source,
             "destination": Path(selected),
@@ -1369,9 +1443,13 @@ class MediaTimelineEditor(tk.Tk):
         except Exception as exc:
             self._error(exc)
             return
-        destination = filedialog.askdirectory(title="Escolha a pasta de exportação")
+        destination = filedialog.askdirectory(
+            title="Escolha a pasta de exportação",
+            initialdir=self._dialog_dir("last_export_dir"),
+        )
         if not destination:
             return
+        self._remember_dir("last_export_dir", Path(destination))
         settings["destination_dir"] = Path(destination)
         self.status_var.set("Exportando WebP e áudio sincronizado...")
         worker = self._segment_export_worker if segment_mode else self._export_worker
