@@ -276,3 +276,54 @@ def test_export_synchronized_segment_uses_audio_source_range_and_timeline_positi
     assert result.webp_path.name == "camilly_01_motion.webp"
     assert result.audio_path is not None
     assert core.probe_media(result.audio_path).duration == pytest.approx(1.5, abs=0.08)
+
+
+
+def test_media_editor_folder_preferences_persist_between_sessions(tmp_path: Path) -> None:
+    settings_path = tmp_path / "prefs" / "media_editor_settings.json"
+    open_dir = tmp_path / "audios"
+    export_dir = tmp_path / "exportados"
+    open_dir.mkdir()
+    export_dir.mkdir()
+
+    core.save_media_editor_settings(
+        {
+            "last_open_dir": str(open_dir),
+            "last_export_dir": str(export_dir),
+        },
+        settings_path,
+    )
+
+    loaded = core.load_media_editor_settings(settings_path)
+
+    assert loaded == {
+        "last_open_dir": str(open_dir),
+        "last_export_dir": str(export_dir),
+    }
+
+
+def test_media_editor_folder_preferences_ignore_corrupted_file(tmp_path: Path) -> None:
+    settings_path = tmp_path / "media_editor_settings.json"
+    settings_path.write_text("{quebrado", encoding="utf-8")
+
+    assert core.load_media_editor_settings(settings_path) == {}
+
+
+def test_media_editor_folder_preferences_keep_only_supported_keys(tmp_path: Path) -> None:
+    settings_path = tmp_path / "media_editor_settings.json"
+
+    core.save_media_editor_settings(
+        {
+            "last_open_dir": "C:/Audios",
+            "last_export_dir": "D:/Saidas",
+            "segredo": "nao-persistir",
+        },
+        settings_path,
+    )
+
+    loaded = core.load_media_editor_settings(settings_path)
+
+    assert loaded == {
+        "last_open_dir": "C:/Audios",
+        "last_export_dir": "D:/Saidas",
+    }
