@@ -4,6 +4,8 @@ import array
 import io
 import os
 import re
+import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -736,6 +738,54 @@ def export_synchronized_segment(
     )
 
 
+
+def media_editor_settings_path() -> Path:
+    """Arquivo persistente e local com preferências não sensíveis do editor."""
+
+    appdata = str(os.getenv("APPDATA", "") or "").strip()
+    base = Path(appdata) if appdata else Path.home() / ".entrecenas"
+    if appdata:
+        return base / "EntreCenas" / "media_editor_settings.json"
+    return base / "media_editor_settings.json"
+
+
+def load_media_editor_settings(path: Path | None = None) -> dict[str, str]:
+    target = Path(path) if path is not None else media_editor_settings_path()
+    try:
+        payload = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    result: dict[str, str] = {}
+    for key in ("last_open_dir", "last_export_dir"):
+        value = str(payload.get(key, "") or "").strip()
+        if value:
+            result[key] = value
+    return result
+
+
+def save_media_editor_settings(
+    settings: dict[str, str],
+    path: Path | None = None,
+) -> None:
+    target = Path(path) if path is not None else media_editor_settings_path()
+    payload = {
+        key: str(settings.get(key, "") or "").strip()
+        for key in ("last_open_dir", "last_export_dir")
+        if str(settings.get(key, "") or "").strip()
+    }
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        temporary.replace(target)
+    except OSError:
+        return
+
 __all__ = [
     "AudioSegment",
     "ExportResult",
@@ -753,9 +803,12 @@ __all__ = [
     "ffmpeg_executable",
     "frame_time",
     "image_dib_bytes",
+    "load_media_editor_settings",
+    "media_editor_settings_path",
     "move_audio_segment",
     "probe_media",
     "rename_audio_segments",
+    "save_media_editor_settings",
     "split_audio_segment",
     "trim_audio_segment",
     "validate_interval",
