@@ -50,6 +50,121 @@ class ScriptEditor(GalleryScriptEditor):
         self._install_cast_controls()
         install_media_bridge(self)
         self._refresh_actor_values()
+        self.after_idle(self._install_responsive_toolbars)
+
+    def _responsive_toolbar_widgets(self, toolbar):
+        widgets = [
+            widget
+            for widget in toolbar.winfo_children()
+            if widget.winfo_manager() in {"pack", "grid"}
+        ]
+        if not widgets:
+            return []
+
+        def priority(widget):
+            text = ""
+            try:
+                text = str(widget.cget("text") or "")
+            except tk.TclError:
+                pass
+            order = {
+                "+ DESCRIÇÃO DESTA IMAGEM": 10,
+                "+ NOVO QUADRO": 20,
+                "Ator:": 30,
+                "+ FALA": 50,
+                "+ PENSAMENTO": 60,
+                "+ NOME DO ATOR": 70,
+                "+ ONOMATOPEIA": 80,
+                "+ PAGAMENTO": 90,
+                "+ FIM DA HISTÓRIA": 100,
+                "Validar / atualizar": 110,
+                "Linhas geradas": 10,
+                "EDITAR LINHA SELECIONADA": 20,
+                "USAR IMAGEM ATUAL NESTA LINHA": 30,
+                "EDITAR ÁUDIO/MÍDIA DA LINHA": 40,
+                "REMOVER ÁUDIO": 50,
+                "ATRIBUIR VÍDEO À LINHA": 60,
+                "REMOVER VÍDEO": 70,
+                "MOSTRAR MÍDIA": 80,
+                "OCULTAR MÍDIA": 80,
+            }
+            if widget is getattr(self, "actor_combo", None):
+                return 40
+            return order.get(text, 500)
+
+        return sorted(widgets, key=priority)
+
+    def _layout_responsive_toolbar(self, toolbar) -> None:
+        widgets = getattr(toolbar, "_responsive_widgets", None)
+        if not widgets:
+            return
+
+        available = max(420, toolbar.winfo_width())
+        x = 0
+        row = 0
+        column = 0
+        for child in widgets:
+            width = max(70, child.winfo_reqwidth()) + 12
+            if column and x + width > available:
+                row += 1
+                column = 0
+                x = 0
+            child.grid(
+                row=row,
+                column=column,
+                padx=4,
+                pady=3,
+                sticky="w",
+            )
+            x += width
+            column += 1
+
+        for index in range(24):
+            toolbar.columnconfigure(index, weight=0)
+        # A última coluna de cada barra pode absorver a folga sem esconder controles.
+        if column:
+            toolbar.columnconfigure(column - 1, weight=1)
+
+    def _make_toolbar_responsive(self, toolbar) -> None:
+        if toolbar is None or getattr(toolbar, "_responsive_ready", False):
+            return
+        widgets = self._responsive_toolbar_widgets(toolbar)
+        if not widgets:
+            return
+
+        # Todos os filhos desta barra usam pack no legado. Removemos o gerenciador
+        # uma única vez e passamos a usar grid, que permite quebra em várias linhas.
+        for child in widgets:
+            manager = child.winfo_manager()
+            if manager == "pack":
+                child.pack_forget()
+            elif manager == "grid":
+                child.grid_forget()
+
+        toolbar._responsive_widgets = widgets
+        toolbar._responsive_ready = True
+        toolbar.bind(
+            "<Configure>",
+            lambda _event, target=toolbar: self._layout_responsive_toolbar(target),
+            add="+",
+        )
+        self._layout_responsive_toolbar(toolbar)
+
+    def _install_responsive_toolbars(self) -> None:
+        candidates = []
+        for label in (
+            "Validar / atualizar",
+            "EDITAR LINHA SELECIONADA",
+            "EDITAR ÁUDIO/MÍDIA DA LINHA",
+            "USAR IMAGEM ATUAL NESTA LINHA",
+            "MOSTRAR MÍDIA",
+        ):
+            button = self._find_button(label)
+            if button is not None and button.master not in candidates:
+                candidates.append(button.master)
+
+        for toolbar in candidates:
+            self._make_toolbar_responsive(toolbar)
 
     def _install_cast_controls(self) -> None:
         configure = self._find_button("Atualizar atores")
