@@ -18,8 +18,10 @@ class ScriptEditor(BalloonScriptEditor):
     def __init__(self) -> None:
         super().__init__()
         self.title("Editor de Roteiros ROLEPLAY2026 — Timeline visual")
+        self.privacy_hidden = True
         self._configure_timeline_tree()
         self._install_timeline_controls()
+        self._install_privacy_overlay()
         if self.rows:
             self.refresh_tree()
 
@@ -65,6 +67,65 @@ class ScriptEditor(BalloonScriptEditor):
                 command=self.insert_description_from_reference,
             )
             new_frame.pack(side="left", padx=(0, 8), after=description_button)
+
+    def _install_privacy_overlay(self) -> None:
+        preview = getattr(self, "preview_label", None)
+        if preview is None:
+            return
+        parent = preview.master
+        self.privacy_mask = tk.Label(
+            parent,
+            text="MÍDIA OCULTA\n\nClique em MOSTRAR MÍDIA para visualizar",
+            bg="#111111",
+            fg="#FFFFFF",
+            font=("Segoe UI", 18, "bold"),
+            anchor="center",
+            justify="center",
+        )
+        self.privacy_mask.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.privacy_mask.lift()
+
+        toolbar = None
+        for label in (
+            "USAR IMAGEM ATUAL NESTA LINHA",
+            "+ NOVO QUADRO",
+            "EDITAR LINHA SELECIONADA",
+        ):
+            button = self._find_button(label)
+            if button is not None:
+                toolbar = button.master
+                break
+        if toolbar is not None:
+            self.privacy_button = ttk.Button(
+                toolbar,
+                text="MOSTRAR MÍDIA",
+                command=self.toggle_privacy,
+            )
+            self.privacy_button.pack(side="right", padx=(0, 8))
+
+    def _ensure_privacy_mask_visible(self) -> None:
+        mask = getattr(self, "privacy_mask", None)
+        if mask is not None and self.privacy_hidden:
+            mask.place(relx=0, rely=0, relwidth=1, relheight=1)
+            mask.lift()
+
+    def toggle_privacy(self) -> None:
+        mask = getattr(self, "privacy_mask", None)
+        button = getattr(self, "privacy_button", None)
+        if mask is None:
+            return
+        self.privacy_hidden = not self.privacy_hidden
+        if self.privacy_hidden:
+            mask.place(relx=0, rely=0, relwidth=1, relheight=1)
+            mask.lift()
+            if button is not None:
+                button.configure(text="MOSTRAR MÍDIA")
+            self.status_var.set("Privacidade ativada: prévia visual oculta.")
+        else:
+            mask.place_forget()
+            if button is not None:
+                button.configure(text="OCULTAR MÍDIA")
+            self.status_var.set("Mídia visível temporariamente.")
 
     def _row_by_id(self, line_id: str):
         for row in self.rows:
@@ -264,6 +325,7 @@ class ScriptEditor(BalloonScriptEditor):
             return None
 
     def _show_selected_media(self, source: str, media_id: str, line_id: str, *, is_motion: bool = False) -> None:
+        self._ensure_privacy_mask_visible()
         if not source:
             self.preview_image = None
             self.preview_label.configure(image="", text=f"{line_id}\n{media_id}\nArquivo de origem não informado.")
@@ -330,6 +392,7 @@ class ScriptEditor(BalloonScriptEditor):
         self.preview_label.configure(image="", text=f"{line_id}\nEsta linha não possui imagem ou vídeo próprio.")
         self.reference_name_var.set("Nenhuma mídia própria na linha")
         self.reference_count_var.set("A linha pode herdar a imagem do quadro anterior")
+        self._ensure_privacy_mask_visible()
 
     def _on_tree_double_click(self, event) -> None:
         row_id = self.tree.identify_row(event.y)
