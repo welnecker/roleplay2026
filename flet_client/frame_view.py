@@ -1059,4 +1059,9 @@ class NovelFrameView:
         self.stage_cursor.latest(len(self._current_row().items))
         self._animate_next_render = True
         self._refresh()
+        # Cada nova fala/pensamento pode apontar para outro audio_id. O
+        # primeiro áudio do quadro já nasce pré-montado no __init__, mas as
+        # revelações seguintes precisam sincronizar o novo src antes do clique.
+        self._preload_selected_audio()
+        self.page.update()
         self._start_stage_animation(include_scene=False)
