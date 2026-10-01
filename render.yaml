@@ -31,7 +31,7 @@ services:
     runtime: python
     plan: starter
     region: virginia
-    branch: agent/narrative-engine-v2
+    branch: agent/legal-pages
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: >-
       mkdir -p .streamlit &&
