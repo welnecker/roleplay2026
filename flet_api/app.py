@@ -319,7 +319,7 @@ def create_api_app(services: ApiServices) -> FastAPI:
     app = FastAPI(title="Roleplay 2026 Flet API", version="0.1.0")
     bearer = HTTPBearer(auto_error=False)
 
-    if services.run_service is not None:
+    if isinstance(services.run_service, FletRunService):
         advance_parameters = inspect.signature(services.run_service.advance).parameters
         required_callbacks = {"paid_access_resolver", "paid_access_consumer"}
         missing_callbacks = sorted(required_callbacks.difference(advance_parameters))
@@ -393,11 +393,14 @@ def create_api_app(services: ApiServices) -> FastAPI:
     @app.get("/api/v1/health")
     def health() -> dict[str, str]:
         signature = ""
+        service_class = ""
         if services.run_service is not None:
+            service_class = type(services.run_service).__name__
             signature = str(inspect.signature(services.run_service.advance))
         return {
             "status": "ok",
             "run_service_api": FLET_RUN_SERVICE_API_VERSION,
+            "run_service_class": service_class,
             "advance_signature": signature,
         }
 
