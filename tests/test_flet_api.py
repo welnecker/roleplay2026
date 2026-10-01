@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -503,3 +505,13 @@ def test_run_exige_nome_e_genero_antes_de_chamar_runtime() -> None:
     assert invalid_gender.status_code == 422
     assert blank_name.status_code == 422
 
+
+
+
+def test_advance_contract_accepts_payment_gate_callbacks() -> None:
+    from flet_api.runs import FletRunService
+
+    parameters = inspect.signature(FletRunService.advance).parameters
+
+    assert "paid_access_resolver" in parameters
+    assert "paid_access_consumer" in parameters
