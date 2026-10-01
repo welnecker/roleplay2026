@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+FLET_RUN_SERVICE_API_VERSION = "payment-gate-v2"
+
 from dataclasses import dataclass
 from functools import lru_cache
 from hashlib import sha256
@@ -903,4 +905,4 @@ class FletRunService:
         return Path(image["path"]) if image is not None else None
 
 
-__all__ = ["FletRunService", "RunFrame"]
+__all__ = ["FLET_RUN_SERVICE_API_VERSION", "FletRunService", "RunFrame"]
