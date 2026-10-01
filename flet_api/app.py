@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -17,7 +18,7 @@ from flet_api.sessions import SessionStore
 from legal_acceptance import PRIVACY_VERSION, TERMS_VERSION, LegalAcceptance
 from flet_api.payments import PaymentGateway, PaymentState, build_payment_gateway
 from flet_api.public_media import public_story_media_url
-from flet_api.runs import FletRunService, PaymentRequiredError, RunFrame
+from flet_api.runs import FLET_RUN_SERVICE_API_VERSION, FletRunService, PaymentRequiredError, RunFrame
 from persistence.accounts import AccountUser, build_account_repository
 from persistence.google_sheets_retry import (
     GoogleSheetsTemporarilyUnavailable,
@@ -318,6 +319,22 @@ def create_api_app(services: ApiServices) -> FastAPI:
     app = FastAPI(title="Roleplay 2026 Flet API", version="0.1.0")
     bearer = HTTPBearer(auto_error=False)
 
+    if services.run_service is not None:
+        advance_parameters = inspect.signature(services.run_service.advance).parameters
+        required_callbacks = {"paid_access_resolver", "paid_access_consumer"}
+        missing_callbacks = sorted(required_callbacks.difference(advance_parameters))
+        if missing_callbacks:
+            raise RuntimeError(
+                "Runtime Flet incompatível com a API atual. "
+                "Faltam parâmetros em FletRunService.advance(): "
+                + ", ".join(missing_callbacks)
+            )
+        _LOGGER.warning(
+            "[FLET_RUNTIME] api_version=%s advance_callbacks=ok service_class=%s",
+            FLET_RUN_SERVICE_API_VERSION,
+            type(services.run_service).__name__,
+        )
+
     def sheets_unavailable_response(message: str) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -375,7 +392,14 @@ def create_api_app(services: ApiServices) -> FastAPI:
 
     @app.get("/api/v1/health")
     def health() -> dict[str, str]:
-        return {"status": "ok"}
+        signature = ""
+        if services.run_service is not None:
+            signature = str(inspect.signature(services.run_service.advance))
+        return {
+            "status": "ok",
+            "run_service_api": FLET_RUN_SERVICE_API_VERSION,
+            "advance_signature": signature,
+        }
 
     @app.post("/api/v1/auth/login", response_model=LoginResponse)
     def login(payload: LoginRequest) -> LoginResponse:
