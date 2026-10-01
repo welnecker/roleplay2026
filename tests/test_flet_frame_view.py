@@ -693,3 +693,51 @@ def test_audio_e_pre_montado_e_primeiro_clique_apenas_toca(monkeypatch) -> None:
 
     assert events == ["play:0"]
     assert view._audio_playing_url == "https://midia.example/audio/mary1.mp3"
+
+
+
+def test_revelar_segunda_fala_precarrega_o_novo_audio(monkeypatch) -> None:
+    page = _Page()
+    created: list[object] = []
+
+    class _FakeAudio:
+        def __init__(self, *, src, autoplay, volume, on_state_change) -> None:
+            self.src = src
+            self.autoplay = autoplay
+            self.volume = volume
+            self.on_state_change = on_state_change
+            created.append(self)
+
+        async def play(self, position: int) -> None:
+            return None
+
+        async def pause(self) -> None:
+            return None
+
+    monkeypatch.setattr("flet_client.frame_view.fa.Audio", _FakeAudio)
+
+    view = NovelFrameView(  # type: ignore[arg-type]
+        page,
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (
+                VisualEntry("fala", "mary", "Mary", "Primeira."),
+                VisualEntry("fala", "mary", "Mary", "Segunda."),
+            ),
+        ),
+        entry_audios=(
+            "https://midia.example/audio/mary1.mp3",
+            "https://midia.example/audio/mary2.mp3",
+        ),
+        on_reveal=lambda _count: True,
+    )
+
+    assert len(created) == 1
+    assert created[0].src.endswith("/mary1.mp3")
+
+    view._advance()
+
+    assert view.stage_cursor.position == 1
+    assert view._active_audio is created[0]
+    assert view._active_audio.src.endswith("/mary2.mp3")
