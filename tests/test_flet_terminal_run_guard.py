@@ -216,3 +216,60 @@ def test_opening_non_terminal_run_clears_previous_terminal_cache() -> None:
         assert calls["advance"] == 1
     finally:
         _restore_guard_state(saved)
+
+
+
+def test_terminal_guard_preserva_callbacks_de_pagamento_no_advance() -> None:
+    cls = FletRunService
+    saved = _preserve_guard_state()
+    captured: dict[str, object] = {}
+
+    def fake_open(self, *, account, package_id, preferred_name, story_gender):
+        return _frame(finished=False)
+
+    def fake_reveal(
+        self, *, account, package_id, expected_frame_id, preferred_name, story_gender
+    ):
+        return _frame(finished=False)
+
+    def fake_advance(
+        self,
+        *,
+        account,
+        package_id,
+        expected_frame_id,
+        revealed_entries,
+        preferred_name,
+        story_gender,
+        paid_access_resolver=None,
+        paid_access_consumer=None,
+    ):
+        captured["resolver"] = paid_access_resolver
+        captured["consumer"] = paid_access_consumer
+        return _frame(finished=False)
+
+    resolver = lambda _user_id, _package_id: True
+    consumer = lambda _user_id, _package_id, _run_id: None
+
+    try:
+        cls.open = fake_open  # type: ignore[method-assign]
+        cls.advance = fake_advance  # type: ignore[method-assign]
+        cls.reveal = fake_reveal  # type: ignore[method-assign]
+        guard._INSTALLED = False
+        guard.install()
+
+        cls.advance(  # type: ignore[arg-type]
+            object(),
+            account=SimpleNamespace(user_id="user_1"),
+            package_id="story_1",
+            expected_frame_id="frame_1",
+            revealed_entries=1,
+            preferred_name="Pessoa",
+            story_gender="Como homem",
+            paid_access_resolver=resolver,
+            paid_access_consumer=consumer,
+        )
+
+        assert captured == {"resolver": resolver, "consumer": consumer}
+    finally:
+        _restore_guard_state(saved)
