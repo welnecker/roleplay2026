@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import flet as ft
 import pytest
 
@@ -651,3 +653,40 @@ def test_revelacao_falha_restaura_o_indice_visual() -> None:
     assert view.controller.revealed_entries == 1
     assert view.stage_cursor.position == 0
     assert view.advance_button.disabled is False
+
+
+
+def test_primeiro_clique_de_audio_sincroniza_servico_antes_de_tocar(monkeypatch) -> None:
+    page = _Page()
+    events: list[str] = []
+
+    class _FakeAudio:
+        def __init__(self, *, src, autoplay, volume, on_state_change) -> None:
+            self.src = src
+            self.autoplay = autoplay
+            self.volume = volume
+            self.on_state_change = on_state_change
+
+        async def play(self, position: int) -> None:
+            events.append(f"play:{position}:updates={page.updates}")
+
+        async def pause(self) -> None:
+            events.append("pause")
+
+    monkeypatch.setattr("flet_client.frame_view.fa.Audio", _FakeAudio)
+
+    view = NovelFrameView(  # type: ignore[arg-type]
+        page,
+        VisualFrame(
+            "entrada_001",
+            "Mary entra.",
+            (VisualEntry("fala", "mary", "Mary", "Olá."),),
+        ),
+        entry_audios=("https://midia.example/audio/mary1.mp3",),
+    )
+
+    asyncio.run(view._toggle_audio_async("https://midia.example/audio/mary1.mp3"))
+
+    assert len(page.services) == 1
+    assert events == ["play:0:updates=1"]
+    assert view._audio_playing_url == "https://midia.example/audio/mary1.mp3"
