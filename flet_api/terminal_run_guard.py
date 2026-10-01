@@ -11,7 +11,7 @@ Sheets.
 
 from functools import wraps
 from threading import Lock
-from typing import Any
+from typing import Any, Callable
 
 from flet_api.runs import FletRunService, RunFrame
 
@@ -136,6 +136,8 @@ def install() -> None:
         preferred_name: str = "",
         story_gender: str = "",
         cast_names: dict[str, str] | None = None,
+        paid_access_resolver: Callable[[str, str], bool] | None = None,
+        paid_access_consumer: Callable[[str, str, str], None] | None = None,
     ) -> RunFrame:
         terminal = _cached(account.user_id, package_id, expected_frame_id)
         if terminal is not None:
@@ -152,6 +154,8 @@ def install() -> None:
             package_id=package_id,
             expected_frame_id=expected_frame_id,
             revealed_entries=revealed_entries,
+            paid_access_resolver=paid_access_resolver,
+            paid_access_consumer=paid_access_consumer,
             **identity,
         )
         _remember(account.user_id, frame)
