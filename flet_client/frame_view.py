@@ -886,6 +886,11 @@ class NovelFrameView:
                 await audio.pause()
                 self._audio_playing_url = None
             else:
+                # No Flet web, um Audio recém-adicionado (ou com src trocado)
+                # precisa chegar ao cliente antes do primeiro play(). Sem este
+                # update, o primeiro clique apenas monta o serviço e o usuário
+                # acaba precisando clicar novamente para realmente ouvir.
+                self.page.update()
                 await audio.play(0)
                 self._audio_playing_url = audio_url
         except RuntimeError as exc:
