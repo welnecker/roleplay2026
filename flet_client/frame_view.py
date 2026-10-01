@@ -477,6 +477,7 @@ class NovelFrameView:
         )
         self.stage_cursor.latest(len(self._current_row().items))
         self._refresh(update_page=False)
+        self._preload_selected_audio()
 
     def _entry_image(self, index: int) -> bytes | str | None:
         active: bytes | str | None = self.base_image
@@ -822,6 +823,20 @@ class NovelFrameView:
             pass
         self._play_audio_url(audio_url)
 
+    def _preload_selected_audio(self) -> None:
+        """Monta o serviço do áudio atual antes do primeiro clique do usuário.
+
+        No Flet web, criar o Audio apenas no clique pode exigir um ciclo extra
+        de sincronização com o navegador. Pré-montando junto com o quadro,
+        o primeiro clique executa somente play() sobre um serviço já existente.
+        """
+
+        selected = self._selected_item()
+        audio_url = self._item_audio(selected)
+        if not audio_url:
+            return
+        self._audio_service(audio_url)
+
     def _audio_service(self, audio_url: str) -> fa.Audio | None:
         services = getattr(self.page, "services", None)
         if services is None or not audio_url:
@@ -886,11 +901,6 @@ class NovelFrameView:
                 await audio.pause()
                 self._audio_playing_url = None
             else:
-                # No Flet web, um Audio recém-adicionado (ou com src trocado)
-                # precisa chegar ao cliente antes do primeiro play(). Sem este
-                # update, o primeiro clique apenas monta o serviço e o usuário
-                # acaba precisando clicar novamente para realmente ouvir.
-                self.page.update()
                 await audio.play(0)
                 self._audio_playing_url = audio_url
         except RuntimeError as exc:
@@ -979,6 +989,7 @@ class NovelFrameView:
         replay_effect = bool(selected and selected.entry and selected.entry.effects_before)
         self._animate_next_render = replay_effect
         self._refresh()
+        self._preload_selected_audio()
         if replay_effect:
             self._start_stage_animation(include_scene=False)
 
@@ -992,6 +1003,7 @@ class NovelFrameView:
         replay_effect = bool(selected and selected.entry and selected.entry.effects_before)
         self._animate_next_render = replay_effect
         self._refresh()
+        self._preload_selected_audio()
         if replay_effect:
             self._start_stage_animation(include_scene=False)
 
