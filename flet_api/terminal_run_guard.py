@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 """Curto-circuita chamadas repetidas depois de um quadro terminal já conhecido.
 
 O estado durável continua sendo STORY_RUNS/INTERACTIONS. Este cache existe apenas
@@ -148,16 +149,19 @@ def install() -> None:
         }
         if cast_names is not None:
             identity["cast_names"] = cast_names
-        frame = original_advance(
-            self,
-            account=account,
-            package_id=package_id,
-            expected_frame_id=expected_frame_id,
-            revealed_entries=revealed_entries,
-            paid_access_resolver=paid_access_resolver,
-            paid_access_consumer=paid_access_consumer,
+        advance_kwargs: dict[str, object] = {
+            "account": account,
+            "package_id": package_id,
+            "expected_frame_id": expected_frame_id,
+            "revealed_entries": revealed_entries,
             **identity,
-        )
+        }
+        original_parameters = inspect.signature(original_advance).parameters
+        if "paid_access_resolver" in original_parameters:
+            advance_kwargs["paid_access_resolver"] = paid_access_resolver
+        if "paid_access_consumer" in original_parameters:
+            advance_kwargs["paid_access_consumer"] = paid_access_consumer
+        frame = original_advance(self, **advance_kwargs)
         _remember(account.user_id, frame)
         return frame
 
