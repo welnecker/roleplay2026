@@ -656,7 +656,7 @@ def test_revelacao_falha_restaura_o_indice_visual() -> None:
 
 
 
-def test_primeiro_clique_de_audio_sincroniza_servico_antes_de_tocar(monkeypatch) -> None:
+def test_audio_e_pre_montado_e_primeiro_clique_apenas_toca(monkeypatch) -> None:
     page = _Page()
     events: list[str] = []
 
@@ -668,7 +668,7 @@ def test_primeiro_clique_de_audio_sincroniza_servico_antes_de_tocar(monkeypatch)
             self.on_state_change = on_state_change
 
         async def play(self, position: int) -> None:
-            events.append(f"play:{position}:updates={page.updates}")
+            events.append(f"play:{position}")
 
         async def pause(self) -> None:
             events.append("pause")
@@ -685,8 +685,11 @@ def test_primeiro_clique_de_audio_sincroniza_servico_antes_de_tocar(monkeypatch)
         entry_audios=("https://midia.example/audio/mary1.mp3",),
     )
 
+    # O serviço já existe quando o quadro nasce; o clique não precisa montar Audio.
+    assert len(page.services) == 1
+    assert page.services[0].src == "https://midia.example/audio/mary1.mp3"
+
     asyncio.run(view._toggle_audio_async("https://midia.example/audio/mary1.mp3"))
 
-    assert len(page.services) == 1
-    assert events == ["play:0:updates=1"]
+    assert events == ["play:0"]
     assert view._audio_playing_url == "https://midia.example/audio/mary1.mp3"
